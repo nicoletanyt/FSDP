@@ -1,0 +1,9 @@
+project_id = "fsdp"
+
+# Guest Checkout: pricing and redirects are controlled by the function.
+[functions.create-checkout-session]
+verify_jwt = false
+
+# Stripe authenticates webhook requests through Stripe-Signature, not a JWT.
+[functions.stripe-webhook]
+verify_jwt = false
