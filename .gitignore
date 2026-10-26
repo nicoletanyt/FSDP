@@ -1,5 +1,6 @@
 node_modules/
 dist/
+.vercel/
 *.tsbuildinfo
 *.log
 # Ignore environment files at every level; only the root template is public.
