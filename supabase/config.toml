@@ -7,3 +7,7 @@ verify_jwt = false
 # Stripe authenticates webhook requests through Stripe-Signature, not a JWT.
 [functions.stripe-webhook]
 verify_jwt = false
+
+# The handler verifies the user JWT with Auth, then checks the database role.
+[functions.create-instructor]
+verify_jwt = false

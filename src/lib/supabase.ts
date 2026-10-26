@@ -9,4 +9,11 @@ if (!supabaseUrl || !supabasePublishableKey) {
   )
 }
 
-export const supabase = createClient(supabaseUrl, supabasePublishableKey)
+// Auth, REST, and Functions each append their own path to the project origin.
+export const supabase = createClient(new URL(supabaseUrl).origin, supabasePublishableKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+  },
+})

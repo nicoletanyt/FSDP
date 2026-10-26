@@ -1,9 +1,18 @@
+import { lazy } from 'react'
 import { BrowserRouter, Route, Routes } from 'react-router'
+import { GuestRoute, ProtectedRoute } from '@/components/auth/AuthGate'
+import AuthLayout from './layouts/AuthLayout'
 import RootLayout from './layouts/RootLayout'
 import CheckoutCancel from './pages/CheckoutCancel'
 import CheckoutSuccess from './pages/CheckoutSuccess'
 import Home from './pages/Home'
 import NotFound from './pages/NotFound'
+
+const Login = lazy(() => import('./pages/Login'))
+const Signup = lazy(() => import('./pages/Signup'))
+const StudentDashboard = lazy(() => import('./pages/StudentDashboard'))
+const InstructorDashboard = lazy(() => import('./pages/InstructorDashboard'))
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard'))
 
 export default function App() {
   return (
@@ -11,6 +20,22 @@ export default function App() {
       <Routes>
         <Route path="/" element={<RootLayout />}>
           <Route index element={<Home />} />
+          <Route element={<GuestRoute />}>
+            <Route element={<AuthLayout />}>
+              <Route path="login" element={<Login />} />
+              <Route path="signup" element={<Signup />} />
+              <Route path="staff/login" element={<Login staff />} />
+            </Route>
+          </Route>
+          <Route element={<ProtectedRoute role="student" />}>
+            <Route path="dashboard" element={<StudentDashboard />} />
+          </Route>
+          <Route element={<ProtectedRoute role="instructor" />}>
+            <Route path="instructor" element={<InstructorDashboard />} />
+          </Route>
+          <Route element={<ProtectedRoute role="administrator" />}>
+            <Route path="admin" element={<AdminDashboard />} />
+          </Route>
           <Route path="checkout/success" element={<CheckoutSuccess />} />
           <Route path="checkout/cancel" element={<CheckoutCancel />} />
           <Route path="*" element={<NotFound />} />
