@@ -2,7 +2,8 @@ node_modules/
 dist/
 *.tsbuildinfo
 *.log
+# Ignore environment files at every level; only the root template is public.
 .env
 .env.*
-!.env.example
+!/.env.example
 *.local
