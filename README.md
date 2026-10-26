@@ -2,7 +2,7 @@
 
 ## Tech Stack
 
-- **Frontend:** React, TypeScript, Vite, Tailwind CSS v4, React Router
+- **Frontend:** React, TypeScript, Vite, Tailwind CSS v4, shadcn/ui, React Router
 - **Backend:** Supabase Cloud — PostgreSQL, Auth, and Deno Edge Functions
 - **Payments:** Stripe hosted Checkout (test mode)
 - **Hosting:** Vercel (frontend)
@@ -31,6 +31,7 @@ server secrets with `VITE_`.
 | `npm run preview` | Preview the production build |
 | `npm run check:functions` | Type-check Edge Functions |
 | `npm run test:functions` | Run Stripe function tests |
+| `npx shadcn@latest add <component>` | Add a shadcn/ui component |
 
 ## Deployment
 
