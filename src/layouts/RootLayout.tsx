@@ -1,7 +1,27 @@
+import { Suspense, useState } from 'react'
 import { Link, Outlet } from 'react-router'
 import ThemeToggle from '@/components/theme-toggle'
+import { Button } from '@/components/ui/button'
+import { useAuth } from '@/hooks/use-auth'
+import { dashboardPaths } from '@/lib/auth'
 
 export default function RootLayout() {
+  const { session, profile, loading, signOut } = useAuth()
+  const [signingOut, setSigningOut] = useState(false)
+  const [error, setError] = useState('')
+
+  async function handleSignOut() {
+    setSigningOut(true)
+    setError('')
+    try {
+      await signOut()
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : 'Unable to sign out.')
+    } finally {
+      setSigningOut(false)
+    }
+  }
+
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
       <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur">
@@ -26,10 +46,26 @@ export default function RootLayout() {
             </span>
           </Link>
           <ThemeToggle />
+          {!loading && (
+            <div className="flex items-center gap-4 text-sm">
+              {session ? <>
+                {profile && <Link to={dashboardPaths[profile.role]} className="font-medium hover:underline">Dashboard</Link>}
+                <Button variant="outline" onClick={handleSignOut} disabled={signingOut}>
+                  {signingOut ? 'Signing out…' : 'Sign out'}
+                </Button>
+              </> : <>
+                <Link to="/login" className="hover:underline">Sign in</Link>
+                <Link to="/signup" className="font-medium hover:underline">Sign up</Link>
+              </>}
+            </div>
+          )}
         </nav>
+        {error && <p role="alert" className="mx-auto max-w-5xl px-6 pb-3 text-sm text-destructive">{error}</p>}
       </header>
-      <main className="mx-auto w-full max-w-5xl flex-1 px-6 py-12">
-        <Outlet />
+      <main className="mx-auto max-w-5xl px-6 py-12">
+        <Suspense fallback={<p role="status" className="py-12 text-muted-foreground">Loading…</p>}>
+          <Outlet />
+        </Suspense>
       </main>
       <footer className="border-t border-border">
         <div className="mx-auto flex w-full max-w-5xl flex-col gap-1 px-6 py-6 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
