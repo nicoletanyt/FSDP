@@ -3,7 +3,28 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>FSDP</title>
+    <title>Aikido Shinju-Kai</title>
+    <meta
+      name="description"
+      content="Aikido Shinju-Kai project portal — classes, members, and payments."
+    />
+    <meta name="theme-color" content="#2c3f67" />
+    <link rel="icon" type="image/png" href="/logo.png" />
+    <link rel="apple-touch-icon" href="/logo.png" />
+    <script>
+      ;(() => {
+        try {
+          const stored = localStorage.getItem('theme')
+          const dark =
+            stored === 'dark' ||
+            (!stored && matchMedia('(prefers-color-scheme: dark)').matches)
+          document.documentElement.classList.toggle('dark', dark)
+          document.documentElement.style.colorScheme = dark ? 'dark' : 'light'
+        } catch {
+          // Ignore storage access errors and fall back to the light theme.
+        }
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>
