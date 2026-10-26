@@ -8,6 +8,27 @@
 - **Hosting:** Vercel (frontend)
 - **Package manager:** npm
 
+## Brand & theme
+
+The Aikido Shinju-Kai palette lives in `src/index.css`:
+
+| Token | Hex | Usage |
+| --- | --- | --- |
+| `--brand-blue` | `#2c3f67` | Primary actions, links, focus rings |
+| `--brand-red` | `#e62128` | Accents, destructive actions |
+| `--brand-grey` | `#352b29` | Body text and warm neutrals |
+
+Semantic shadcn tokens (`--primary`, `--destructive`, `--foreground`, ...) map
+onto these colours, with a warm-grey dark theme. Prefer semantic utilities such
+as `bg-primary` and `text-muted-foreground` in components; use `bg-brand-*`
+only where the exact brand colour is required. For red text use
+`text-brand-red-ink`, which switches to a lighter red in dark mode to keep
+contrast accessible.
+
+Dark mode follows the system preference, can be toggled from the header, and is
+persisted in `localStorage`. The emblem is served from `public/logo.png` and is
+used in the header and as the favicon.
+
 ## Setup
 
 Requires Node.js 22.12+ or 24+. Edge Function checks and tests also require Deno.
