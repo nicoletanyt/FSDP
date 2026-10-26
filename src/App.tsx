@@ -12,6 +12,9 @@ const Login = lazy(() => import('./pages/Login'))
 const Signup = lazy(() => import('./pages/Signup'))
 const StudentDashboard = lazy(() => import('./pages/StudentDashboard'))
 const InstructorDashboard = lazy(() => import('./pages/InstructorDashboard'))
+const InstructorStudentDetails = lazy(() => import('./pages/InstructorStudentDetails'))
+const InstructorStudentReports = lazy(() => import('./pages/InstructorStudentReports'))
+const InstructorGradingAssessment = lazy(() => import('./pages/InstructorGradingAssessment'))
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'))
 
 export default function App() {
@@ -32,6 +35,9 @@ export default function App() {
           </Route>
           <Route element={<ProtectedRoute role="instructor" />}>
             <Route path="instructor" element={<InstructorDashboard />} />
+            <Route path="instructor/students/:studentId" element={<InstructorStudentDetails />} />
+            <Route path="instructor/reports/:eventId" element={<InstructorStudentReports />} />
+            <Route path="instructor/assessments/:eventId/:studentId" element={<InstructorGradingAssessment />} />
           </Route>
           <Route element={<ProtectedRoute role="administrator" />}>
             <Route path="admin" element={<AdminDashboard />} />
