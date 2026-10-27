@@ -13,7 +13,7 @@ export default function InstructorStudentReports() {
     const { eventId } = useParams();
     const event = findCalendarEvent(eventId);
     if (!event || event.type !== "training") {
-        return <section className="space-y-4"><Link to="/instructor" className="text-sm underline">Back to calendar</Link><h1 className="text-2xl font-semibold">Class report not found</h1></section>;
+        return <section className="space-y-4"><Link to="/instructor/calendar" className="text-sm underline">Back to calendar</Link><h1 className="text-2xl font-semibold">Class report not found</h1></section>;
     }
     const record = loadSession(event);
     const roster = students.filter((student) => event.studentIds.includes(student.id));

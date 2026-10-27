@@ -6,7 +6,7 @@ import { dashboardPaths } from '@/lib/auth'
 
 export default function RootLayout() {
   const { session, profile, loading, signOut } = useAuth()
-  const isInstructorDashboard = useMatch('/instructor')
+  const isInstructorPortal = useMatch('/instructor/*')
   const [signingOut, setSigningOut] = useState(false)
   const [error, setError] = useState('')
 
@@ -22,10 +22,18 @@ export default function RootLayout() {
     }
   }
 
+  if (isInstructorPortal) {
+    return (
+      <Suspense fallback={<p role="status" className="mx-auto w-[70%] py-6 text-muted-foreground">Loading…</p>}>
+        <Outlet />
+      </Suspense>
+    )
+  }
+
   return (
-    <div className={isInstructorDashboard ? 'flex h-dvh flex-col overflow-hidden bg-muted/30 text-foreground' : 'min-h-screen bg-muted/30 text-foreground'}>
+    <div className="min-h-screen bg-muted/30 text-foreground">
       <header className="shrink-0 border-b bg-background">
-        <nav aria-label="Main navigation" className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-4 px-6 py-4">
+        <nav aria-label="Main navigation" className="mx-auto flex w-[70%] flex-wrap items-center justify-between gap-4 py-4">
           <Link to="/" className="font-semibold hover:underline">
             FSDP
           </Link>
@@ -43,9 +51,9 @@ export default function RootLayout() {
             </div>
           )}
         </nav>
-        {error && <p role="alert" className="mx-auto max-w-5xl px-6 pb-3 text-sm text-destructive">{error}</p>}
+        {error && <p role="alert" className="mx-auto w-[70%] pb-3 text-sm text-destructive">{error}</p>}
       </header>
-      <main className={isInstructorDashboard ? 'mx-auto flex min-h-0 w-[90%] flex-1 flex-col py-4 sm:py-6' : 'mx-auto max-w-5xl px-6 py-12'}>
+      <main className="mx-auto w-[70%] py-12">
         <Suspense fallback={<p role="status" className="py-12 text-muted-foreground">Loading…</p>}>
           <Outlet />
         </Suspense>

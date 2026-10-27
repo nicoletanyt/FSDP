@@ -15,6 +15,7 @@ import {
     dateKey,
     eventStyles,
     eventsForDate,
+    findCalendarEvent,
     formatTime,
     fullDate,
     parseCalendarDate,
@@ -240,40 +241,32 @@ function CalendarWeek({
 }
 
 export default function InstructorDashboard() {
-    const [searchParams] = useSearchParams();
+    const [searchParams, setSearchParams] = useSearchParams();
     const [today] = useState(() => {
         const now = new Date();
         return new Date(now.getFullYear(), now.getMonth(), now.getDate());
     });
-    const [selection, setSelection] = useState(() => {
-        const selectedDate = parseCalendarDate(searchParams.get("date")) ?? today;
-        const requestedClass = searchParams.get("class");
-        return {
-            selectedDate,
-            expandedClassId: eventsForDate(selectedDate).some(
-                (event) => event.id === requestedClass,
-            )
-                ? requestedClass
-                : null,
-        };
-    });
-    const { selectedDate, expandedClassId } = selection;
+    const requestedSession = findCalendarEvent(searchParams.get("session") ?? searchParams.get("class") ?? undefined);
+    const selectedDate = parseCalendarDate(searchParams.get("date")) ?? requestedSession?.date ?? today;
+    const expandedClassId = requestedSession && dateKey(requestedSession.date) === dateKey(selectedDate)
+        ? requestedSession.id
+        : null;
+
+    function updateSelection(date: Date, sessionId: string | null = null) {
+        const next = new URLSearchParams(searchParams);
+        next.set("date", dateKey(date));
+        next.delete("class");
+        if (sessionId) next.set("session", sessionId);
+        else next.delete("session");
+        if (next.toString() !== searchParams.toString()) setSearchParams(next);
+    }
 
     function selectDay(date: Date) {
-        setSelection((current) => ({
-            selectedDate: date,
-            expandedClassId:
-                dateKey(date) === dateKey(current.selectedDate)
-                    ? current.expandedClassId
-                    : null,
-        }));
+        updateSelection(date, dateKey(date) === dateKey(selectedDate) ? expandedClassId : null);
     }
 
     function navigateWeek(direction: number) {
-        setSelection((current) => ({
-            selectedDate: addDays(current.selectedDate, direction * 7),
-            expandedClassId: null,
-        }));
+        updateSelection(addDays(selectedDate, direction * 7));
     }
 
     return (
@@ -293,14 +286,7 @@ export default function InstructorDashboard() {
                                 variant="outline"
                                 onClick={() => {
                                     const now = new Date();
-                                    setSelection({
-                                        selectedDate: new Date(
-                                            now.getFullYear(),
-                                            now.getMonth(),
-                                            now.getDate(),
-                                        ),
-                                        expandedClassId: null,
-                                    });
+                                    updateSelection(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
                                 }}
                                 className="mr-1 h-9 px-3"
                             >
@@ -323,6 +309,7 @@ export default function InstructorDashboard() {
                                 <ChevronRight aria-hidden="true" />
                             </Button>
                         </div>
+                        <h2 className="text-sm font-medium" aria-live="polite">{weekLabel(selectedDate)}</h2>
                     </div>
                     <div
                         aria-label="Event categories"
@@ -344,11 +331,7 @@ export default function InstructorDashboard() {
                     expandedClassId={expandedClassId}
                     onSelectDate={selectDay}
                     onToggleClass={(event) =>
-                        setSelection((current) => ({
-                            selectedDate: event.date,
-                            expandedClassId:
-                                current.expandedClassId === event.id ? null : event.id,
-                        }))
+                        updateSelection(event.date, expandedClassId === event.id ? null : event.id)
                     }
                 />
             </section>

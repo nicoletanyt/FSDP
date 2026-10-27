@@ -13,7 +13,7 @@ function AssessmentForm({ event, student }: { event: CalendarEvent; student: Stu
     const [notice, setNotice] = useState("");
 
     return (
-        <section className="mx-auto max-w-2xl space-y-6">
+        <section className="space-y-6">
             <Link to={calendarHref(event)} className="inline-flex items-center gap-1 rounded-sm text-sm text-muted-foreground hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-ring">
                 <ChevronLeft aria-hidden="true" className="size-4" /> Back to assessment class
             </Link>
@@ -63,11 +63,12 @@ function AssessmentForm({ event, student }: { event: CalendarEvent; student: Stu
 }
 
 export default function InstructorGradingAssessment() {
-    const { eventId, studentId } = useParams();
-    const event = findCalendarEvent(eventId);
-    const student = students.find((item) => item.id === studentId);
+    const { assessmentId, eventId, studentId } = useParams();
+    const [assessmentEventId, assessmentStudentId] = assessmentId?.split("--") ?? [];
+    const event = findCalendarEvent(assessmentEventId ?? eventId);
+    const student = students.find((item) => item.id === (assessmentStudentId ?? studentId));
     if (!event || event.type !== "grading" || !student || !event.studentIds.includes(student.id)) {
-        return <section className="space-y-4"><Link to="/instructor" className="text-sm underline">Back to calendar</Link><h1 className="text-2xl font-semibold">Assessment not found</h1></section>;
+        return <section className="space-y-4"><Link to="/instructor/calendar" className="text-sm underline">Back to calendar</Link><h1 className="text-2xl font-semibold">Assessment not found</h1><p className="text-sm text-muted-foreground">Open a candidate’s assessment from a grading session in the calendar. Assessments currently use demo data.</p></section>;
     }
     return <AssessmentForm key={`${event.id}-${student.id}`} event={event} student={student} />;
 }

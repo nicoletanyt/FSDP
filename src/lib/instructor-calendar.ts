@@ -125,15 +125,24 @@ export function findCalendarEvent(id: string | undefined) {
 }
 
 export function calendarHref(event: CalendarEvent) {
-    return `/instructor?date=${dateKey(event.date)}&class=${encodeURIComponent(event.id)}`;
+    const params = new URLSearchParams({ date: dateKey(event.date), session: event.id });
+    return `/instructor/calendar?${params}`;
 }
 
 export function studentDetailsHref(studentId: string, event?: CalendarEvent, tab?: "overview" | "sessions" | "grading") {
     const params = new URLSearchParams();
-    if (event) params.set("class", event.id);
+    if (event) {
+        params.set("date", dateKey(event.date));
+        params.set("session", event.id);
+    }
     if (tab) params.set("tab", tab);
     const query = params.toString();
     return `/instructor/students/${studentId}${query ? `?${query}` : ""}`;
+}
+
+// Demo assessment IDs associate a grading session with one candidate.
+export function assessmentHref(event: CalendarEvent, studentId: string) {
+    return `/instructor/assessments/${encodeURIComponent(`${event.id}--${studentId}`)}`;
 }
 
 // In-memory demo saves survive card/route changes, and reset on a page refresh.

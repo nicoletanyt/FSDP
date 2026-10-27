@@ -21,6 +21,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
+    assessmentHref,
     calendarHref,
     findCalendarEvent,
     formatTime,
@@ -36,7 +37,6 @@ import type {
 } from "@/lib/instructor-calendar";
 import {
     beltColorClass,
-    defaultStudentClass,
     getStudentProfile,
     studentGradingHistory,
     studentSessionHistory,
@@ -418,13 +418,13 @@ function StudentDetailContent({
         <section className="space-y-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <Button
-                    render={<Link to={context ? calendarHref(context) : "/instructor"} />}
+                    render={<Link to={context ? calendarHref(context) : "/instructor/students"} />}
                     nativeButton={false}
                     variant="ghost"
                     className="-ml-2"
                 >
                     <ChevronLeft aria-hidden="true" />
-                    Back to calendar
+                    {context ? "Back to calendar" : "Back to students"}
                 </Button>
                 {roster.length > 1 && (
                     <div
@@ -618,6 +618,18 @@ function StudentDetailContent({
                     </TabsContent>
 
                     <TabsContent value="grading" className="space-y-4">
+                        {context?.type === "grading" && (
+                            <Card>
+                                <CardHeader><CardTitle>Selected grading session</CardTitle></CardHeader>
+                                <CardContent className="flex flex-wrap items-center justify-between gap-3">
+                                    <p className="text-xs text-muted-foreground">{context.name} · {fullDate(context.date)}</p>
+                                    <Button render={<Link to={assessmentHref(context, student.id)} />} nativeButton={false}>
+                                        Open assessment
+                                        <ChevronRight aria-hidden="true" />
+                                    </Button>
+                                </CardContent>
+                            </Card>
+                        )}
                         <Card>
                             <CardHeader>
                                 <CardTitle>Current rank</CardTitle>
@@ -704,7 +716,7 @@ export default function InstructorStudentDetails() {
         return new Date(now.getFullYear(), now.getMonth(), now.getDate());
     });
     const student = students.find((item) => item.id === studentId);
-    const requestedContext = findCalendarEvent(params.get("class") ?? undefined);
+    const requestedContext = findCalendarEvent(params.get("session") ?? params.get("class") ?? undefined);
     if (!student)
         return (
             <section className="space-y-4">
@@ -714,7 +726,7 @@ export default function InstructorStudentDetails() {
                             to={
                                 requestedContext
                                     ? calendarHref(requestedContext)
-                                    : "/instructor"
+                                    : "/instructor/students"
                             }
                         />
                     }
@@ -722,14 +734,14 @@ export default function InstructorStudentDetails() {
                     variant="outline"
                 >
                     <ChevronLeft aria-hidden="true" />
-                    Back to calendar
+                    {requestedContext ? "Back to calendar" : "Back to students"}
                 </Button>
                 <h1 className="text-2xl font-semibold">Student not found</h1>
             </section>
         );
     const context = requestedContext?.studentIds.includes(student.id)
         ? requestedContext
-        : defaultStudentClass(student, today);
+        : undefined;
     return (
         <StudentDetailContent
             key={`${student.id}-${context?.id ?? "direct"}`}
