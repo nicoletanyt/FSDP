@@ -8,8 +8,8 @@ export default defineConfig({
   envPrefix: 'VITE_',
   plugins: [react(), tailwindcss()],
   optimizeDeps: {
-    // Preload the tabs dependency used by the lazy-loaded student detail page.
-    include: ['@base-ui/react/tabs'],
+    // Preload UI dependencies used by the lazy-loaded student detail page.
+    include: ['@base-ui/react/tabs', '@base-ui/react/toast', '@base-ui/react/avatar'],
   },
   resolve: {
     alias: {

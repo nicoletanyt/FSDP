@@ -1,11 +1,12 @@
-import { addDays, classTemplates, currentInstructor, dateKey, eventsForDate, getSavedStudentSession, students } from "@/lib/instructor-calendar";
-import type { Attendance, CalendarEvent, Student } from "@/lib/instructor-calendar";
+import { addDays, classTemplates, currentInstructor, dateKey, eventsForDate, getSavedStudentSession, instructors, students } from "@/lib/instructor-calendar";
+import type { Attendance, CalendarEvent, ReportAuthor, Student } from "@/lib/instructor-calendar";
 
 export type StudentHistorySession = {
     event: CalendarEvent;
     attendance: Attendance;
     feedback: string;
     instructor: string;
+    reportAuthor?: ReportAuthor;
 };
 
 const feedbackExamples = [
@@ -54,23 +55,43 @@ export function defaultStudentClass(student: Student, today: Date) {
     return eventsForDate(date).find((event) => event.id === `${template.id}-${dateKey(date)}`);
 }
 
-export function studentSessionHistory(student: Student, today: Date, context?: CalendarEvent): StudentHistorySession[] {
+export function sessionPhase(event: CalendarEvent, now: Date): "upcoming" | "in-progress" | "past" {
+    const atTime = (time: string) => {
+        const [hours, minutes] = time.split(":").map(Number);
+        return new Date(event.date.getFullYear(), event.date.getMonth(), event.date.getDate(), hours, minutes);
+    };
+    if (now < atTime(event.startTime)) return "upcoming";
+    return now < atTime(event.endTime) ? "in-progress" : "past";
+}
+
+export function studentSessionHistory(student: Student, now: Date, context?: CalendarEvent): StudentHistorySession[] {
     const index = students.findIndex((item) => item.id === student.id);
-    const events = Array.from({ length: 56 }, (_, daysAgo) => eventsForDate(addDays(today, -daysAgo)))
-        .flat().filter((event) => event.type === "training" && event.studentIds.includes(student.id))
+    const tomorrow = addDays(now, 1);
+    const belongsToStudent = (event: CalendarEvent) => event.type === "training" && event.studentIds.includes(student.id);
+    const events = Array.from({ length: 56 }, (_, daysAgo) => eventsForDate(addDays(now, -daysAgo)))
+        .flat().filter((event) => belongsToStudent(event) && event.date < tomorrow)
         .sort((a, b) => b.date.getTime() - a.date.getTime() || b.startTime.localeCompare(a.startTime))
         .slice(0, 12);
-    if (context?.type === "training" && context.studentIds.includes(student.id) && !events.some((event) => event.id === context.id)) events.push(context);
+    if (context?.type === "training" && context.date < tomorrow && context.studentIds.includes(student.id) && !events.some((event) => event.id === context.id)) events.push(context);
 
-    return events.map((event, eventIndex) => {
+    return events.map((event) => {
         const saved = getSavedStudentSession(event.id, student.id);
-        const historical = dateKey(event.date) !== dateKey(today) && event.date < today;
-        const attendance: Attendance = saved?.attendance ?? (historical ? ((eventIndex + index) % 7 === 3 ? "absent" : "present") : "unmarked");
+        const phase = sessionPhase(event, now);
+        // Stable per-session examples, independent of filtering and sorting.
+        const day = Math.floor(Date.UTC(event.date.getFullYear(), event.date.getMonth(), event.date.getDate()) / 86_400_000);
+        const seed = day + Math.floor(day / 7) + index
+            + classTemplates.findIndex((template) => event.id.startsWith(`${template.id}-`));
+        const attendance: Attendance = phase === "upcoming" ? "unmarked"
+            : saved?.attendance ?? (phase === "past" ? (seed % 11 === 0 ? "unmarked" : seed % 5 === 2 ? "absent" : "present") : "unmarked");
+        const instructor = instructors.find((item) => item.id === event.instructorId) ?? currentInstructor;
+        const feedback = saved?.comment
+            ?? (phase === "past" && attendance === "present" && seed % 5 !== 0 ? feedbackExamples[seed % feedbackExamples.length] : "");
         return {
             event,
             attendance,
-            feedback: saved?.comment ?? (historical && attendance === "present" ? feedbackExamples[(eventIndex + index) % feedbackExamples.length] : ""),
-            instructor: currentInstructor.name,
+            feedback,
+            instructor: instructor.name,
+            reportAuthor: feedback.trim() ? saved?.reportAuthor ?? instructor : undefined,
         };
     }).sort((a, b) => b.event.date.getTime() - a.event.date.getTime() || b.event.startTime.localeCompare(a.event.startTime));
 }

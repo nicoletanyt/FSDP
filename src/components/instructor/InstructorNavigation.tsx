@@ -62,7 +62,12 @@ export default function InstructorNavigation({
 
     return (
         <header className="shrink-0 border-b bg-background">
-            <div className={cn("mx-auto flex flex-wrap items-center justify-between gap-x-6 gap-y-3 py-3", contentWidthClassName)}>
+            <div
+                className={cn(
+                    "mx-auto flex flex-wrap items-center justify-between gap-x-6 gap-y-3 py-3",
+                    contentWidthClassName,
+                )}
+            >
                 <Link
                     to={calendarTo}
                     className="flex items-center rounded-sm font-semibold tracking-tight focus-visible:outline-2 focus-visible:outline-ring"
@@ -78,72 +83,77 @@ export default function InstructorNavigation({
                         Instructor Portal
                     </span>
                 </Link>
-                <nav
-                    aria-label="Instructor navigation"
-                    className="order-3 flex w-full items-center gap-1 lg:order-none lg:w-auto"
-                >
-                    {navigation.map(({ label, to, icon: Icon }) => {
-                        const active =
-                            pathname === to ||
-                            pathname.startsWith(`${to}/`) ||
-                            (label === "Calendar" && isCalendarRelated);
-                        return (
-                            <Link
-                                key={to}
-                                to={label === "Calendar" ? calendarTo : to}
-                                aria-current={active ? "page" : undefined}
-                                className={cn(
-                                    "flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring sm:px-3 sm:text-sm lg:flex-none",
-                                    active && "bg-accent text-accent-foreground",
-                                )}
-                            >
-                                <Icon aria-hidden="true" className="size-4" />
-                                {label}
-                            </Link>
-                        );
-                    })}
-                </nav>
-                <DropdownMenu>
-                    <DropdownMenuTrigger
-                        render={<Button variant="ghost" className="min-h-10 gap-2" />}
-                        aria-label={`Account menu for ${name}`}
-                        disabled={signingOut}
+                <div className="flex justify-between">
+                    <nav
+                        aria-label="Instructor navigation"
+                        className="order-3 flex w-full items-center gap-1 lg:order-0 lg:w-auto"
                     >
-                        <span
-                            className="flex size-7 items-center justify-center rounded-full bg-muted text-xs font-semibold"
-                            aria-hidden="true"
-                        >
-                            {initials}
-                        </span>
-                        <span className="hidden max-w-36 truncate md:inline">
-                            {signingOut ? "Signing out…" : name}
-                        </span>
-                        <ChevronDown aria-hidden="true" className="size-3.5" />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent>
-                        <div className="border-b px-2 py-2">
-                            <p className="truncate font-medium">{name}</p>
-                            <p className="truncate text-xs text-muted-foreground">
-                                {profile?.email}
-                            </p>
-                        </div>
-                        <DropdownMenuItem render={<Link to="/instructor/profile" />}>
-                            <UserRound aria-hidden="true" /> Profile
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                            onClick={() => void handleSignOut()}
+                        {navigation.map(({ label, to, icon: Icon }) => {
+                            const active =
+                                pathname === to ||
+                                pathname.startsWith(`${to}/`) ||
+                                (label === "Calendar" && isCalendarRelated);
+                            return (
+                                <Link
+                                    key={to}
+                                    to={label === "Calendar" ? calendarTo : to}
+                                    aria-current={active ? "page" : undefined}
+                                    className={cn(
+                                        "flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring sm:px-3 sm:text-sm lg:flex-none",
+                                        active && "bg-accent text-accent-foreground",
+                                    )}
+                                >
+                                    <Icon aria-hidden="true" className="size-4" />
+                                    {label}
+                                </Link>
+                            );
+                        })}
+                    </nav>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger
+                            render={<Button variant="ghost" className="min-h-10 gap-2" />}
+                            aria-label={`Account menu for ${name}`}
                             disabled={signingOut}
                         >
-                            <LogOut aria-hidden="true" />{" "}
-                            {signingOut ? "Signing out…" : "Log out"}
-                        </DropdownMenuItem>
-                    </DropdownMenuContent>
-                </DropdownMenu>
+                            <span
+                                className="flex size-7 items-center justify-center rounded-full bg-muted text-xs font-semibold"
+                                aria-hidden="true"
+                            >
+                                {initials}
+                            </span>
+                            <span className="hidden max-w-36 truncate md:inline">
+                                {signingOut ? "Signing out…" : name}
+                            </span>
+                            <ChevronDown aria-hidden="true" className="size-3.5" />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent>
+                            <div className="border-b px-2 py-2">
+                                <p className="truncate font-medium">{name}</p>
+                                <p className="truncate text-xs text-muted-foreground">
+                                    {profile?.email}
+                                </p>
+                            </div>
+                            <DropdownMenuItem render={<Link to="/instructor/profile" />}>
+                                <UserRound aria-hidden="true" /> Profile
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                                onClick={() => void handleSignOut()}
+                                disabled={signingOut}
+                            >
+                                <LogOut aria-hidden="true" />{" "}
+                                {signingOut ? "Signing out…" : "Log out"}
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                </div>
             </div>
             {error && (
                 <p
                     role="alert"
-                    className={cn("mx-auto pb-3 text-sm text-destructive", contentWidthClassName)}
+                    className={cn(
+                        "mx-auto pb-3 text-sm text-destructive",
+                        contentWidthClassName,
+                    )}
                 >
                     {error}
                 </p>

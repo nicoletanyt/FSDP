@@ -1,80 +1,52 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
 import {
-    CalendarDays,
-    Check,
     ChevronLeft,
     ChevronRight,
-    CircleCheck,
-    CircleX,
     HeartPulse,
     Mail,
     MapPin,
     MessageSquare,
-    Pencil,
     Phone,
     Target,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import StudentSessionHistory from "@/components/instructor/StudentSessionHistory";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
+import { ToastProvider } from "@/components/ui/toast";
 import {
     assessmentHref,
     calendarHref,
     findCalendarEvent,
-    formatTime,
     fullDate,
-    saveStudentFeedback,
     studentDetailsHref,
     students,
 } from "@/lib/instructor-calendar";
 import type {
-    Attendance,
     CalendarEvent,
     Student,
 } from "@/lib/instructor-calendar";
 import {
     beltColorClass,
     getStudentProfile,
+    sessionPhase,
     studentGradingHistory,
     studentSessionHistory,
 } from "@/lib/instructor-student-details";
-import type { StudentHistorySession } from "@/lib/instructor-student-details";
 import { cn } from "@/lib/utils";
 
 type Profile = ReturnType<typeof getStudentProfile>;
 type DetailTab = "overview" | "sessions" | "grading";
 
-function AttendanceBadge({ value }: { value: Attendance }) {
-    return (
-        <span
-            className={cn(
-                "inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium capitalize",
-                value === "present"
-                    ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200"
-                    : value === "absent"
-                        ? "bg-rose-50 text-rose-800 dark:bg-rose-950 dark:text-rose-200"
-                        : "bg-muted text-muted-foreground",
-            )}
-        >
-            {value === "present" && (
-                <CircleCheck aria-hidden="true" className="size-3" />
-            )}
-            {value === "absent" && <CircleX aria-hidden="true" className="size-3" />}
-            {value}
-        </span>
-    );
-}
-
 function StudentInformation({ profile }: { profile: Profile }) {
     return (
-        <Card>
-            <CardHeader>
-                <CardTitle>{profile.name}</CardTitle>
+        <Card size="sm" className="gap-3">
+            <CardHeader className="gap-1.5">
+                <h2 className="text-xs font-semibold text-muted-foreground">Student</h2>
+                <CardTitle className="text-xl font-semibold group-data-[size=sm]/card:text-xl"><h1>{profile.name}</h1></CardTitle>
                 <p className="text-xs text-muted-foreground">{profile.studentNumber}</p>
-                <p className="mt-2 flex items-center gap-2 text-sm">
+                <p className="mt-1 flex items-center gap-2 text-sm">
                     <span
                         aria-hidden="true"
                         className={cn(
@@ -85,11 +57,11 @@ function StudentInformation({ profile }: { profile: Profile }) {
                     {profile.beltGrade}
                 </p>
             </CardHeader>
-            <CardContent className="space-y-5 text-sm">
-                <dl className="space-y-3 border-t pt-4">
+            <CardContent className="space-y-3 text-sm">
+                <dl className="space-y-2 border-t pt-3">
                     <div>
                         <dt className="text-xs text-muted-foreground">Principal dojo</dt>
-                        <dd className="mt-1 flex items-center gap-1.5">
+                        <dd className="mt-0.5 flex items-center gap-1.5 text-xs">
                             <MapPin
                                 aria-hidden="true"
                                 className="size-3.5 text-muted-foreground"
@@ -112,10 +84,10 @@ function StudentInformation({ profile }: { profile: Profile }) {
                     </div>
                 </dl>
                 <section
-                    className="space-y-2 border-t pt-4"
+                    className="space-y-2 border-t pt-3"
                     aria-label="Contact information"
                 >
-                    <h2 className="text-xs font-semibold">Contact information</h2>
+                    <h2 className="text-xs font-semibold">Contact</h2>
                     <a
                         href={`mailto:${profile.email}`}
                         className="flex items-start gap-2 text-xs text-muted-foreground hover:text-foreground"
@@ -130,36 +102,33 @@ function StudentInformation({ profile }: { profile: Profile }) {
                         <Phone aria-hidden="true" className="size-3.5" />
                         {profile.phone}
                     </a>
+                    <div className="space-y-1 pt-1" aria-label="Emergency contact">
+                        <h3 className="text-[11px] font-medium text-muted-foreground">Emergency contact</h3>
+                        <p className="text-xs font-medium">{profile.emergencyContact.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                            {profile.emergencyContact.relationship}
+                        </p>
+                        <a
+                            href={`tel:${profile.emergencyContact.phone.replaceAll(" ", "")}`}
+                            className="inline-block text-xs text-muted-foreground hover:text-foreground hover:underline"
+                        >
+                            {profile.emergencyContact.phone}
+                        </a>
+                    </div>
                 </section>
                 <section
-                    className="space-y-1 border-t pt-4"
-                    aria-label="Emergency contact"
-                >
-                    <h2 className="mb-2 text-xs font-semibold">Emergency contact</h2>
-                    <p className="text-xs font-medium">{profile.emergencyContact.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                        {profile.emergencyContact.relationship}
-                    </p>
-                    <a
-                        href={`tel:${profile.emergencyContact.phone.replaceAll(" ", "")}`}
-                        className="inline-block text-xs text-muted-foreground hover:text-foreground hover:underline"
-                    >
-                        {profile.emergencyContact.phone}
-                    </a>
-                </section>
-                <section
-                    className="space-y-2 border-t pt-4"
+                    className="space-y-2 border-t pt-3"
                     aria-label="Medical alerts"
                 >
                     <h2 className="flex items-center gap-1.5 text-xs font-semibold">
                         <HeartPulse aria-hidden="true" className="size-3.5" />
-                        Medical alerts
+                        Medical
                     </h2>
                     {profile.medicalAlerts.length ? (
                         profile.medicalAlerts.map((alert) => (
                             <p
                                 key={alert}
-                                className="rounded-lg bg-amber-50 p-2.5 text-xs leading-relaxed text-amber-950 dark:bg-amber-950/40 dark:text-amber-200"
+                                className="rounded-lg bg-amber-50 p-2 text-xs leading-relaxed text-amber-950 dark:bg-amber-950/40 dark:text-amber-200"
                             >
                                 {alert}
                             </p>
@@ -248,133 +217,36 @@ function GradingRequirements({
     );
 }
 
-function SessionFeedback({
-    session,
-    student,
-    selected,
-    onSaved,
-}: {
-    session: StudentHistorySession;
-    student: Student;
-    selected: boolean;
-    onSaved: () => void;
-}) {
-    const [editing, setEditing] = useState(false);
-    const [draft, setDraft] = useState(session.feedback);
-    const [notice, setNotice] = useState("");
-    return (
-        <Card className={cn(selected && "bg-muted/30")}>
-            <CardHeader className="gap-2">
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div>
-                        <p className="mb-1 text-xs text-muted-foreground">
-                            {fullDate(session.event.date)} ·{" "}
-                            {formatTime(session.event.startTime)}
-                            {selected && " · Selected class"}
-                        </p>
-                        <CardTitle className="text-sm">{session.event.name}</CardTitle>
-                    </div>
-                    <AttendanceBadge value={session.attendance} />
-                </div>
-                <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <MapPin aria-hidden="true" className="size-3" />
-                    {session.event.dojo}
-                </p>
-            </CardHeader>
-            <CardContent className="space-y-3">
-                {editing ? (
-                    <form
-                        className="space-y-2"
-                        onSubmit={(submit) => {
-                            submit.preventDefault();
-                            saveStudentFeedback(
-                                session.event,
-                                student.id,
-                                draft.trim(),
-                                session.attendance,
-                            );
-                            setEditing(false);
-                            setNotice("Feedback saved locally.");
-                            onSaved();
-                        }}
-                    >
-                        <Label htmlFor={`feedback-${session.event.id}`} className="text-xs">
-                            Instructor feedback
-                        </Label>
-                        <Textarea
-                            id={`feedback-${session.event.id}`}
-                            value={draft}
-                            onChange={(change) => setDraft(change.target.value)}
-                            rows={2}
-                            className="min-h-16 bg-background"
-                            placeholder="What went well? What should they work on next?"
-                            autoFocus
-                        />
-                        <div className="flex justify-end gap-2">
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setEditing(false)}
-                            >
-                                Cancel
-                            </Button>
-                            <Button type="submit" size="sm">
-                                <Check aria-hidden="true" />
-                                Save feedback
-                            </Button>
-                        </div>
-                    </form>
-                ) : (
-                    <>
-                        <p className="whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">
-                            {session.feedback || "No feedback recorded for this session."}
-                        </p>
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                            <span className="text-[11px] text-muted-foreground">
-                                {session.instructor}
-                            </span>
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                    setDraft(session.feedback);
-                                    setEditing(true);
-                                    setNotice("");
-                                }}
-                            >
-                                <Pencil aria-hidden="true" />
-                                {session.feedback ? "Edit feedback" : "Add feedback"}
-                            </Button>
-                        </div>
-                    </>
-                )}
-                {notice && (
-                    <p role="status" className="text-[11px] text-muted-foreground">
-                        {notice}
-                    </p>
-                )}
-            </CardContent>
-        </Card>
-    );
-}
-
 function StudentDetailContent({
     student,
     context,
     today,
+    now,
 }: {
     student: Student;
     context: CalendarEvent | undefined;
     today: Date;
+    now: Date;
 }) {
     const [params, setParams] = useSearchParams();
     const tabParam = params.get("tab");
     const activeTab: DetailTab =
         tabParam === "sessions" || tabParam === "grading" ? tabParam : "overview";
     const [sessions, setSessions] = useState(() =>
-        studentSessionHistory(student, today, context),
+        studentSessionHistory(student, now, context),
     );
+    const sidebarRef = useRef<HTMLElement>(null);
+    const [sidebarFits, setSidebarFits] = useState(false);
+    useEffect(() => {
+        const sidebar = sidebarRef.current;
+        if (!sidebar) return;
+        const update = () => setSidebarFits(sidebar.getBoundingClientRect().height <= window.innerHeight - 32);
+        const observer = new ResizeObserver(update);
+        observer.observe(sidebar);
+        window.addEventListener("resize", update);
+        update();
+        return () => { observer.disconnect(); window.removeEventListener("resize", update); };
+    }, []);
     const profile = getStudentProfile(student, today);
     const gradingHistory = studentGradingHistory(student, today, context);
     const roster = context
@@ -386,7 +258,7 @@ function StudentDetailContent({
     const previous = roster[position - 1];
     const next = roster[position + 1];
     const markedSessions = sessions.filter(
-        (item) => item.event.date <= today && item.attendance !== "unmarked",
+        (item) => sessionPhase(item.event, now) === "past" && item.attendance !== "unmarked",
     );
     const attended = markedSessions.filter(
         (item) => item.attendance === "present",
@@ -394,7 +266,7 @@ function StudentDetailContent({
     const attendanceRate = markedSessions.length
         ? Math.round((attended / markedSessions.length) * 100)
         : 0;
-    const recentFeedback = sessions.filter((item) => item.feedback).slice(0, 3);
+    const recentFeedback = sessions.filter((item) => sessionPhase(item.event, now) === "past" && item.feedback).slice(0, 3);
     const monthsInRank = Math.max(
         0,
         (today.getFullYear() - profile.rankAwardedOn.getFullYear()) * 12 +
@@ -418,7 +290,11 @@ function StudentDetailContent({
         <section className="space-y-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <Button
-                    render={<Link to={context ? calendarHref(context) : "/instructor/students"} />}
+                    render={
+                        <Link
+                            to={context ? calendarHref(context) : "/instructor/students"}
+                        />
+                    }
                     nativeButton={false}
                     variant="ghost"
                     className="-ml-2"
@@ -428,13 +304,17 @@ function StudentDetailContent({
                 </Button>
                 {roster.length > 1 && (
                     <div
-                        className="flex items-center gap-4"
+                        className="flex flex-wrap items-center gap-2 sm:gap-3"
                         role="group"
                         aria-label="Students in this class"
                     >
                         <Button
                             render={
-                                previous ? <Link to={studentDetailsHref(previous.id, context, activeTab)} /> : undefined
+                                previous ? (
+                                    <Link
+                                        to={studentDetailsHref(previous.id, context, activeTab)}
+                                    />
+                                ) : undefined
                             }
                             nativeButton={!previous}
                             variant="outline"
@@ -451,11 +331,13 @@ function StudentDetailContent({
                             Previous
                         </Button>
                         <span className="text-xs text-muted-foreground tabular-nums">
-                            {position + 1}/{roster.length}
+                            Student {position + 1} of {roster.length}
                         </span>
                         <Button
                             render={
-                                next ? <Link to={studentDetailsHref(next.id, context, activeTab)} /> : undefined
+                                next ? (
+                                    <Link to={studentDetailsHref(next.id, context, activeTab)} />
+                                ) : undefined
                             }
                             nativeButton={!next}
                             variant="outline"
@@ -470,19 +352,8 @@ function StudentDetailContent({
                     </div>
                 )}
             </div>
-            <header>
-                <h1 className="text-3xl font-semibold tracking-tight">
-                    {student.name}
-                </h1>
-                {context && (
-                    <p className="mt-2 text-xs text-muted-foreground">
-                        {context.name} · {fullDate(context.date)}
-                    </p>
-                )}
-            </header>
-
             <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,7fr)]">
-                <aside className="order-2 min-w-0 lg:order-1">
+                <aside ref={sidebarRef} className={cn("order-2 min-w-0 lg:order-1", sidebarFits && "lg:sticky lg:top-4")}>
                     <StudentInformation profile={profile} />
                 </aside>
                 <Tabs
@@ -566,7 +437,7 @@ function StudentDetailContent({
                                                 {session.feedback}
                                             </p>
                                             <p className="mt-1 text-[11px] text-muted-foreground">
-                                                {session.instructor}
+                                                {session.reportAuthor?.name ?? session.instructor}
                                             </p>
                                         </article>
                                     ))
@@ -580,50 +451,30 @@ function StudentDetailContent({
                         <GradingRequirements profile={profile} attended={attended} />
                     </TabsContent>
 
-                    <TabsContent value="sessions" className="space-y-4">
-                        <div>
-                            <h2 className="flex items-center gap-2 font-semibold">
-                                <CalendarDays
-                                    aria-hidden="true"
-                                    className="size-4 text-muted-foreground"
-                                />
-                                Session history
-                            </h2>
-                            <p className="mt-1 text-xs text-muted-foreground">
-                                Newest first · Add or edit feedback for each lesson. Changes
-                                save locally for this session.
-                            </p>
-                        </div>
-                        {sessions.length ? (
-                            sessions.map((session) => (
-                                <SessionFeedback
-                                    key={session.event.id}
-                                    session={session}
-                                    student={student}
-                                    selected={session.event.id === context?.id}
-                                    onSaved={() =>
-                                        setSessions(studentSessionHistory(student, today, context))
-                                    }
-                                />
-                            ))
-                        ) : (
-                            <Card>
-                                <CardContent>
-                                    <p className="text-sm text-muted-foreground">
-                                        No training sessions recorded.
-                                    </p>
-                                </CardContent>
-                            </Card>
-                        )}
+                    <TabsContent value="sessions">
+                        <StudentSessionHistory
+                            sessions={sessions}
+                            student={student}
+                            contextId={context?.id}
+                            now={now}
+                            onSaved={() => setSessions(studentSessionHistory(student, now, context))}
+                        />
                     </TabsContent>
 
                     <TabsContent value="grading" className="space-y-4">
                         {context?.type === "grading" && (
                             <Card>
-                                <CardHeader><CardTitle>Selected grading session</CardTitle></CardHeader>
+                                <CardHeader>
+                                    <CardTitle>Selected grading session</CardTitle>
+                                </CardHeader>
                                 <CardContent className="flex flex-wrap items-center justify-between gap-3">
-                                    <p className="text-xs text-muted-foreground">{context.name} · {fullDate(context.date)}</p>
-                                    <Button render={<Link to={assessmentHref(context, student.id)} />} nativeButton={false}>
+                                    <p className="text-xs text-muted-foreground">
+                                        {context.name} · {fullDate(context.date)}
+                                    </p>
+                                    <Button
+                                        render={<Link to={assessmentHref(context, student.id)} />}
+                                        nativeButton={false}
+                                    >
                                         Open assessment
                                         <ChevronRight aria-hidden="true" />
                                     </Button>
@@ -711,12 +562,16 @@ function StudentDetailContent({
 export default function InstructorStudentDetails() {
     const { studentId } = useParams();
     const [params] = useSearchParams();
-    const [today] = useState(() => {
-        const now = new Date();
-        return new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    });
+    const [now, setNow] = useState(() => new Date());
+    useEffect(() => {
+        const timer = window.setInterval(() => setNow(new Date()), 60_000);
+        return () => window.clearInterval(timer);
+    }, []);
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const student = students.find((item) => item.id === studentId);
-    const requestedContext = findCalendarEvent(params.get("session") ?? params.get("class") ?? undefined);
+    const requestedContext = findCalendarEvent(
+        params.get("session") ?? params.get("class") ?? undefined,
+    );
     if (!student)
         return (
             <section className="space-y-4">
@@ -743,11 +598,14 @@ export default function InstructorStudentDetails() {
         ? requestedContext
         : undefined;
     return (
-        <StudentDetailContent
-            key={`${student.id}-${context?.id ?? "direct"}`}
-            student={student}
-            context={context}
-            today={today}
-        />
+        <ToastProvider>
+            <StudentDetailContent
+                key={`${student.id}-${context?.id ?? "direct"}`}
+                student={student}
+                context={context}
+                today={today}
+                now={now}
+            />
+        </ToastProvider>
     );
 }

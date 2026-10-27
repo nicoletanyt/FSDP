@@ -13,9 +13,11 @@ export type CalendarEvent = {
 export type ClassTemplate = Omit<CalendarEvent, "id" | "date"> & { id: string; weekday: number };
 export type Student = { id: string; name: string; beltGrade: string; targetGrade: string };
 export type Attendance = "unmarked" | "present" | "absent";
+export type ReportAuthor = { id: string; name: string };
 export type StudentSession = {
     attendance: Attendance;
     comment: string;
+    reportAuthor?: ReportAuthor;
     assessmentStatus: "pending" | "completed";
     assessmentNotes: string;
 };
@@ -164,8 +166,12 @@ export function getSavedStudentSession(eventId: string, studentId: string): Stud
     return value ? structuredClone(value) : undefined;
 }
 
-export function saveStudentFeedback(event: CalendarEvent, studentId: string, comment: string, fallbackAttendance: Attendance) {
+export function saveStudentFeedback(event: CalendarEvent, studentId: string, comment: string, fallbackAttendance: Attendance, author?: ReportAuthor) {
     const saved = savedSessions.get(event.id) ?? {};
     const value = saved[studentId] ?? { ...loadSession(event)[studentId], attendance: fallbackAttendance };
-    savedSessions.set(event.id, { ...saved, [studentId]: { ...value, comment } });
+    savedSessions.set(event.id, { ...saved, [studentId]: {
+        ...value,
+        comment,
+        reportAuthor: comment.trim() ? value.reportAuthor ?? author ?? currentInstructor : undefined,
+    } });
 }
