@@ -1,14 +1,17 @@
 import { Suspense, useState } from 'react'
-import { Link, Outlet } from 'react-router'
+import { Link, Outlet, useLocation } from 'react-router'
 import ThemeToggle from '@/components/theme-toggle'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/hooks/use-auth'
 import { dashboardPaths } from '@/lib/auth'
+import { cn } from 'cn'
 
 export default function RootLayout() {
   const { session, profile, loading, signOut } = useAuth()
   const [signingOut, setSigningOut] = useState(false)
   const [error, setError] = useState('')
+  const location = useLocation()
+  const isAdmin = location.pathname === '/admin' || location.pathname.startsWith('/admin/')
 
   async function handleSignOut() {
     setSigningOut(true)
@@ -27,7 +30,10 @@ export default function RootLayout() {
       <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur">
         <nav
           aria-label="Main navigation"
-          className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-6 py-3"
+          className={cn(
+            'mx-auto flex w-full items-center justify-between gap-4 px-6 py-3',
+            isAdmin ? 'max-w-[1400px]' : 'max-w-5xl',
+          )}
         >
           <Link
             to="/"
@@ -60,15 +66,20 @@ export default function RootLayout() {
             </div>
           )}
         </nav>
-        {error && <p role="alert" className="mx-auto max-w-5xl px-6 pb-3 text-sm text-destructive">{error}</p>}
+        {error && <p role="alert" className={cn('mx-auto px-6 pb-3 text-sm text-destructive', isAdmin ? 'max-w-[1400px]' : 'max-w-5xl')}>{error}</p>}
       </header>
-      <main className="mx-auto max-w-5xl px-6 py-12">
+      <main className={cn('mx-auto w-full px-6', isAdmin ? 'max-w-[1400px] py-6' : 'max-w-5xl py-12')}>
         <Suspense fallback={<p role="status" className="py-12 text-muted-foreground">Loading…</p>}>
           <Outlet />
         </Suspense>
       </main>
       <footer className="border-t border-border">
-        <div className="mx-auto flex w-full max-w-5xl flex-col gap-1 px-6 py-6 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+        <div
+          className={cn(
+            'mx-auto flex w-full flex-col gap-1 px-6 py-6 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between',
+            isAdmin ? 'max-w-[1400px]' : 'max-w-5xl',
+          )}
+        >
           <p>&copy; {new Date().getFullYear()} Aikido Shinju-Kai</p>
           <p>FSDP project portal</p>
         </div>
