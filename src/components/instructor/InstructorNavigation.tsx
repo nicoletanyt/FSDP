@@ -4,6 +4,7 @@ import {
     CalendarDays,
     ChevronDown,
     LogOut,
+    ScanLine,
     UserRound,
     Users,
 } from "lucide-react";
@@ -21,6 +22,7 @@ import { cn } from "@/lib/utils";
 const navigation = [
     { label: "Calendar", to: "/instructor/calendar", icon: CalendarDays },
     { label: "Students", to: "/instructor/students", icon: Users },
+    { label: "Check-in", to: "/instructor/check-in", icon: ScanLine },
 ];
 
 export default function InstructorNavigation({
@@ -83,10 +85,10 @@ export default function InstructorNavigation({
                         Instructor Portal
                     </span>
                 </Link>
-                <div className="flex justify-between">
+                <div className="flex min-w-0 flex-wrap items-center justify-between gap-1">
                     <nav
                         aria-label="Instructor navigation"
-                        className="order-3 flex w-full items-center gap-1 lg:order-0 lg:w-auto"
+                        className="order-3 flex w-full flex-wrap items-center gap-1 lg:order-0 lg:w-auto"
                     >
                         {navigation.map(({ label, to, icon: Icon }) => {
                             const active =

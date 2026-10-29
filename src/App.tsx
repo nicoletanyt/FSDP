@@ -16,6 +16,7 @@ const StudentDashboard = lazy(() => import('./pages/StudentDashboard'))
 const InstructorDashboard = lazy(() => import('./pages/InstructorDashboard'))
 const InstructorStudents = lazy(() => import('./pages/InstructorStudents'))
 const InstructorProfile = lazy(() => import('./pages/InstructorProfile'))
+const InstructorCheckIn = lazy(() => import('./pages/InstructorCheckIn'))
 const InstructorStudentDetails = lazy(() => import('./pages/InstructorStudentDetails'))
 const InstructorStudentReports = lazy(() => import('./pages/InstructorStudentReports'))
 const InstructorGradingAssessment = lazy(() => import('./pages/InstructorGradingAssessment'))
@@ -42,6 +43,7 @@ export default function App() {
               <Route index element={<InstructorIndexRedirect />} />
               <Route path="calendar" element={<InstructorDashboard />} />
               <Route path="students" element={<InstructorStudents />} />
+              <Route path="check-in" element={<InstructorCheckIn />} />
               <Route path="students/:studentId" element={<InstructorStudentDetails />} />
               <Route path="reports/:eventId" element={<InstructorStudentReports />} />
               <Route path="assessments/:assessmentId" element={<InstructorGradingAssessment />} />

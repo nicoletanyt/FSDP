@@ -142,7 +142,7 @@ export default function FloatingChatbot() {
     }
 
     return (
-        <div className="fixed right-4 bottom-[calc(1rem+env(safe-area-inset-bottom))] z-40 sm:right-6 sm:bottom-[calc(1.5rem+env(safe-area-inset-bottom))]">
+        <div data-floating-chatbot className="fixed right-4 bottom-[calc(1rem+env(safe-area-inset-bottom))] z-40 sm:right-6 sm:bottom-[calc(1.5rem+env(safe-area-inset-bottom))]">
             <Card
                 id={panelId}
                 role="dialog"
