@@ -7,7 +7,6 @@ import {
     Pencil,
     Plus,
 } from "lucide-react";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -79,13 +78,6 @@ function SessionReport({
         }
         : currentInstructor;
     const authorName = session.reportAuthor?.name ?? session.instructor;
-    const initials = authorName
-        .split(/\s+/)
-        .filter(Boolean)
-        .slice(0, 2)
-        .map((part) => part[0])
-        .join("")
-        .toUpperCase();
 
     return (
         <Card

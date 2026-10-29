@@ -12,6 +12,10 @@
     --color-brand-red: var(--brand-red);
     --color-brand-red-ink: var(--brand-red-ink);
     --color-brand-grey: var(--brand-grey);
+    --color-success: var(--success);
+    --color-success-foreground: var(--success-foreground);
+    --color-warning: var(--warning);
+    --color-warning-foreground: var(--warning-foreground);
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -91,6 +95,11 @@
     --destructive: var(--brand-red);
     --destructive-foreground: oklch(0.985 0 0);
 
+    --success: oklch(0.52 0.13 155);
+    --success-foreground: oklch(0.985 0 0);
+    --warning: oklch(0.72 0.15 75);
+    --warning-foreground: oklch(0.26 0.02 75);
+
     --border: oklch(0.905 0.003 31.23);
     --input: oklch(0.905 0.003 31.23);
     --ring: var(--brand-blue);
@@ -140,6 +149,11 @@
 
     --destructive: oklch(0.68 0.19 26.56);
     --destructive-foreground: oklch(0.2 0.012 31.23);
+
+    --success: oklch(0.72 0.14 155);
+    --success-foreground: oklch(0.2 0.012 31.23);
+    --warning: oklch(0.78 0.13 78);
+    --warning-foreground: oklch(0.22 0.02 78);
 
     --border: oklch(1 0 0 / 12%);
     --input: oklch(1 0 0 / 15%);

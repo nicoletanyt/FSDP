@@ -71,6 +71,39 @@ server secrets with `VITE_`.
 - Sessions persist automatically. Roles come from `public.users`; browser clients
   cannot write profiles or assign privileged roles. Passwords stay in Supabase Auth.
 
+## Administrator console
+
+Administrators sign in at `/staff/login` and land on `/admin`. The console uses a
+top navigation bar with **Monitor** and **Grading** menus, an **Instructors**
+link, and theme, notification, and profile controls. The logo returns to
+`/admin`; students and instructors keep the public home page. Sign out is on
+`/admin/profile` rather than in the shared header.
+
+| Route | Purpose |
+| --- | --- |
+| `/admin` | Overview of attendance, declining students, and the grading pipeline |
+| `/admin/centres` | Centre directory: search and filter students; open a full student profile |
+| `/admin/attendance/register` | Mark a session roster present, late, absent, or excused |
+| `/admin/attendance/sessions` | Create sessions and assign an instructor, including external sessions |
+| `/admin/attendance/records` | Review and export attendance history |
+| `/admin/attendance/monitoring` | Flag declining attendance, notify students, and track follow-up |
+| `/admin/grading/eligibility` | Automatic eligibility checks and invitations |
+| `/admin/grading/opportunities` | Create grading opportunities and assign an assessing instructor |
+| `/admin/grading/applications` | Read-only view and CSV export of submitted applications |
+| `/admin/notifications` | Compose targeted notifications and review delivery history |
+| `/admin/reports` | Consolidated centre reporting and CSV export |
+| `/admin/instructors` | Teaching team and instructor account creation |
+| `/admin/profile` | Administrator account details and sign out |
+
+The console uses deterministic mock data from `src/lib/admin/mock-data.ts`
+through an in-memory provider. Attendance, sessions, opportunities,
+notifications, and follow-up changes reset on reload; no admin data is written to
+Supabase yet. Instructor account creation on `/admin/instructors` is the one live
+backend action, using the existing `create-instructor` Edge Function.
+
+Grading results, belt promotions, and application approvals are intentionally
+out of scope. Applications are displayed read-only for administrators.
+
 After approving the target cloud database changes, apply the migration:
 
 ```sh
