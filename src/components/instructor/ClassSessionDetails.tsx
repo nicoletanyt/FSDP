@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import {
     Check,
     CircleCheck,
+    CircleMinus,
     CircleX,
     MessageSquare,
 } from "lucide-react";
@@ -16,16 +17,40 @@ import type {
     StudentSession,
 } from "@/lib/instructor-calendar";
 import { cn } from "@/lib/utils";
+import { sessionPhase, studentSessionHistory } from "@/lib/instructor-student-details";
 
 function AttendanceControls({
     student,
     value,
     onChange,
+    readOnly = false,
 }: {
     student: Student;
     value: Attendance;
     onChange: (value: Attendance) => void;
+    readOnly?: boolean;
 }) {
+    if (readOnly) {
+        const label = value === "present" ? "Present" : value === "absent" ? "Absent" : "Unmarked";
+        return (
+            <span
+                role="img"
+                aria-label={`Attendance for ${student.name}: ${label}`}
+                title={label}
+                className={cn(
+                    "flex size-7 shrink-0 items-center justify-center rounded-full",
+                    value === "present" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+                        : value === "absent" ? "bg-red-100 text-red-600 dark:bg-red-950 dark:text-red-400"
+                            : "bg-muted text-muted-foreground",
+                )}
+            >
+                {value === "present" ? <CircleCheck aria-hidden="true" className="size-4" />
+                    : value === "absent" ? <CircleX aria-hidden="true" className="size-4 text-red-600 dark:text-red-400" />
+                        : <CircleMinus aria-hidden="true" className="size-4" />}
+            </span>
+        );
+    }
+
     return (
         <div
             role="group"
@@ -57,9 +82,8 @@ function AttendanceControls({
                 title={value === "absent" ? "Absent · click to clear" : "Mark absent"}
                 onClick={() => onChange(value === "absent" ? "unmarked" : "absent")}
                 className={cn(
-                    "size-7 rounded-full text-muted-foreground/45 transition-colors duration-200 hover:bg-rose-50 hover:text-rose-700 dark:hover:bg-rose-950/50",
-                    value === "absent" &&
-                    "bg-rose-100 text-rose-700 hover:bg-rose-200 dark:bg-rose-950 dark:text-rose-300 dark:hover:bg-rose-900",
+                    "size-7 rounded-full text-muted-foreground/45 transition-colors duration-200 hover:bg-muted hover:text-muted-foreground",
+                    value === "absent" && "bg-red-100 text-red-600 hover:bg-red-200 hover:text-red-600 dark:bg-red-950 dark:text-red-400 dark:hover:bg-red-900 dark:hover:text-red-400",
                 )}
             >
                 <CircleX aria-hidden="true" className="size-4" />
@@ -98,7 +122,25 @@ export default function ClassSessionDetails({
 }: {
     event: CalendarEvent;
 }) {
-    const [record, setRecord] = useState(() => loadSession(event));
+    const [record, setRecord] = useState(() => {
+        const initial = loadSession(event);
+        const currentTime = new Date();
+        if (sessionPhase(event, currentTime) === "past") {
+            // Match student history, including any explicitly saved attendance.
+            for (const student of students.filter((item) => event.studentIds.includes(item.id))) {
+                const history = studentSessionHistory(student, currentTime, event)
+                    .find((item) => item.event.id === event.id);
+                if (history) initial[student.id].attendance = history.attendance;
+            }
+        }
+        return initial;
+    });
+    const [now, setNow] = useState(() => new Date());
+    useEffect(() => {
+        const timer = window.setInterval(() => setNow(new Date()), 60_000);
+        return () => window.clearInterval(timer);
+    }, []);
+    const isPast = sessionPhase(event, now) === "past";
     const isGrading = event.type === "grading";
     const roster = students.filter((student) =>
         event.studentIds.includes(student.id),
@@ -107,6 +149,7 @@ export default function ClassSessionDetails({
     const allPresent = roster.length > 0 && roster.every((student) => record[student.id].attendance === "present");
 
     function persistRecord(next: SessionRecord) {
+        if (sessionPhase(event, new Date()) === "past") return;
         saveSession(event.id, next);
         setRecord(next);
     }
@@ -165,6 +208,7 @@ export default function ClassSessionDetails({
                                     <AttendanceControls
                                         student={student}
                                         value={value.attendance}
+                                        readOnly={isPast}
                                         onChange={(attendance) => updateStudent(student.id, { attendance })}
                                     />
                                     <Button
@@ -185,14 +229,16 @@ export default function ClassSessionDetails({
                 })}
             </ul>
 
-            <div className="space-y-2 p-3">
-                <div className="flex items-center justify-between gap-2">
-                    <Button variant="outline" size="sm" onClick={toggleAllAttendance} className="h-auto min-h-7 min-w-0 shrink py-1 whitespace-normal">
-                        {allPresent ? <CircleX aria-hidden="true" /> : <Check aria-hidden="true" />}
-                        {allPresent ? "Mark All Absent" : "Mark All Present"}
-                    </Button>
+            {!isPast && (
+                <div className="space-y-2 p-3">
+                    <div className="flex items-center justify-between gap-2">
+                        <Button variant="outline" size="sm" onClick={toggleAllAttendance} className="h-auto min-h-7 min-w-0 shrink py-1 whitespace-normal">
+                            {allPresent ? <CircleX aria-hidden="true" /> : <Check aria-hidden="true" />}
+                            {allPresent ? "Mark All Absent" : "Mark All Present"}
+                        </Button>
+                    </div>
                 </div>
-            </div>
+            )}
         </div>
     );
 }

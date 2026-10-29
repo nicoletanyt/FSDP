@@ -13,7 +13,6 @@ import { Card } from "@/components/ui/card";
 import {
     addDays,
     dateKey,
-    eventStyles,
     eventsForDate,
     findCalendarEvent,
     formatTime,
@@ -34,21 +33,17 @@ function EventCard({
     expanded: boolean;
     onToggle: () => void;
 }) {
-    const style = eventStyles[event.type];
     return (
         <Card
             size="sm"
-            className={cn(
-                "gap-0 rounded-lg border py-0 shadow-none ring-0 transition-[border-color,box-shadow] duration-200 hover:border-foreground/25 hover:shadow-sm has-focus-visible:ring-2 has-focus-visible:ring-ring",
-                style.card,
-            )}
+            className="gap-0 rounded-lg border py-0 shadow-none ring-0 transition-[border-color,box-shadow] duration-200 hover:border-foreground/25 hover:shadow-sm has-focus-visible:ring-2 has-focus-visible:ring-ring"
         >
             <Button
                 variant="ghost"
                 onClick={onToggle}
                 aria-expanded={expanded}
                 aria-controls={`details-${event.id}`}
-                aria-label={`${event.name}, ${style.label}, ${fullDate(event.date)}, ${formatTime(event.startTime)} to ${formatTime(event.endTime)}, ${event.dojo}, ${event.studentIds.length} ${event.type === "grading" ? "candidates" : "students"}. ${expanded ? "Collapse" : "Expand"} class details`}
+                aria-label={`${event.name}, ${fullDate(event.date)}, ${formatTime(event.startTime)} to ${formatTime(event.endTime)}, ${event.dojo}, ${event.studentIds.length} students. ${expanded ? "Collapse" : "Expand"} class details`}
                 className="h-auto w-full flex-col items-stretch gap-2 rounded-lg p-2.5 text-left whitespace-normal hover:bg-foreground/5 focus-visible:-outline-offset-2"
             >
                 <span className="flex items-start justify-between gap-1 text-xs leading-snug font-semibold">
@@ -104,12 +99,14 @@ function CalendarWeek({
     date,
     today,
     expandedClassId,
+    expandSelectedDay,
     onSelectDate,
     onToggleClass,
 }: {
     date: Date;
     today: Date;
     expandedClassId: string | null;
+    expandSelectedDay: boolean;
     onSelectDate: (date: Date) => void;
     onToggleClass: (event: CalendarEvent) => void;
 }) {
@@ -166,9 +163,10 @@ function CalendarWeek({
             </div>
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border lg:flex-row lg:divide-x">
                 {weekDates(date).map((day) => {
-                    const events = eventsForDate(day);
+                    const events = eventsForDate(day).filter((event) => event.type === "training");
                     const isToday = dateKey(day) === dateKey(today);
                     const isSelected = dateKey(day) === dateKey(date);
+                    const isExpanded = isSelected && expandSelectedDay;
                     return (
                         <section
                             key={dateKey(day)}
@@ -179,16 +177,17 @@ function CalendarWeek({
                             })}
                             className={cn(
                                 "min-h-0 min-w-0 grow flex-col bg-card transition-[flex-basis,flex-grow,background-color,box-shadow] duration-200 ease-in-out motion-reduce:transition-none lg:shrink-0",
-                                isSelected
-                                    ? "flex bg-accent/60 lg:grow-0 lg:basis-[clamp(300px,24vw,320px)]"
-                                    : "hidden lg:flex lg:grow lg:basis-0",
+                                isSelected ? "flex" : "hidden lg:flex",
+                                isExpanded
+                                    ? "bg-accent/60 lg:grow-0 lg:basis-[clamp(300px,24vw,320px)]"
+                                    : "lg:grow lg:basis-0",
                             )}
-                            data-selected={isSelected}
+                            data-selected={isExpanded}
                         >
                             <header
                                 className={cn(
                                     "h-20 shrink-0 border-b p-2 transition-colors duration-200",
-                                    isSelected && "bg-accent/70",
+                                    isExpanded && "bg-accent/70",
                                 )}
                             >
                                 <Button
@@ -196,13 +195,13 @@ function CalendarWeek({
                                     onClick={() => onSelectDate(day)}
                                     aria-label={`Select and expand ${day.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}`}
                                     aria-current={isToday ? "date" : undefined}
-                                    aria-pressed={isSelected}
+                                    aria-pressed={isExpanded}
                                     className="h-full w-full cursor-pointer flex-col items-center gap-1 px-0 py-1 transition-colors duration-200"
                                 >
                                     <span
                                         className={cn(
                                             "flex h-6 shrink-0 items-center justify-center rounded-full px-1.5 text-[10px] font-semibold tabular-nums",
-                                            isSelected && "text-xs",
+                                            isExpanded && "text-xs",
                                             isToday && "bg-primary text-primary-foreground",
                                         )}
                                     >
@@ -210,9 +209,9 @@ function CalendarWeek({
                                     </span>
                                     <span className="h-4 max-w-full shrink-0 truncate px-2 text-xs leading-4 font-normal text-muted-foreground">
                                         {day.toLocaleDateString("en-GB", {
-                                            weekday: isSelected ? "long" : "short",
+                                            weekday: isExpanded ? "long" : "short",
                                         })}
-                                        {isToday && isSelected && " · Today"}
+                                        {isToday && isExpanded && " · Today"}
                                     </span>
                                 </Button>
                             </header>
@@ -242,17 +241,20 @@ function CalendarWeek({
 
 export default function InstructorDashboard() {
     const [searchParams, setSearchParams] = useSearchParams();
+    const [weekOverview, setWeekOverview] = useState(false);
     const [today] = useState(() => {
         const now = new Date();
         return new Date(now.getFullYear(), now.getMonth(), now.getDate());
     });
-    const requestedSession = findCalendarEvent(searchParams.get("session") ?? searchParams.get("class") ?? undefined);
+    const requestedEvent = findCalendarEvent(searchParams.get("session") ?? searchParams.get("class") ?? undefined);
+    const requestedSession = requestedEvent?.type === "training" ? requestedEvent : undefined;
     const selectedDate = parseCalendarDate(searchParams.get("date")) ?? requestedSession?.date ?? today;
     const expandedClassId = requestedSession && dateKey(requestedSession.date) === dateKey(selectedDate)
         ? requestedSession.id
         : null;
 
-    function updateSelection(date: Date, sessionId: string | null = null) {
+    function updateSelection(date: Date, sessionId: string | null = null, overview = false) {
+        setWeekOverview(overview);
         const next = new URLSearchParams(searchParams);
         next.set("date", dateKey(date));
         next.delete("class");
@@ -266,7 +268,9 @@ export default function InstructorDashboard() {
     }
 
     function navigateWeek(direction: number) {
-        updateSelection(addDays(selectedDate, direction * 7));
+        const nextDate = addDays(selectedDate, direction * 7);
+        const includesToday = weekDates(nextDate).some((day) => dateKey(day) === dateKey(today));
+        updateSelection(includesToday ? today : nextDate, null, !includesToday);
     }
 
     return (
@@ -311,24 +315,12 @@ export default function InstructorDashboard() {
                         </div>
                         <h2 className="text-sm font-medium" aria-live="polite">{weekLabel(selectedDate)}</h2>
                     </div>
-                    <div
-                        aria-label="Event categories"
-                        className="flex gap-4 text-xs text-muted-foreground"
-                    >
-                        {(["training", "grading"] as const).map((type) => (
-                            <span key={type} className="flex items-center gap-1.5">
-                                <span
-                                    className={cn("size-2 rounded-full", eventStyles[type].dot)}
-                                />{" "}
-                                {eventStyles[type].label}
-                            </span>
-                        ))}
-                    </div>
                 </div>
                 <CalendarWeek
                     date={selectedDate}
                     today={today}
                     expandedClassId={expandedClassId}
+                    expandSelectedDay={!weekOverview || expandedClassId !== null}
                     onSelectDate={selectDay}
                     onToggleClass={(event) =>
                         updateSelection(event.date, expandedClassId === event.id ? null : event.id)
