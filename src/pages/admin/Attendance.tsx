@@ -1,7 +1,4 @@
-import { CalendarCheck } from 'lucide-react'
-import { Link, NavLink, Outlet } from 'react-router'
-import PageHeader from '@/components/admin/PageHeader'
-import { Button } from '@/components/ui/button'
+import { NavLink, Outlet } from 'react-router'
 import { cn } from 'cn'
 
 const tabs = [
@@ -13,19 +10,11 @@ const tabs = [
 
 export default function Attendance() {
   return (
-    <div className="space-y-5">
-      <PageHeader
-        eyebrow="Monitor"
-        title="Attendance"
-        description="Record classes, review history, and follow up with students whose attendance is declining across centres."
-        actions={
-          <Button render={<Link to="/admin/attendance/register" />}>
-            <CalendarCheck />
-            Record attendance
-          </Button>
-        }
-      />
-      <nav aria-label="Attendance sections" className="flex flex-wrap gap-1 border-b border-border">
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
+      <nav
+        aria-label="Attendance sections"
+        className="flex shrink-0 flex-wrap gap-1 border-b border-border"
+      >
         {tabs.map((tab) => (
           <NavLink
             key={tab.to}

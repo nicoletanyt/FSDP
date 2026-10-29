@@ -12,6 +12,9 @@ export default function RootLayout() {
   const [error, setError] = useState('')
   const location = useLocation()
   const isAdmin = location.pathname === '/admin' || location.pathname.startsWith('/admin/')
+  const isAttendanceRegister =
+    location.pathname === '/admin/attendance' ||
+    location.pathname.startsWith('/admin/attendance/register')
   const isInstructorPortal = useMatch('/instructor/*')
   const homePath = profile?.role === 'administrator' ? dashboardPaths.administrator : '/'
 
@@ -94,17 +97,19 @@ export default function RootLayout() {
           </Suspense>
         </main>
       )}
-      <footer className="border-t border-border">
-        <div
-          className={cn(
-            'mx-auto flex w-full flex-col gap-1 px-6 py-6 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between',
-            isAdmin ? 'max-w-[1400px]' : 'max-w-5xl',
-          )}
-        >
-          <p>&copy; {new Date().getFullYear()} Aikido Shinju-Kai</p>
-          <p>FSDP project portal</p>
-        </div>
-      </footer>
+      {!isAttendanceRegister && (
+        <footer className="border-t border-border">
+          <div
+            className={cn(
+              'mx-auto flex w-full flex-col gap-1 px-6 py-6 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between',
+              isAdmin ? 'max-w-[1400px]' : 'max-w-5xl',
+            )}
+          >
+            <p>&copy; {new Date().getFullYear()} Aikido Shinju-Kai</p>
+            <p>FSDP project portal</p>
+          </div>
+        </footer>
+      )}
     </div>
   )
 }
