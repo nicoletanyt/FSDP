@@ -1,6 +1,7 @@
 import { lazy } from 'react'
 import { BrowserRouter, Route, Routes } from 'react-router'
 import { GuestRoute, ProtectedRoute } from '@/components/auth/AuthGate'
+import FloatingChatbot from '@/components/FloatingChatbot'
 import AuthLayout from './layouts/AuthLayout'
 import RootLayout from './layouts/RootLayout'
 import InstructorLayout, { InstructorIndexRedirect } from './layouts/InstructorLayout'
@@ -56,6 +57,7 @@ export default function App() {
           <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>
+      <FloatingChatbot />
     </BrowserRouter>
   )
 }
