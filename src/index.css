@@ -177,3 +177,7 @@
         @apply bg-primary text-primary-foreground;
     }
 }
+
+body:has([data-check-in-kiosk="true"]) [data-floating-chatbot] {
+  display: none;
+}
