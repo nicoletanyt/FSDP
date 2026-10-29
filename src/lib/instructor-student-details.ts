@@ -68,7 +68,13 @@ export function studentSessionHistory(student: Student, now: Date, context?: Cal
     const index = students.findIndex((item) => item.id === student.id);
     const tomorrow = addDays(now, 1);
     const belongsToStudent = (event: CalendarEvent) => event.type === "training" && event.studentIds.includes(student.id);
-    const events = Array.from({ length: 56 }, (_, daysAgo) => eventsForDate(addDays(now, -daysAgo)))
+    // A student's record spans every enrolled dojo and instructor, not just the portal calendar.
+    const events: CalendarEvent[] = Array.from({ length: 56 }, (_, daysAgo) => {
+        const date = addDays(now, -daysAgo);
+        return classTemplates
+            .filter((template) => template.type === "training" && template.weekday === date.getDay() && template.studentIds.includes(student.id))
+            .map((template) => ({ ...template, id: `${template.id}-${dateKey(date)}`, date }));
+    })
         .flat().filter((event) => belongsToStudent(event) && event.date < tomorrow)
         .sort((a, b) => b.date.getTime() - a.date.getTime() || b.startTime.localeCompare(a.startTime))
         .slice(0, 12);
@@ -94,6 +100,26 @@ export function studentSessionHistory(student: Student, now: Date, context?: Cal
             reportAuthor: feedback.trim() ? saved?.reportAuthor ?? instructor : undefined,
         };
     }).sort((a, b) => b.event.date.getTime() - a.event.date.getTime() || b.event.startTime.localeCompare(a.event.startTime));
+}
+
+export function studentAttendanceSummary(sessions: StudentHistorySession[], now: Date) {
+    const pastSessions = sessions
+        .filter((session) => sessionPhase(session.event, now) === "past")
+        .sort((a, b) => b.event.date.getTime() - a.event.date.getTime() || b.event.startTime.localeCompare(a.event.startTime));
+    const markedSessions = pastSessions.filter((session) => session.attendance !== "unmarked");
+    const presentSessions = markedSessions.filter((session) => session.attendance === "present");
+    // An unmarked session breaks the streak: missing attendance is not evidence of absence.
+    const firstNonAbsence = pastSessions.findIndex((session) => session.attendance !== "absent");
+    return {
+        pastSessions,
+        markedSessions,
+        attended: presentSessions.length,
+        attendanceRate: markedSessions.length ? Math.round(presentSessions.length / markedSessions.length * 100) : null,
+        lastAttended: presentSessions[0],
+        periodStart: pastSessions.at(-1)?.event.date,
+        periodEnd: pastSessions[0]?.event.date,
+        consecutiveAbsences: firstNonAbsence === -1 ? pastSessions.length : firstNonAbsence,
+    };
 }
 
 export function studentGradingHistory(student: Student, today: Date, context?: CalendarEvent) {

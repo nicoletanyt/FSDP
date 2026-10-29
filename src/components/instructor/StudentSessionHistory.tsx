@@ -5,6 +5,7 @@ import {
     CircleCheck,
     CircleX,
     Pencil,
+    Plus,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -126,15 +127,15 @@ function SessionReport({
                     </h4>
                     {!editing && (
                         <Button
-                            variant="ghost"
+                            variant={report ? "ghost" : "default"}
                             size="sm"
-                            className="-mr-1 h-6"
+                            className={report ? "-mr-1 h-6" : undefined}
                             onClick={() => {
                                 setDraft(session.feedback);
                                 setEditing(true);
                             }}
                         >
-                            <Pencil aria-hidden="true" />
+                            {report ? <Pencil aria-hidden="true" /> : <Plus aria-hidden="true" />}
                             {report ? "Edit report" : "Add report"}
                         </Button>
                     )}
@@ -190,7 +191,7 @@ function SessionReport({
                             report ? "text-foreground" : "text-muted-foreground",
                         )}
                     >
-                        {report || "No instructor report yet"}
+                        {report || "No instructor report has been added."}
                     </p>
                 )}
                 {report && (

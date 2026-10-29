@@ -6,9 +6,9 @@ import {
     HeartPulse,
     Mail,
     MapPin,
-    MessageSquare,
     Phone,
     Target,
+    TriangleAlert,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import StudentSessionHistory from "@/components/instructor/StudentSessionHistory";
@@ -23,14 +23,11 @@ import {
     studentDetailsHref,
     students,
 } from "@/lib/instructor-calendar";
-import type {
-    CalendarEvent,
-    Student,
-} from "@/lib/instructor-calendar";
+import type { CalendarEvent, Student } from "@/lib/instructor-calendar";
 import {
     beltColorClass,
     getStudentProfile,
-    sessionPhase,
+    studentAttendanceSummary,
     studentGradingHistory,
     studentSessionHistory,
 } from "@/lib/instructor-student-details";
@@ -44,7 +41,9 @@ function StudentInformation({ profile }: { profile: Profile }) {
         <Card size="sm" className="gap-3">
             <CardHeader className="gap-1.5">
                 <h2 className="text-xs font-semibold text-muted-foreground">Student</h2>
-                <CardTitle className="text-xl font-semibold group-data-[size=sm]/card:text-xl"><h1>{profile.name}</h1></CardTitle>
+                <CardTitle className="text-xl font-semibold group-data-[size=sm]/card:text-xl">
+                    <h1>{profile.name}</h1>
+                </CardTitle>
                 <p className="text-xs text-muted-foreground">{profile.studentNumber}</p>
                 <p className="mt-1 flex items-center gap-2 text-sm">
                     <span
@@ -58,7 +57,7 @@ function StudentInformation({ profile }: { profile: Profile }) {
                 </p>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
-                <dl className="space-y-2 border-t pt-3">
+                <dl className="grid grid-cols-2 gap-3 border-t pt-3">
                     <div>
                         <dt className="text-xs text-muted-foreground">Principal dojo</dt>
                         <dd className="mt-0.5 flex items-center gap-1.5 text-xs">
@@ -84,7 +83,7 @@ function StudentInformation({ profile }: { profile: Profile }) {
                     </div>
                 </dl>
                 <section
-                    className="space-y-2 border-t pt-3"
+                    className="space-y-1.5 border-t pt-3"
                     aria-label="Contact information"
                 >
                     <h2 className="text-xs font-semibold">Contact</h2>
@@ -102,11 +101,18 @@ function StudentInformation({ profile }: { profile: Profile }) {
                         <Phone aria-hidden="true" className="size-3.5" />
                         {profile.phone}
                     </a>
-                    <div className="space-y-1 pt-1" aria-label="Emergency contact">
-                        <h3 className="text-[11px] font-medium text-muted-foreground">Emergency contact</h3>
-                        <p className="text-xs font-medium">{profile.emergencyContact.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                            {profile.emergencyContact.relationship}
+                    <div className="space-y-1 pt-2" aria-label="Emergency contact">
+                        <h3 className="text-[11px] font-medium text-muted-foreground">
+                            Emergency contact
+                        </h3>
+                        <p className="text-xs">
+                            <span className="font-medium">
+                                {profile.emergencyContact.name}
+                            </span>
+                            <span className="text-muted-foreground">
+                                {" "}
+                                · {profile.emergencyContact.relationship}
+                            </span>
                         </p>
                         <a
                             href={`tel:${profile.emergencyContact.phone.replaceAll(" ", "")}`}
@@ -122,7 +128,7 @@ function StudentInformation({ profile }: { profile: Profile }) {
                 >
                     <h2 className="flex items-center gap-1.5 text-xs font-semibold">
                         <HeartPulse aria-hidden="true" className="size-3.5" />
-                        Medical
+                        Medical alerts
                     </h2>
                     {profile.medicalAlerts.length ? (
                         profile.medicalAlerts.map((alert) => (
@@ -217,6 +223,64 @@ function GradingRequirements({
     );
 }
 
+function NextGradingSummary({
+    profile,
+    assessmentRecorded,
+    onViewGrading,
+}: {
+    profile: Profile;
+    assessmentRecorded: boolean;
+    onViewGrading: () => void;
+}) {
+    return (
+        <section className="space-y-3">
+            <div className="flex min-h-7 flex-wrap items-center gap-x-3 gap-y-1">
+                <h2 className="text-sm font-semibold">Next grading</h2>
+                <Button variant="ghost" size="sm" onClick={onViewGrading} className="ml-auto">
+                    View grading
+                    <ChevronRight aria-hidden="true" />
+                </Button>
+            </div>
+            <Card size="sm">
+                <CardContent className="space-y-3">
+                    <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
+                        <div>
+                            <dt className="text-muted-foreground">Current rank</dt>
+                            <dd className="mt-1 flex items-center gap-2 font-medium">
+                                <span
+                                    aria-hidden="true"
+                                    className={cn(
+                                        "size-2.5 shrink-0 rounded-full border",
+                                        beltColorClass(profile.beltGrade),
+                                    )}
+                                />
+                                {profile.beltGrade}
+                            </dd>
+                        </div>
+                        <div>
+                            <dt className="text-muted-foreground">Next grade</dt>
+                            <dd className="mt-1 font-medium">{profile.targetGrade}</dd>
+                        </div>
+                        <div>
+                            <dt className="text-muted-foreground">Eligibility</dt>
+                            <dd className="mt-1 font-medium">Not yet verified</dd>
+                        </div>
+                        <div>
+                            <dt className="text-muted-foreground">Technical assessment</dt>
+                            <dd className="mt-1 font-medium">
+                                {assessmentRecorded ? "Recorded" : "Not yet verified"}
+                            </dd>
+                        </div>
+                    </dl>
+                    <p className="text-[11px] text-muted-foreground">
+                        Eligibility is separate from technical assessment.
+                    </p>
+                </CardContent>
+            </Card>
+        </section>
+    );
+}
+
 function StudentDetailContent({
     student,
     context,
@@ -240,12 +304,18 @@ function StudentDetailContent({
     useEffect(() => {
         const sidebar = sidebarRef.current;
         if (!sidebar) return;
-        const update = () => setSidebarFits(sidebar.getBoundingClientRect().height <= window.innerHeight - 32);
+        const update = () =>
+            setSidebarFits(
+                sidebar.getBoundingClientRect().height <= window.innerHeight - 32,
+            );
         const observer = new ResizeObserver(update);
         observer.observe(sidebar);
         window.addEventListener("resize", update);
         update();
-        return () => { observer.disconnect(); window.removeEventListener("resize", update); };
+        return () => {
+            observer.disconnect();
+            window.removeEventListener("resize", update);
+        };
     }, []);
     const profile = getStudentProfile(student, today);
     const gradingHistory = studentGradingHistory(student, today, context);
@@ -257,16 +327,25 @@ function StudentDetailContent({
     const position = roster.findIndex((item) => item.id === student.id);
     const previous = roster[position - 1];
     const next = roster[position + 1];
-    const markedSessions = sessions.filter(
-        (item) => sessionPhase(item.event, now) === "past" && item.attendance !== "unmarked",
+    const {
+        pastSessions,
+        markedSessions,
+        attended,
+        attendanceRate,
+        lastAttended,
+        periodStart,
+        periodEnd,
+        consecutiveAbsences,
+    } = studentAttendanceSummary(sessions, now);
+    const recentFeedback = pastSessions
+        .filter((item) => item.feedback.trim())
+        .slice(0, 2);
+    const assessmentRecorded = gradingHistory.some(
+        (assessment) =>
+            assessment.status === "Completed" &&
+            assessment.fromGrade === profile.beltGrade &&
+            assessment.toGrade === profile.targetGrade,
     );
-    const attended = markedSessions.filter(
-        (item) => item.attendance === "present",
-    ).length;
-    const attendanceRate = markedSessions.length
-        ? Math.round((attended / markedSessions.length) * 100)
-        : 0;
-    const recentFeedback = sessions.filter((item) => sessionPhase(item.event, now) === "past" && item.feedback).slice(0, 3);
     const monthsInRank = Math.max(
         0,
         (today.getFullYear() - profile.rankAwardedOn.getFullYear()) * 12 +
@@ -353,7 +432,13 @@ function StudentDetailContent({
                 )}
             </div>
             <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,7fr)]">
-                <aside ref={sidebarRef} className={cn("order-2 min-w-0 lg:order-1", sidebarFits && "lg:sticky lg:top-4")}>
+                <aside
+                    ref={sidebarRef}
+                    className={cn(
+                        "order-2 min-w-0 lg:order-1",
+                        sidebarFits && "lg:sticky lg:top-4",
+                    )}
+                >
                     <StudentInformation profile={profile} />
                 </aside>
                 <Tabs
@@ -374,81 +459,107 @@ function StudentDetailContent({
                         <TabsTrigger value="grading">Grading</TabsTrigger>
                     </TabsList>
 
-                    <TabsContent value="overview" className="space-y-4">
-                        <div className="grid grid-cols-2 gap-3">
+                    <TabsContent value="overview" className="space-y-5">
+                        <section className="space-y-3">
+                            <div className="flex min-h-7 flex-wrap items-center gap-x-3 gap-y-1">
+                                <h2 className="text-sm font-semibold">Attendance</h2>
+                                <p className="ml-auto text-right text-[11px] text-muted-foreground">
+                                    {periodStart && periodEnd
+                                        ? `Reporting period: ${fullDate(periodStart)} – ${fullDate(periodEnd)}`
+                                        : "No completed sessions recorded"}
+                                </p>
+                            </div>
+                            <div className="grid gap-3 sm:grid-cols-2">
+                                <Card size="sm">
+                                    <CardContent>
+                                        <p className="text-xs text-muted-foreground">
+                                            Attendance rate
+                                        </p>
+                                        <p className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1 tabular-nums">
+                                            <span className="text-2xl font-semibold">
+                                                {attendanceRate === null ? "—" : `${attendanceRate}%`}
+                                            </span>
+                                            <span className="text-xs text-muted-foreground">
+                                                · {attended}/{markedSessions.length} sessions
+                                            </span>
+                                        </p>
+                                    </CardContent>
+                                </Card>
+                                <Card size="sm">
+                                    <CardContent>
+                                        <p className="text-xs text-muted-foreground">
+                                            Last attended
+                                        </p>
+                                        <p className="mt-2 text-lg font-semibold tabular-nums">
+                                            {lastAttended
+                                                ? fullDate(lastAttended.event.date)
+                                                : "Not recorded"}
+                                        </p>
+                                        <p className="mt-1 text-[11px] text-muted-foreground">
+                                            {lastAttended
+                                                ? `${lastAttended.event.name} · ${lastAttended.event.dojo}`
+                                                : "No attended sessions in this history"}
+                                        </p>
+                                    </CardContent>
+                                </Card>
+                            </div>
+                            {consecutiveAbsences >= 2 && (
+                                <p
+                                    role="status"
+                                    className="flex items-start gap-2 rounded-lg bg-amber-50/70 px-3 py-2 text-xs leading-relaxed text-amber-900 dark:bg-amber-950/30 dark:text-amber-200"
+                                >
+                                    <TriangleAlert
+                                        aria-hidden="true"
+                                        className="mt-0.5 size-3.5 shrink-0"
+                                    />
+                                    {consecutiveAbsences} consecutive absences in the most recent
+                                    recorded sessions. Review attendance in the Sessions tab.
+                                </p>
+                            )}
+                        </section>
+                        <section className="space-y-3">
+                            <div className="flex min-h-7 flex-wrap items-center gap-x-3 gap-y-1">
+                                <h2 className="text-sm font-semibold">Recent lesson feedback</h2>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => selectTab("sessions")}
+                                    className="ml-auto"
+                                >
+                                    All sessions
+                                    <ChevronRight aria-hidden="true" />
+                                </Button>
+                            </div>
                             <Card size="sm">
-                                <CardContent>
-                                    <p className="text-xs text-muted-foreground">
-                                        Attendance rate
-                                    </p>
-                                    <p className="mt-2 text-2xl font-semibold tabular-nums">
-                                        {attendanceRate}%
-                                    </p>
-                                    <p className="mt-1 text-[11px] text-muted-foreground">
-                                        {markedSessions.length} marked sessions
-                                    </p>
+                                <CardContent className="space-y-4">
+                                    {recentFeedback.length ? (
+                                        recentFeedback.map((session) => (
+                                            <article key={session.event.id} className="border-l-2 pl-3">
+                                                <p className="text-xs font-medium">
+                                                    {session.event.name}{" "}
+                                                    <span className="font-normal text-muted-foreground">
+                                                        · {fullDate(session.event.date)} ·{" "}
+                                                        {session.reportAuthor?.name ?? session.instructor}
+                                                    </span>
+                                                </p>
+                                                <p className="mt-1.5 whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">
+                                                    {session.feedback}
+                                                </p>
+                                            </article>
+                                        ))
+                                    ) : (
+                                        <p className="text-xs text-muted-foreground">
+                                            No feedback recorded yet. Add notes from the Sessions tab.
+                                        </p>
+                                    )}
                                 </CardContent>
                             </Card>
-                            <Card size="sm">
-                                <CardContent>
-                                    <p className="text-xs text-muted-foreground">
-                                        Sessions attended
-                                    </p>
-                                    <p className="mt-2 text-2xl font-semibold tabular-nums">
-                                        {attended}
-                                    </p>
-                                    <p className="mt-1 text-[11px] text-muted-foreground">
-                                        In this training history
-                                    </p>
-                                </CardContent>
-                            </Card>
-                        </div>
-                        <Card>
-                            <CardHeader>
-                                <div className="flex items-center justify-between gap-2">
-                                    <CardTitle className="flex items-center gap-2">
-                                        <MessageSquare
-                                            aria-hidden="true"
-                                            className="size-4 text-muted-foreground"
-                                        />
-                                        Recent lesson feedback
-                                    </CardTitle>
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => selectTab("sessions")}
-                                    >
-                                        All sessions
-                                        <ChevronRight aria-hidden="true" />
-                                    </Button>
-                                </div>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                                {recentFeedback.length ? (
-                                    recentFeedback.map((session) => (
-                                        <article key={session.event.id} className="border-l-2 pl-3">
-                                            <p className="text-xs font-medium">
-                                                {session.event.name}{" "}
-                                                <span className="font-normal text-muted-foreground">
-                                                    · {fullDate(session.event.date)}
-                                                </span>
-                                            </p>
-                                            <p className="mt-1.5 whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">
-                                                {session.feedback}
-                                            </p>
-                                            <p className="mt-1 text-[11px] text-muted-foreground">
-                                                {session.reportAuthor?.name ?? session.instructor}
-                                            </p>
-                                        </article>
-                                    ))
-                                ) : (
-                                    <p className="text-xs text-muted-foreground">
-                                        No feedback recorded yet. Add notes from the Sessions tab.
-                                    </p>
-                                )}
-                            </CardContent>
-                        </Card>
-                        <GradingRequirements profile={profile} attended={attended} />
+                        </section>
+                        <NextGradingSummary
+                            profile={profile}
+                            assessmentRecorded={assessmentRecorded}
+                            onViewGrading={() => selectTab("grading")}
+                        />
                     </TabsContent>
 
                     <TabsContent value="sessions">
@@ -457,7 +568,9 @@ function StudentDetailContent({
                             student={student}
                             contextId={context?.id}
                             now={now}
-                            onSaved={() => setSessions(studentSessionHistory(student, now, context))}
+                            onSaved={() =>
+                                setSessions(studentSessionHistory(student, now, context))
+                            }
                         />
                     </TabsContent>
 
