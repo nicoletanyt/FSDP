@@ -74,7 +74,9 @@ server secrets with `VITE_`.
 ## Administrator console
 
 Administrators sign in at `/staff/login` and land on `/admin`. The console is
-designed for multi-centre operations:
+designed for multi-centre operations. While signed in as an administrator, the
+header logo also returns to `/admin`; students and instructors keep the public
+home page.
 
 | Route | Purpose |
 | --- | --- |

@@ -12,6 +12,7 @@ export default function RootLayout() {
   const [error, setError] = useState('')
   const location = useLocation()
   const isAdmin = location.pathname === '/admin' || location.pathname.startsWith('/admin/')
+  const homePath = profile?.role === 'administrator' ? dashboardPaths.administrator : '/'
 
   async function handleSignOut() {
     setSigningOut(true)
@@ -36,7 +37,7 @@ export default function RootLayout() {
           )}
         >
           <Link
-            to="/"
+            to={homePath}
             className="flex items-center gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
           >
             <img
