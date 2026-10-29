@@ -1,22 +1,17 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
-import { Bell, Menu, Search } from 'lucide-react'
-import { Link, useNavigate } from 'react-router'
-import { Button } from '@/components/ui/button'
-import { useAuth } from '@/hooks/use-auth'
+import { Search } from 'lucide-react'
+import { useNavigate } from 'react-router'
 import { useAdminData } from '@/lib/admin/admin-data-context'
 import { useAdminFilters } from '@/lib/admin/admin-filters'
 import type { AdminDateRange } from '@/lib/admin/admin-filters'
-import { initials } from '@/lib/admin/format'
 import { NativeSelect } from './form-controls'
 
-export default function AdminTopbar({ onOpenMenu }: { onOpenMenu: () => void }) {
-  const { profile } = useAuth()
-  const { centres, notifications } = useAdminData()
+export default function AdminFilterBar() {
+  const { centres } = useAdminData()
   const { centreId, setCentreId, dateRange, setDateRange } = useAdminFilters()
   const [query, setQuery] = useState('')
   const navigate = useNavigate()
-  const unread = notifications.filter((notification) => notification.channel === 'in_app').length
 
   function handleSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -25,18 +20,7 @@ export default function AdminTopbar({ onOpenMenu }: { onOpenMenu: () => void }) 
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-2 border-b border-border pb-3">
-      <Button
-        type="button"
-        variant="outline"
-        size="icon"
-        className="lg:hidden"
-        onClick={onOpenMenu}
-        aria-label="Open navigation"
-      >
-        <Menu />
-      </Button>
-
+    <div className="flex flex-wrap items-center gap-2">
       <form onSubmit={handleSearch} className="relative min-w-48 flex-1 sm:max-w-xs">
         <Search
           className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
@@ -79,23 +63,6 @@ export default function AdminTopbar({ onOpenMenu }: { onOpenMenu: () => void }) 
             <option value={180}>Last 180 days</option>
           </NativeSelect>
         </div>
-
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label={`Notifications${unread ? `, ${unread} unread` : ''}`}
-          render={<Link to="/admin/notifications" />}
-          className="relative"
-        >
-          <Bell />
-          {unread > 0 && (
-            <span className="absolute top-1 right-1 size-2 rounded-full bg-brand-red" aria-hidden="true" />
-          )}
-        </Button>
-
-        <span className="flex size-8 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
-          {profile ? initials(profile.first_name, profile.last_name) : 'AD'}
-        </span>
       </div>
     </div>
   )

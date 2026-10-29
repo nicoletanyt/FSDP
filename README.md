@@ -73,10 +73,11 @@ server secrets with `VITE_`.
 
 ## Administrator console
 
-Administrators sign in at `/staff/login` and land on `/admin`. The console is
-designed for multi-centre operations. While signed in as an administrator, the
-header logo also returns to `/admin`; students and instructors keep the public
-home page.
+Administrators sign in at `/staff/login` and land on `/admin`. The console uses a
+top navigation bar with **Monitor** and **Grading** menus, an **Instructors**
+link, and theme, notification, and profile controls. The logo returns to
+`/admin`; students and instructors keep the public home page. Sign out is on
+`/admin/profile` rather than in the shared header.
 
 | Route | Purpose |
 | --- | --- |
@@ -92,6 +93,7 @@ home page.
 | `/admin/notifications` | Compose targeted notifications and review delivery history |
 | `/admin/reports` | Consolidated centre reporting and CSV export |
 | `/admin/instructors` | Teaching team and instructor account creation |
+| `/admin/profile` | Administrator account details and sign out |
 
 The console uses deterministic mock data from `src/lib/admin/mock-data.ts`
 through an in-memory provider. Attendance, sessions, opportunities,

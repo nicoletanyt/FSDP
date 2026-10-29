@@ -29,7 +29,8 @@
 - Roles and dashboard paths: `src/lib/auth.ts`; route guards: `src/components/auth/AuthGate.tsx`. Staff sign in at `/staff/login`.
 - Admin code is isolated under `src/pages/admin`, `src/components/admin`, and `src/lib/admin`. Do not mix admin UI into student/instructor code.
 - `src/pages/AdminDashboard.tsx` is legacy and unrouted. The live admin shell is `src/pages/admin/AdminLayout.tsx`.
-- The admin console is widened via `/admin` route checks in `RootLayout`, not a separate layout container.
+- On `/admin/*`, `RootLayout` hides the shared header; `AdminLayout` owns the top navbar (`src/components/admin/AdminNavbar.tsx`) and the page container. The admin navbar uses the shadcn `navigation-menu` base-nova pattern.
+- Admin sign out lives at `/admin/profile`, not in the shared header. The profile avatar in the navbar links there.
 
 ## Admin data
 

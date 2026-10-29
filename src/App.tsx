@@ -28,6 +28,7 @@ const AdminGradingOpportunities = lazy(() => import('./pages/admin/GradingOpport
 const AdminGradingApplications = lazy(() => import('./pages/admin/GradingApplications'))
 const AdminNotifications = lazy(() => import('./pages/admin/Notifications'))
 const AdminInstructors = lazy(() => import('./pages/admin/Instructors'))
+const AdminProfile = lazy(() => import('./pages/admin/Profile'))
 const AdminReports = lazy(() => import('./pages/admin/Reports'))
 
 export default function App() {
@@ -71,6 +72,7 @@ export default function App() {
               </Route>
               <Route path="notifications" element={<AdminNotifications />} />
               <Route path="instructors" element={<AdminInstructors />} />
+              <Route path="profile" element={<AdminProfile />} />
               <Route path="reports" element={<AdminReports />} />
             </Route>
           </Route>
