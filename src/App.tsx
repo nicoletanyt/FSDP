@@ -1,8 +1,10 @@
 import { lazy } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router'
 import { GuestRoute, ProtectedRoute } from '@/components/auth/AuthGate'
+import FloatingChatbot from '@/components/FloatingChatbot'
 import AuthLayout from './layouts/AuthLayout'
 import RootLayout from './layouts/RootLayout'
+import InstructorLayout, { InstructorIndexRedirect } from './layouts/InstructorLayout'
 import CheckoutCancel from './pages/CheckoutCancel'
 import CheckoutSuccess from './pages/CheckoutSuccess'
 import Home from './pages/Home'
@@ -31,6 +33,13 @@ const AdminInstructors = lazy(() => import('./pages/admin/Instructors'))
 const AdminProfile = lazy(() => import('./pages/admin/Profile'))
 const AdminReports = lazy(() => import('./pages/admin/Reports'))
 
+const InstructorStudents = lazy(() => import('./pages/InstructorStudents'))
+const InstructorProfile = lazy(() => import('./pages/InstructorProfile'))
+const InstructorCheckIn = lazy(() => import('./pages/InstructorCheckIn'))
+const InstructorStudentDetails = lazy(() => import('./pages/InstructorStudentDetails'))
+const InstructorStudentReports = lazy(() => import('./pages/InstructorStudentReports'))
+const InstructorGradingAssessment = lazy(() => import('./pages/InstructorGradingAssessment'))
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -48,7 +57,17 @@ export default function App() {
             <Route path="dashboard" element={<StudentDashboard />} />
           </Route>
           <Route element={<ProtectedRoute role="instructor" />}>
-            <Route path="instructor" element={<InstructorDashboard />} />
+            <Route path="instructor" element={<InstructorLayout />}>
+              <Route index element={<InstructorIndexRedirect />} />
+              <Route path="calendar" element={<InstructorDashboard />} />
+              <Route path="students" element={<InstructorStudents />} />
+              <Route path="check-in" element={<InstructorCheckIn />} />
+              <Route path="students/:studentId" element={<InstructorStudentDetails />} />
+              <Route path="reports/:eventId" element={<InstructorStudentReports />} />
+              <Route path="assessments/:assessmentId" element={<InstructorGradingAssessment />} />
+              <Route path="assessments/:eventId/:studentId" element={<InstructorGradingAssessment />} />
+              <Route path="profile" element={<InstructorProfile />} />
+            </Route>
           </Route>
           <Route element={<ProtectedRoute role="administrator" />}>
             <Route path="admin" element={<AdminLayout />}>
@@ -81,6 +100,7 @@ export default function App() {
           <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>
+      <FloatingChatbot />
     </BrowserRouter>
   )
 }

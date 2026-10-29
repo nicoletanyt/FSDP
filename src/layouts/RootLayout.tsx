@@ -1,5 +1,5 @@
 import { Suspense, useState } from 'react'
-import { Link, Outlet, useLocation } from 'react-router'
+import { Link, Outlet, useLocation, useMatch } from 'react-router'
 import ThemeToggle from '@/components/theme-toggle'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/hooks/use-auth'
@@ -12,6 +12,7 @@ export default function RootLayout() {
   const [error, setError] = useState('')
   const location = useLocation()
   const isAdmin = location.pathname === '/admin' || location.pathname.startsWith('/admin/')
+  const isInstructorPortal = useMatch('/instructor/*')
   const homePath = profile?.role === 'administrator' ? dashboardPaths.administrator : '/'
 
   async function handleSignOut() {
@@ -24,6 +25,20 @@ export default function RootLayout() {
     } finally {
       setSigningOut(false)
     }
+  }
+
+  if (isInstructorPortal) {
+    return (
+      <Suspense
+        fallback={
+          <p role="status" className="mx-auto w-[70%] py-6 text-muted-foreground">
+            Loading…
+          </p>
+        }
+      >
+        <Outlet />
+      </Suspense>
+    )
   }
 
   return (
@@ -65,7 +80,7 @@ export default function RootLayout() {
               </div>
             )}
           </nav>
-          {error && <p role="alert" className="mx-auto max-w-5xl px-6 pb-3 text-sm text-destructive">{error}</p>}
+          {error && <p role="alert" className="mx-auto w-[70%] pb-3 text-sm text-destructive">{error}</p>}
         </header>
       )}
       {isAdmin ? (
@@ -73,7 +88,7 @@ export default function RootLayout() {
           <Outlet />
         </Suspense>
       ) : (
-        <main className="mx-auto w-full max-w-5xl px-6 py-12">
+        <main className="mx-auto w-[70%] py-12">
           <Suspense fallback={<p role="status" className="py-12 text-muted-foreground">Loading…</p>}>
             <Outlet />
           </Suspense>
