@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
-import { Navigate, Outlet } from 'react-router'
+import { Navigate, Outlet, useLocation } from 'react-router'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/hooks/use-auth'
@@ -36,6 +36,15 @@ function AuthStatus() {
   )
 }
 
+export function InstructorIndexRedirect() {
+  const { session, profile, loading, error } = useAuth()
+  const { search } = useLocation()
+  if (loading || (session && (error || !profile))) return <AuthStatus />
+  return <Navigate to={session && profile?.role === 'instructor'
+    ? `${dashboardPaths.instructor}${search}`
+    : '/instructor/signin'} replace />
+}
+
 export function GuestRoute() {
   const { session, profile, loading, error } = useAuth()
   if (loading || (session && (error || !profile))) return <AuthStatus />
@@ -47,7 +56,7 @@ export function ProtectedRoute({ role }: { role: UserRole }) {
   const { session, profile, loading, error } = useAuth()
   if (loading) return <AuthStatus />
   if (!session) {
-    return <Navigate to={role === 'student' ? '/login' : '/staff/login'} replace />
+    return <Navigate to={role === 'instructor' ? '/instructor/signin' : role === 'student' ? '/login' : '/staff/login'} replace />
   }
   if (error || !profile) return <AuthStatus />
   if (profile.role !== role) return <Navigate to={dashboardPaths[profile.role]} replace />

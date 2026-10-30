@@ -1,13 +1,12 @@
 import { lazy } from 'react'
-import { BrowserRouter, Route, Routes } from 'react-router'
-import { GuestRoute, ProtectedRoute } from '@/components/auth/AuthGate'
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router'
+import { GuestRoute, InstructorIndexRedirect, ProtectedRoute } from '@/components/auth/AuthGate'
 import FloatingChatbot from '@/components/FloatingChatbot'
 import AuthLayout from './layouts/AuthLayout'
 import RootLayout from './layouts/RootLayout'
-import InstructorLayout, { InstructorIndexRedirect } from './layouts/InstructorLayout'
+import InstructorLayout from './layouts/InstructorLayout'
 import CheckoutCancel from './pages/CheckoutCancel'
 import CheckoutSuccess from './pages/CheckoutSuccess'
-import Home from './pages/Home'
 import NotFound from './pages/NotFound'
 
 const Login = lazy(() => import('./pages/Login'))
@@ -27,7 +26,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<RootLayout />}>
-          <Route index element={<Home />} />
+          <Route index element={<Navigate to="/instructor" replace />} />
           <Route element={<GuestRoute />}>
             <Route element={<AuthLayout />}>
               <Route path="login" element={<Login />} />
@@ -38,17 +37,25 @@ export default function App() {
           <Route element={<ProtectedRoute role="student" />}>
             <Route path="dashboard" element={<StudentDashboard />} />
           </Route>
-          <Route element={<ProtectedRoute role="instructor" />}>
-            <Route path="instructor" element={<InstructorLayout />}>
-              <Route index element={<InstructorIndexRedirect />} />
-              <Route path="calendar" element={<InstructorDashboard />} />
-              <Route path="students" element={<InstructorStudents />} />
-              <Route path="check-in" element={<InstructorCheckIn />} />
-              <Route path="students/:studentId" element={<InstructorStudentDetails />} />
-              <Route path="reports/:eventId" element={<InstructorStudentReports />} />
-              <Route path="assessments/:assessmentId" element={<InstructorGradingAssessment />} />
-              <Route path="assessments/:eventId/:studentId" element={<InstructorGradingAssessment />} />
-              <Route path="profile" element={<InstructorProfile />} />
+          <Route path="instructor">
+            <Route index element={<InstructorIndexRedirect />} />
+            <Route element={<GuestRoute />}>
+              <Route element={<AuthLayout />}>
+                <Route path="signin" element={<Login staff />} />
+              </Route>
+            </Route>
+            <Route element={<ProtectedRoute role="instructor" />}>
+              <Route element={<InstructorLayout />}>
+                <Route path="dashboard" element={<InstructorDashboard />} />
+                <Route path="calendar" element={<InstructorDashboard />} />
+                <Route path="students" element={<InstructorStudents />} />
+                <Route path="check-in" element={<InstructorCheckIn />} />
+                <Route path="students/:studentId" element={<InstructorStudentDetails />} />
+                <Route path="reports/:eventId" element={<InstructorStudentReports />} />
+                <Route path="assessments/:assessmentId" element={<InstructorGradingAssessment />} />
+                <Route path="assessments/:eventId/:studentId" element={<InstructorGradingAssessment />} />
+                <Route path="profile" element={<InstructorProfile />} />
+              </Route>
             </Route>
           </Route>
           <Route element={<ProtectedRoute role="administrator" />}>

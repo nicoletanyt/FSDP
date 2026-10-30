@@ -45,6 +45,7 @@ export default function InstructorNavigation({
         .map((part) => part[0])
         .join("");
     const isCalendarRelated =
+        pathname === "/instructor/dashboard" ||
         pathname.startsWith("/instructor/assessments/") ||
         pathname.startsWith("/instructor/reports/");
 

@@ -1,5 +1,5 @@
 import { Suspense, useEffect, useState } from 'react'
-import { Navigate, Outlet, useLocation, useSearchParams } from 'react-router'
+import { Outlet, useLocation, useSearchParams } from 'react-router'
 import InstructorNavigation from '@/components/instructor/InstructorNavigation'
 import { calendarHref, findCalendarEvent } from '@/lib/instructor-calendar'
 import { cn } from '@/lib/utils'
@@ -9,15 +9,10 @@ export type InstructorOutletContext = {
   setIsKiosk: (value: boolean) => void
 }
 
-export function InstructorIndexRedirect() {
-  const { search } = useLocation()
-  return <Navigate to={`/instructor/calendar${search}`} replace />
-}
-
 export default function InstructorLayout() {
   const { pathname, search } = useLocation()
   const [params] = useSearchParams()
-  const isCalendar = pathname === '/instructor/calendar'
+  const isCalendar = pathname === '/instructor/calendar' || pathname === '/instructor/dashboard'
   const isCheckIn = pathname === '/instructor/check-in'
   const [stationKiosk, setIsKiosk] = useState(false)
   const isKiosk = isCheckIn && stationKiosk
