@@ -1,21 +1,6 @@
-import { useState } from "react";
 import { Link, useLocation } from "react-router";
-import {
-    CalendarDays,
-    ChevronDown,
-    LogOut,
-    ScanLine,
-    UserRound,
-    Users,
-} from "lucide-react";
+import { CalendarDays, ScanLine, Users } from "lucide-react";
 import logo from "@/assets/logo.png";
-import { Button } from "@/components/ui/button";
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 
@@ -32,10 +17,8 @@ export default function InstructorNavigation({
     calendarTo: string;
     contentWidthClassName?: string;
 }) {
-    const { profile, signOut } = useAuth();
+    const { profile } = useAuth();
     const { pathname } = useLocation();
-    const [signingOut, setSigningOut] = useState(false);
-    const [error, setError] = useState("");
     const name =
         [profile?.first_name, profile?.last_name].filter(Boolean).join(" ") ||
         "Instructor";
@@ -48,20 +31,6 @@ export default function InstructorNavigation({
         pathname === "/instructor/dashboard" ||
         pathname.startsWith("/instructor/assessments/") ||
         pathname.startsWith("/instructor/reports/");
-
-    async function handleSignOut() {
-        setSigningOut(true);
-        setError("");
-        try {
-            await signOut();
-        } catch (failure) {
-            setError(
-                failure instanceof Error ? failure.message : "Unable to sign out.",
-            );
-        } finally {
-            setSigningOut(false);
-        }
-    }
 
     return (
         <header className="shrink-0 border-b bg-background">
@@ -82,9 +51,15 @@ export default function InstructorNavigation({
                         width={40}
                         height={40}
                     />
-                    <span className="ml-2 text-xs font-normal text-muted-foreground">
-                        Instructor Portal
-                    </span>
+                    <div className="relative ml-2 leading-tight">
+                        <p className="whitespace-nowrap text-base">
+                            <span className="text-primary">Aikido</span>{" "}
+                            <span className="text-brand-red-ink">Shinju-Kai</span>
+                        </p>
+                        <p className="mt-0.5 text-[10px] leading-none font-normal tracking-normal text-muted-foreground">
+                            Instructor
+                        </p>
+                    </div>
                 </Link>
                 <div className="flex min-w-0 flex-wrap items-center justify-between gap-1">
                     <nav
@@ -112,55 +87,26 @@ export default function InstructorNavigation({
                             );
                         })}
                     </nav>
-                    <DropdownMenu>
-                        <DropdownMenuTrigger
-                            render={<Button variant="ghost" className="min-h-10 gap-2" />}
-                            aria-label={`Account menu for ${name}`}
-                            disabled={signingOut}
+                    <Link
+                        to="/instructor/profile"
+                        aria-label={`View profile for ${name}`}
+                        aria-current={
+                            pathname === "/instructor/profile" ? "page" : undefined
+                        }
+                        className={cn(
+                            "flex size-10 items-center justify-center rounded-lg transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring",
+                            pathname === "/instructor/profile" && "bg-accent",
+                        )}
+                    >
+                        <span
+                            className="flex size-7 items-center justify-center rounded-full bg-muted text-xs font-semibold"
+                            aria-hidden="true"
                         >
-                            <span
-                                className="flex size-7 items-center justify-center rounded-full bg-muted text-xs font-semibold"
-                                aria-hidden="true"
-                            >
-                                {initials}
-                            </span>
-                            <span className="hidden max-w-36 truncate md:inline">
-                                {signingOut ? "Signing out…" : name}
-                            </span>
-                            <ChevronDown aria-hidden="true" className="size-3.5" />
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent>
-                            <div className="border-b px-2 py-2">
-                                <p className="truncate font-medium">{name}</p>
-                                <p className="truncate text-xs text-muted-foreground">
-                                    {profile?.email}
-                                </p>
-                            </div>
-                            <DropdownMenuItem render={<Link to="/instructor/profile" />}>
-                                <UserRound aria-hidden="true" /> Profile
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                                onClick={() => void handleSignOut()}
-                                disabled={signingOut}
-                            >
-                                <LogOut aria-hidden="true" />{" "}
-                                {signingOut ? "Signing out…" : "Log out"}
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
+                            {initials}
+                        </span>
+                    </Link>
                 </div>
             </div>
-            {error && (
-                <p
-                    role="alert"
-                    className={cn(
-                        "mx-auto pb-3 text-sm text-destructive",
-                        contentWidthClassName,
-                    )}
-                >
-                    {error}
-                </p>
-            )}
         </header>
     );
 }
