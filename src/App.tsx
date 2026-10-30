@@ -13,6 +13,8 @@ import NotFound from './pages/NotFound'
 const Login = lazy(() => import('./pages/Login'))
 const Signup = lazy(() => import('./pages/Signup'))
 const StudentDashboard = lazy(() => import('./pages/StudentDashboard'))
+const StudentProfile = lazy(() => import('../student/profile'))
+const StudentPayments = lazy(() => import('../student/payments'))
 const InstructorDashboard = lazy(() => import('./pages/InstructorDashboard'))
 const InstructorStudents = lazy(() => import('./pages/InstructorStudents'))
 const InstructorProfile = lazy(() => import('./pages/InstructorProfile'))
@@ -37,6 +39,8 @@ export default function App() {
           </Route>
           <Route element={<ProtectedRoute role="student" />}>
             <Route path="dashboard" element={<StudentDashboard />} />
+            <Route path="profile" element={<StudentProfile />} />
+            <Route path="payments" element={<StudentPayments />} />
           </Route>
           <Route element={<ProtectedRoute role="instructor" />}>
             <Route path="instructor" element={<InstructorLayout />}>

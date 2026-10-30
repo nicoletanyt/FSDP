@@ -8,6 +8,12 @@ import ThemeToggle from "@/components/theme-toggle";
 export default function RootLayout() {
     const { session, profile, loading, signOut } = useAuth();
     const isInstructorPortal = useMatch("/instructor/*");
+    const isStudentDashboard = useMatch("/dashboard");
+    const isStudentProfile = useMatch("/profile");
+    const isStudentPayments = useMatch("/payments");
+    const isStudentPage = Boolean(
+        isStudentDashboard || isStudentProfile || isStudentPayments,
+    );
     const [signingOut, setSigningOut] = useState(false);
     const [error, setError] = useState("");
 
@@ -25,7 +31,7 @@ export default function RootLayout() {
         }
     }
 
-    if (isInstructorPortal) {
+    if (isInstructorPortal || isStudentPage) {
         return (
             <Suspense
                 fallback={
