@@ -1,6 +1,7 @@
 import { Link, useLocation } from "react-router";
 import { CalendarDays, ScanLine, Users } from "lucide-react";
 import logo from "@/assets/logo.png";
+import ThemeToggle from "@/components/theme-toggle";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 
@@ -56,7 +57,7 @@ export default function InstructorNavigation({
                             <span className="text-primary">Aikido</span>{" "}
                             <span className="text-brand-red-ink">Shinju-Kai</span>
                         </p>
-                        <p className="mt-0.5 text-[10px] leading-none font-normal tracking-normal text-muted-foreground">
+                        <p className="mt-0.5 text-3xs leading-none font-normal tracking-normal text-muted-foreground">
                             Instructor
                         </p>
                     </div>
@@ -87,6 +88,7 @@ export default function InstructorNavigation({
                             );
                         })}
                     </nav>
+                    <ThemeToggle />
                     <Link
                         to="/instructor/profile"
                         aria-label={`View profile for ${name}`}

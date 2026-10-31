@@ -193,7 +193,7 @@ export default function FloatingChatbot() {
                     className="min-h-0 flex-1 bg-muted/25"
                 >
                     <div className="space-y-5 px-4 py-5">
-                        <p className="text-center text-[11px] font-medium text-muted-foreground">
+                        <p className="text-center text-2xs font-medium text-muted-foreground">
                             Your conversation starts here
                         </p>
                         <div
@@ -229,7 +229,7 @@ export default function FloatingChatbot() {
                                         <time
                                             dateTime={message.timestamp.toISOString()}
                                             className={cn(
-                                                "mt-1 block px-1 text-[10px] text-muted-foreground",
+                                                "mt-1 block px-1 text-3xs text-muted-foreground",
                                                 message.role === "user" && "text-right",
                                             )}
                                         >

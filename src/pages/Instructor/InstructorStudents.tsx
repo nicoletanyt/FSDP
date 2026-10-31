@@ -189,10 +189,10 @@ export default function InstructorStudents() {
                                                 <p className="truncate text-sm font-medium">
                                                     {student.name}
                                                 </p>
-                                                <p className="mt-0.5 text-xs leading-4 text-muted-foreground">
+                                                <p className="mt-0.5 text-xs text-muted-foreground">
                                                     {student.studentNumber} · {student.beltGrade}
                                                 </p>
-                                                <p className="mt-0.5 text-xs leading-4 text-muted-foreground sm:hidden">
+                                                <p className="mt-0.5 text-xs text-muted-foreground sm:hidden">
                                                     {student.principalDojo}
                                                 </p>
                                             </div>

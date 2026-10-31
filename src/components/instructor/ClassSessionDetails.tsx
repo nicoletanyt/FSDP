@@ -199,7 +199,7 @@ export default function ClassSessionDetails({
                                     <BeltIndicator grade={student.beltGrade} />
                                     <Link
                                         to={studentDetailsHref(student.id, event, isGrading ? "grading" : undefined)}
-                                        className="rounded-sm text-[11px] focus-visible:outline-2 focus-visible:outline-ring"
+                                        className="rounded-sm text-2xs focus-visible:outline-2 focus-visible:outline-ring"
                                     >
                                         {student.name}
                                     </Link>

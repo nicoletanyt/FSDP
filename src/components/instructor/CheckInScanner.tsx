@@ -76,7 +76,7 @@ export default function CheckInScanner({
                     </h2>
                     <span
                         role="status"
-                        className="flex items-center gap-1.5 text-[11px] text-white/70"
+                        className="flex items-center gap-1.5 text-2xs text-white/70"
                     >
                         <span
                             aria-hidden="true"

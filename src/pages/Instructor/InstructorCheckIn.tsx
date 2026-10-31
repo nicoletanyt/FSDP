@@ -237,7 +237,7 @@ export default function InstructorCheckIn() {
                         <p
                             aria-live="polite"
                             aria-atomic="true"
-                            className="text-[11px] text-muted-foreground"
+                            className="text-2xs text-muted-foreground"
                         >
                             <span className="font-semibold tabular-nums text-foreground pr-1">
                                 {attendance.length}/{roster.length}

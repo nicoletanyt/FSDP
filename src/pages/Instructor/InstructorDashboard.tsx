@@ -64,13 +64,13 @@ function EventCard({
                             : "flex-col items-start",
                     )}
                 >
-                    <span className="flex items-center gap-1.5 text-[11px] font-normal text-muted-foreground">
+                    <span className="flex items-center gap-1.5 text-2xs font-normal text-muted-foreground">
                         <Clock3 aria-hidden="true" className="mt-0.5 size-3 shrink-0" />
                         <span className="min-w-0 wrap-break-word">
                             {formatTime(event.startTime)} – {formatTime(event.endTime)}
                         </span>
                     </span>
-                    <span className="flex items-center gap-1.5 text-[11px] font-normal text-muted-foreground">
+                    <span className="flex items-center gap-1.5 text-2xs font-normal text-muted-foreground">
                         <MapPin aria-hidden="true" className="size-3 shrink-0" />{" "}
                         <span className="min-w-0 wrap-break-word">{event.dojo}</span>
                     </span>
@@ -146,7 +146,7 @@ function CalendarWeek({
                                 isSelected && "bg-accent hover:bg-accent",
                             )}
                         >
-                            <span className="text-[11px] font-normal">
+                            <span className="text-2xs font-normal">
                                 {day.toLocaleDateString("en-GB", { weekday: "short" })}
                             </span>
                             <span
@@ -200,14 +200,14 @@ function CalendarWeek({
                                 >
                                     <span
                                         className={cn(
-                                            "flex h-6 shrink-0 items-center justify-center rounded-full px-1.5 text-[10px] font-semibold tabular-nums",
+                                            "flex h-6 shrink-0 items-center justify-center rounded-full px-1.5 text-3xs font-semibold tabular-nums",
                                             isExpanded && "text-xs",
                                             isToday && "bg-primary text-primary-foreground",
                                         )}
                                     >
                                         {fullDate(day)}
                                     </span>
-                                    <span className="h-4 max-w-full shrink-0 truncate px-2 text-xs leading-4 font-normal text-muted-foreground">
+                                    <span className="h-5 max-w-full shrink-0 truncate px-2 text-xs font-normal text-muted-foreground">
                                         {day.toLocaleDateString("en-GB", {
                                             weekday: isExpanded ? "long" : "short",
                                         })}

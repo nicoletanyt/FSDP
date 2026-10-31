@@ -34,7 +34,7 @@ function AttendanceBadge({ value }: { value: Attendance }) {
     return (
         <span
             className={cn(
-                "inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium capitalize",
+                "inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-0.5 text-2xs font-medium capitalize",
                 value === "present"
                     ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200"
                     : value === "absent"
@@ -108,7 +108,7 @@ function SessionReport({
                     </CardTitle>
                     <AttendanceBadge value={session.attendance} />
                 </div>
-                <p className="flex flex-wrap gap-x-1 text-[11px] leading-4 text-muted-foreground">
+                <p className="flex flex-wrap gap-x-1 text-2xs leading-5 text-muted-foreground">
                     <span>{sessionDateFormat.format(session.event.date)}</span>
                     <span aria-hidden="true">·</span>
                     <span>
@@ -165,7 +165,7 @@ function SessionReport({
                             value={draft}
                             onChange={(change) => setDraft(change.target.value)}
                             rows={2}
-                            className="min-h-16 bg-background text-sm leading-5"
+                            className="min-h-16 bg-background text-sm"
                             placeholder="What went well? What should they work on next?"
                             autoFocus
                         />
@@ -187,7 +187,7 @@ function SessionReport({
                 ) : (
                     <p
                         className={cn(
-                            "whitespace-pre-wrap text-sm leading-5 wrap-break-word",
+                            "whitespace-pre-wrap text-sm wrap-break-word",
                             report ? "text-foreground" : "text-muted-foreground",
                         )}
                     >
@@ -248,7 +248,7 @@ export default function StudentSessionHistory({
                     <div className="flex flex-col gap-1">
                         <Label
                             htmlFor="attendance-filter"
-                            className="text-[11px] text-muted-foreground"
+                            className="text-2xs text-muted-foreground"
                         >
                             Attendance
                         </Label>
@@ -269,7 +269,7 @@ export default function StudentSessionHistory({
                     <div className="flex flex-col gap-1">
                         <Label
                             htmlFor="session-sort"
-                            className="text-[11px] text-muted-foreground"
+                            className="text-2xs text-muted-foreground"
                         >
                             Date order
                         </Label>

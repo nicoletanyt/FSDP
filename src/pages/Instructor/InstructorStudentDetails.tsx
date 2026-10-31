@@ -102,7 +102,7 @@ function StudentInformation({ profile }: { profile: Profile }) {
                         {profile.phone}
                     </a>
                     <div className="space-y-1 pt-2" aria-label="Emergency contact">
-                        <h3 className="text-[11px] font-medium text-muted-foreground">
+                        <h3 className="text-2xs font-medium text-muted-foreground">
                             Emergency contact
                         </h3>
                         <p className="text-xs">
@@ -215,7 +215,7 @@ function GradingRequirements({
                         />
                     </div>
                 ))}
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-2xs text-muted-foreground">
                     Illustrative grading requirements · Dummy data
                 </p>
             </CardContent>
@@ -272,7 +272,7 @@ function NextGradingSummary({
                             </dd>
                         </div>
                     </dl>
-                    <p className="text-[11px] text-muted-foreground">
+                    <p className="text-2xs text-muted-foreground">
                         Eligibility is separate from technical assessment.
                     </p>
                 </CardContent>
@@ -463,7 +463,7 @@ function StudentDetailContent({
                         <section className="space-y-3">
                             <div className="flex min-h-7 flex-wrap items-center gap-x-3 gap-y-1">
                                 <h2 className="text-sm font-semibold">Attendance</h2>
-                                <p className="ml-auto text-right text-[11px] text-muted-foreground">
+                                <p className="ml-auto text-right text-2xs text-muted-foreground">
                                     {periodStart && periodEnd
                                         ? `Reporting period: ${fullDate(periodStart)} – ${fullDate(periodEnd)}`
                                         : "No completed sessions recorded"}
@@ -495,7 +495,7 @@ function StudentDetailContent({
                                                 ? fullDate(lastAttended.event.date)
                                                 : "Not recorded"}
                                         </p>
-                                        <p className="mt-1 text-[11px] text-muted-foreground">
+                                        <p className="mt-1 text-2xs text-muted-foreground">
                                             {lastAttended
                                                 ? `${lastAttended.event.name} · ${lastAttended.event.dojo}`
                                                 : "No attended sessions in this history"}
@@ -622,7 +622,7 @@ function StudentDetailContent({
                                         <dd className="mt-1 font-medium">
                                             {monthsInRank} {monthsInRank === 1 ? "month" : "months"}
                                         </dd>
-                                        <dd className="mt-1 text-[11px] text-muted-foreground">
+                                        <dd className="mt-1 text-2xs text-muted-foreground">
                                             Since {fullDate(profile.rankAwardedOn)}
                                         </dd>
                                     </div>
@@ -643,12 +643,12 @@ function StudentDetailContent({
                                                     <p className="text-xs font-medium">
                                                         {assessment.fromGrade} → {assessment.toGrade}
                                                     </p>
-                                                    <p className="mt-1 text-[11px] text-muted-foreground">
+                                                    <p className="mt-1 text-2xs text-muted-foreground">
                                                         {fullDate(assessment.date)} ·{" "}
                                                         {assessment.instructor}
                                                     </p>
                                                 </div>
-                                                <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">
+                                                <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-2xs text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">
                                                     {assessment.status}
                                                 </span>
                                             </div>
