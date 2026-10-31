@@ -79,12 +79,27 @@ export function addDays(date: Date, amount: number) {
     return new Date(date.getFullYear(), date.getMonth(), date.getDate() + amount);
 }
 
+export function addMonths(date: Date, amount: number) {
+    const month = new Date(date.getFullYear(), date.getMonth() + amount, 1);
+    const lastDay = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
+    return new Date(month.getFullYear(), month.getMonth(), Math.min(date.getDate(), lastDay));
+}
+
 export function startOfWeek(date: Date) {
     return addDays(date, -((date.getDay() + 6) % 7));
 }
 
 export function weekDates(date: Date) {
     return Array.from({ length: 7 }, (_, index) => addDays(startOfWeek(date), index));
+}
+
+export function monthDates(date: Date) {
+    const start = startOfWeek(new Date(date.getFullYear(), date.getMonth(), 1));
+    const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+    const end = addDays(startOfWeek(lastDay), 6);
+    const days: Date[] = [];
+    for (let day = start; day <= end; day = addDays(day, 1)) days.push(day);
+    return days;
 }
 
 export function eventsForDate(date: Date): CalendarEvent[] {
