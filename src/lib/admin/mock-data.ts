@@ -1,15 +1,19 @@
 import {
   addDays,
+  ageFromIso,
   daysAgoIso,
   daysAheadIso,
   fullName,
   startOfDay,
   toIsoDate,
 } from './format'
+import { nextGrade } from './types'
 import type {
   AttendanceRecord,
   AttendanceStatus,
   Centre,
+  Grade,
+  GradeTrack,
   GradingApplication,
   GradingOpportunity,
   Instructor,
@@ -43,34 +47,383 @@ function seededRandom(seed: number) {
 
 export const centres: Centre[] = [
   {
-    id: 'centre-bukit-timah',
+    id: 'centre-ask-hq',
+    name: 'ASK Headquarters Dojo',
+    shortName: 'ASK HQ',
+    address: 'Thomson V One, 9 Sin Ming Road, #B1-02, Singapore 575630',
+    timezone: 'Asia/Singapore',
+    status: 'active',
+  },
+  {
+    id: 'centre-bdas',
+    name: 'ActiveSG Bedok Dojo',
+    shortName: 'BDAS',
+    address:
+      'Heartbeat@Bedok, 11 Bedok North Street 1 #01-02, Singapore 469662',
+    timezone: 'Asia/Singapore',
+    status: 'active',
+  },
+  {
+    id: 'centre-bdcc',
+    name: 'Bedok Community Centre Dojo',
+    shortName: 'BDCC',
+    address: 'Bedok Community Centre, 850 New Upper Changi Rd, Singapore 467352',
+    timezone: 'Asia/Singapore',
+    status: 'closed',
+  },
+  {
+    id: 'centre-ehis',
+    name: 'Etonhouse International School Dojo',
+    shortName: 'EHIS',
+    address: '51 Broadrick Rd, Singapore 439501',
+    timezone: 'Asia/Singapore',
+    status: 'active',
+  },
+  {
+    id: 'centre-kkcc',
+    name: 'Kampong Kembangan Community Club Dojo',
+    shortName: 'KKCC',
+    address: '5 Lengkong Tiga, Singapore 417408',
+    timezone: 'Asia/Singapore',
+    status: 'under_renovation',
+  },
+  {
+    id: 'centre-mccc',
+    name: 'MacPherson Community Club',
+    shortName: 'MCCC',
+    address: '400 Paya Lebar Way, Singapore 379131',
+    timezone: 'Asia/Singapore',
+    status: 'closed',
+  },
+  {
+    id: 'centre-mpcc',
+    name: 'Marine Parade Dojo',
+    shortName: 'MPCC',
+    address: '278 Marine Parade Rd, Singapore 449282',
+    timezone: 'Asia/Singapore',
+    status: 'under_renovation',
+  },
+  {
+    id: 'centre-nsrcc',
+    name: 'National Service Resort & Country Club',
+    shortName: 'NSRCC',
+    address: '10 Changi Coast Walk, Singapore 499739',
+    timezone: 'Asia/Singapore',
+    status: 'active',
+  },
+  {
+    id: 'centre-oth',
+    name: 'Our Tampines Hub',
+    shortName: 'OTH',
+    address: '1 Tampines Walk, Singapore 528523',
+    timezone: 'Asia/Singapore',
+    status: 'active',
+  },
+  {
+    id: 'centre-plkc',
+    name: 'Paya Lebar Kovan Dojo',
+    shortName: 'PLKC',
+    address: '207 Hougang Street 21, Singapore 530207',
+    timezone: 'Asia/Singapore',
+    status: 'active',
+  },
+  {
+    id: 'centre-rvaf',
+    name: 'Rivervale Dojo',
+    shortName: 'RVAF',
+    address: 'Rivervale Mall, 11 Rivervale Cres, Singapore 545082',
+    timezone: 'Asia/Singapore',
+    status: 'active',
+  },
+  {
+    id: 'centre-skas',
+    name: 'ActiveSG Seng Kang Dojo',
+    shortName: 'SKAS',
+    address: '57 Anchorvale Rd, Singapore 544964',
+    timezone: 'Asia/Singapore',
+    status: 'active',
+  },
+  {
+    id: 'centre-sscc',
+    name: 'Siglap South Dojo',
+    shortName: 'SSCC',
+    address: '6 Palm Rd, Singapore 456441',
+    timezone: 'Asia/Singapore',
+    status: 'active',
+  },
+  {
+    id: 'centre-twcc',
+    name: 'Tampines West Dojo',
+    shortName: 'TWCC',
+    address: '5 Tampines Ave 3, Singapore 529705',
+    timezone: 'Asia/Singapore',
+    status: 'closed',
+  },
+  {
+    id: 'centre-bsas',
+    name: 'ActiveSG Bishan Dojo',
+    shortName: 'BSAS',
+    address: '5 Bishan Street 14, Singapore 579783',
+    timezone: 'Asia/Singapore',
+    status: 'active',
+  },
+  {
+    id: 'centre-btcc',
     name: 'Bukit Timah Dojo',
-    shortName: 'Bukit Timah',
-    address: '12 Chun Tin Road, Singapore 599899',
+    shortName: 'BTCC',
+    address: 'Bukit Timah Community Club, 20 Toh Yi Dr, Singapore 596569',
     timezone: 'Asia/Singapore',
+    status: 'active',
   },
   {
-    id: 'centre-serangoon',
-    name: 'Serangoon Dojo',
-    shortName: 'Serangoon',
-    address: '18 Serangoon Central, Singapore 556072',
+    id: 'centre-cscc',
+    name: 'Cheng San Dojo',
+    shortName: 'CSCC',
+    address: '6 Ang Mo Kio Street 53, Singapore 569205',
     timezone: 'Asia/Singapore',
+    status: 'active',
   },
   {
-    id: 'centre-tampines',
-    name: 'Tampines Dojo',
-    shortName: 'Tampines',
-    address: '5 Tampines Avenue 3, Singapore 529705',
+    id: 'centre-ehrw',
+    name: 'EtonHouse Pre-School Robertson Walk',
+    shortName: 'EHRW',
+    address: '11 Unity St, #02-20, Singapore 237995',
     timezone: 'Asia/Singapore',
+    status: 'active',
   },
   {
-    id: 'centre-jurong',
-    name: 'Jurong Dojo',
-    shortName: 'Jurong',
-    address: '50 Jurong West Street 41, Singapore 649369',
+    id: 'centre-japa',
+    name: 'Japanese Association Dojo',
+    shortName: 'JAPA',
+    address: '120 Adam Rd, Singapore 289899',
     timezone: 'Asia/Singapore',
+    status: 'active',
+  },
+  {
+    id: 'centre-sici',
+    name: 'The Singapore Island Country Club Dojo',
+    shortName: 'SICI',
+    address: '240 Sime Rd, Singapore 288303',
+    timezone: 'Asia/Singapore',
+    status: 'active',
+  },
+  {
+    id: 'centre-smuc',
+    name: 'SMU Dojo',
+    shortName: 'SMUC',
+    address:
+      'Singapore Management University, 81 Victoria St, Singapore 188065',
+    timezone: 'Asia/Singapore',
+    status: 'active',
+  },
+  {
+    id: 'centre-stpy',
+    name: 'SAFRA Toa Payoh Dojo',
+    shortName: 'STPY',
+    address: '293 Lor 6 Toa Payoh, Singapore 319387',
+    timezone: 'Asia/Singapore',
+    status: 'active',
+  },
+  {
+    id: 'centre-tscc',
+    name: 'Thomson Dojo',
+    shortName: 'TSCC',
+    address: '233 Bishan Street 22, Singapore 570233',
+    timezone: 'Asia/Singapore',
+    status: 'active',
+  },
+  {
+    id: 'centre-ykas',
+    name: 'ActiveSG Yio Chu Kang Dojo',
+    shortName: 'YKAS',
+    address: '200 Ang Mo Kio Ave 9, Singapore 569770',
+    timezone: 'Asia/Singapore',
+    status: 'active',
+  },
+  {
+    id: 'centre-agora',
+    name: 'AGORA Colearning',
+    shortName: 'AGORA',
+    address:
+      '1 Maritime Square, HarbourFront Centre, #04-01, Singapore 099253',
+    timezone: 'Asia/Singapore',
+    status: 'active',
+  },
+  {
+    id: 'centre-ehsc',
+    name: 'EtonHouse International School Sentosa',
+    shortName: 'EHSC',
+    address: '33 Allanbrooke Rd, Singapore 099981',
+    timezone: 'Asia/Singapore',
+    status: 'active',
+  },
+  {
+    id: 'centre-tgpc',
+    name: 'Tanjong Pagar Dojo',
+    shortName: 'TGPC',
+    address:
+      'Tanjong Pagar Community Club, 101 Cantonment Rd, Singapore 089774',
+    timezone: 'Asia/Singapore',
+    status: 'active',
+  },
+  {
+    id: 'centre-arca',
+    name: 'Alexandra Retail Centre Dojo',
+    shortName: 'ARCA',
+    address: '460 Alexandra Road #03-02, Singapore 119963',
+    timezone: 'Asia/Singapore',
+    status: 'active',
+  },
+  {
+    id: 'centre-cscb',
+    name: 'Civil Service Club (Bukit Batok) Dojo',
+    shortName: 'CSCB',
+    address: '91 Bukit Batok West Ave 2, Singapore 659206',
+    timezone: 'Asia/Singapore',
+    status: 'active',
+  },
+  {
+    id: 'centre-gpcc',
+    name: 'Gek Poh Dojo',
+    shortName: 'GPCC',
+    address:
+      'Gek Poh Ville Community Club, 1 Jurong West Street 74, Singapore 649149',
+    timezone: 'Asia/Singapore',
+    status: 'under_renovation',
+  },
+  {
+    id: 'centre-htns-bb',
+    name: 'HomeTeamNS – Bukit Batok Dojo',
+    shortName: 'HTNS-BB',
+    address: 'HomeTeamNS @ Bukit Batok, Singapore 659003',
+    timezone: 'Asia/Singapore',
+    status: 'active',
+  },
+  {
+    id: 'centre-jeas',
+    name: 'ActiveSG Jurong East',
+    shortName: 'JEAS',
+    address: '21 Jurong East Street 31, Singapore 609517',
+    timezone: 'Asia/Singapore',
+    status: 'active',
+  },
+  {
+    id: 'centre-tfcc',
+    name: 'The Frontier Dojo',
+    shortName: 'TFCC',
+    address: '665a Jurong West Street 65, Singapore 641665',
+    timezone: 'Asia/Singapore',
+    status: 'active',
+  },
+  {
+    id: 'centre-wccc',
+    name: 'West Coast Dojo',
+    shortName: 'WCCC',
+    address: '2 Clementi West Street 2, Singapore 129605',
+    timezone: 'Asia/Singapore',
+    status: 'active',
+  },
+  {
+    id: 'centre-cckc',
+    name: 'Chua Chu Kang Dojo',
+    shortName: 'CCKC',
+    address: '35 Teck Whye Ave, Singapore 688892',
+    timezone: 'Asia/Singapore',
+    status: 'active',
+  },
+  {
+    id: 'centre-cpcc',
+    name: 'Chong Pang Dojo',
+    shortName: 'CPCC',
+    address: '109 Yishun Ring Rd, Singapore 760109',
+    timezone: 'Asia/Singapore',
+    status: 'active',
+  },
+  {
+    id: 'centre-fccc',
+    name: 'Fu Chun Dojo',
+    shortName: 'FCCC',
+    address: 'Woodgrove Zone 10 RN, Blk 310 Link Hall',
+    timezone: 'Asia/Singapore',
+    status: 'under_renovation',
+  },
+  {
+    id: 'centre-htns-kt',
+    name: 'HometeamNS Khatib',
+    shortName: 'HTNS-KT',
+    address: '2 Yishun Walk, Singapore 767944',
+    timezone: 'Asia/Singapore',
+    status: 'active',
+  },
+  {
+    id: 'centre-nypa',
+    name: 'Nanyang Polytechnic Dojo',
+    shortName: 'NYPA',
+    address: '180 Ang Mo Kio Ave 8, Singapore 569830',
+    timezone: 'Asia/Singapore',
+    status: 'active',
+  },
+  {
+    id: 'centre-occa',
+    name: 'Orchid Country Club Dojo',
+    shortName: 'OCCA',
+    address: '1 Orchid Club Rd, Singapore 769162',
+    timezone: 'Asia/Singapore',
+    status: 'active',
+  },
+  {
+    id: 'centre-rpac',
+    name: 'Republic Polytechnic',
+    shortName: 'RPAC',
+    address: '9 Woodlands Ave 9, Singapore 738964',
+    timezone: 'Asia/Singapore',
+    status: 'active',
+  },
+  {
+    id: 'centre-wdas',
+    name: 'ActiveSG Woodlands Dojo',
+    shortName: 'WDAS',
+    address: '2 Woodlands Street 12, Singapore 738599',
+    timezone: 'Asia/Singapore',
+    status: 'active',
+  },
+  {
+    id: 'centre-cycc',
+    name: 'Ci Yuan Dojo',
+    shortName: 'CYCC',
+    address: '51 Hougang Ave 9, Singapore 538776',
+    timezone: 'Asia/Singapore',
+    status: 'active',
+  },
+  {
+    id: 'centre-p21c',
+    name: 'Punggol 21 Dojo',
+    shortName: 'P21C',
+    address: '80 Punggol Field, Singapore 828815',
+    timezone: 'Asia/Singapore',
+    status: 'active',
+  },
+  {
+    id: 'centre-sjcc',
+    name: 'Senja-Cashew Community Club Dojo',
+    shortName: 'SJCC',
+    address: '101 Bukit Panjang Rd, Singapore 679910',
+    timezone: 'Asia/Singapore',
+    status: 'active',
   },
 ]
+
+export const activeCentres = centres.filter(
+  (centre) => centre.status === 'active',
+)
+
+const activeCentreIds = activeCentres.map((centre) => centre.id)
+
+function instructorCentreIds(index: number) {
+  return activeCentreIds.filter(
+    (_, centreIndex) => centreIndex % 4 === index,
+  )
+}
 
 export const instructors: Instructor[] = [
   {
@@ -78,32 +431,32 @@ export const instructors: Instructor[] = [
     firstName: 'Kenji',
     lastName: 'Mori',
     email: 'kenji.mori@example.test',
-    centreIds: ['centre-bukit-timah', 'centre-jurong'],
+    centreIds: instructorCentreIds(0),
   },
   {
     id: 'instructor-tan',
     firstName: 'Wei Ming',
     lastName: 'Tan',
     email: 'weiming.tan@example.test',
-    centreIds: ['centre-serangoon', 'centre-tampines'],
+    centreIds: instructorCentreIds(1),
   },
   {
     id: 'instructor-nair',
     firstName: 'Ananya',
     lastName: 'Nair',
     email: 'ananya.nair@example.test',
-    centreIds: ['centre-tampines', 'centre-bukit-timah'],
+    centreIds: instructorCentreIds(2),
   },
   {
     id: 'instructor-sato',
     firstName: 'Hiroshi',
     lastName: 'Sato',
     email: 'hiroshi.sato@example.test',
-    centreIds: ['centre-jurong', 'centre-serangoon'],
+    centreIds: instructorCentreIds(3),
   },
 ]
 
-const studentNames: [string, string][] = [
+const baseStudentNames: [string, string][] = [
   ['Aiko', 'Tanaka'],
   ['Ethan', 'Lim'],
   ['Priya', 'Nair'],
@@ -142,15 +495,122 @@ const studentNames: [string, string][] = [
   ['Gabriel', 'Sim'],
 ]
 
-const gradeSequence = ['6th Kyu', '5th Kyu', '4th Kyu', '3rd Kyu', '2nd Kyu', '1st Kyu', 'Shodan'] as const
+const extraFirstNames = [
+  'Aiden',
+  'Bella',
+  'Cheng',
+  'Divya',
+  'Elijah',
+  'Farah',
+  'Gavin',
+  'Hazel',
+  'Ivan',
+  'Jasmine',
+  'Kai',
+  'Lena',
+  'Mohan',
+  'Nina',
+  'Owen',
+  'Pearl',
+  'Quinn',
+  'Rafael',
+  'Shannon',
+  'Tara',
+  'Umar',
+  'Vera',
+]
+
+const extraLastNames = [
+  'Ang',
+  'Balakrishnan',
+  'Chan',
+  'Dewi',
+  'Foo',
+  'Goh',
+  'Huang',
+  'Iyer',
+  'Jiang',
+  'Kwek',
+  'Loh',
+  'Menon',
+  'Poh',
+  'Quek',
+  'Rahim',
+  'Soh',
+]
+
+const generatedStudentNames: [string, string][] = Array.from(
+  { length: 110 },
+  (_, index) => [
+    extraFirstNames[index % extraFirstNames.length],
+    extraLastNames[(index * 7) % extraLastNames.length],
+  ],
+)
+
+const studentNames: [string, string][] = [
+  ...baseStudentNames,
+  ...generatedStudentNames,
+]
+
+/** Weighted pools so each dojo covers a handful of neighbouring grades. */
+const adultGradePool = [
+  'Unranked',
+  '6th Kyu',
+  '6th Kyu',
+  '5th Kyu',
+  '5th Kyu',
+  '4th Kyu',
+  '4th Kyu',
+  '3rd Kyu',
+  '3rd Kyu',
+  '2nd Kyu',
+  '1st Kyu',
+  'Shodan',
+  'Nidan',
+  '3rd Dan',
+  'Shodan',
+] as const
+
+const childrenGradePool = [
+  'Unranked',
+  '12th Kyu (Red)',
+  '11th Kyu (Red-Gold)',
+  '10th Kyu (Yellow)',
+  '9th Kyu (Orange)',
+  '8th Kyu (Green)',
+  '7th Kyu (Purple)',
+  '6th Kyu (Blue)',
+  '6th Kyu (Blue-Silver)',
+  '5th Kyu (Blue-Gold)',
+  '4th Kyu (Brown)',
+  '4th Kyu (Brown-Silver)',
+  '3rd Kyu (Brown-Silver)',
+  '2nd Kyu (Black)',
+  '2nd Kyu (Black-Silver)',
+  '1st Kyu (Black-Gold)',
+] as const
+
+function dateOfBirthFor(index: number, track: 'children' | 'adult'): string {
+  const age = track === 'children' ? 6 + (index % 7) : 14 + (index % 45)
+  const month = index % 12
+  const day = 1 + ((index * 7) % 27)
+  return toIsoDate(new Date(reference.getFullYear() - age, month, day))
+}
 
 function studentEmail(firstName: string, lastName: string): string {
   return `${firstName}.${lastName}`.toLowerCase().replace(/[^a-z.]/g, '') + '@example.test'
 }
 
 export const students: Student[] = studentNames.map(([firstName, lastName], index) => {
-  const centre = centres[index % centres.length]
-  const currentGrade = gradeSequence[index % gradeSequence.length]
+  const centre = activeCentres[index % activeCentres.length]
+  const track = index % 5 < 2 ? 'children' : 'adult'
+  const pool = track === 'children' ? childrenGradePool : adultGradePool
+  const centreIndex = index % activeCentres.length
+  const positionInCentre = Math.floor(index / activeCentres.length)
+  const recentlyJoined = index % 23 === 0
+  const currentGrade = recentlyJoined
+    ? 'Unranked'
+    : pool[(centreIndex + positionInCentre) % pool.length]
   const membershipStatus =
     index % 13 === 0 ? 'expired' : index % 17 === 0 ? 'pending' : 'active'
   const followUpStatus =
@@ -164,10 +624,16 @@ export const students: Student[] = studentNames.map(([firstName, lastName], inde
     email: studentEmail(firstName, lastName),
     phone: `+65 9${String(1000 + index * 37).slice(-3)} ${String(2000 + index * 53).slice(-4)}`,
     homeCentreId: centre.id,
+    dateOfBirth: dateOfBirthFor(index, track),
     currentGrade,
     membershipStatus,
-    joinedAt: isoOffset(-(420 + (index % 9) * 40)),
-    lastGradedAt: index % 9 === 0 ? null : isoOffset(-(70 + (index % 7) * 35)),
+    joinedAt: recentlyJoined
+      ? isoOffset(-(30 + (index % 3) * 20))
+      : isoOffset(-(420 + (index % 9) * 40)),
+    lastGradedAt:
+      currentGrade === 'Unranked'
+        ? null
+        : isoOffset(-(70 + (index % 7) * 35)),
     followUpStatus,
     outstandingFees: index % 11 === 0,
   }
@@ -179,10 +645,10 @@ function sessionTypeFor(index: number) {
 
 export const sessions: Session[] = []
 
-centres.forEach((centre, centreIndex) => {
+activeCentres.forEach((centre, centreIndex) => {
   const primaryInstructor = instructors[centreIndex % instructors.length]
 
-  for (let week = 11; week >= 0; week--) {
+  for (let week = 43; week >= 0; week--) {
     const offsets = [-(week * 7) - 1, -(week * 7) - 3]
 
     offsets.forEach((offset, sessionIndex) => {
@@ -310,12 +776,15 @@ for (const session of sessions) {
 
   const instructor = instructorById.get(session.instructorId)
   const roster = students.filter((student) => student.homeCentreId === session.centreId)
-  const centreIndex = centres.findIndex((centre) => centre.id === session.centreId)
+  const centreIndex = activeCentres.findIndex(
+    (centre) => centre.id === session.centreId,
+  )
 
   const externalGuests = session.isExternal
     ? students.filter(
         (student) =>
-          student.homeCentreId === centres[(centreIndex + 1) % centres.length].id,
+          student.homeCentreId ===
+          activeCentres[(centreIndex + 1) % activeCentres.length].id,
       ).slice(0, 2)
     : []
 
@@ -335,112 +804,130 @@ for (const session of sessions) {
 export const opportunities: GradingOpportunity[] = [
   {
     id: 'opportunity-autumn-bukit-timah',
-    title: 'Autumn grading — Bukit Timah',
-    centreId: 'centre-bukit-timah',
+    title: "Autumn children's grading — Bukit Timah",
+    centreId: 'centre-btcc',
     instructorId: 'instructor-mori',
+    gradingType: 'children',
     date: daysAheadIso(21),
-    applicationDeadline: daysAheadIso(10),
-    targetGrades: ['5th Kyu', '4th Kyu', '3rd Kyu'],
+    applicationDeadline: daysAheadIso(7),
+    targetGrades: ['4th Kyu (Brown-Silver)', '2nd Kyu (Black)'],
     status: 'open',
   },
   {
     id: 'opportunity-autumn-serangoon',
-    title: 'Autumn grading — Serangoon',
-    centreId: 'centre-serangoon',
+    title: "Autumn children's grading — Ci Yuan",
+    centreId: 'centre-cycc',
     instructorId: 'instructor-tan',
+    gradingType: 'children',
     date: daysAheadIso(28),
     applicationDeadline: daysAheadIso(14),
-    targetGrades: ['5th Kyu', '4th Kyu', '3rd Kyu'],
+    targetGrades: ['7th Kyu (Purple)'],
     status: 'open',
   },
   {
     id: 'opportunity-winter-tampines',
     title: 'Winter grading — Tampines',
-    centreId: 'centre-tampines',
+    centreId: 'centre-oth',
     instructorId: 'instructor-nair',
+    gradingType: 'adult',
     date: daysAheadIso(42),
     applicationDeadline: daysAheadIso(28),
-    targetGrades: ['3rd Kyu', '2nd Kyu', '1st Kyu'],
+    targetGrades: ['4th Kyu', '3rd Kyu', '2nd Kyu'],
     status: 'open',
   },
   {
     id: 'opportunity-summer-jurong',
-    title: 'Summer grading — Jurong',
-    centreId: 'centre-jurong',
+    title: "Summer children's grading — Jurong",
+    centreId: 'centre-jeas',
     instructorId: 'instructor-sato',
+    gradingType: 'children',
     date: daysAgoIso(30),
-    applicationDeadline: daysAgoIso(45),
-    targetGrades: ['5th Kyu', '4th Kyu', '3rd Kyu'],
+    applicationDeadline: daysAgoIso(44),
+    targetGrades: ['4th Kyu (Brown)'],
     status: 'closed',
   },
 ]
 
+function takeStudentForGrade(
+  targetGrade: Grade,
+  track: GradeTrack,
+  centreId?: string,
+  index = 0,
+): string {
+  const matches = students.filter((student) => {
+    const studentTrack = ageFromIso(student.dateOfBirth) < 13 ? 'children' : 'adult'
+    return (
+      studentTrack === track &&
+      nextGrade(student.currentGrade, track) === targetGrade &&
+      (centreId === undefined || student.homeCentreId === centreId)
+    )
+  })
+  return matches[index % Math.max(matches.length, 1)]?.id ?? students[0].id
+}
+
 export const applications: GradingApplication[] = [
   {
     id: 'application-001',
-    studentId: 'student-001',
+    studentId: takeStudentForGrade(
+      '4th Kyu (Brown-Silver)',
+      'children',
+      'centre-btcc',
+    ),
     opportunityId: 'opportunity-autumn-bukit-timah',
-    targetGrade: '5th Kyu',
+    targetGrade: '4th Kyu (Brown-Silver)',
     submittedAt: daysAgoIso(4),
     status: 'submitted',
     notes: 'Attending Tuesday and Thursday sessions.',
   },
   {
     id: 'application-002',
-    studentId: 'student-017',
+    studentId: takeStudentForGrade('2nd Kyu (Black)', 'children', 'centre-btcc'),
     opportunityId: 'opportunity-autumn-bukit-timah',
-    targetGrade: '3rd Kyu',
+    targetGrade: '2nd Kyu (Black)',
     submittedAt: daysAgoIso(6),
     status: 'under_review',
   },
   {
     id: 'application-003',
-    studentId: 'student-009',
-    opportunityId: 'opportunity-autumn-bukit-timah',
-    targetGrade: '4th Kyu',
+    studentId: takeStudentForGrade('7th Kyu (Purple)', 'children', 'centre-cycc'),
+    opportunityId: 'opportunity-autumn-serangoon',
+    targetGrade: '7th Kyu (Purple)',
     submittedAt: daysAgoIso(8),
     status: 'submitted',
   },
   {
     id: 'application-004',
-    studentId: 'student-002',
+    studentId: takeStudentForGrade('7th Kyu (Purple)', 'children', 'centre-tgpc'),
     opportunityId: 'opportunity-autumn-serangoon',
-    targetGrade: '4th Kyu',
+    targetGrade: '7th Kyu (Purple)',
     submittedAt: daysAgoIso(5),
-    status: 'submitted',
-    notes: 'First grading attempt.',
+    status: 'withdrawn',
+    notes: 'Withdrawn — unable to attend the Ci Yuan date.',
   },
   {
     id: 'application-005',
-    studentId: 'student-010',
-    opportunityId: 'opportunity-autumn-serangoon',
-    targetGrade: '3rd Kyu',
+    studentId: takeStudentForGrade('4th Kyu', 'adult', 'centre-oth'),
+    opportunityId: 'opportunity-winter-tampines',
+    targetGrade: '4th Kyu',
     submittedAt: daysAgoIso(9),
-    status: 'under_review',
+    status: 'submitted',
   },
   {
     id: 'application-006',
-    studentId: 'student-022',
-    opportunityId: 'opportunity-autumn-serangoon',
-    targetGrade: '5th Kyu',
+    studentId: takeStudentForGrade('3rd Kyu', 'adult', 'centre-oth'),
+    opportunityId: 'opportunity-winter-tampines',
+    targetGrade: '3rd Kyu',
     submittedAt: daysAgoIso(12),
-    status: 'withdrawn',
+    status: 'under_review',
   },
   {
     id: 'application-007',
-    studentId: 'student-003',
-    opportunityId: 'opportunity-winter-tampines',
-    targetGrade: '3rd Kyu',
-    submittedAt: daysAgoIso(2),
-    status: 'submitted',
-  },
-  {
-    id: 'application-008',
-    studentId: 'student-011',
+    studentId: takeStudentForGrade('2nd Kyu', 'adult', 'centre-oth'),
     opportunityId: 'opportunity-winter-tampines',
     targetGrade: '2nd Kyu',
-    submittedAt: daysAgoIso(3),
+    submittedAt: daysAgoIso(2),
     status: 'submitted',
+    notes: 'First grading attempt.',
   },
 ]
 
@@ -469,7 +956,7 @@ export const notifications: NotificationEntry[] = [
     id: 'notification-003',
     channel: 'email',
     template: 'General reminder',
-    audience: 'Serangoon — all students',
+    audience: 'Ci Yuan — all students',
     recipientCount: 9,
     sentAt: `${daysAgoIso(8)}T08:05:00`,
     deliveredCount: 9,
@@ -479,7 +966,7 @@ export const notifications: NotificationEntry[] = [
     id: 'notification-004',
     channel: 'email',
     template: 'Grading invitation',
-    audience: 'Eligible students — Serangoon',
+    audience: 'Eligible students — Ci Yuan',
     recipientCount: 5,
     sentAt: `${daysAgoIso(10)}T10:30:00`,
     deliveredCount: 5,

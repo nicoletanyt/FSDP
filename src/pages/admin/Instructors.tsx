@@ -8,6 +8,9 @@ import { fullName, initials } from '@/lib/admin/format'
 export default function Instructors() {
   const { centres, instructors } = useAdminData()
   const centreNames = new Map(centres.map((centre) => [centre.id, centre.name]))
+  const activeCentreCount = centres.filter(
+    (centre) => centre.status === 'active',
+  ).length
 
   return (
     <div className="space-y-5">
@@ -22,7 +25,7 @@ export default function Instructors() {
           <CardHeader className="border-b border-border py-4">
             <CardTitle>Teaching team</CardTitle>
             <CardDescription>
-              {instructors.length} instructors across {centres.length} centres.
+              {instructors.length} instructors across {activeCentreCount} active centres.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">

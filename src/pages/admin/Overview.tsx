@@ -54,9 +54,13 @@ export default function Overview() {
   const trend = getWeeklyAttendanceTrend(attendance, sessions, centreId, 8)
   const trendChange =
     trend.length >= 2 ? trend[trend.length - 1].rate - trend[trend.length - 2].rate : 0
-  const centreStats = getCentreStats(centres, students, attendance, sessions).filter(
-    (stats) => centreId === 'all' || stats.centreId === centreId,
-  )
+  const centreStats = getCentreStats(
+    centres.filter((centre) => centre.status === 'active'),
+    students,
+    attendance,
+    sessions,
+  ).filter((stats) => centreId === 'all' || stats.centreId === centreId)
+  const comparisonStats = centreStats.slice(0, 8)
   const upcoming = getUpcomingSessions(sessions, centreId, 5)
   const scopedApplications = applications.filter((application) => {
     const student = students.find((item) => item.id === application.studentId)
@@ -144,15 +148,17 @@ export default function Overview() {
         <Card>
           <CardHeader>
             <CardTitle>Centre comparison</CardTitle>
-            <CardDescription>30-day attendance rate by centre.</CardDescription>
+            <CardDescription>
+              Lowest 8 active centres by 30-day attendance rate.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <CentreComparison
-              data={centreStats}
+              data={comparisonStats}
               names={Object.fromEntries(centres.map((centre) => [centre.id, centre.shortName]))}
             />
             <div className="mt-3 space-y-1.5 text-sm">
-              {centreStats.map((stats) => (
+              {comparisonStats.map((stats) => (
                 <div key={stats.centreId} className="flex items-center justify-between gap-3">
                   <span className="truncate text-muted-foreground">
                     {centreNames.get(stats.centreId)}
@@ -236,7 +242,7 @@ export default function Overview() {
                 <CardTitle>Upcoming sessions</CardTitle>
                 <CardDescription>Next classes across the dojos.</CardDescription>
               </div>
-              <Button variant="ghost" size="sm" render={<Link to="/admin/attendance/sessions" />}>
+              <Button variant="ghost" size="sm" render={<Link to="/admin/attendance/register?view=list" />}>
                 All sessions
                 <ChevronRight />
               </Button>
@@ -264,7 +270,7 @@ export default function Overview() {
                     <Button
                       variant="outline"
                       size="xs"
-                      render={<Link to={`/admin/attendance/sessions`} />}
+                      render={<Link to="/admin/attendance/register?view=list" />}
                     >
                       Manage
                     </Button>

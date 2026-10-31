@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import type { ReactNode } from 'react'
 import {
   ChevronDown,
   ChevronLeft,
@@ -95,6 +96,7 @@ export default function AttendanceCalendar({
   events,
   expandedSessionId,
   focusStudentId,
+  viewToggle,
   onSelectDate,
   onToggleSession,
   onToday,
@@ -105,6 +107,7 @@ export default function AttendanceCalendar({
   events: AdminCalendarEvent[]
   expandedSessionId: string | null
   focusStudentId?: string
+  viewToggle?: ReactNode
   onSelectDate: (date: Date) => void
   onToggleSession: (event: AdminCalendarEvent) => void
   onToday: () => void
@@ -165,6 +168,7 @@ export default function AttendanceCalendar({
             {weekLabel(date)}
           </h2>
         </div>
+        {viewToggle}
       </div>
 
       <div

@@ -21,7 +21,6 @@ const AdminCentres = lazy(() => import('./pages/admin/Centres'))
 const AdminStudentDetail = lazy(() => import('./pages/admin/StudentDetail'))
 const AdminAttendance = lazy(() => import('./pages/admin/Attendance'))
 const AdminAttendanceRegister = lazy(() => import('./pages/admin/AttendanceRegister'))
-const AdminAttendanceSessions = lazy(() => import('./pages/admin/AttendanceSessions'))
 const AdminAttendanceRecords = lazy(() => import('./pages/admin/AttendanceRecords'))
 const AdminAttendanceMonitoring = lazy(() => import('./pages/admin/AttendanceMonitoring'))
 const AdminGrading = lazy(() => import('./pages/admin/Grading'))
@@ -79,7 +78,7 @@ export default function App() {
               <Route path="attendance" element={<AdminAttendance />}>
                 <Route index element={<Navigate to="register" replace />} />
                 <Route path="register" element={<AdminAttendanceRegister />} />
-                <Route path="sessions" element={<AdminAttendanceSessions />} />
+                <Route path="sessions" element={<Navigate to="/admin/attendance/register?view=list" replace />} />
                 <Route path="records" element={<AdminAttendanceRecords />} />
                 <Route path="monitoring" element={<AdminAttendanceMonitoring />} />
               </Route>

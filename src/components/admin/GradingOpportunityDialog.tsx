@@ -12,11 +12,26 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { useAdminData } from '@/lib/admin/admin-data-context'
-import { daysAheadIso, todayIso } from '@/lib/admin/format'
+import {
+  addDays,
+  daysAheadIso,
+  toIsoDate,
+  todayIso,
+} from '@/lib/admin/format'
 import { countEligibleForOpportunity } from '@/lib/admin/grading-eligibility'
-import { grades } from '@/lib/admin/types'
-import type { Grade } from '@/lib/admin/types'
+import { getGradeMeta, grades } from '@/lib/admin/types'
+import type { Grade, GradeTrack } from '@/lib/admin/types'
 import { Field, NativeSelect } from './form-controls'
+
+const DEADLINE_WINDOW_DAYS = 14
+
+function deadlineFor(dateIso: string): string {
+  return toIsoDate(addDays(new Date(`${dateIso}T00:00:00`), -DEADLINE_WINDOW_DAYS))
+}
+
+function firstGradeFor(track: GradeTrack): Grade {
+  return grades.find((grade) => getGradeMeta(grade)?.track === track) ?? '6th Kyu'
+}
 
 export default function GradingOpportunityDialog({
   open,
@@ -36,15 +51,21 @@ export default function GradingOpportunityDialog({
     createOpportunity,
     sendNotification,
   } = useAdminData()
-  const firstCentre = centres[0]?.id ?? ''
+  const activeCentres = useMemo(
+    () => centres.filter((centre) => centre.status === 'active'),
+    [centres],
+  )
+  const firstCentre = activeCentres[0]?.id ?? ''
   const [centreId, setCentreId] = useState(
     defaultCentreId === 'all' ? firstCentre : defaultCentreId,
   )
   const [instructorId, setInstructorId] = useState('')
+  const [gradingType, setGradingType] = useState<GradeTrack>('adult')
   const [title, setTitle] = useState('')
   const [date, setDate] = useState(daysAheadIso(21))
-  const [deadline, setDeadline] = useState(daysAheadIso(10))
-  const [targetGrades, setTargetGrades] = useState<Grade[]>(['5th Kyu'])
+  const [deadline, setDeadline] = useState(deadlineFor(daysAheadIso(21)))
+  const [deadlineTouched, setDeadlineTouched] = useState(false)
+  const [targetGrades, setTargetGrades] = useState<Grade[]>(['6th Kyu'])
   const [notifyNow, setNotifyNow] = useState(true)
 
   const availableInstructors = useMemo(
@@ -63,8 +84,10 @@ export default function GradingOpportunityDialog({
     )
     setTitle('')
     setDate(daysAheadIso(21))
-    setDeadline(daysAheadIso(10))
-    setTargetGrades(['5th Kyu'])
+    setDeadline(deadlineFor(daysAheadIso(21)))
+    setDeadlineTouched(false)
+    setGradingType('adult')
+    setTargetGrades(['6th Kyu'])
     setNotifyNow(true)
   }, [open, defaultCentreId, firstCentre, instructors])
 
@@ -84,6 +107,22 @@ export default function GradingOpportunityDialog({
     )
   }
 
+  function handleGradingTypeChange(next: GradeTrack) {
+    setGradingType(next)
+    setTargetGrades([firstGradeFor(next)])
+  }
+
+  function handleDateChange(next: string) {
+    setDate(next)
+    if (!deadlineTouched) setDeadline(deadlineFor(next))
+  }
+
+  const recommendedDeadline = deadlineFor(date)
+  const lateDeadline = deadline > recommendedDeadline
+  const trackGrades = grades.filter(
+    (grade) => getGradeMeta(grade)?.track === gradingType,
+  )
+
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const finalTitle = title.trim() || 'Grading opportunity'
@@ -91,6 +130,7 @@ export default function GradingOpportunityDialog({
       title: finalTitle,
       centreId,
       instructorId,
+      gradingType,
       date,
       applicationDeadline: deadline,
       targetGrades,
@@ -149,7 +189,7 @@ export default function GradingOpportunityDialog({
                 }}
                 required
               >
-                {centres.map((centre) => (
+                {activeCentres.map((centre) => (
                   <option key={centre.id} value={centre.id}>
                     {centre.name}
                   </option>
@@ -174,14 +214,26 @@ export default function GradingOpportunityDialog({
             </Field>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Field label="Grading type" htmlFor="opportunity-type">
+              <NativeSelect
+                id="opportunity-type"
+                value={gradingType}
+                onChange={(event) =>
+                  handleGradingTypeChange(event.target.value as GradeTrack)
+                }
+              >
+                <option value="adult">Adult grading</option>
+                <option value="children">Children's grading</option>
+              </NativeSelect>
+            </Field>
             <Field label="Grading date" htmlFor="opportunity-date">
               <Input
                 id="opportunity-date"
                 type="date"
                 min={todayIso()}
                 value={date}
-                onChange={(event) => setDate(event.target.value)}
+                onChange={(event) => handleDateChange(event.target.value)}
                 required
               />
             </Field>
@@ -189,19 +241,27 @@ export default function GradingOpportunityDialog({
               <Input
                 id="opportunity-deadline"
                 type="date"
-                min={todayIso()}
                 max={date}
                 value={deadline}
-                onChange={(event) => setDeadline(event.target.value)}
+                onChange={(event) => {
+                  setDeadline(event.target.value)
+                  setDeadlineTouched(true)
+                }}
                 required
               />
+              {lateDeadline && (
+                <p className="text-xs text-warning-foreground dark:text-warning">
+                  Applications should close by {recommendedDeadline} (14 days before
+                  grading).
+                </p>
+              )}
             </Field>
           </div>
 
           <fieldset>
             <legend className="text-sm font-medium">Target grades</legend>
             <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {grades.map((grade) => (
+              {trackGrades.map((grade) => (
                 <label
                   key={grade}
                   className="flex items-center gap-2 rounded-lg border border-border px-2.5 py-1.5 text-sm"

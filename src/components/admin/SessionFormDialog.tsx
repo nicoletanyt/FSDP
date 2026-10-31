@@ -26,7 +26,11 @@ export default function SessionFormDialog({
   defaultCentreId?: string
 }) {
   const { centres, instructors, createSession } = useAdminData()
-  const firstCentre = centres[0]?.id ?? ''
+  const activeCentres = useMemo(
+    () => centres.filter((centre) => centre.status === 'active'),
+    [centres],
+  )
+  const firstCentre = activeCentres[0]?.id ?? ''
   const [centreId, setCentreId] = useState(
     defaultCentreId === 'all' ? firstCentre : defaultCentreId,
   )
@@ -109,7 +113,7 @@ export default function SessionFormDialog({
                 onChange={(event) => handleCentreChange(event.target.value)}
                 required
               >
-                {centres.map((centre) => (
+                {activeCentres.map((centre) => (
                   <option key={centre.id} value={centre.id}>
                     {centre.name}
                   </option>

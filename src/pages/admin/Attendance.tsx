@@ -3,7 +3,6 @@ import { cn } from 'cn'
 
 const tabs = [
   { to: 'register', label: 'Register' },
-  { to: 'sessions', label: 'Sessions' },
   { to: 'records', label: 'Records' },
   { to: 'monitoring', label: 'Monitoring' },
 ]

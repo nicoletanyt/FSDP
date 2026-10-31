@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge'
 import type {
   ApplicationStatus,
   AttendanceStatus,
+  CentreStatus,
   EligibilityStatus,
   FollowUpStatus,
   MembershipStatus,
@@ -105,5 +106,19 @@ const followUpLabels: Record<FollowUpStatus, { label: string; tone: BadgeTone }>
 
 export function FollowUpBadge({ status }: { status: FollowUpStatus }) {
   const config = followUpLabels[status]
+  return <StatusBadge tone={config.tone}>{config.label}</StatusBadge>
+}
+
+const centreStatusLabels: Record<
+  CentreStatus,
+  { label: string; tone: BadgeTone }
+> = {
+  active: { label: 'Active', tone: 'success' },
+  closed: { label: 'Closed', tone: 'danger' },
+  under_renovation: { label: 'Under renovation', tone: 'warning' },
+}
+
+export function CentreStatusBadge({ status }: { status: CentreStatus }) {
+  const config = centreStatusLabels[status]
   return <StatusBadge tone={config.tone}>{config.label}</StatusBadge>
 }

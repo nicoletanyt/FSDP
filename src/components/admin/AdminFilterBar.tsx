@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Search } from 'lucide-react'
 import { useNavigate } from 'react-router'
 import { useAdminData } from '@/lib/admin/admin-data-context'
 import { useAdminFilters } from '@/lib/admin/admin-filters'
 import type { AdminDateRange } from '@/lib/admin/admin-filters'
+import CentreCombobox from './CentreCombobox'
 import { NativeSelect } from './form-controls'
 
 export default function AdminFilterBar() {
@@ -12,11 +13,24 @@ export default function AdminFilterBar() {
   const { centreId, setCentreId, dateRange, setDateRange } = useAdminFilters()
   const [query, setQuery] = useState('')
   const navigate = useNavigate()
+  const activeCentres = useMemo(
+    () => centres.filter((centre) => centre.status === 'active'),
+    [centres],
+  )
+
+  useEffect(() => {
+    if (centreId === 'all') return
+    if (!activeCentres.some((centre) => centre.id === centreId)) setCentreId('all')
+  }, [centreId, activeCentres, setCentreId])
 
   function handleSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const trimmed = query.trim()
-    navigate(trimmed ? `/admin/centres?q=${encodeURIComponent(trimmed)}` : '/admin/centres')
+    navigate(
+      trimmed
+        ? `/admin/centres?tab=students&q=${encodeURIComponent(trimmed)}`
+        : '/admin/centres?tab=students',
+    )
   }
 
   return (
@@ -37,20 +51,11 @@ export default function AdminFilterBar() {
       </form>
 
       <div className="ml-auto flex flex-wrap items-center gap-2">
-        <div className="w-40">
-          <NativeSelect
-            value={centreId}
-            onChange={(event) => setCentreId(event.target.value)}
-            aria-label="Filter by centre"
-          >
-            <option value="all">All centres</option>
-            {centres.map((centre) => (
-              <option key={centre.id} value={centre.id}>
-                {centre.shortName}
-              </option>
-            ))}
-          </NativeSelect>
-        </div>
+        <CentreCombobox
+          centres={activeCentres}
+          value={centreId}
+          onChange={setCentreId}
+        />
 
         <div className="w-32">
           <NativeSelect

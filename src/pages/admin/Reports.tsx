@@ -26,9 +26,12 @@ export default function Reports() {
   const { centreId } = useAdminFilters()
 
   const trend = getWeeklyAttendanceTrend(attendance, sessions, centreId, 12)
-  const stats = getCentreStats(centres, students, attendance, sessions).filter(
-    (item) => centreId === 'all' || item.centreId === centreId,
-  )
+  const stats = getCentreStats(
+    centres.filter((centre) => centre.status === 'active'),
+    students,
+    attendance,
+    sessions,
+  ).filter((item) => centreId === 'all' || item.centreId === centreId)
   const scopedStudents = students.filter(
     (student) => centreId === 'all' || student.homeCentreId === centreId,
   )

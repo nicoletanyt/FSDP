@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import { CalendarDays, MapPin } from 'lucide-react'
+import { CalendarDays, List, MapPin } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router'
 import AttendanceCalendar from '@/components/admin/AttendanceCalendar'
+import AttendanceSessionList from '@/components/admin/AttendanceSessionList'
+import SessionFormDialog from '@/components/admin/SessionFormDialog'
 import { NativeSelect } from '@/components/admin/form-controls'
 import { Button } from '@/components/ui/button'
 import { Calendar } from '@/components/ui/calendar'
@@ -68,6 +70,7 @@ export default function AttendanceRegister() {
   const { centreId: filterCentreId, setCentreId } = useAdminFilters()
   const [searchParams, setSearchParams] = useSearchParams()
   const [calendarOpen, setCalendarOpen] = useState(false)
+  const [newSessionOpen, setNewSessionOpen] = useState(false)
   const [today] = useState(() => startOfDay())
 
   const todayKey = toIsoDate(today)
@@ -75,6 +78,7 @@ export default function AttendanceRegister() {
   const dateParam = searchParams.get('date')
   const centreParam = searchParams.get('centre')
   const studentParam = searchParams.get('student')
+  const isListView = searchParams.get('view') === 'list'
 
   const focusStudent = studentParam
     ? students.find((student) => student.id === studentParam)
@@ -314,21 +318,32 @@ export default function AttendanceRegister() {
     setSearchParams(next)
   }
 
+  function toggleView() {
+    const next = new URLSearchParams(searchParams)
+    if (isListView) next.delete('view')
+    else next.set('view', 'list')
+    setSearchParams(next)
+  }
+
   if (!sessions.length || !selectedCentreId) {
     return (
-      <Card>
-        <CardContent className="flex flex-col items-center gap-3 py-10 text-center">
-          <p className="text-sm text-muted-foreground">
-            No sessions found. Create a session before recording attendance.
-          </p>
-          <Button
-            variant="outline"
-            render={<Link to="/admin/attendance/sessions" />}
-          >
-            Go to sessions
-          </Button>
-        </CardContent>
-      </Card>
+      <>
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 py-10 text-center">
+            <p className="text-sm text-muted-foreground">
+              No sessions found. Create a session before recording attendance.
+            </p>
+            <Button variant="outline" onClick={() => setNewSessionOpen(true)}>
+              Create session
+            </Button>
+          </CardContent>
+        </Card>
+        <SessionFormDialog
+          open={newSessionOpen}
+          onOpenChange={setNewSessionOpen}
+          defaultCentreId="all"
+        />
+      </>
     )
   }
 
@@ -341,6 +356,29 @@ export default function AttendanceRegister() {
     relative === 'Today' || relative === 'Yesterday' || relative === 'Tomorrow'
       ? `${relative} · ${formatWeekday(selectedIso)}`
       : formatDate(selectedIso)
+
+  const viewToggle = (
+    <Button
+      variant="outline"
+      aria-label={
+        isListView ? 'Switch to calendar view' : 'Switch to session list view'
+      }
+      onClick={toggleView}
+      className="h-9 px-3"
+    >
+      {isListView ? (
+        <>
+          <CalendarDays aria-hidden="true" />
+          Calendar
+        </>
+      ) : (
+        <>
+          <List aria-hidden="true" />
+          List
+        </>
+      )}
+    </Button>
+  )
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
@@ -486,24 +524,34 @@ export default function AttendanceRegister() {
         </CardContent>
       </Card>
 
-      <AttendanceCalendar
-        date={selectedDate}
-        today={today}
-        events={calendarEvents}
-        expandedSessionId={selectedSession?.id ?? null}
-        focusStudentId={focusStudent?.id}
-        onSelectDate={selectDay}
-        onToggleSession={toggleSession}
-        onToday={() => handleDateChange(today)}
-        onNavigateWeek={(direction) =>
-          handleDateChange(addDays(selectedDate, direction * 7))
-        }
-      />
+      {isListView ? (
+        <AttendanceSessionList
+          centreId={selectedCentreId}
+          viewToggle={viewToggle}
+        />
+      ) : (
+        <>
+          <AttendanceCalendar
+            date={selectedDate}
+            today={today}
+            events={calendarEvents}
+            expandedSessionId={selectedSession?.id ?? null}
+            focusStudentId={focusStudent?.id}
+            viewToggle={viewToggle}
+            onSelectDate={selectDay}
+            onToggleSession={toggleSession}
+            onToday={() => handleDateChange(today)}
+            onNavigateWeek={(direction) =>
+              handleDateChange(addDays(selectedDate, direction * 7))
+            }
+          />
 
-      <p className="shrink-0 text-xs text-muted-foreground">
-        Attendance rate uses present and late as attended; excused absences are
-        excluded.
-      </p>
+          <p className="shrink-0 text-xs text-muted-foreground">
+            Attendance rate uses present and late as attended; excused absences
+            are excluded.
+          </p>
+        </>
+      )}
     </div>
   )
 }

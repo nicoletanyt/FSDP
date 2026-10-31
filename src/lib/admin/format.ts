@@ -98,6 +98,10 @@ export function monthsBetween(iso: string, reference = todayIso()): number {
   )
 }
 
+export function ageFromIso(iso: string, reference = todayIso()): number {
+  return Math.floor(monthsBetween(iso, reference) / 12)
+}
+
 export function daysBetween(fromIso: string, toIso: string): number {
   const from = new Date(`${fromIso}T00:00:00`).getTime()
   const to = new Date(`${toIso}T00:00:00`).getTime()

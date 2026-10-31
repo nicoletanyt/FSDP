@@ -10,6 +10,7 @@ import { useAdminData } from '@/lib/admin/admin-data-context'
 import { useAdminFilters } from '@/lib/admin/admin-filters'
 import { formatDate, todayIso } from '@/lib/admin/format'
 import { countEligibleForOpportunity } from '@/lib/admin/grading-eligibility'
+import type { GradingOpportunity } from '@/lib/admin/types'
 
 export default function GradingOpportunities() {
   const {
@@ -197,14 +198,7 @@ function OpportunityCard({
   onNotify,
   isPast,
 }: {
-  opportunity: {
-    id: string
-    title: string
-    date: string
-    applicationDeadline: string
-    targetGrades: string[]
-    status: string
-  }
+  opportunity: GradingOpportunity
   centreName: string
   instructorName: string
   eligibleCount: number
@@ -219,7 +213,8 @@ function OpportunityCard({
           <div>
             <CardTitle>{opportunity.title}</CardTitle>
             <CardDescription>
-              {centreName} · {formatDate(opportunity.date)}
+              {centreName} · {formatDate(opportunity.date)} ·{' '}
+              {opportunity.gradingType === 'children' ? "Children's" : 'Adult'} grading
             </CardDescription>
           </div>
           <StatusBadge tone={isPast ? 'neutral' : 'success'}>

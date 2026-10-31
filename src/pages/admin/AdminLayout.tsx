@@ -1,4 +1,4 @@
-import { Outlet, useLocation } from 'react-router'
+import { Outlet, useLocation, useSearchParams } from 'react-router'
 import AdminFilterBar from '@/components/admin/AdminFilterBar'
 import AdminNavbar from '@/components/admin/AdminNavbar'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -8,11 +8,14 @@ import { cn } from 'cn'
 
 function AdminShell() {
   const { pathname } = useLocation()
+  const [searchParams] = useSearchParams()
   const isAttendanceRegister =
     pathname === '/admin/attendance' ||
     pathname.startsWith('/admin/attendance/register')
+  const isDojosTab =
+    pathname === '/admin/centres' && searchParams.get('tab') !== 'students'
   const showFilters =
-    pathname !== '/admin/profile' && !isAttendanceRegister
+    pathname !== '/admin/profile' && !isAttendanceRegister && !isDojosTab
 
   return (
     <div

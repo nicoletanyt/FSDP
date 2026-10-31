@@ -25,9 +25,13 @@ import {
   fullName,
   initials,
 } from '@/lib/admin/format'
-import { getEligibilityAssessments } from '@/lib/admin/grading-eligibility'
-import type { Grade } from '@/lib/admin/types'
-import { grades } from '@/lib/admin/types'
+import {
+  formatMonths,
+  getEligibilityAssessments,
+  getGradeRequirement,
+} from '@/lib/admin/grading-eligibility'
+import type { Grade, GradeTrack } from '@/lib/admin/types'
+import { getGradeMeta, grades } from '@/lib/admin/types'
 import { cn } from 'cn'
 
 export default function GradingEligibility() {
@@ -135,7 +139,7 @@ export default function GradingEligibility() {
             <option value="not_eligible">Not eligible</option>
           </NativeSelect>
         </div>
-        <div className="w-32">
+        <div className="w-44">
           <NativeSelect
             value={gradeFilter}
             onChange={(event) => setGradeFilter(event.target.value)}
@@ -292,18 +296,67 @@ export default function GradingEligibility() {
         <CardHeader>
           <CardTitle>Eligibility rules</CardTitle>
           <CardDescription>
-            Read-only rules applied automatically to every student.
+            Applied automatically to every student. Months are time in the
+            current grade, not cumulative. Source: Aikido Shinju-Kai grading
+            information.
           </CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-2 text-sm text-muted-foreground sm:grid-cols-2">
-          <p>• Active membership</p>
-          <p>• 20 training sessions since last grading (30 for Shodan/Nidan)</p>
-          <p>• 75% attendance over the last 90 days</p>
-          <p>• 4 months in the current grade (6 for Shodan/Nidan)</p>
-          <p>• No outstanding fees</p>
-          <p>• The next grade is determined from the current grade</p>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <RuleList title="Adult grading" track="adult" />
+            <RuleList title="Children's grading" track="children" />
+          </div>
+          <ul className="grid gap-1 border-t border-border pt-3 text-sm text-muted-foreground">
+            <li>• Member for at least 3 months, with no outstanding fees.</li>
+            <li>• Applications close 14 days before the grading.</li>
+            <li>
+              • 90-day attendance is shown as a readiness signal, not a pass/fail
+              requirement.
+            </li>
+            <li>
+              • 2nd Kyu and above also need the weapons assessment, tracked
+              separately.
+            </li>
+          </ul>
         </CardContent>
       </Card>
+    </div>
+  )
+}
+
+function requirementText(grade: Grade): string {
+  const requirement = getGradeRequirement(grade)
+  if (!requirement) return '—'
+  const parts: string[] = []
+  if (requirement.minAge !== undefined) parts.push(`age ${requirement.minAge}+`)
+  if (requirement.minMonths > 0) {
+    parts.push(formatMonths(requirement.minMonths, requirement.maxMonths))
+  }
+  if (requirement.sessions !== undefined) parts.push(`${requirement.sessions} sessions`)
+  return parts.join(' · ')
+}
+
+function RuleList({ title, track }: { title: string; track: GradeTrack }) {
+  return (
+    <div>
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        {title}
+      </p>
+      <dl className="mt-2 space-y-1 text-sm">
+        {grades
+          .filter((grade) => getGradeMeta(grade)?.track === track)
+          .map((grade) => (
+            <div
+              key={grade}
+              className="flex items-baseline justify-between gap-3"
+            >
+              <dt className="text-muted-foreground">{grade}</dt>
+              <dd className="shrink-0 text-right tabular-nums">
+                {requirementText(grade)}
+              </dd>
+            </div>
+          ))}
+      </dl>
     </div>
   )
 }
