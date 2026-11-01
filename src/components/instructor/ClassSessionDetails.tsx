@@ -195,10 +195,6 @@ export default function ClassSessionDetails({
     const marked = roster.filter(
         (student) => record[student.id].attendance !== "unmarked",
     ).length;
-    const present = roster.filter(
-        (student) => record[student.id].attendance === "present",
-    ).length;
-    const absent = marked - present;
     const allPresent =
         roster.length > 0 &&
         roster.every((student) => record[student.id].attendance === "present");
@@ -235,54 +231,24 @@ export default function ClassSessionDetails({
                 !summary && "border-t border-foreground/10",
             )}
         >
-            {summary && (
-                <div className="space-y-2 px-3 pb-2">
-                    <div
-                        role="group"
-                        aria-label={`Attendance summary for ${event.name}`}
-                        aria-live="polite"
-                        className="grid grid-cols-3 gap-1 rounded-md px-2 py-2 text-2xs tabular-nums"
+            {summary && showAttendanceToggle && (
+                <div className="px-4 pb-3">
+                    <Button
+                        variant="ghost"
+                        onClick={onToggle}
+                        aria-expanded={expanded}
+                        aria-controls={`attendance-${event.id}`}
+                        className="h-9 w-full justify-between px-3 text-xs"
                     >
-                        <span className="flex items-center gap-1 text-emerald-700 dark:text-emerald-400">
-                            <CircleCheck
-                                aria-hidden="true"
-                                className="size-3 shrink-0"
-                            />
-                            {present} present
-                        </span>
-                        <span className="flex items-center justify-center gap-1 text-red-600 dark:text-red-400">
-                            <CircleX
-                                aria-hidden="true"
-                                className="size-3 shrink-0"
-                            />
-                            {absent} absent
-                        </span>
-                        <span className="flex items-center justify-end gap-1 text-muted-foreground">
-                            <CircleMinus
-                                aria-hidden="true"
-                                className="size-3 shrink-0"
-                            />
-                            {roster.length - marked} unmarked
-                        </span>
-                    </div>
-                    {showAttendanceToggle && (
-                        <Button
-                            variant="ghost"
-                            onClick={onToggle}
-                            aria-expanded={expanded}
-                            aria-controls={`attendance-${event.id}`}
-                            className="h-7 w-full justify-between px-1 text-xs"
-                        >
-                            {expanded ? "Hide Attendance" : "View Attendance"}
-                            <ChevronDown
-                                aria-hidden="true"
-                                className={cn(
-                                    "size-3 transition-transform motion-reduce:transition-none",
-                                    expanded && "rotate-180",
-                                )}
-                            />
-                        </Button>
-                    )}
+                        {expanded ? "Hide Attendance" : "View Attendance"}
+                        <ChevronDown
+                            aria-hidden="true"
+                            className={cn(
+                                "size-3 transition-transform motion-reduce:transition-none",
+                                expanded && "rotate-180",
+                            )}
+                        />
+                    </Button>
                 </div>
             )}
             <div
@@ -290,7 +256,7 @@ export default function ClassSessionDetails({
                 hidden={summary && !expanded}
             >
                 {!summary && (
-                    <div className="space-y-2 p-3">
+                    <div className="space-y-3 p-4">
                         <div className="flex items-center justify-between gap-2 text-xs">
                             <h4 className="font-semibold">Attendance</h4>
                             <span
@@ -304,12 +270,12 @@ export default function ClassSessionDetails({
                 )}
                 <ul
                     aria-label="Student roster"
-                    className="max-h-80 divide-y overflow-y-auto overscroll-contain border-foreground/5 px-3"
+                    className="max-h-80 divide-y overflow-y-auto overscroll-contain border-foreground/5 px-4"
                 >
                     {roster.map((student) => {
                         const value = record[student.id];
                         return (
-                            <li key={student.id} className="py-1.5">
+                            <li key={student.id} className="py-2.5">
                                 <div className="flex min-h-7 items-center justify-between gap-2">
                                     <div className="flex min-w-0 flex-1 items-center gap-2">
                                         <BeltIndicator
@@ -377,13 +343,13 @@ export default function ClassSessionDetails({
                     })}
                 </ul>
                 {!isPast && (
-                    <div className="space-y-2 p-3">
+                    <div className="space-y-3 p-4">
                         <div className="flex items-center justify-between gap-2">
                             <Button
                                 variant="outline"
                                 size="sm"
                                 onClick={toggleAllAttendance}
-                                className="h-auto min-h-7 min-w-0 shrink py-1 whitespace-normal"
+                                className="h-auto min-h-9 min-w-0 shrink px-3 py-2 text-xs whitespace-normal"
                             >
                                 {allPresent ? (
                                     <CircleX aria-hidden="true" />

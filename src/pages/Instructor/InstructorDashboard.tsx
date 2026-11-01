@@ -1,15 +1,26 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import {
     ChevronDown,
     ChevronLeft,
     ChevronRight,
     Clock3,
+    CalendarDays as CalendarDaysIcon,
+    Info,
+    List,
     MapPin,
+    Plus,
 } from "lucide-react";
 import ClassSessionDetails from "@/components/instructor/ClassSessionDetails";
+import CalendarTimeline from "@/components/instructor/CalendarTimeline";
+import {
+    AvailabilityCard,
+    AvailabilityDialog,
+} from "@/components/instructor/CalendarAvailability";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Kbd } from "@/components/ui/kbd";
+import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@/components/ui/popover";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -17,6 +28,19 @@ import {
     DropdownMenuRadioItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+    availabilityError,
+    minutesTime,
+    mockAvailability,
+    timeMinutes,
+} from "@/lib/instructor-availability";
+import type { AvailabilityRange, AvailabilitySlot } from "@/lib/instructor-availability";
 import {
     addDays,
     addMonths,
@@ -41,6 +65,9 @@ type CalendarProps = {
     expandedClassId: string | null;
     onSelectDate: (date: Date) => void;
     onToggleClass: (event: CalendarEvent) => void;
+    availability: AvailabilitySlot[];
+    selectedAvailabilityId: string | null;
+    onSelectAvailability: (slot: AvailabilitySlot) => void;
 };
 
 function EventCard({
@@ -48,11 +75,13 @@ function EventCard({
     expanded,
     onToggle,
     layout = "week",
+    detailsInPanel = false,
 }: {
     event: CalendarEvent;
     expanded: boolean;
     onToggle: () => void;
     layout?: "day" | "week" | "panel";
+    detailsInPanel?: boolean;
 }) {
     const showSummary = layout !== "week";
     return (
@@ -67,12 +96,12 @@ function EventCard({
                 variant="ghost"
                 onClick={onToggle}
                 aria-expanded={expanded}
-                aria-controls={`${showSummary ? "attendance" : "details"}-${event.id}`}
+                aria-controls={detailsInPanel && !expanded ? undefined : `${showSummary || detailsInPanel ? "attendance" : "details"}-${event.id}`}
                 aria-label={`${event.name}, ${fullDate(event.date)}, ${formatTime(event.startTime)} to ${formatTime(event.endTime)}, ${event.dojo}, ${event.studentIds.length} students. ${expanded ? "Collapse" : "Expand"} class details`}
                 className={cn(
-                    "h-auto w-full flex-col items-stretch gap-2 rounded-lg p-2.5 text-left whitespace-normal hover:bg-foreground/5 focus-visible:-outline-offset-2",
-                    showSummary && "p-3",
-                    layout === "day" && "gap-3 p-4",
+                    "h-auto w-full flex-col items-stretch gap-3 rounded-lg p-3 text-left whitespace-normal hover:bg-foreground/5 focus-visible:-outline-offset-2",
+                    showSummary && "p-4",
+                    layout === "day" && "gap-4 p-5",
                 )}
             >
                 <span
@@ -124,7 +153,7 @@ function EventCard({
                     <span className="flex items-center justify-between gap-2 text-2xs font-normal text-muted-foreground">
                         <span
                             className={cn(
-                                "rounded px-1.5 py-0.5",
+                                "rounded px-2 py-1",
                                 eventStyles[event.type].badge,
                             )}
                         >
@@ -134,7 +163,7 @@ function EventCard({
                     </span>
                 )}
             </Button>
-            {showSummary ? (
+            {!detailsInPanel && (showSummary ? (
                 <ClassSessionDetails
                     event={event}
                     summary
@@ -158,7 +187,7 @@ function EventCard({
                         <ClassSessionDetails event={event} />
                     </div>
                 </div>
-            )}
+            ))}
         </Card>
     );
 }
@@ -171,6 +200,9 @@ function CalendarDays({
     expandSelectedDay,
     onSelectDate,
     onToggleClass,
+    availability,
+    selectedAvailabilityId,
+    onSelectAvailability,
 }: CalendarProps & {
     view: "day" | "week";
     expandSelectedDay: boolean;
@@ -251,6 +283,11 @@ function CalendarDays({
                     const isToday = dateKey(day) === dateKey(today);
                     const isSelected = dateKey(day) === dateKey(date);
                     const isExpanded = isSelected && expandSelectedDay;
+                    const slots = availability.filter((slot) => dateKey(slot.date) === dateKey(day));
+                    const entries = [
+                        ...events.map((event) => ({ id: event.id, startTime: event.startTime, event, slot: null })),
+                        ...slots.map((slot) => ({ id: slot.id, startTime: slot.startTime, event: null, slot })),
+                    ].sort((a, b) => a.startTime.localeCompare(b.startTime));
                     return (
                         <section
                             key={dateKey(day)}
@@ -312,16 +349,17 @@ function CalendarDays({
                                 className={cn(
                                     "min-h-0 flex-1 overflow-y-auto",
                                     view === "day"
-                                        ? "grid auto-rows-max items-start gap-3 bg-muted/30 p-1 xl:grid-cols-2"
-                                        : "space-y-2 p-2",
+                                        ? "grid auto-rows-max items-start gap-4 bg-muted/30 p-2 xl:grid-cols-2"
+                                        : "space-y-3 p-3",
                                 )}
                             >
-                                {events.length ? (
-                                    events.map((event) => (
+                                {entries.length ? (
+                                    entries.map(({ event, slot, id }) => event ? (
                                         <EventCard
-                                            key={event.id}
+                                            key={id}
                                             event={event}
                                             layout={view}
+                                            detailsInPanel
                                             expanded={
                                                 isSelected &&
                                                 expandedClassId === event.id
@@ -330,6 +368,8 @@ function CalendarDays({
                                                 onToggleClass(event)
                                             }
                                         />
+                                    ) : slot && (
+                                        <AvailabilityCard key={id} slot={slot} selected={selectedAvailabilityId === id} onSelect={() => onSelectAvailability(slot)} />
                                     ))
                                 ) : (
                                     <p className="px-1 py-3 text-xs text-muted-foreground">
@@ -351,31 +391,24 @@ function CalendarMonth({
     expandedClassId,
     onSelectDate,
     onToggleClass,
+    availability,
+    selectedAvailabilityId,
+    onSelectAvailability,
 }: CalendarProps) {
     const selectedDay = useRef<HTMLElement>(null);
-    const selectedClass = useRef<HTMLDivElement>(null);
-    const attendancePanel = useRef<HTMLElement>(null);
     const selectedKey = dateKey(date);
     const days = monthDates(date);
-    const selectedEvents = eventsForDate(date);
     useEffect(() => {
         selectedDay.current?.scrollIntoView({
             block: "nearest",
             inline: "nearest",
         });
-        if (attendancePanel.current) attendancePanel.current.scrollTop = 0;
     }, [selectedKey]);
-    useEffect(() => {
-        selectedClass.current?.scrollIntoView({
-            block: "start",
-            inline: "nearest",
-        });
-    }, [expandedClassId]);
 
     return (
         <div
             aria-label="Monthly class calendar"
-            className="grid min-h-0 flex-1 grid-rows-[minmax(0,3fr)_minmax(0,2fr)] gap-3 lg:grid-cols-[minmax(0,3fr)_minmax(300px,1fr)] lg:grid-rows-1"
+            className="flex min-h-0 min-w-0 flex-1 flex-col"
         >
             <div
                 aria-label="Month dates"
@@ -420,7 +453,7 @@ function CalendarMonth({
                                         onSelectDate(day);
                                 }}
                                 className={cn(
-                                    "flex min-w-0 flex-col items-start gap-0.5 border-r border-b border-border/60 p-1 nth-[7n]:border-r-0 sm:p-1.5",
+                                    "flex min-w-0 flex-col items-start gap-0.5 overflow-y-auto border-r border-b border-border/60 p-1 nth-[7n]:border-r-0 sm:p-1.5",
                                     !isCurrentMonth &&
                                     "bg-muted/40 text-muted-foreground",
                                     isSelected &&
@@ -474,55 +507,14 @@ function CalendarMonth({
                                         </span>
                                     </Button>
                                 ))}
+                                {availability.filter((slot) => dateKey(slot.date) === key).map((slot) => (
+                                    <AvailabilityCard key={slot.id} slot={slot} compact selected={selectedAvailabilityId === slot.id} onSelect={() => onSelectAvailability(slot)} />
+                                ))}
                             </section>
                         );
                     })}
                 </div>
             </div>
-            <aside
-                ref={attendancePanel}
-                aria-label="Selected day classes"
-                className="min-h-0 min-w-0 space-y-2 overflow-y-auto overscroll-contain lg:min-w-75"
-            >
-                <header className="sticky top-0 z-10 px-1 py-2">
-                    <h3 className="text-sm font-medium">
-                        {date.toLocaleDateString("en-GB", {
-                            weekday: "long",
-                            day: "numeric",
-                            month: "long",
-                            year: "numeric",
-                        })}
-                    </h3>
-                    <p className="mt-0.5 text-2xs text-muted-foreground">
-                        {selectedEvents.length}{" "}
-                        {selectedEvents.length === 1 ? "class" : "classes"}
-                    </p>
-                </header>
-                {selectedEvents.length ? (
-                    selectedEvents.map((event) => (
-                        <div
-                            key={event.id}
-                            ref={
-                                expandedClassId === event.id
-                                    ? selectedClass
-                                    : undefined
-                            }
-                            className="scroll-mt-20"
-                        >
-                            <EventCard
-                                event={event}
-                                layout="panel"
-                                expanded={expandedClassId === event.id}
-                                onToggle={() => onToggleClass(event)}
-                            />
-                        </div>
-                    ))
-                ) : (
-                    <p className="rounded-lg border bg-card p-3 text-xs text-muted-foreground">
-                        No classes scheduled
-                    </p>
-                )}
-            </aside>
         </div>
     );
 }
@@ -530,15 +522,26 @@ function CalendarMonth({
 export default function InstructorDashboard() {
     const [searchParams, setSearchParams] = useSearchParams();
     const [weekOverview, setWeekOverview] = useState(false);
+    const [displayMode, setDisplayMode] = useState<"timeline" | "list">("list");
+    const [now, setNow] = useState(() => new Date());
+    useEffect(() => {
+        const timer = window.setInterval(() => setNow(new Date()), 30_000);
+        return () => window.clearInterval(timer);
+    }, []);
     const requestedView = searchParams.get("view");
     const view: CalendarView =
         requestedView === "day" || requestedView === "month"
             ? requestedView
             : "week";
-    const [today] = useState(() => {
-        const now = new Date();
-        return new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    });
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const [availability, setAvailability] = useState<AvailabilitySlot[]>(() =>
+        mockAvailability(today),
+    );
+    const [selectedAvailabilityId, setSelectedAvailabilityId] = useState<string | null>(null);
+    const [availabilityDialog, setAvailabilityDialog] = useState<{
+        range: AvailabilityRange;
+        editingId?: string;
+    } | null>(null);
     const requestedEvent = findCalendarEvent(
         searchParams.get("session") ?? searchParams.get("class") ?? undefined,
     );
@@ -547,20 +550,27 @@ export default function InstructorDashboard() {
         parseCalendarDate(searchParams.get("date")) ??
         requestedSession?.date ??
         today;
+    const selectedDateKey = dateKey(selectedDate);
     const expandedClassId =
         requestedSession &&
             dateKey(requestedSession.date) === dateKey(selectedDate)
             ? requestedSession.id
             : null;
+    const selectedAvailability = availability.find((slot) =>
+        slot.id === selectedAvailabilityId && dateKey(slot.date) === dateKey(selectedDate),
+    );
 
     function updateSelection(
         date: Date,
         sessionId: string | null = null,
         overview = false,
+        nextView?: CalendarView,
     ) {
+        setSelectedAvailabilityId(null);
         setWeekOverview(overview);
         const next = new URLSearchParams(searchParams);
         next.set("date", dateKey(date));
+        if (nextView) next.set("view", nextView);
         next.delete("class");
         if (sessionId) next.set("session", sessionId);
         else next.delete("session");
@@ -572,6 +582,55 @@ export default function InstructorDashboard() {
             date,
             dateKey(date) === dateKey(selectedDate) ? expandedClassId : null,
         );
+    }
+
+    function selectMonthDate(date: Date) {
+        updateSelection(date, null, false, "day");
+    }
+
+    function selectAvailability(slot: AvailabilitySlot) {
+        updateSelection(slot.date);
+        setSelectedAvailabilityId(slot.id);
+        setAvailabilityDialog({ range: slot, editingId: slot.id });
+    }
+
+    function selectRange(range: AvailabilityRange) {
+        updateSelection(range.date);
+        setAvailabilityDialog({ range });
+    }
+
+    function addAvailability() {
+        const currentTime = new Date();
+        let date = selectedDate < today ? today : selectedDate;
+        let start = dateKey(date) === dateKey(currentTime)
+            ? Math.max(8 * 60, (Math.floor((currentTime.getHours() * 60 + currentTime.getMinutes()) / 30) + 1) * 30)
+            : 8 * 60;
+        // Prefer the first free half hour so the manual dialog starts with a usable range.
+        for (let attempt = 0; attempt < 56; attempt++) {
+            if (start >= 22 * 60) {
+                date = addDays(date, 1);
+                start = 8 * 60;
+            }
+            const range = {
+                date,
+                startTime: minutesTime(start),
+                endTime: minutesTime(start + 30),
+            };
+            if (!availabilityError(range, availability, undefined, currentTime)) {
+                selectRange(range);
+                return;
+            }
+            start += 30;
+        }
+        selectRange({ date: addDays(date, 1), startTime: "08:00", endTime: "08:30" });
+    }
+
+    function deleteAvailability() {
+        const id = availabilityDialog?.editingId;
+        if (!id) return;
+        setAvailability((slots) => slots.filter((slot) => slot.id !== id));
+        setSelectedAvailabilityId(null);
+        setAvailabilityDialog(null);
     }
 
     function navigateDate(direction: number) {
@@ -590,13 +649,58 @@ export default function InstructorDashboard() {
         updateSelection(includesToday ? today : nextDate, null, !includesToday);
     }
 
-    function changeView(value: unknown) {
+    const changeView = useCallback((value: unknown) => {
         if (value !== "day" && value !== "week" && value !== "month") return;
         const next = new URLSearchParams(searchParams);
         next.set("view", value);
-        next.set("date", dateKey(selectedDate));
+        next.set("date", selectedDateKey);
         setSearchParams(next);
-    }
+    }, [searchParams, selectedDateKey, setSearchParams]);
+
+    useEffect(() => {
+        function handleCalendarShortcut(event: KeyboardEvent) {
+            if (
+                event.defaultPrevented || event.repeat || event.isComposing ||
+                event.ctrlKey || event.metaKey || event.altKey || availabilityDialog
+            ) return;
+            const target = event.target;
+            if (target instanceof HTMLElement && (
+                target.isContentEditable || target.closest('input, textarea, select, [role="textbox"], [role="combobox"]')
+            )) return;
+            // Hidden overlays such as the closed chatbot stay mounted in the page.
+            const hasOpenOverlay = Array.from(document.querySelectorAll<HTMLElement>(
+                '[role="dialog"], [role="alertdialog"], [role="menu"]',
+            )).some((overlay) => {
+                if (overlay.closest('[hidden], [inert], [aria-hidden="true"], [data-closed]')) return false;
+                const style = window.getComputedStyle(overlay);
+                return overlay.getClientRects().length > 0 && style.visibility === "visible" && style.opacity !== "0";
+            });
+            if (hasOpenOverlay) return;
+
+            const key = event.key.toLowerCase();
+            const nextView = key === "w" ? "week" : key === "d" ? "day" : key === "m" ? "month" : null;
+            if (key === "escape" && expandedClassId) {
+                event.preventDefault();
+                setSearchParams((params) => {
+                    const next = new URLSearchParams(params);
+                    next.set("date", selectedDateKey);
+                    next.delete("session");
+                    next.delete("class");
+                    return next;
+                });
+            } else if (nextView) {
+                event.preventDefault();
+                changeView(nextView);
+            } else if (key === "t" || key === "l") {
+                event.preventDefault();
+                setDisplayMode(key === "t" ? "timeline" : "list");
+                if (view === "month") changeView("week");
+            }
+        }
+
+        window.addEventListener("keydown", handleCalendarShortcut);
+        return () => window.removeEventListener("keydown", handleCalendarShortcut);
+    }, [availabilityDialog, changeView, expandedClassId, selectedDateKey, setSearchParams, view]);
 
     const heading =
         view === "week"
@@ -618,7 +722,13 @@ export default function InstructorDashboard() {
                 event.date,
                 expandedClassId === event.id ? null : event.id,
             ),
+        availability,
+        selectedAvailabilityId: selectedAvailability?.id ?? null,
+        onSelectAvailability: selectAvailability,
     };
+
+    const isTimeline = view !== "month" && displayMode === "timeline";
+    const showSidePanel = expandedClassId !== null;
 
     return (
         <section className="flex min-h-0 flex-1 flex-col gap-4">
@@ -628,12 +738,12 @@ export default function InstructorDashboard() {
                 </h1>
             </header>
             <section className="flex min-h-0 flex-1 flex-col gap-4">
-                <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
-                    <div className="flex min-w-0 flex-wrap items-center gap-3">
+                <div className="flex shrink-0 flex-wrap items-center justify-between gap-4">
+                    <div className="flex min-w-0 flex-wrap items-center gap-4">
                         <div
                             role="group"
                             aria-label={`${view[0].toUpperCase()}${view.slice(1)} navigation`}
-                            className="flex items-center gap-1"
+                            className="flex items-center gap-2"
                         >
                             <Button
                                 variant="outline"
@@ -647,13 +757,14 @@ export default function InstructorDashboard() {
                                         ),
                                     );
                                 }}
-                                className="mr-1 h-9 px-3"
+                                className="mr-1 h-10 px-4"
                             >
                                 Today
                             </Button>
                             <Button
                                 variant="ghost"
                                 size="icon-lg"
+                                className="size-10"
                                 aria-label={`Previous ${view}`}
                                 onClick={() => navigateDate(-1)}
                             >
@@ -662,6 +773,7 @@ export default function InstructorDashboard() {
                             <Button
                                 variant="ghost"
                                 size="icon-lg"
+                                className="size-10"
                                 aria-label={`Next ${view}`}
                                 onClick={() => navigateDate(1)}
                             >
@@ -672,48 +784,99 @@ export default function InstructorDashboard() {
                             {heading}
                         </h2>
                     </div>
-                    <DropdownMenu>
-                        <DropdownMenuTrigger
-                            render={
-                                <Button
-                                    variant="outline"
-                                    className="ml-auto h-9 min-w-28 justify-between px-3"
-                                />
-                            }
-                            aria-label={`Calendar view: ${view}`}
-                        >
-                            {view[0].toUpperCase()}
-                            {view.slice(1)}
-                            <ChevronDown aria-hidden="true" />
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                            <DropdownMenuRadioGroup
-                                aria-label="Calendar view"
-                                value={view}
-                                onValueChange={changeView}
+                    <div className="flex flex-wrap items-center gap-3">
+                        <Button variant="outline" onClick={addAvailability} className="h-10 gap-2 px-4">
+                            <Plus aria-hidden="true" />Add Availability
+                        </Button>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger
+                                render={<Button variant="outline" className="h-10 min-w-28 justify-between gap-3 px-4" />}
+                                aria-label={`Calendar date range: ${view}`}
                             >
-                                <DropdownMenuRadioItem value="day" closeOnClick>
-                                    Day
-                                </DropdownMenuRadioItem>
-                                <DropdownMenuRadioItem
-                                    value="week"
-                                    closeOnClick
-                                >
-                                    Week
-                                </DropdownMenuRadioItem>
-                                <DropdownMenuRadioItem
-                                    value="month"
-                                    closeOnClick
-                                >
-                                    Month
-                                </DropdownMenuRadioItem>
-                            </DropdownMenuRadioGroup>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
+                                {view[0].toUpperCase()}{view.slice(1)}
+                                <ChevronDown aria-hidden="true" />
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent className="p-1.5">
+                                <DropdownMenuRadioGroup value={view} onValueChange={changeView} aria-label="Calendar date range">
+                                    <DropdownMenuRadioItem value="day" closeOnClick aria-keyshortcuts="d" className="py-2.5 pr-4 pl-9">
+                                        Day<Kbd className="ml-auto" aria-hidden="true">D</Kbd>
+                                    </DropdownMenuRadioItem>
+                                    <DropdownMenuRadioItem value="week" closeOnClick aria-keyshortcuts="w" className="py-2.5 pr-4 pl-9">
+                                        Week<Kbd className="ml-auto" aria-hidden="true">W</Kbd>
+                                    </DropdownMenuRadioItem>
+                                    <DropdownMenuRadioItem value="month" closeOnClick aria-keyshortcuts="m" className="py-2.5 pr-4 pl-9">
+                                        Month<Kbd className="ml-auto" aria-hidden="true">M</Kbd>
+                                    </DropdownMenuRadioItem>
+                                </DropdownMenuRadioGroup>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                        {view !== "month" && <TooltipProvider>
+                            <DropdownMenu>
+                                <Tooltip>
+                                    <TooltipTrigger render={
+                                        <DropdownMenuTrigger
+                                            render={<Button variant="outline" className="h-10 min-w-28 justify-between gap-3 px-4" />}
+                                            aria-label={`Calendar display mode: ${displayMode}`}
+                                        />
+                                    }>
+                                        {displayMode === "timeline" ? <CalendarDaysIcon aria-hidden="true" /> : <List aria-hidden="true" />}
+                                        {displayMode === "timeline" ? "Timeline" : "List"}
+                                        <ChevronDown aria-hidden="true" />
+                                    </TooltipTrigger>
+                                    <TooltipContent>Calendar display mode</TooltipContent>
+                                </Tooltip>
+                                <DropdownMenuContent className="p-1.5">
+                                    <DropdownMenuRadioGroup
+                                        aria-label="Calendar display mode"
+                                        value={displayMode}
+                                        onValueChange={(value) => {
+                                            if (value === "timeline" || value === "list") setDisplayMode(value);
+                                        }}
+                                    >
+                                        <DropdownMenuRadioItem value="timeline" closeOnClick aria-keyshortcuts="t" className="gap-3 py-2.5 pr-4 pl-9">
+                                            <CalendarDaysIcon aria-hidden="true" className="size-4" />Timeline<Kbd className="ml-auto" aria-hidden="true">T</Kbd>
+                                        </DropdownMenuRadioItem>
+                                        <DropdownMenuRadioItem value="list" closeOnClick aria-keyshortcuts="l" className="gap-3 py-2.5 pr-4 pl-9">
+                                            <List aria-hidden="true" className="size-4" />List<Kbd className="ml-auto" aria-hidden="true">L</Kbd>
+                                        </DropdownMenuRadioItem>
+                                    </DropdownMenuRadioGroup>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        </TooltipProvider>}
+                        <Popover>
+                            <PopoverTrigger
+                                render={<Button variant="ghost" size="icon-lg" className="size-10" />}
+                                aria-label="Calendar information"
+                                title="Calendar information"
+                            >
+                                <Info aria-hidden="true" className="size-5" />
+                            </PopoverTrigger>
+                            <PopoverContent>
+                                <PopoverTitle>Calendar legend</PopoverTitle>
+                                <ul className="space-y-3 text-xs text-muted-foreground">
+                                    <li className="flex items-center gap-2"><span aria-hidden="true" className="size-2 rounded-full bg-blue-500" />Training</li>
+                                    <li className="flex items-center gap-2"><span aria-hidden="true" className="size-2 rounded-full bg-amber-500" />Grading</li>
+                                    <li className="flex items-center gap-2"><span aria-hidden="true" className="size-2 rounded-full bg-emerald-500" />Availability</li>
+                                </ul>
+                            </PopoverContent>
+                        </Popover>
+                    </div>
                 </div>
-                <div className="flex min-h-0 flex-1 flex-col">
+                <div className={cn("flex min-h-0 flex-1 flex-col", showSidePanel && "grid grid-rows-[minmax(180px,3fr)_minmax(140px,2fr)] gap-3 lg:grid-cols-[minmax(0,1fr)_320px] lg:grid-rows-1")}>
                     {view === "month" ? (
-                        <CalendarMonth {...calendarProps} />
+                        <CalendarMonth {...calendarProps} onSelectDate={selectMonthDate} />
+                    ) : isTimeline ? (
+                        <CalendarTimeline
+                            date={selectedDate}
+                            now={now}
+                            view={view}
+                            slots={availability}
+                            selectedId={selectedAvailability?.id ?? expandedClassId}
+                            onSelectClass={calendarProps.onToggleClass}
+                            onSelectAvailability={selectAvailability}
+                            onSelectRange={selectRange}
+                            onSelectDate={selectDay}
+                        />
                     ) : (
                         <CalendarDays
                             {...calendarProps}
@@ -725,8 +888,39 @@ export default function InstructorDashboard() {
                             }
                         />
                     )}
+                    {showSidePanel && requestedSession && (
+                        <aside aria-label="Calendar selection details" className="min-h-0 min-w-0 overflow-y-auto overscroll-contain">
+                            <EventCard
+                                key={requestedSession.id}
+                                event={requestedSession}
+                                layout="panel"
+                                expanded
+                                onToggle={() => updateSelection(selectedDate)}
+                            />
+                        </aside>
+                    )}
                 </div>
             </section>
+            {availabilityDialog && <AvailabilityDialog
+                key={`${availabilityDialog.editingId ?? "new"}-${dateKey(availabilityDialog.range.date)}-${availabilityDialog.range.startTime}`}
+                initial={availabilityDialog.range}
+                editingId={availabilityDialog.editingId}
+                slots={availability}
+                onClose={() => setAvailabilityDialog(null)}
+                onDelete={deleteAvailability}
+                onSave={(range) => {
+                    const id = availabilityDialog.editingId ?? `availability-${crypto.randomUUID()}`;
+                    setAvailability((slots) => [
+                        ...slots.filter((slot) => slot.id !== id),
+                        { ...range, id },
+                    ].sort((a, b) =>
+                        a.date.getTime() - b.date.getTime() || timeMinutes(a.startTime) - timeMinutes(b.startTime),
+                    ));
+                    updateSelection(range.date);
+                    setSelectedAvailabilityId(id);
+                    setAvailabilityDialog(null);
+                }}
+            />}
         </section>
     );
 }
