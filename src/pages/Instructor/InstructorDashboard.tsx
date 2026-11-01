@@ -10,8 +10,10 @@ import {
     List,
     MapPin,
     Plus,
+    Users,
 } from "lucide-react";
 import ClassSessionDetails from "@/components/instructor/ClassSessionDetails";
+import SelectedClassIndicator from "@/components/instructor/SelectedClassIndicator";
 import CalendarTimeline from "@/components/instructor/CalendarTimeline";
 import {
     AvailabilityCard,
@@ -44,10 +46,12 @@ import type { AvailabilityRange, AvailabilitySlot } from "@/lib/instructor-avail
 import {
     addDays,
     addMonths,
+    classTypes,
     dateKey,
-    eventStyles,
+    dojoCapacities,
     eventsForDate,
     findCalendarEvent,
+    getEventStyle,
     formatTime,
     fullDate,
     monthDates,
@@ -84,22 +88,29 @@ function EventCard({
     detailsInPanel?: boolean;
 }) {
     const showSummary = layout !== "week";
+    const style = getEventStyle(event);
+    const capacity = dojoCapacities[event.dojo];
     return (
         <Card
             size="sm"
             className={cn(
                 "gap-0 rounded-lg border py-0 shadow-none ring-0 transition-[border-color,box-shadow] duration-200 hover:border-foreground/25 has-focus-visible:ring-2 has-focus-visible:ring-ring",
-                expanded && "border-primary/40 ring-1 ring-primary/15",
+                style.card,
+                layout === "panel" && "h-full min-h-0",
+                expanded && (detailsInPanel
+                    ? "relative z-10 border-primary ring-2 ring-primary ring-offset-2 ring-offset-background"
+                    : "border-primary/40 ring-1 ring-primary/15"),
             )}
         >
             <Button
                 variant="ghost"
                 onClick={onToggle}
                 aria-expanded={expanded}
+                aria-pressed={detailsInPanel ? expanded : undefined}
                 aria-controls={detailsInPanel && !expanded ? undefined : `${showSummary || detailsInPanel ? "attendance" : "details"}-${event.id}`}
-                aria-label={`${event.name}, ${fullDate(event.date)}, ${formatTime(event.startTime)} to ${formatTime(event.endTime)}, ${event.dojo}, ${event.studentIds.length} students. ${expanded ? "Collapse" : "Expand"} class details`}
+                aria-label={`${event.name}, ${fullDate(event.date)}, ${formatTime(event.startTime)} to ${formatTime(event.endTime)}, ${event.dojo}, ${event.studentIds.length} of ${capacity} students. ${expanded ? "Collapse" : "Expand"} class details`}
                 className={cn(
-                    "h-auto w-full flex-col items-stretch gap-3 rounded-lg p-3 text-left whitespace-normal hover:bg-foreground/5 focus-visible:-outline-offset-2",
+                    "h-auto w-full flex-col items-stretch gap-3 rounded-lg p-3 text-left whitespace-normal text-inherit hover:bg-foreground/5 hover:text-inherit aria-expanded:text-inherit focus-visible:-outline-offset-2",
                     showSummary && "p-4",
                     layout === "day" && "gap-4 p-5",
                 )}
@@ -108,18 +119,20 @@ function EventCard({
                     className={cn(
                         "flex items-start justify-between gap-2 text-xs leading-snug font-semibold",
                         layout === "day" && "text-sm sm:text-base",
+                        layout === "panel" && "text-lg leading-tight sm:text-xl",
                     )}
                 >
                     <span className="min-w-0 wrap-break-word">
                         {event.name}
                     </span>
-                    <ChevronDown
+                    {expanded && detailsInPanel ? <SelectedClassIndicator className="mt-0.5" /> : <ChevronDown
                         aria-hidden="true"
                         className={cn(
                             "mt-0.5 size-3 shrink-0 transition-transform duration-200 motion-reduce:transition-none",
                             expanded && "rotate-180",
+                            layout === "panel" && "mt-1 size-4",
                         )}
-                    />
+                    />}
                 </span>
                 <div
                     className={cn(
@@ -129,7 +142,7 @@ function EventCard({
                             : "flex-col items-start",
                     )}
                 >
-                    <span className="flex items-center gap-1.5 text-2xs font-normal text-muted-foreground">
+                    <span className="flex items-center gap-1.5 text-2xs font-normal text-current opacity-80">
                         <Clock3
                             aria-hidden="true"
                             className="mt-0.5 size-3 shrink-0"
@@ -139,7 +152,7 @@ function EventCard({
                             {formatTime(event.endTime)}
                         </span>
                     </span>
-                    <span className="flex items-center gap-1.5 text-2xs font-normal text-muted-foreground">
+                    <span className="flex items-center gap-1.5 text-2xs font-normal text-current opacity-80">
                         <MapPin
                             aria-hidden="true"
                             className="size-3 shrink-0"
@@ -149,19 +162,10 @@ function EventCard({
                         </span>
                     </span>
                 </div>
-                {showSummary && (
-                    <span className="flex items-center justify-between gap-2 text-2xs font-normal text-muted-foreground">
-                        <span
-                            className={cn(
-                                "rounded px-2 py-1",
-                                eventStyles[event.type].badge,
-                            )}
-                        >
-                            {eventStyles[event.type].label}
-                        </span>
-                        <span>{event.studentIds.length} students</span>
-                    </span>
-                )}
+                <span className="flex items-center gap-1.5 text-2xs font-normal opacity-80">
+                    <Users aria-hidden="true" className="size-3 shrink-0" />
+                    {event.studentIds.length}/{capacity} students
+                </span>
             </Button>
             {!detailsInPanel && (showSummary ? (
                 <ClassSessionDetails
@@ -169,6 +173,7 @@ function EventCard({
                     summary
                     expanded={expanded}
                     showAttendanceToggle={layout !== "panel"}
+                    fillHeight={layout === "panel"}
                     onToggle={onToggle}
                 />
             ) : (
@@ -481,11 +486,12 @@ function CalendarMonth({
                                     <Button
                                         key={event.id}
                                         variant="ghost"
-                                        title={`${event.name} · ${formatTime(event.startTime)} · ${eventStyles[event.type].label}`}
+                                        title={`${event.name} · ${formatTime(event.startTime)} · ${event.studentIds.length}/${dojoCapacities[event.dojo]} students`}
                                         aria-label={`${event.name}, ${fullDate(day)}, ${formatTime(event.startTime)} to ${formatTime(event.endTime)}. ${expandedClassId === event.id ? "Collapse" : "Expand"} class details`}
                                         aria-expanded={
                                             expandedClassId === event.id
                                         }
+                                        aria-pressed={expandedClassId === event.id}
                                         aria-controls={
                                             expandedClassId === event.id
                                                 ? `attendance-${event.id}`
@@ -494,15 +500,16 @@ function CalendarMonth({
                                         onClick={() => onToggleClass(event)}
                                         className={cn(
                                             "h-auto min-h-5 w-full min-w-0 flex-col items-start gap-0 rounded border-0 px-1 py-0.5 text-left text-[11px] leading-tight xl:flex-row xl:items-center xl:gap-1",
-                                            eventStyles[event.type].card,
+                                            getEventStyle(event).card,
                                             expandedClassId === event.id &&
-                                            "ring-1 ring-primary ring-inset",
+                                            "relative z-[1] pr-5 ring-2 ring-primary ring-offset-1 ring-offset-background",
                                         )}
                                     >
+                                        {expandedClassId === event.id && <SelectedClassIndicator className="absolute top-0.5 right-0.5 size-3.5" />}
                                         <span className="w-full min-w-0 truncate font-medium xl:w-auto xl:flex-1">
                                             {event.name}
                                         </span>
-                                        <span className="max-w-full shrink-0 truncate font-normal text-muted-foreground">
+                                        <span className="max-w-full shrink-0 truncate font-normal opacity-80">
                                             {formatTime(event.startTime)}
                                         </span>
                                     </Button>
@@ -851,18 +858,25 @@ export default function InstructorDashboard() {
                             >
                                 <Info aria-hidden="true" className="size-5" />
                             </PopoverTrigger>
-                            <PopoverContent>
+                            <PopoverContent className="max-h-[min(36rem,calc(100dvh-3rem))] w-96 overflow-y-auto">
                                 <PopoverTitle>Calendar legend</PopoverTitle>
-                                <ul className="space-y-3 text-xs text-muted-foreground">
-                                    <li className="flex items-center gap-2"><span aria-hidden="true" className="size-2 rounded-full bg-blue-500" />Training</li>
-                                    <li className="flex items-center gap-2"><span aria-hidden="true" className="size-2 rounded-full bg-amber-500" />Grading</li>
+                                <p className="-mt-2 text-xs text-muted-foreground">Classes · 60 minutes each</p>
+                                <ul className="space-y-3 text-xs">
+                                    {Object.entries(classTypes).map(([type, style]) => (
+                                        <li key={type} className="grid grid-cols-[9.5rem_minmax(0,1fr)] items-center gap-3">
+                                            <span className={cn("w-fit rounded-full border px-2 py-1 text-[10px] uppercase", style.badge)}>{style.label}</span>
+                                            <span className="text-muted-foreground">{style.description}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                                <ul className="flex flex-wrap gap-4 border-t pt-3 text-xs text-muted-foreground">
                                     <li className="flex items-center gap-2"><span aria-hidden="true" className="size-2 rounded-full bg-emerald-500" />Availability</li>
                                 </ul>
                             </PopoverContent>
                         </Popover>
                     </div>
                 </div>
-                <div className={cn("flex min-h-0 flex-1 flex-col", showSidePanel && "grid grid-rows-[minmax(180px,3fr)_minmax(140px,2fr)] gap-3 lg:grid-cols-[minmax(0,1fr)_320px] lg:grid-rows-1")}>
+                <div className={cn("flex min-h-0 flex-1 flex-col", showSidePanel && "grid grid-cols-1 grid-rows-[repeat(2,minmax(320px,1fr))] gap-3 overflow-y-auto overscroll-contain lg:grid-cols-[minmax(0,1fr)_320px] lg:grid-rows-1 lg:overflow-hidden")}>
                     {view === "month" ? (
                         <CalendarMonth {...calendarProps} onSelectDate={selectMonthDate} />
                     ) : isTimeline ? (
@@ -889,7 +903,7 @@ export default function InstructorDashboard() {
                         />
                     )}
                     {showSidePanel && requestedSession && (
-                        <aside aria-label="Calendar selection details" className="min-h-0 min-w-0 overflow-y-auto overscroll-contain">
+                        <aside aria-label="Calendar selection details" className="flex min-h-0 min-w-0 flex-col overflow-hidden">
                             <EventCard
                                 key={requestedSession.id}
                                 event={requestedSession}

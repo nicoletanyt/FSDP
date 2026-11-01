@@ -9,6 +9,8 @@ import {
     MessageSquare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import GradeBadge from "@/components/GradeBadge";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
     loadSession,
     saveSession,
@@ -47,30 +49,29 @@ function AttendanceControls({
                     ? "Absent"
                     : "Unmarked";
         return (
-            <span
-                role="img"
-                aria-label={`Attendance for ${student.name}: ${label}`}
-                title={label}
-                className={cn(
-                    "flex size-7 shrink-0 items-center justify-center rounded-full",
-                    value === "present"
-                        ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
-                        : value === "absent"
-                            ? "bg-red-100 text-red-600 dark:bg-red-950 dark:text-red-400"
-                            : "bg-muted text-muted-foreground",
-                )}
-            >
-                {value === "present" ? (
-                    <CircleCheck aria-hidden="true" className="size-4" />
-                ) : value === "absent" ? (
-                    <CircleX
-                        aria-hidden="true"
-                        className="size-4 text-red-600 dark:text-red-400"
-                    />
-                ) : (
-                    <CircleMinus aria-hidden="true" className="size-4" />
-                )}
-            </span>
+            <div className="flex w-15 shrink-0 items-center justify-center">
+                <span
+                    role="img"
+                    aria-label={`Attendance for ${student.name}: ${label}`}
+                    title={label}
+                    className={cn(
+                        "flex size-7 shrink-0 items-center justify-center rounded-full",
+                        value === "present"
+                            ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+                            : value === "absent"
+                                ? "bg-red-100 text-red-600 dark:bg-red-950 dark:text-red-400"
+                                : "bg-muted text-muted-foreground",
+                    )}
+                >
+                    {value === "present" ? (
+                        <CircleCheck aria-hidden="true" className="size-4" />
+                    ) : value === "absent" ? (
+                        <CircleX aria-hidden="true" className="size-4" />
+                    ) : (
+                        <CircleMinus aria-hidden="true" className="size-4" />
+                    )}
+                </span>
+            </div>
         );
     }
 
@@ -78,75 +79,47 @@ function AttendanceControls({
         <div
             role="group"
             aria-label={`Attendance for ${student.name}`}
-            className="flex shrink-0 items-center gap-0.5"
+            className="grid w-15 shrink-0 grid-cols-2 gap-1"
         >
-            <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-pressed={value === "present"}
-                aria-label={`Mark ${student.name} present${value === "present" ? " · selected, click again to clear" : ""}`}
-                title={
-                    value === "present"
-                        ? "Present · click to clear"
-                        : "Mark present"
-                }
-                onClick={() =>
-                    onChange(value === "present" ? "unmarked" : "present")
-                }
-                className={cn(
-                    "size-7 rounded-full text-muted-foreground/45 transition-colors duration-200 hover:bg-emerald-50 hover:text-emerald-700 dark:hover:bg-emerald-950/50",
-                    value === "present" &&
-                    "bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:hover:bg-emerald-900",
-                )}
-            >
-                <CircleCheck aria-hidden="true" className="size-4" />
-            </Button>
-            <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-pressed={value === "absent"}
-                aria-label={`Mark ${student.name} absent${value === "absent" ? " · selected, click again to clear" : ""}`}
-                title={
-                    value === "absent"
-                        ? "Absent · click to clear"
-                        : "Mark absent"
-                }
-                onClick={() =>
-                    onChange(value === "absent" ? "unmarked" : "absent")
-                }
-                className={cn(
-                    "size-7 rounded-full text-muted-foreground/45 transition-colors duration-200 hover:bg-muted hover:text-muted-foreground",
-                    value === "absent" &&
-                    "bg-red-100 text-red-600 hover:bg-red-200 hover:text-red-600 dark:bg-red-950 dark:text-red-400 dark:hover:bg-red-900 dark:hover:text-red-400",
-                )}
-            >
-                <CircleX aria-hidden="true" className="size-4" />
-            </Button>
+            <Tooltip>
+                <TooltipTrigger render={
+                    <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-pressed={value === "present"}
+                        aria-label={`Mark ${student.name} present${value === "present" ? " · selected, click again to clear" : ""}`}
+                        onClick={() => onChange(value === "present" ? "unmarked" : "present")}
+                        className={cn(
+                            "size-7 rounded-md text-foreground/70 transition-colors hover:bg-emerald-100 hover:text-emerald-800 dark:hover:bg-emerald-950 dark:hover:text-emerald-300",
+                            value === "present" &&
+                            "bg-emerald-600 text-white hover:bg-emerald-700 hover:text-white dark:bg-emerald-500 dark:text-emerald-950 dark:hover:bg-emerald-400 dark:hover:text-emerald-950",
+                        )}
+                    />
+                }>
+                    <CircleCheck aria-hidden="true" className="size-4" />
+                </TooltipTrigger>
+                <TooltipContent>{value === "present" ? "Present · click to clear" : "Present"}</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+                <TooltipTrigger render={
+                    <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-pressed={value === "absent"}
+                        aria-label={`Mark ${student.name} absent${value === "absent" ? " · selected, click again to clear" : ""}`}
+                        onClick={() => onChange(value === "absent" ? "unmarked" : "absent")}
+                        className={cn(
+                            "size-7 rounded-md text-foreground/70 transition-colors hover:bg-rose-100 hover:text-rose-800 dark:hover:bg-rose-950 dark:hover:text-rose-300",
+                            value === "absent" &&
+                            "bg-rose-600 text-white hover:bg-rose-700 hover:text-white dark:bg-rose-500 dark:text-rose-950 dark:hover:bg-rose-400 dark:hover:text-rose-950",
+                        )}
+                    />
+                }>
+                    <CircleX aria-hidden="true" className="size-4" />
+                </TooltipTrigger>
+                <TooltipContent>{value === "absent" ? "Absent · click to clear" : "Absent"}</TooltipContent>
+            </Tooltip>
         </div>
-    );
-}
-
-const beltColors: Record<string, string> = {
-    white: "border-slate-300 bg-white dark:border-slate-500",
-    yellow: "border-yellow-500 bg-yellow-400",
-    orange: "border-orange-500 bg-orange-500",
-    green: "border-green-600 bg-green-600",
-    blue: "border-blue-600 bg-blue-600",
-    brown: "border-amber-900 bg-amber-800",
-    black: "border-slate-950 bg-slate-950 dark:border-slate-300 dark:bg-slate-200",
-};
-
-function BeltIndicator({ grade }: { grade: string }) {
-    const color = grade.toLowerCase().split(" ")[0];
-    return (
-        <span
-            aria-label={`${grade} belt`}
-            title={`${grade} belt`}
-            className={cn(
-                "inline-block size-3 shrink-0 rounded-full border shadow-xs",
-                beltColors[color] ?? "border-muted-foreground bg-muted",
-            )}
-        />
     );
 }
 
@@ -155,12 +128,14 @@ export default function ClassSessionDetails({
     summary = false,
     expanded = true,
     showAttendanceToggle = true,
+    fillHeight = false,
     onToggle,
 }: {
     event: CalendarEvent;
     summary?: boolean;
     expanded?: boolean;
     showAttendanceToggle?: boolean;
+    fillHeight?: boolean;
     onToggle?: () => void;
 }) {
     const [record, setRecord] = useState(() => {
@@ -227,12 +202,13 @@ export default function ClassSessionDetails({
     return (
         <div
             className={cn(
-                "bg-background/60",
+                "bg-background text-foreground",
+                fillHeight && "flex min-h-0 flex-1 flex-col",
                 !summary && "border-t border-foreground/10",
             )}
         >
             {summary && showAttendanceToggle && (
-                <div className="px-4 pb-3">
+                <div className="shrink-0 px-3 pb-2">
                     <Button
                         variant="ghost"
                         onClick={onToggle}
@@ -254,9 +230,10 @@ export default function ClassSessionDetails({
             <div
                 id={summary ? `attendance-${event.id}` : undefined}
                 hidden={summary && !expanded}
+                className={cn(fillHeight && (!summary || expanded) && "flex min-h-0 flex-1 flex-col")}
             >
                 {!summary && (
-                    <div className="space-y-3 p-4">
+                    <div className="shrink-0 space-y-2 px-3 py-2.5">
                         <div className="flex items-center justify-between gap-2 text-xs">
                             <h4 className="font-semibold">Attendance</h4>
                             <span
@@ -268,88 +245,71 @@ export default function ClassSessionDetails({
                         </div>
                     </div>
                 )}
-                <ul
-                    aria-label="Student roster"
-                    className="max-h-80 divide-y overflow-y-auto overscroll-contain border-foreground/5 px-4"
-                >
-                    {roster.map((student) => {
-                        const value = record[student.id];
-                        return (
-                            <li key={student.id} className="py-2.5">
-                                <div className="flex min-h-7 items-center justify-between gap-2">
-                                    <div className="flex min-w-0 flex-1 items-center gap-2">
-                                        <BeltIndicator
-                                            grade={student.beltGrade}
-                                        />
-                                        <Link
-                                            to={studentDetailsHref(
-                                                student.id,
-                                                event,
-                                                isGrading
-                                                    ? "grading"
-                                                    : undefined,
-                                            )}
-                                            className="rounded-sm text-2xs focus-visible:outline-2 focus-visible:outline-ring"
-                                        >
-                                            {student.name}
-                                        </Link>
-                                    </div>
-                                    <div className="flex shrink-0 items-center gap-1">
+                <TooltipProvider>
+                    <ul
+                        aria-label="Student roster"
+                        className={cn(
+                            "my-2 divide-y divide-border/50 overflow-y-auto overscroll-contain bg-muted/25",
+                            fillHeight ? "min-h-0 flex-1" : "max-h-80",
+                        )}
+                    >
+                        {roster.map((student) => {
+                            const value = record[student.id];
+                            return (
+                                <li key={student.id} className="grid h-14 grid-cols-[minmax(0,1fr)_92px] grid-rows-[28px_16px] items-center gap-x-2 gap-y-0.5 px-3 py-1">
+                                    <span title={student.name} className="min-w-0 truncate text-2xs font-medium">
+                                        {student.name}
+                                    </span>
+                                    <div className="col-start-2 row-span-2 row-start-1 grid w-[92px] grid-cols-[60px_28px] items-center gap-1 self-center">
                                         <AttendanceControls
                                             student={student}
                                             value={value.attendance}
                                             readOnly={isPast}
-                                            onChange={(attendance) =>
-                                                updateStudent(student.id, {
-                                                    attendance,
-                                                })
-                                            }
+                                            onChange={(attendance) => updateStudent(student.id, { attendance })}
                                         />
-                                        <Button
-                                            render={
-                                                <Link
-                                                    to={studentDetailsHref(
-                                                        student.id,
-                                                        event,
-                                                        isGrading
-                                                            ? "grading"
-                                                            : "sessions",
+                                        <Tooltip>
+                                            <TooltipTrigger render={
+                                                <Button
+                                                    render={
+                                                        <Link to={studentDetailsHref(student.id, event, isGrading ? "grading" : "sessions")} />
+                                                    }
+                                                    nativeButton={false}
+                                                    variant="ghost"
+                                                    size="icon-sm"
+                                                    aria-label={isGrading
+                                                        ? `View grading details for ${student.name}`
+                                                        : `View sessions and feedback for ${student.name}`}
+                                                    className={cn(
+                                                        "size-7 rounded-md text-foreground/70 hover:text-foreground",
+                                                        value.comment && "bg-accent text-foreground",
                                                     )}
                                                 />
-                                            }
-                                            nativeButton={false}
-                                            variant="ghost"
-                                            size="icon-sm"
-                                            aria-label={
-                                                isGrading
-                                                    ? `View grading details for ${student.name}`
-                                                    : `View sessions and feedback for ${student.name}`
-                                            }
-                                            title={
-                                                isGrading
-                                                    ? "View student grading details"
-                                                    : "View student sessions and feedback"
-                                            }
-                                            className={cn(
-                                                value.comment && "bg-muted",
-                                            )}
-                                        >
-                                            <MessageSquare aria-hidden="true" />
-                                        </Button>
+                                            }>
+                                                <MessageSquare aria-hidden="true" />
+                                            </TooltipTrigger>
+                                            <TooltipContent>Note</TooltipContent>
+                                        </Tooltip>
                                     </div>
-                                </div>
-                            </li>
-                        );
-                    })}
-                </ul>
+                                    <div className="col-start-1 row-start-2 flex min-w-0 items-center">
+                                        <GradeBadge
+                                            rank={student.rank}
+                                            system={student.gradingSystem}
+                                            className="h-4 rounded-none border-0 bg-transparent p-0 text-[11px] leading-4 text-muted-foreground [&>span:first-child]:font-normal [&>[aria-hidden]]:h-1.5 [&>[aria-hidden]]:w-3"
+                                        />
+                                    </div>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                </TooltipProvider>
                 {!isPast && (
-                    <div className="space-y-3 p-4">
+                    <div className="shrink-0 border-t border-border/50 px-3 py-2">
                         <div className="flex items-center justify-between gap-2">
                             <Button
                                 variant="outline"
                                 size="sm"
                                 onClick={toggleAllAttendance}
-                                className="h-auto min-h-9 min-w-0 shrink px-3 py-2 text-xs whitespace-normal"
+                                className="h-auto min-h-8 min-w-0 shrink px-3 py-1.5 text-xs whitespace-normal"
                             >
                                 {allPresent ? (
                                     <CircleX aria-hidden="true" />

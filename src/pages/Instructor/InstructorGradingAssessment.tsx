@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import GradeBadge from "@/components/GradeBadge";
+import { getNextGrade, gradingSystems } from "@/lib/student-grades";
 import {
     calendarHref,
     findCalendarEvent,
@@ -29,6 +31,7 @@ function AssessmentForm({
 }) {
     const [value, setValue] = useState(() => loadSession(event)[student.id]);
     const [notice, setNotice] = useState("");
+    const nextGrade = getNextGrade(student.gradingSystem, student.rank);
 
     return (
         <section className="space-y-6">
@@ -75,14 +78,17 @@ function AssessmentForm({
                     >
                         <dl className="grid grid-cols-2 gap-4 rounded-lg bg-muted/50 p-4 text-sm">
                             <div>
-                                <dt className="text-xs text-muted-foreground">Current grade</dt>
-                                <dd className="mt-1 font-medium">{student.beltGrade}</dd>
+                                <dt className="text-xs text-muted-foreground">Current rank</dt>
+                                <dd className="mt-1"><GradeBadge rank={student.rank} system={student.gradingSystem} showBeltLabel /></dd>
                             </div>
                             <div>
-                                <dt className="text-xs text-muted-foreground">Target grade</dt>
-                                <dd className="mt-1 font-medium">{student.targetGrade}</dd>
+                                <dt className="text-xs text-muted-foreground">Target rank</dt>
+                                <dd className="mt-1">{nextGrade
+                                    ? <GradeBadge rank={nextGrade.rank} system={student.gradingSystem} showBeltLabel />
+                                    : "No further grading configured"}</dd>
                             </div>
                         </dl>
+                        <p className="text-xs text-muted-foreground">{gradingSystems[student.gradingSystem].label}</p>
                         <fieldset className="space-y-2">
                             <legend className="mb-2 text-sm font-medium">
                                 Assessment status

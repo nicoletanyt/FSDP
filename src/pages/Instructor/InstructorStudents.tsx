@@ -11,13 +11,13 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import GradeBadge from "@/components/GradeBadge";
 import { Label } from "@/components/ui/label";
 import { studentDetailsHref, students } from "@/lib/instructor-calendar";
 import {
-    beltColorClass,
     getStudentProfile,
 } from "@/lib/instructor-student-details";
-import { cn } from "@/lib/utils";
+import { belts, compareRanks, formatRank, getGrade, gradingSystems } from "@/lib/student-grades";
 
 function DirectoryFilter({
     label,
@@ -25,9 +25,9 @@ function DirectoryFilter({
     options,
     onValueChange,
 }: {
-    label: "Belt" | "Dojo";
+    label: "Rank" | "Belt" | "Dojo";
     value: string;
-    options: string[];
+    options: { value: string; label: string }[];
     onValueChange: (value: string) => void;
 }) {
     const triggerId = useId();
@@ -49,9 +49,9 @@ function DirectoryFilter({
                             className="h-10 min-w-0 flex-1 justify-between gap-2 lg:min-w-24 lg:flex-none"
                         />
                     }
-                    aria-label={`${label}: ${value || "All"}`}
+                    aria-label={`${label}: ${options.find((option) => option.value === value)?.label || value || "All"}`}
                 >
-                    <span className="truncate">{value || "All"}</span>
+                    <span className="truncate">{options.find((option) => option.value === value)?.label || value || "All"}</span>
                     <ChevronDown aria-hidden="true" className="size-4" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
@@ -61,11 +61,11 @@ function DirectoryFilter({
                         aria-label={`${label} filter`}
                     >
                         <DropdownMenuRadioItem value="" closeOnClick>
-                            All {label === "Belt" ? "belts" : "dojos"}
+                            All {label === "Rank" ? "ranks" : label === "Belt" ? "belts" : "dojos"}
                         </DropdownMenuRadioItem>
                         {options.map((option) => (
-                            <DropdownMenuRadioItem key={option} value={option} closeOnClick>
-                                {option}
+                            <DropdownMenuRadioItem key={option.value} value={option.value} closeOnClick>
+                                {option.label}
                             </DropdownMenuRadioItem>
                         ))}
                     </DropdownMenuRadioGroup>
@@ -80,29 +80,37 @@ export default function InstructorStudents() {
     const searchRef = useRef<HTMLInputElement>(null);
     const query = params.get("q") ?? "";
     const belt = params.get("belt") ?? "";
+    const rank = params.get("rank") ?? "";
     const dojo = params.get("dojo") ?? "";
     const today = new Date();
-    const directory = students.map((student) =>
-        getStudentProfile(student, today),
-    );
-    const belts = [
-        ...new Set(directory.map((student) => student.beltGrade)),
-    ].sort();
+    const directory = students.map((student) => {
+        const grade = getGrade(student.gradingSystem, student.rank);
+        return {
+            ...getStudentProfile(student, today),
+            beltLabel: grade ? belts[grade.belt].label : "Rank not recorded",
+        };
+    });
+    const ranks = [...new Set(directory.map((student) => student.rank))]
+        .sort(compareRanks).map((rank) => ({ value: rank, label: formatRank(rank) }));
+    const beltOptions = [
+        ...new Set(directory.map((student) => student.beltLabel)),
+    ].sort().map((belt) => ({ value: belt, label: belt }));
     const dojos = [
         ...new Set(directory.map((student) => student.principalDojo)),
-    ].sort();
+    ].sort().map((dojo) => ({ value: dojo, label: dojo }));
     const search = query.trim().toLowerCase();
-    const hasFilters = Boolean(search || belt || dojo);
+    const hasFilters = Boolean(search || rank || belt || dojo);
     const filtered = directory.filter(
         (student) =>
             `${student.name} ${student.studentNumber}`
                 .toLowerCase()
                 .includes(search) &&
-            (!belt || student.beltGrade === belt) &&
+            (!rank || student.rank === rank) &&
+            (!belt || student.beltLabel === belt) &&
             (!dojo || student.principalDojo === dojo),
     );
 
-    function updateFilter(name: "q" | "belt" | "dojo", value: string) {
+    function updateFilter(name: "q" | "rank" | "belt" | "dojo", value: string) {
         setParams(
             (current) => {
                 const next = new URLSearchParams(current);
@@ -118,7 +126,7 @@ export default function InstructorStudents() {
         setParams(
             (current) => {
                 const next = new URLSearchParams(current);
-                for (const name of ["q", "belt", "dojo"]) next.delete(name);
+                for (const name of ["q", "rank", "belt", "dojo"]) next.delete(name);
                 return next;
             },
             { replace: true },
@@ -147,11 +155,17 @@ export default function InstructorStudents() {
                         className="h-10 bg-background pl-9"
                     />
                 </div>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:flex lg:shrink-0">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 lg:flex lg:shrink-0">
+                    <DirectoryFilter
+                        label="Rank"
+                        value={rank}
+                        options={ranks}
+                        onValueChange={(value) => updateFilter("rank", value)}
+                    />
                     <DirectoryFilter
                         label="Belt"
                         value={belt}
-                        options={belts}
+                        options={beltOptions}
                         onValueChange={(value) => updateFilter("belt", value)}
                     />
                     <DirectoryFilter
@@ -178,19 +192,13 @@ export default function InstructorStudents() {
                                             to={studentDetailsHref(student.id)}
                                             className="flex min-h-17 items-center gap-3 px-4 py-2 transition-colors hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:-outline-offset-2 focus-visible:outline-2 focus-visible:outline-ring sm:px-6"
                                         >
-                                            <span
-                                                aria-hidden="true"
-                                                className={cn(
-                                                    "size-3 shrink-0 rounded-full border",
-                                                    beltColorClass(student.beltGrade),
-                                                )}
-                                            />
                                             <div className="min-w-0 flex-1">
-                                                <p className="truncate text-sm font-medium">
-                                                    {student.name}
-                                                </p>
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <p className="truncate text-sm font-medium">{student.name}</p>
+                                                    <GradeBadge rank={student.rank} system={student.gradingSystem} />
+                                                </div>
                                                 <p className="mt-0.5 text-xs text-muted-foreground">
-                                                    {student.studentNumber} · {student.beltGrade}
+                                                    {student.studentNumber} · {gradingSystems[student.gradingSystem].label}
                                                 </p>
                                                 <p className="mt-0.5 text-xs text-muted-foreground sm:hidden">
                                                     {student.principalDojo}
@@ -215,7 +223,7 @@ export default function InstructorStudents() {
                                 />
                                 <h2 className="font-medium">No students found</h2>
                                 <p className="text-sm text-muted-foreground">
-                                    Try another name, student ID, belt or dojo.
+                                    Try another name, student ID, rank, belt or dojo.
                                 </p>
                                 <Button
                                     variant="outline"

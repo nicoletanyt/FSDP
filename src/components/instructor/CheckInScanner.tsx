@@ -11,6 +11,8 @@ import {
 } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import GradeBadge from "@/components/GradeBadge";
+import type { StudentRank } from "@/lib/student-grades";
 import { useQrCamera } from "@/hooks/use-qr-camera";
 import { cn } from "@/lib/utils";
 
@@ -18,7 +20,7 @@ export type ScanFeedback = {
     tone: "success" | "duplicate" | "invalid";
     title: string;
     description: string;
-    beltGrade?: string;
+    grade?: StudentRank;
 };
 
 export default function CheckInScanner({
@@ -213,10 +215,8 @@ export default function CheckInScanner({
                     <p className="max-w-full text-3xl font-semibold tracking-tight wrap-break-words sm:text-4xl lg:text-5xl">
                         {feedback.title}
                     </p>
-                    {feedback.beltGrade && (
-                        <p className="rounded-full bg-white/15 px-4 py-1.5 text-lg font-medium">
-                            {feedback.beltGrade}
-                        </p>
+                    {feedback.grade && (
+                        <GradeBadge rank={feedback.grade.rank} system={feedback.grade.gradingSystem} showBeltLabel className="border-current/20 bg-white/15 px-4 py-1.5 text-lg text-inherit" />
                     )}
                     <p className="max-w-md text-base sm:text-lg">
                         {feedback.description}

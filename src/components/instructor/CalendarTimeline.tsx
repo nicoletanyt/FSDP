@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import type { PointerEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { availabilityStyle } from "@/components/instructor/CalendarAvailability";
+import SelectedClassIndicator from "@/components/instructor/SelectedClassIndicator";
 import {
     availabilityError,
     layoutTimelineItems,
@@ -17,7 +18,8 @@ import type {
 } from "@/lib/instructor-availability";
 import {
     dateKey,
-    eventStyles,
+    dojoCapacities,
+    getEventStyle,
     eventsForDate,
     formatTime,
     fullDate,
@@ -309,9 +311,9 @@ export default function CalendarTimeline({
                                                 className={cn(
                                                     "absolute z-10 flex flex-col items-start overflow-hidden rounded-md border border-l-[3px] px-2 py-1 text-left text-xs shadow-xs outline-none transition-shadow hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring",
                                                     isClass
-                                                        ? eventStyles[item.event.type].card
+                                                        ? getEventStyle(item.event).card
                                                         : cn(availabilityStyle, "border-dashed"),
-                                                    selectedId === item.id && "ring-2 ring-primary",
+                                                    selectedId === item.id && "z-[15] ring-2 ring-primary ring-offset-2 ring-offset-card",
                                                 )}
                                                 style={{
                                                     top: (start - TIMELINE_START) * PIXELS_PER_MINUTE,
@@ -320,7 +322,8 @@ export default function CalendarTimeline({
                                                     width: `calc(${100 / lanes}% - 6px)`,
                                                 }}
                                             >
-                                                <span className="block truncate font-semibold">
+                                                {isClass && selectedId === item.id && <SelectedClassIndicator className="absolute top-1 right-1" />}
+                                                <span className={cn("block max-w-full truncate font-semibold", isClass && selectedId === item.id && "pr-5")}>
                                                     {isClass ? item.event.name : "Available"}
                                                 </span>
                                                 <span className="block text-[10px] leading-tight">
@@ -328,8 +331,9 @@ export default function CalendarTimeline({
                                                     {formatTime(item.endTime)}
                                                 </span>
                                                 {isClass && end - start >= 60 && (
-                                                    <span className="mt-1 block truncate text-[10px] text-muted-foreground">
-                                                        {item.event.dojo}
+                                                    <span className="mt-1 flex w-full items-center justify-between gap-2 text-[10px] opacity-80">
+                                                        <span className="min-w-0 truncate">{item.event.dojo}</span>
+                                                        <span className="shrink-0">{item.event.studentIds.length}/{dojoCapacities[item.event.dojo]} students</span>
                                                     </span>
                                                 )}
                                             </button>
