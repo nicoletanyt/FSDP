@@ -9,10 +9,13 @@ import CheckoutCancel from './pages/CheckoutCancel'
 import CheckoutSuccess from './pages/CheckoutSuccess'
 import Home from './pages/Home'
 import NotFound from './pages/NotFound'
+import StudentLayout from './layouts/StudentLayout'
 
 const Login = lazy(() => import('./pages/Login'))
 const Signup = lazy(() => import('./pages/Signup'))
 const StudentDashboard = lazy(() => import('./pages/StudentDashboard'))
+const StudentClasses = lazy(() => import('./pages/StudentClasses'))
+const StudentAttendance = lazy(() => import('./pages/StudentAttendance'))
 const InstructorDashboard = lazy(() => import('./pages/InstructorDashboard'))
 const InstructorStudents = lazy(() => import('./pages/InstructorStudents'))
 const InstructorProfile = lazy(() => import('./pages/InstructorProfile'))
@@ -36,7 +39,11 @@ export default function App() {
             </Route>
           </Route>
           <Route element={<ProtectedRoute role="student" />}>
-            <Route path="dashboard" element={<StudentDashboard />} />
+            <Route path="dashboard" element={<StudentLayout />}>
+              <Route index element={<StudentDashboard />} />
+              <Route path="classes" element={<StudentClasses />} />
+              <Route path="attendance" element={<StudentAttendance />} />
+            </Route>
           </Route>
           <Route element={<ProtectedRoute role="instructor" />}>
             <Route path="instructor" element={<InstructorLayout />}>
