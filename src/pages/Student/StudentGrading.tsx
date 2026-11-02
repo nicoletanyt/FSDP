@@ -4,11 +4,10 @@ import { CalendarX2, CheckCircle2, Lock } from "lucide-react";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import StudentShell from "./StudentShell";
-import { formatDate } from "./format";
-import { mockGradingWindow, type GradingSession } from "./grading";
-import { mockProfile } from "./profile-data";
-import { mockStudent } from "./student";
+import { formatDate, formatDateTime } from "@/lib/format";
+import { mockGradingWindow } from "@/lib/student-grading";
+import { mockProfile } from "@/lib/student-profile";
+import { mockStudent } from "@/lib/student-dashboard";
 
 /* ---------- Form types & helpers ---------- */
 type FormState = {
@@ -69,13 +68,6 @@ function validate(f: FormState): Errors {
   if (!f.agree) e.agree = "Please confirm the declaration";
   if (!f.signature.trim()) e.signature = REQUIRED;
   return e;
-}
-
-function formatSession(s: GradingSession) {
-  const d = new Date(s.startsAt);
-  const day = d.toLocaleDateString("en-SG", { weekday: "long", day: "numeric", month: "short" });
-  const time = d.toLocaleTimeString("en-SG", { hour: "numeric", minute: "2-digit" });
-  return `${day}, ${time}`;
 }
 
 /* ---------- Google-Forms-style building blocks ---------- */
@@ -186,7 +178,6 @@ export default function StudentGrading() {
   /* ----- State 1: no applications open ----- */
   if (!window_.open) {
     return (
-      <StudentShell>
         <main className="w-full">
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Grading Applications</h1>
           <Card className="mt-6 items-center gap-4 rounded-2xl px-6 py-14 text-center">
@@ -205,7 +196,6 @@ export default function StudentGrading() {
             </Link>
           </Card>
         </main>
-      </StudentShell>
     );
   }
 
@@ -214,7 +204,6 @@ export default function StudentGrading() {
   /* ----- State 3: submitted ----- */
   if (submitted) {
     return (
-      <StudentShell>
         <div className="min-h-[80vh] bg-transparent pb-14 pt-6">
           <main className="w-full">
             <Card className="gap-3 rounded-xl border-t-[10px] border-t-primary p-6">
@@ -225,7 +214,7 @@ export default function StudentGrading() {
               </p>
               <dl className="mt-2 grid gap-3 text-sm sm:grid-cols-2">
                 <ReadOnlyField label="Rank applied for" value={student.nextBelt.name} />
-                <ReadOnlyField label="Grading session" value={chosen ? `${formatSession(chosen)}, ${chosen.centre}` : "-"} />
+                <ReadOnlyField label="Grading session" value={chosen ? `${formatDateTime(chosen.startsAt)}, ${chosen.centre}` : "-"} />
               </dl>
               <p className="text-sm text-muted-foreground">Your application is now with the administrators for review.</p>
               <Link to="/dashboard" className={buttonVariants({ className: "mt-2 w-fit" })}>
@@ -234,7 +223,6 @@ export default function StudentGrading() {
             </Card>
           </main>
         </div>
-      </StudentShell>
     );
   }
 
@@ -246,7 +234,6 @@ export default function StudentGrading() {
   ];
 
   return (
-    <StudentShell>
       <div className="min-h-[80vh] bg-transparent pb-14 pt-6">
         <main className="w-full">
           <form onSubmit={handleSubmit} noValidate className="grid gap-3">
@@ -376,7 +363,7 @@ export default function StudentGrading() {
               <div role="radiogroup" aria-labelledby="sessionId-label">
                 {window_.sessions.map((s) => (
                   <Choice key={s.id} name="sessionId" value={s.id} checked={form.sessionId === s.id} onChange={() => set("sessionId", s.id)}>
-                    <span className="font-medium">{formatSession(s)}</span>
+                    <span className="font-medium">{formatDateTime(s.startsAt)}</span>
                     <span className="block text-sm text-muted-foreground">{s.centre}</span>
                   </Choice>
                 ))}
@@ -428,6 +415,5 @@ export default function StudentGrading() {
           </form>
         </main>
       </div>
-    </StudentShell>
   );
 }

@@ -5,6 +5,7 @@ import FloatingChatbot from '@/components/FloatingChatbot'
 import AuthLayout from './layouts/AuthLayout'
 import RootLayout from './layouts/RootLayout'
 import InstructorLayout from './layouts/InstructorLayout'
+import StudentLayout from './layouts/StudentLayout'
 import CheckoutCancel from './pages/CheckoutCancel'
 import CheckoutSuccess from './pages/CheckoutSuccess'
 import NotFound from './pages/NotFound'
@@ -38,10 +39,12 @@ export default function App() {
             </Route>
           </Route>
           <Route element={<ProtectedRoute role="student" />}>
-            <Route path="dashboard" element={<StudentDashboard />} />
-            <Route path="profile" element={<StudentProfile />} />
-            <Route path="payments" element={<StudentPayments />} />
-            <Route path="grading" element={<StudentGrading />} />
+            <Route element={<StudentLayout />}>
+              <Route path="dashboard" element={<StudentDashboard />} />
+              <Route path="profile" element={<StudentProfile />} />
+              <Route path="payments" element={<StudentPayments />} />
+              <Route path="grading" element={<StudentGrading />} />
+            </Route>
           </Route>
           <Route path="instructor">
             <Route index element={<InstructorIndexRedirect />} />

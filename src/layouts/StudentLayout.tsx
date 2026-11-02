@@ -1,5 +1,5 @@
-import { useState, type ReactNode } from "react";
-import { Link, useLocation } from "react-router";
+import { Suspense, useState } from "react";
+import { Link, Outlet, useLocation } from "react-router";
 import {
   CalendarDays,
   ClipboardCheck,
@@ -28,7 +28,7 @@ const NAV = [
 ];
 
 /** Shared timetable-style frame for student pages. */
-export default function StudentShell({ children }: { children: ReactNode }) {
+export default function StudentLayout() {
   const { signOut } = useAuth();
   const { pathname } = useLocation();
   const [signingOut, setSigningOut] = useState(false);
@@ -134,7 +134,11 @@ export default function StudentShell({ children }: { children: ReactNode }) {
           {signOutError}
         </p>
       )}
-      <div className="mx-auto flex w-[80%] flex-1 flex-col py-6">{children}</div>
+      <div className="mx-auto flex w-[80%] flex-1 flex-col py-6">
+        <Suspense fallback={<p role="status" className="py-12 text-muted-foreground">Loading…</p>}>
+          <Outlet />
+        </Suspense>
+      </div>
     </div>
   );
 }
