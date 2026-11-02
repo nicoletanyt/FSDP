@@ -2,7 +2,7 @@ import { useState, type ChangeEvent, type FormEvent, type ReactNode } from "reac
 import { Link } from "react-router";
 import { CalendarX2, CheckCircle2, Lock } from "lucide-react";
 
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/student/button";
 import { Card } from "@/components/ui/card";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { mockGradingWindow } from "@/lib/student-grading";
@@ -204,7 +204,7 @@ export default function StudentGrading() {
   /* ----- State 3: submitted ----- */
   if (submitted) {
     return (
-        <div className="min-h-[80vh] bg-transparent pb-14 pt-6">
+        <div className="min-h-[80vh] bg-transparent">
           <main className="w-full">
             <Card className="gap-3 rounded-xl border-t-[10px] border-t-primary p-6">
               <h1 className="text-2xl font-bold tracking-tight">Application submitted</h1>
@@ -234,9 +234,9 @@ export default function StudentGrading() {
   ];
 
   return (
-      <div className="min-h-[80vh] bg-transparent pb-14 pt-6">
+      <div className="min-h-[80vh] bg-transparent">
         <main className="w-full">
-          <form onSubmit={handleSubmit} noValidate className="grid gap-3">
+          <form onSubmit={handleSubmit} noValidate className="grid gap-4">
             {/* Form header */}
             <Card className="gap-2 rounded-xl border-t-[10px] border-t-primary p-6">
               <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Dan/Kyu Grading Application</h1>

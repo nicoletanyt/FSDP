@@ -13,6 +13,8 @@ import NotFound from './pages/NotFound'
 const Login = lazy(() => import('./pages/Login'))
 const Signup = lazy(() => import('./pages/Signup'))
 const StudentDashboard = lazy(() => import('./pages/Student/StudentDashboard'))
+const StudentClasses = lazy(() => import('./pages/StudentClasses'))
+const StudentAttendance = lazy(() => import('./pages/StudentAttendance'))
 const StudentProfile = lazy(() => import('./pages/Student/StudentProfile'))
 const StudentPayments = lazy(() => import('./pages/Student/StudentPayments'))
 const StudentGrading = lazy(() => import('./pages/Student/StudentGrading'))
@@ -41,6 +43,9 @@ export default function App() {
           <Route element={<ProtectedRoute role="student" />}>
             <Route element={<StudentLayout />}>
               <Route path="dashboard" element={<StudentDashboard />} />
+              <Route path="timetable" element={<StudentClasses />} />
+              <Route path="classes" element={<StudentClasses />} />
+              <Route path="attendance" element={<StudentAttendance />} />
               <Route path="profile" element={<StudentProfile />} />
               <Route path="payments" element={<StudentPayments />} />
               <Route path="grading" element={<StudentGrading />} />

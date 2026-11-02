@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router";
 import { ArrowLeft } from "lucide-react";
 
-import { buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/student/button";
 import { Card } from "@/components/ui/card";
 import PaymentStatusBadge from "@/components/student/PaymentStatusBadge";
 import { formatDate, money } from "@/lib/format";
