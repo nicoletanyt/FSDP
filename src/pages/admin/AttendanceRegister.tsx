@@ -1,57 +1,59 @@
-import { useMemo, useState } from 'react'
-import type { ReactNode } from 'react'
-import { CalendarDays, List, MapPin } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import {
+  CalendarDays as CalendarDaysIcon,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Info,
+  List,
+  Plus,
+  Table2,
+} from 'lucide-react'
 import { Link, useSearchParams } from 'react-router'
 import AttendanceCalendar from '@/components/admin/AttendanceCalendar'
+import type {
+  CalendarDisplay,
+  CalendarView,
+} from '@/components/admin/AttendanceCalendar'
 import AttendanceSessionList from '@/components/admin/AttendanceSessionList'
+import AttendanceSessionPanel from '@/components/admin/AttendanceSessionPanel'
 import CentreCombobox from '@/components/admin/CentreCombobox'
 import SessionFormDialog from '@/components/admin/SessionFormDialog'
-import { NativeSelect } from '@/components/admin/form-controls'
 import { Button } from '@/components/ui/button'
-import { Calendar } from '@/components/ui/calendar'
 import { Card, CardContent } from '@/components/ui/card'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { Kbd } from '@/components/ui/kbd'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTitle,
+  PopoverTrigger,
+} from '@/components/ui/popover'
 import { useAdminData } from '@/lib/admin/admin-data-context'
 import { useAdminFilters } from '@/lib/admin/admin-filters'
 import {
   addDays,
+  addMonths,
   buildCalendarEvent,
   dateKey,
+  monthDates,
   parseIsoDate,
   weekDates,
+  weekLabel,
 } from '@/lib/admin/attendance-calendar'
 import type { AdminCalendarEvent } from '@/lib/admin/attendance-calendar'
-import {
-  formatDate,
-  formatWeekday,
-  fullName,
-  relativeDay,
-  startOfDay,
-  toIsoDate,
-} from '@/lib/admin/format'
-import type { Session, SessionType } from '@/lib/admin/types'
+import { fullName, startOfDay, toIsoDate } from '@/lib/admin/format'
+import { sessionTypeStyles } from '@/lib/admin/session-styles'
+import type { Session } from '@/lib/admin/types'
+import { cn } from 'cn'
 
-const sessionTypeLabels: Record<SessionType, string> = {
-  regular: 'Regular class',
-  weapons: 'Weapons class',
-  kids: 'Kids class',
-  seminar: 'Seminar',
-  external: 'External session',
-}
-
-function classOptionLabel(
-  session: Session,
-  instructors: { id: string; firstName: string; lastName: string }[],
-) {
-  const instructor = instructors.find((item) => item.id === session.instructorId)
-  const parts = [
-    session.title,
-    sessionTypeLabels[session.type],
-    instructor ? `${instructor.firstName} ${instructor.lastName}` : 'Unassigned',
-  ]
-  if (session.isExternal && session.type !== 'external') parts.push('External')
-  return parts.join(' · ')
-}
+type DisplayMode = CalendarDisplay | 'table'
 
 function latestFirst(left: Session, right: Session) {
   return `${right.date}T${right.startTime}`.localeCompare(
@@ -59,10 +61,11 @@ function latestFirst(left: Session, right: Session) {
   )
 }
 
-function earliestFirst(left: Session, right: Session) {
+function earliestByDate(left: Session, right: Session) {
   return (
-    left.startTime.localeCompare(right.startTime) ||
-    left.title.localeCompare(right.title)
+    `${left.date}T${left.startTime}`.localeCompare(
+      `${right.date}T${right.startTime}`,
+    ) || left.title.localeCompare(right.title)
   )
 }
 
@@ -70,81 +73,54 @@ export default function AttendanceRegister() {
   const { centres, instructors, students, sessions, attendance } = useAdminData()
   const { centreId: filterCentreId, setCentreId } = useAdminFilters()
   const [searchParams, setSearchParams] = useSearchParams()
-  const [calendarOpen, setCalendarOpen] = useState(false)
   const [newSessionOpen, setNewSessionOpen] = useState(false)
-  const [today] = useState(() => startOfDay())
+  const [weekOverview, setWeekOverview] = useState(false)
+  const [now, setNow] = useState(() => new Date())
 
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 30_000)
+    return () => window.clearInterval(timer)
+  }, [])
+
+  const today = useMemo(() => startOfDay(now), [now])
   const todayKey = toIsoDate(today)
+
+  const viewParam = searchParams.get('view')
+  const legacyList = viewParam === 'list'
+  const view: CalendarView =
+    viewParam === 'day' || viewParam === 'month' ? viewParam : 'week'
+  const displayParam = searchParams.get('display')
+  const requestedDisplay: DisplayMode =
+    legacyList || displayParam === 'table'
+      ? 'table'
+      : displayParam === 'list'
+        ? 'list'
+        : 'timeline'
+  const display: DisplayMode =
+    view === 'month' && requestedDisplay === 'table'
+      ? 'timeline'
+      : requestedDisplay
+
+  useEffect(() => {
+    if (!legacyList) return
+    const next = new URLSearchParams(searchParams)
+    next.set('view', 'week')
+    next.set('display', 'table')
+    setSearchParams(next, { replace: true })
+  }, [legacyList, searchParams, setSearchParams])
+
   const sessionParam = searchParams.get('session')
   const dateParam = searchParams.get('date')
   const centreParam = searchParams.get('centre')
   const studentParam = searchParams.get('student')
-  const isListView = searchParams.get('view') === 'list'
 
   const focusStudent = studentParam
     ? students.find((student) => student.id === studentParam)
     : undefined
-
   const requestedSession = sessionParam
     ? sessions.find((session) => session.id === sessionParam)
     : undefined
   const requestedDate = useMemo(() => parseIsoDate(dateParam), [dateParam])
-
-  const fallbackSession = useMemo(() => {
-    if (requestedSession || requestedDate) return undefined
-    const latest = (items: Session[]) =>
-      [...items].sort(latestFirst)[0] as Session | undefined
-
-    if (focusStudent && !centreParam) {
-      const recordedSessions = new Set(
-        attendance
-          .filter((record) => record.studentId === focusStudent.id)
-          .map((record) => record.sessionId),
-      )
-      const centreSessions = sessions.filter(
-        (session) =>
-          session.centreId === focusStudent.homeCentreId &&
-          session.date <= todayKey,
-      )
-      return (
-        latest(
-          centreSessions.filter((session) => recordedSessions.has(session.id)),
-        ) ?? latest(centreSessions)
-      )
-    }
-
-    const scopedCentreId =
-      centreParam ?? (filterCentreId !== 'all' ? filterCentreId : undefined)
-    if (scopedCentreId) {
-      const scoped = sessions.filter(
-        (session) => session.centreId === scopedCentreId,
-      )
-      return (
-        latest(scoped.filter((session) => session.date <= todayKey)) ??
-        latest(scoped)
-      )
-    }
-
-    return (
-      latest(sessions.filter((session) => session.date <= todayKey)) ??
-      latest(sessions)
-    )
-  }, [
-    requestedSession,
-    requestedDate,
-    focusStudent,
-    centreParam,
-    filterCentreId,
-    sessions,
-    attendance,
-    todayKey,
-  ])
-
-  const selectedSession = requestedSession ?? fallbackSession
-  const selectedDate = useMemo(() => {
-    if (selectedSession) return parseIsoDate(selectedSession.date) ?? today
-    return requestedDate ?? today
-  }, [selectedSession, requestedDate, today])
 
   const centreOptions = useMemo(
     () =>
@@ -155,10 +131,12 @@ export default function AttendanceRegister() {
   )
 
   const candidateCentreId =
-    selectedSession?.centreId ??
-    centreParam ??
+    requestedSession?.centreId ??
+    (focusStudent && !centreParam
+      ? focusStudent.homeCentreId
+      : centreParam) ??
     (filterCentreId !== 'all' ? filterCentreId : undefined) ??
-    centres[0]?.id ??
+    centreOptions[0]?.id ??
     ''
   const selectedCentreId = centreOptions.some(
     (centre) => centre.id === candidateCentreId,
@@ -172,42 +150,57 @@ export default function AttendanceRegister() {
     [sessions, selectedCentreId],
   )
 
-  const sessionsByDate = useMemo(() => {
-    const map = new Map<string, Session[]>()
-    for (const session of centreSessions) {
-      const list = map.get(session.date) ?? []
-      list.push(session)
-      map.set(session.date, list)
+  const fallbackDate = useMemo(() => {
+    if (requestedDate) return requestedDate
+    if (focusStudent && !centreParam) {
+      const recordedSessions = new Set(
+        attendance
+          .filter((record) => record.studentId === focusStudent.id)
+          .map((record) => record.sessionId),
+      )
+      const latestRecorded = centreSessions
+        .filter(
+          (session) =>
+            session.date <= todayKey && recordedSessions.has(session.id),
+        )
+        .sort(latestFirst)[0]
+      if (latestRecorded)
+        return parseIsoDate(latestRecorded.date) ?? today
     }
-    for (const list of map.values()) list.sort(earliestFirst)
-    return map
-  }, [centreSessions])
+    const latestPast = centreSessions
+      .filter((session) => session.date <= todayKey)
+      .sort(latestFirst)[0]
+    if (latestPast) return parseIsoDate(latestPast.date) ?? today
+    const first = [...centreSessions].sort(earliestByDate)[0]
+    return parseIsoDate(first?.date) ?? today
+  }, [
+    requestedDate,
+    focusStudent,
+    centreParam,
+    centreSessions,
+    attendance,
+    todayKey,
+    today,
+  ])
 
-  const sessionDates = useMemo(
-    () => Array.from(sessionsByDate.keys()).sort(),
-    [sessionsByDate],
-  )
-  const earliestDate = parseIsoDate(sessionDates[0])
-  const latestDate = parseIsoDate(sessionDates[sessionDates.length - 1])
-
-  const selectedDaySessions = sessionsByDate.get(dateKey(selectedDate)) ?? []
-
-  const timeOptions = useMemo(
+  const selectedDate = useMemo(
     () =>
-      Array.from(
-        new Set(selectedDaySessions.map((session) => session.startTime)),
-      ).sort(),
-    [selectedDaySessions],
+      requestedSession
+        ? (parseIsoDate(requestedSession.date) ?? fallbackDate)
+        : fallbackDate,
+    [requestedSession, fallbackDate],
   )
-
-  const activeTime = selectedSession?.startTime ?? timeOptions[0] ?? ''
-  const classOptions = selectedDaySessions.filter(
-    (session) => session.startTime === activeTime,
-  )
-  const classValue = selectedSession?.id ?? ''
+  const selectedSession = requestedSession
 
   const calendarEvents = useMemo(() => {
-    const keys = new Set(weekDates(selectedDate).map(dateKey))
+    if (display === 'table') return []
+    const range =
+      view === 'day'
+        ? [selectedDate]
+        : view === 'week'
+          ? weekDates(selectedDate)
+          : monthDates(selectedDate)
+    const keys = new Set(range.map(dateKey))
     return centreSessions
       .filter((session) => keys.has(session.date))
       .map((session) =>
@@ -220,97 +213,69 @@ export default function AttendanceRegister() {
         }),
       )
   }, [
-    centreSessions,
+    display,
+    view,
     selectedDate,
+    centreSessions,
     centres,
     instructors,
     students,
     attendance,
   ])
 
-  function updateSelection({
-    centreId = selectedCentreId,
-    date = selectedDate,
-    sessionId,
-  }: {
-    centreId?: string
-    date?: Date
-    sessionId: string | null
-  }) {
+  const selectedEvent = useMemo(() => {
+    if (!selectedSession) return undefined
+    return (
+      calendarEvents.find((event) => event.id === selectedSession.id) ??
+      buildCalendarEvent({
+        session: selectedSession,
+        centres,
+        instructors,
+        students,
+        attendance,
+      })
+    )
+  }, [
+    selectedSession,
+    calendarEvents,
+    centres,
+    instructors,
+    students,
+    attendance,
+  ])
+
+  function commit(
+    updates: {
+      centre?: string | null
+      date?: Date | null
+      session?: string | null
+      view?: CalendarView
+      display?: DisplayMode
+    },
+    { clearStudent = true }: { clearStudent?: boolean } = {},
+  ) {
     const next = new URLSearchParams(searchParams)
-    next.delete('student')
+    if (clearStudent) next.delete('student')
+
+    const centreId =
+      updates.centre === undefined ? selectedCentreId : updates.centre
     if (centreId) next.set('centre', centreId)
     else next.delete('centre')
-    next.set('date', dateKey(date))
+
+    const date = updates.date === undefined ? selectedDate : updates.date
+    if (date) next.set('date', dateKey(date))
+    else next.delete('date')
+
+    const sessionId =
+      updates.session === undefined
+        ? (selectedSession?.id ?? null)
+        : updates.session
     if (sessionId) next.set('session', sessionId)
     else next.delete('session')
-    setSearchParams(next)
-  }
 
-  function firstSessionOn(date: Date, centreId: string) {
-    return sessions
-      .filter(
-        (session) =>
-          session.centreId === centreId && session.date === dateKey(date),
-      )
-      .sort(earliestFirst)[0]
-  }
-
-  function latestSessionForCentre(centreId: string) {
-    const scoped = sessions
-      .filter((session) => session.centreId === centreId)
-      .sort(latestFirst)
-    return scoped.find((session) => session.date <= todayKey) ?? scoped[0]
-  }
-
-  function handleDateChange(date: Date) {
-    const next = firstSessionOn(date, selectedCentreId)
-    updateSelection({ date, sessionId: next?.id ?? null })
-  }
-
-  function handleCentreChange(nextCentreId: string) {
-    const latest = latestSessionForCentre(nextCentreId)
-    const nextDate = latest ? (parseIsoDate(latest.date) ?? today) : today
-    updateSelection({
-      centreId: nextCentreId,
-      date: nextDate,
-      sessionId: latest?.id ?? null,
-    })
-    if (nextCentreId !== filterCentreId) setCentreId(nextCentreId)
-  }
-
-  function handleTimeChange(startTime: string) {
-    const next = selectedDaySessions.find(
-      (session) => session.startTime === startTime,
-    )
-    if (next) updateSelection({ date: selectedDate, sessionId: next.id })
-  }
-
-  function handleClassChange(sessionId: string) {
-    const session = sessions.find((item) => item.id === sessionId)
-    if (!session) return
-    updateSelection({
-      centreId: session.centreId,
-      date: parseIsoDate(session.date) ?? selectedDate,
-      sessionId: session.id,
-    })
-  }
-
-  function selectDay(date: Date) {
-    if (dateKey(date) === dateKey(selectedDate)) return
-    handleDateChange(date)
-  }
-
-  function toggleSession(event: AdminCalendarEvent) {
-    if (selectedSession?.id === event.id) {
-      updateSelection({ date: event.date, sessionId: null })
-      return
-    }
-    updateSelection({
-      centreId: event.session.centreId,
-      date: event.date,
-      sessionId: event.id,
-    })
+    next.set('view', updates.view ?? view)
+    next.set('display', updates.display ?? display)
+    if (next.toString() !== searchParams.toString()) setSearchParams(next)
   }
 
   function clearStudentFocus() {
@@ -319,12 +284,183 @@ export default function AttendanceRegister() {
     setSearchParams(next)
   }
 
-  function toggleView() {
-    const next = new URLSearchParams(searchParams)
-    if (isListView) next.delete('view')
-    else next.set('view', 'list')
-    setSearchParams(next)
+  function selectDay(date: Date) {
+    const sameDay = dateKey(date) === dateKey(selectedDate)
+    commit({
+      date,
+      session: sameDay ? (selectedSession?.id ?? null) : null,
+    })
+    setWeekOverview(false)
   }
+
+  function selectCalendarDate(date: Date) {
+    if (view === 'month') {
+      commit({
+        date,
+        session: null,
+        view: 'day',
+        display: display === 'table' ? 'list' : display,
+      })
+      setWeekOverview(false)
+      return
+    }
+    selectDay(date)
+  }
+
+  function toggleSession(event: AdminCalendarEvent) {
+    commit({
+      centre: event.session.centreId,
+      date: event.date,
+      session: selectedSession?.id === event.id ? null : event.id,
+    })
+    setWeekOverview(false)
+  }
+
+  function goToday() {
+    commit({ date: today, session: null })
+    setWeekOverview(false)
+  }
+
+  function navigateDate(direction: number) {
+    if (view === 'month') {
+      commit({ date: addMonths(selectedDate, direction), session: null })
+      return
+    }
+    if (view === 'day') {
+      commit({ date: addDays(selectedDate, direction), session: null })
+      return
+    }
+    const nextDate = addDays(selectedDate, direction * 7)
+    const includesToday = weekDates(nextDate).some(
+      (day) => dateKey(day) === todayKey,
+    )
+    commit({
+      date: includesToday ? today : nextDate,
+      session: null,
+    })
+    setWeekOverview(!includesToday)
+  }
+
+  function handleCentreChange(nextCentreId: string) {
+    const scoped = sessions.filter(
+      (session) => session.centreId === nextCentreId,
+    )
+    const latest =
+      scoped.filter((session) => session.date <= todayKey).sort(latestFirst)[0] ??
+      [...scoped].sort(earliestByDate)[0]
+    commit({
+      centre: nextCentreId,
+      date: latest ? (parseIsoDate(latest.date) ?? today) : today,
+      session: null,
+    })
+    setWeekOverview(false)
+    if (nextCentreId !== filterCentreId) setCentreId(nextCentreId)
+  }
+
+  function changeView(nextView: unknown) {
+    if (nextView !== 'day' && nextView !== 'week' && nextView !== 'month')
+      return
+    if (nextView === view) return
+    commit({
+      view: nextView,
+      display: nextView === 'month' && display === 'table' ? 'list' : display,
+    })
+    if (nextView !== 'month') setWeekOverview(false)
+  }
+
+  function changeDisplay(nextDisplay: unknown) {
+    if (
+      nextDisplay !== 'timeline' &&
+      nextDisplay !== 'list' &&
+      nextDisplay !== 'table'
+    )
+      return
+    if (nextDisplay === display) return
+    const nextView =
+      nextDisplay !== 'table' && view === 'month' ? 'week' : view
+    commit({
+      display: nextDisplay,
+      view: nextView,
+      session: nextDisplay === 'table' ? null : undefined,
+    })
+    if (nextView !== 'month') setWeekOverview(false)
+  }
+
+  useEffect(() => {
+    function handleCalendarShortcut(event: KeyboardEvent) {
+      if (
+        event.defaultPrevented ||
+        event.repeat ||
+        event.isComposing ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.altKey ||
+        newSessionOpen
+      )
+        return
+      const target = event.target
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable ||
+          target.closest(
+            'input, textarea, select, [role="textbox"], [role="combobox"]',
+          ))
+      )
+        return
+      const hasOpenOverlay = Array.from(
+        document.querySelectorAll<HTMLElement>(
+          '[role="dialog"], [role="alertdialog"], [role="menu"]',
+        ),
+      ).some((overlay) => {
+        if (
+          overlay.closest('[hidden], [inert], [aria-hidden="true"], [data-closed]')
+        )
+          return false
+        const style = window.getComputedStyle(overlay)
+        return (
+          overlay.getClientRects().length > 0 &&
+          style.visibility === 'visible' &&
+          style.opacity !== '0'
+        )
+      })
+      if (hasOpenOverlay) return
+
+      const key = event.key.toLowerCase()
+      if (key === 'escape' && selectedSession) {
+        event.preventDefault()
+        commit({ session: null })
+        return
+      }
+      if (key === 'd' || key === 'w' || key === 'm') {
+        event.preventDefault()
+        changeView(key === 'd' ? 'day' : key === 'w' ? 'week' : 'month')
+        return
+      }
+      if (key === 't' || key === 'l') {
+        event.preventDefault()
+        const nextDisplay =
+          key === 't' ? ('timeline' as const) : ('list' as const)
+        commit({
+          display: nextDisplay,
+          view: view === 'month' ? 'week' : view,
+          session: null,
+        })
+        setWeekOverview(false)
+      }
+    }
+
+    window.addEventListener('keydown', handleCalendarShortcut)
+    return () => window.removeEventListener('keydown', handleCalendarShortcut)
+  }, [
+    newSessionOpen,
+    selectedSession,
+    view,
+    display,
+    selectedDate,
+    selectedCentreId,
+    searchParams,
+    setSearchParams,
+  ])
 
   if (!sessions.length || !selectedCentreId) {
     return (
@@ -342,44 +478,26 @@ export default function AttendanceRegister() {
         <SessionFormDialog
           open={newSessionOpen}
           onOpenChange={setNewSessionOpen}
-          defaultCentreId="all"
+          defaultCentreId={selectedCentreId || 'all'}
         />
       </>
     )
   }
 
-  const selectedCentre = centres.find(
-    (centre) => centre.id === selectedCentreId,
-  )
-  const selectedIso = dateKey(selectedDate)
-  const relative = relativeDay(selectedIso)
-  const dateLabel =
-    relative === 'Today' || relative === 'Yesterday' || relative === 'Tomorrow'
-      ? `${relative} · ${formatWeekday(selectedIso)}`
-      : formatDate(selectedIso)
+  const heading =
+    display === 'table'
+      ? 'Session table'
+      : view === 'week'
+        ? weekLabel(selectedDate)
+        : selectedDate.toLocaleDateString('en-GB', {
+            ...(view === 'day'
+              ? { weekday: 'long', day: 'numeric' }
+              : {}),
+            month: 'long',
+            year: 'numeric',
+          })
 
-  const viewToggle = (
-    <Button
-      variant="outline"
-      aria-label={
-        isListView ? 'Switch to calendar view' : 'Switch to session list view'
-      }
-      onClick={toggleView}
-      className="h-9 px-3"
-    >
-      {isListView ? (
-        <>
-          <CalendarDays aria-hidden="true" />
-          Calendar
-        </>
-      ) : (
-        <>
-          <List aria-hidden="true" />
-          List
-        </>
-      )}
-    </Button>
-  )
+  const showSidePanel = display !== 'table' && selectedEvent !== undefined
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
@@ -410,183 +528,271 @@ export default function AttendanceRegister() {
         </div>
       )}
 
-      <Card className="shrink-0 gap-3">
-        <CardContent className="space-y-3">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="space-y-1.5">
-              <label
-                className="text-xs text-muted-foreground"
-                htmlFor="attendance-centre"
-              >
-                Centre
-              </label>
-              <CentreCombobox
-                id="attendance-centre"
-                centres={centreOptions}
-                value={selectedCentreId}
-                onChange={handleCentreChange}
-                ariaLabel="Centre"
-                includeAll={false}
-                className="w-full cursor-pointer"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label
-                className="text-xs text-muted-foreground"
-                htmlFor="attendance-date"
-              >
-                Date
-              </label>
-              <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
-                <PopoverTrigger
-                  id="attendance-date"
-                  type="button"
-                  className="flex h-8 w-full items-center justify-between gap-2 rounded-lg border border-input bg-background px-2.5 text-left text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-expanded:bg-muted dark:bg-input/30"
-                >
-                  <span className="truncate">{dateLabel}</span>
-                  <CalendarDays
-                    className="size-4 shrink-0 text-muted-foreground"
-                    aria-hidden="true"
-                  />
-                </PopoverTrigger>
-                <PopoverContent align="start" className="w-auto p-1.5">
-                  <Calendar
-                    mode="single"
-                    required
-                    selected={selectedDate}
-                    defaultMonth={selectedDate}
-                    startMonth={earliestDate ?? undefined}
-                    endMonth={latestDate ?? undefined}
-                    weekStartsOn={1}
-                    onSelect={(date) => {
-                      if (!date) return
-                      handleDateChange(date)
-                      setCalendarOpen(false)
-                    }}
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            <PickerField
-              id="attendance-time"
-              label="Time"
-              value={activeTime}
-              onChange={handleTimeChange}
-            >
-              {timeOptions.length === 0 ? (
-                <option value="">No classes</option>
-              ) : (
-                timeOptions.map((time) => (
-                  <option key={time} value={time}>
-                    {time}
-                  </option>
-                ))
-              )}
-            </PickerField>
-
-            <PickerField
-              id="attendance-class"
-              label="Class"
-              value={classValue}
-              onChange={handleClassChange}
-            >
-              {classOptions.length === 0 ? (
-                <option value="">No classes</option>
-              ) : (
-                <>
-                  {!selectedSession && (
-                    <option value="" disabled>
-                      Select a class
-                    </option>
-                  )}
-                  {classOptions.map((session) => (
-                    <option key={session.id} value={session.id}>
-                      {classOptionLabel(session, instructors)}
-                    </option>
-                  ))}
-                </>
-              )}
-            </PickerField>
-          </div>
-
-          {selectedSession?.isExternal && (
-            <div className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm">
-              <MapPin
-                className="mt-0.5 size-4 shrink-0 text-warning-foreground dark:text-warning"
-                aria-hidden="true"
-              />
-              <div>
-                <p className="font-medium">External session</p>
-                <p className="text-muted-foreground">
-                  {selectedSession.externalLocation ||
-                    'External location not specified'}{' '}
-                  · {selectedCentre?.name}
-                </p>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {isListView ? (
-        <AttendanceSessionList
-          centreId={selectedCentreId}
-          viewToggle={viewToggle}
-        />
-      ) : (
-        <>
-          <AttendanceCalendar
-            date={selectedDate}
-            today={today}
-            events={calendarEvents}
-            expandedSessionId={selectedSession?.id ?? null}
-            focusStudentId={focusStudent?.id}
-            viewToggle={viewToggle}
-            onSelectDate={selectDay}
-            onToggleSession={toggleSession}
-            onToday={() => handleDateChange(today)}
-            onNavigateWeek={(direction) =>
-              handleDateChange(addDays(selectedDate, direction * 7))
-            }
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-4">
+        <div className="flex min-w-0 flex-wrap items-center gap-4">
+          <CentreCombobox
+            id="attendance-centre"
+            centres={centreOptions}
+            value={selectedCentreId}
+            onChange={handleCentreChange}
+            ariaLabel="Attendance centre"
+            includeAll={false}
+            className="h-10 w-56 cursor-pointer"
           />
+          <div
+            role="group"
+            aria-label={`${view[0].toUpperCase()}${view.slice(1)} navigation`}
+            className={cn('flex items-center gap-2', display === 'table' && 'hidden')}
+          >
+            <Button
+              variant="outline"
+              onClick={goToday}
+              className="mr-1 h-10 px-4"
+            >
+              Today
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-lg"
+              className="size-10"
+              aria-label={`Previous ${view}`}
+              onClick={() => navigateDate(-1)}
+            >
+              <ChevronLeft aria-hidden="true" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-lg"
+              className="size-10"
+              aria-label={`Next ${view}`}
+              onClick={() => navigateDate(1)}
+            >
+              <ChevronRight aria-hidden="true" />
+            </Button>
+          </div>
+          <h2 className="text-sm font-medium" aria-live="polite">
+            {heading}
+          </h2>
+        </div>
 
-          <p className="shrink-0 text-xs text-muted-foreground">
-            Attendance rate uses present and late as attended; excused absences
-            are excluded.
-          </p>
-        </>
-      )}
-    </div>
-  )
-}
+        <div className="flex flex-wrap items-center gap-3">
+          {display !== 'table' && (
+            <Button
+              onClick={() => setNewSessionOpen(true)}
+              className="h-10 gap-2 px-4"
+            >
+              <Plus aria-hidden="true" />
+              New session
+            </Button>
+          )}
+          {display !== 'table' && (
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    variant="outline"
+                    className="h-10 min-w-28 justify-between gap-3 px-4"
+                  />
+                }
+                aria-label={`Calendar date range: ${view}`}
+              >
+                {view[0].toUpperCase()}
+                {view.slice(1)}
+                <ChevronDown aria-hidden="true" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="p-1.5">
+                <DropdownMenuRadioGroup
+                  value={view}
+                  onValueChange={changeView}
+                  aria-label="Calendar date range"
+                >
+                  <DropdownMenuRadioItem
+                    value="day"
+                    closeOnClick
+                    aria-keyshortcuts="d"
+                    className="py-2.5 pr-4 pl-9"
+                  >
+                    Day
+                    <Kbd className="ml-auto" aria-hidden="true">
+                      D
+                    </Kbd>
+                  </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem
+                    value="week"
+                    closeOnClick
+                    aria-keyshortcuts="w"
+                    className="py-2.5 pr-4 pl-9"
+                  >
+                    Week
+                    <Kbd className="ml-auto" aria-hidden="true">
+                      W
+                    </Kbd>
+                  </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem
+                    value="month"
+                    closeOnClick
+                    aria-keyshortcuts="m"
+                    className="py-2.5 pr-4 pl-9"
+                  >
+                    Month
+                    <Kbd className="ml-auto" aria-hidden="true">
+                      M
+                    </Kbd>
+                  </DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
 
-function PickerField({
-  id,
-  label,
-  value,
-  onChange,
-  children,
-}: {
-  id: string
-  label: string
-  value: string
-  onChange: (value: string) => void
-  children: ReactNode
-}) {
-  return (
-    <div className="space-y-1.5">
-      <label className="text-xs text-muted-foreground" htmlFor={id}>
-        {label}
-      </label>
-      <NativeSelect
-        id={id}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
+          {view !== 'month' && (
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    variant="outline"
+                    className="h-10 min-w-32 justify-between gap-3 px-4"
+                  />
+                }
+                aria-label={`Calendar display mode: ${display}`}
+              >
+                {display === 'timeline' ? (
+                  <CalendarDaysIcon aria-hidden="true" />
+                ) : display === 'list' ? (
+                  <List aria-hidden="true" />
+                ) : (
+                  <Table2 aria-hidden="true" />
+                )}
+                {display === 'timeline'
+                  ? 'Timeline'
+                  : display === 'list'
+                    ? 'List'
+                    : 'Table'}
+                <ChevronDown aria-hidden="true" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="p-1.5">
+                <DropdownMenuRadioGroup
+                  aria-label="Calendar display mode"
+                  value={display}
+                  onValueChange={changeDisplay}
+                >
+                  <DropdownMenuRadioItem
+                    value="timeline"
+                    closeOnClick
+                    aria-keyshortcuts="t"
+                    className="gap-3 py-2.5 pr-4 pl-9"
+                  >
+                    <CalendarDaysIcon aria-hidden="true" className="size-4" />
+                    Timeline
+                    <Kbd className="ml-auto" aria-hidden="true">
+                      T
+                    </Kbd>
+                  </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem
+                    value="list"
+                    closeOnClick
+                    aria-keyshortcuts="l"
+                    className="gap-3 py-2.5 pr-4 pl-9"
+                  >
+                    <List aria-hidden="true" className="size-4" />
+                    List
+                    <Kbd className="ml-auto" aria-hidden="true">
+                      L
+                    </Kbd>
+                  </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem
+                    value="table"
+                    closeOnClick
+                    className="gap-3 py-2.5 pr-4 pl-9"
+                  >
+                    <Table2 aria-hidden="true" className="size-4" />
+                    Table
+                  </DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+
+          <Popover>
+            <PopoverTrigger
+              render={
+                <Button variant="ghost" size="icon-lg" className="size-10" />
+              }
+              aria-label="Calendar information"
+              title="Calendar information"
+            >
+              <Info aria-hidden="true" className="size-5" />
+            </PopoverTrigger>
+            <PopoverContent className="max-h-[min(36rem,calc(100dvh-3rem))] w-96 overflow-y-auto">
+              <PopoverTitle>Calendar legend</PopoverTitle>
+              <p className="-mt-2 text-xs text-muted-foreground">
+                Sessions · attendance saves as you mark students
+              </p>
+              <ul className="space-y-3 text-xs">
+                {Object.entries(sessionTypeStyles).map(([type, style]) => (
+                  <li
+                    key={type}
+                    className="grid grid-cols-[9.5rem_minmax(0,1fr)] items-center gap-3"
+                  >
+                    <span
+                      className={cn(
+                        'w-fit rounded-full border px-2 py-1 text-[10px] uppercase',
+                        style.badge,
+                      )}
+                    >
+                      {style.label}
+                    </span>
+                    <span className="text-muted-foreground">
+                      {style.description}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </PopoverContent>
+          </Popover>
+        </div>
+      </div>
+
+      <div
+        className={cn(
+          'flex min-h-[520px] flex-1 flex-col lg:min-h-0',
+          showSidePanel &&
+            'grid grid-cols-1 grid-rows-[repeat(2,minmax(320px,1fr))] gap-3 overflow-y-auto overscroll-contain lg:grid-cols-[minmax(0,1fr)_360px] lg:grid-rows-1 lg:overflow-hidden',
+        )}
       >
-        {children}
-      </NativeSelect>
+        {display === 'table' ? (
+          <AttendanceSessionList centreId={selectedCentreId} />
+        ) : (
+          <>
+            <AttendanceCalendar
+              date={selectedDate}
+              today={today}
+              now={now}
+              view={view}
+              display={display}
+              events={calendarEvents}
+              selectedSessionId={selectedSession?.id ?? null}
+              expandSelectedDay={
+                view === 'day' || !weekOverview || selectedSession !== null
+              }
+              onSelectDate={selectCalendarDate}
+              onToggleSession={toggleSession}
+            />
+            {selectedEvent && (
+              <AttendanceSessionPanel
+                event={selectedEvent}
+                focusStudentId={focusStudent?.id}
+                onClose={() => commit({ session: null })}
+              />
+            )}
+          </>
+        )}
+      </div>
+
+      <SessionFormDialog
+        open={newSessionOpen}
+        onOpenChange={setNewSessionOpen}
+        defaultCentreId={selectedCentreId}
+      />
     </div>
   )
 }

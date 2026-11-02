@@ -247,7 +247,7 @@ export default function Overview() {
                 <CardTitle>Upcoming sessions</CardTitle>
                 <CardDescription>Next classes across the dojos.</CardDescription>
               </div>
-              <Button variant="ghost" size="sm" render={<Link to="/admin/attendance/register?view=list" />}>
+              <Button variant="ghost" size="sm" render={<Link to="/admin/attendance/register?view=week&display=table" />}>
                 All sessions
                 <ChevronRight />
               </Button>
@@ -275,7 +275,7 @@ export default function Overview() {
                     <Button
                       variant="outline"
                       size="xs"
-                      render={<Link to="/admin/attendance/register?view=list" />}
+                      render={<Link to="/admin/attendance/register?view=week&display=table" />}
                     >
                       Manage
                     </Button>

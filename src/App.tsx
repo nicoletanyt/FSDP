@@ -86,7 +86,7 @@ export default function App() {
               <Route path="attendance" element={<AdminAttendance />}>
                 <Route index element={<Navigate to="register" replace />} />
                 <Route path="register" element={<AdminAttendanceRegister />} />
-                <Route path="sessions" element={<Navigate to="/admin/attendance/register?view=list" replace />} />
+                <Route path="sessions" element={<Navigate to="/admin/attendance/register?view=week&display=table" replace />} />
                 <Route path="records" element={<AdminAttendanceRecords />} />
                 <Route path="monitoring" element={<AdminAttendanceMonitoring />} />
               </Route>

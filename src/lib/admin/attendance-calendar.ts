@@ -38,6 +38,20 @@ export function addDays(date: Date, amount: number): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate() + amount)
 }
 
+export function addMonths(date: Date, amount: number): Date {
+  const month = new Date(date.getFullYear(), date.getMonth() + amount, 1)
+  const lastDay = new Date(
+    month.getFullYear(),
+    month.getMonth() + 1,
+    0,
+  ).getDate()
+  return new Date(
+    month.getFullYear(),
+    month.getMonth(),
+    Math.min(date.getDate(), lastDay),
+  )
+}
+
 export function startOfWeek(date: Date): Date {
   return addDays(date, -((date.getDay() + 6) % 7))
 }
@@ -46,6 +60,15 @@ export function weekDates(date: Date): Date[] {
   return Array.from({ length: 7 }, (_, index) =>
     addDays(startOfWeek(date), index),
   )
+}
+
+export function monthDates(date: Date): Date[] {
+  const start = startOfWeek(new Date(date.getFullYear(), date.getMonth(), 1))
+  const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0)
+  const end = addDays(startOfWeek(lastDay), 6)
+  const days: Date[] = []
+  for (let day = start; day <= end; day = addDays(day, 1)) days.push(day)
+  return days
 }
 
 export function weekLabel(date: Date): string {
@@ -72,6 +95,61 @@ export function fullDate(date: Date): string {
     month: '2-digit',
     year: '2-digit',
   })
+}
+
+export function formatTime(time: string): string {
+  const [hours, minutes] = time.split(':').map(Number)
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) return time
+  return `${hours % 12 || 12}:${String(minutes).padStart(2, '0')} ${hours >= 12 ? 'PM' : 'AM'}`
+}
+
+export function timeMinutes(time: string): number {
+  const [hours, minutes] = time.split(':').map(Number)
+  return hours * 60 + minutes
+}
+
+export function minutesTime(minutes: number): string {
+  return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`
+}
+
+export const TIMELINE_START = 8 * 60
+export const TIMELINE_END = 22 * 60
+
+/**
+ * Assign a lane to every interval, including transitive overlap groups.
+ * Adjacent intervals can share a lane; overlapping intervals never do.
+ */
+export function layoutTimelineItems<
+  T extends { id: string; startTime: string; endTime: string },
+>(items: T[]) {
+  const sorted = [...items].sort(
+    (left, right) =>
+      timeMinutes(left.startTime) - timeMinutes(right.startTime) ||
+      timeMinutes(right.endTime) - timeMinutes(left.endTime),
+  )
+  const result: { item: T; lane: number; lanes: number }[] = []
+  let group: typeof result = []
+  let laneEnds: number[] = []
+  let groupEnd = -1
+  function flush() {
+    for (const entry of group) entry.lanes = laneEnds.length
+    result.push(...group)
+    group = []
+    laneEnds = []
+    groupEnd = -1
+  }
+  for (const item of sorted) {
+    const start = timeMinutes(item.startTime)
+    const end = timeMinutes(item.endTime)
+    if (start >= groupEnd) flush()
+    let lane = laneEnds.findIndex((laneEnd) => laneEnd <= start)
+    if (lane === -1) lane = laneEnds.length
+    laneEnds[lane] = end
+    group.push({ item, lane, lanes: 1 })
+    groupEnd = Math.max(groupEnd, end)
+  }
+  flush()
+  return result
 }
 
 export function endTime(startTime: string, durationMinutes: number): string {

@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react'
-import type { ReactNode } from 'react'
 import { CalendarPlus, ExternalLink, Plus } from 'lucide-react'
 import { Link } from 'react-router'
 import EmptyState from '@/components/admin/EmptyState'
@@ -18,16 +17,15 @@ import {
 } from '@/components/ui/table'
 import { useAdminData } from '@/lib/admin/admin-data-context'
 import { getSessionAttendanceSummary } from '@/lib/admin/analytics'
+import { formatTime } from '@/lib/admin/attendance-calendar'
 import { formatDate, formatWeekday, todayIso } from '@/lib/admin/format'
 
 type View = 'upcoming' | 'recent'
 
 export default function AttendanceSessionList({
   centreId,
-  viewToggle,
 }: {
   centreId: string
-  viewToggle?: ReactNode
 }) {
   const { instructors, sessions, attendance } = useAdminData()
   const [view, setView] = useState<View>('upcoming')
@@ -84,7 +82,6 @@ export default function AttendanceSessionList({
             <Plus />
             New session
           </Button>
-          {viewToggle}
         </div>
       </div>
 
@@ -135,8 +132,9 @@ export default function AttendanceSessionList({
                         <TableCell>
                           <p className="font-medium">{session.title}</p>
                           <p className="text-xs text-muted-foreground">
-                            {formatWeekday(session.date)} · {session.startTime}{' '}
-                            · {session.durationMinutes} min
+                            {formatWeekday(session.date)} ·{' '}
+                            {formatTime(session.startTime)} ·{' '}
+                            {session.durationMinutes} min
                           </p>
                         </TableCell>
                         <TableCell className="text-muted-foreground">
@@ -166,7 +164,7 @@ export default function AttendanceSessionList({
                                 size="xs"
                                 render={
                                   <Link
-                                    to={`/admin/attendance/register?session=${session.id}&centre=${session.centreId}`}
+                                    to={`/admin/attendance/register?centre=${session.centreId}&date=${session.date}&session=${session.id}&view=week&display=list`}
                                   />
                                 }
                               >

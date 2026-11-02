@@ -65,9 +65,11 @@ function initialStatuses(
 export default function AttendanceClassDetails({
   event,
   focusStudentId,
+  fillHeight = false,
 }: {
   event: AdminCalendarEvent
   focusStudentId?: string
+  fillHeight?: boolean
 }) {
   const { attendance, saveAttendance } = useAdminData()
   const [statusesById, setStatusesById] = useState<Record<string, AttendanceStatus>>(
@@ -102,8 +104,13 @@ export default function AttendanceClassDetails({
   }
 
   return (
-    <div className="border-t border-foreground/10 bg-background/60">
-      <div className="flex items-center justify-between gap-2 p-3 text-xs">
+    <div
+      className={cn(
+        'border-t border-foreground/10 bg-background/60',
+        fillHeight && 'flex min-h-0 flex-1 flex-col bg-background',
+      )}
+    >
+      <div className="flex shrink-0 items-center justify-between gap-2 p-3 text-xs">
         <h4 className="font-semibold">Attendance</h4>
         <span className="text-muted-foreground">
           {roster.length} {roster.length === 1 ? 'student' : 'students'}
@@ -113,7 +120,10 @@ export default function AttendanceClassDetails({
       {roster.length ? (
         <ul
           aria-label="Student roster"
-          className="max-h-80 divide-y overflow-y-auto overscroll-contain border-foreground/5 px-3"
+          className={cn(
+            'divide-y overflow-y-auto overscroll-contain border-foreground/5 px-3',
+            fillHeight ? 'min-h-0 flex-1' : 'max-h-80',
+          )}
         >
           {roster.map((student) => {
             const focused = focusStudentId === student.id
@@ -182,11 +192,11 @@ export default function AttendanceClassDetails({
       )}
 
       {isFuture ? (
-        <p className="px-3 pt-2 pb-3 text-[11px] text-muted-foreground">
+        <p className="shrink-0 px-3 pt-2 pb-3 text-[11px] text-muted-foreground">
           Scheduled class · attendance can be recorded on the class day.
         </p>
       ) : (
-        <div className="p-3">
+        <div className="shrink-0 p-3">
           <Button
             variant="outline"
             size="sm"
