@@ -13,7 +13,7 @@ export interface UserProfile {
 
 export const dashboardPaths: Record<UserRole, string> = {
   administrator: '/admin',
-  instructor: '/instructor',
+  instructor: '/instructor/dashboard',
   student: '/dashboard',
 }
 
