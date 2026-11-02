@@ -95,7 +95,7 @@ export default function AdminNavbar() {
     <header className="sticky top-0 z-40 shrink-0 border-b border-border bg-background/90 backdrop-blur">
       <div
         className={cn(
-          'mx-auto grid grid-cols-[1fr_auto_1fr] items-center gap-2 py-3 sm:gap-3',
+          'mx-auto grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 py-3 sm:gap-3 lg:grid-cols-[1fr_auto_1fr]',
           isAttendanceRegister
             ? 'w-[calc(100%-2rem)] max-w-[1600px] sm:w-[94%]'
             : 'w-full max-w-[1400px] px-4 sm:px-6',
@@ -107,18 +107,23 @@ export default function AdminNavbar() {
           <Link
             to="/admin"
             aria-label="Administrator overview"
-            className="flex items-center gap-2.5 rounded-lg focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+            className="flex items-center rounded-lg font-semibold tracking-tight focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
           >
             <img
               src="/logo.png"
               alt="Aikido Shinju-Kai logo"
               width={40}
               height={40}
-              className="size-10 rounded-full"
+              className="size-10 shrink-0 rounded-full"
             />
-            <span className="hidden text-base font-semibold tracking-tight sm:inline">
-              <span className="text-primary">Aikido</span>{' '}
-              <span className="text-brand-red-ink">Shinju-Kai</span>
+            <span className="ml-2 hidden leading-tight sm:block">
+              <span className="block whitespace-nowrap text-base">
+                <span className="text-primary">Aikido</span>{' '}
+                <span className="text-brand-red-ink">Shinju-Kai</span>
+              </span>
+              <span className="mt-0.5 block text-3xs leading-none font-normal tracking-normal text-muted-foreground">
+                Administrator
+              </span>
             </span>
           </Link>
         </div>
