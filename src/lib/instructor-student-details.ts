@@ -228,7 +228,7 @@ export function getGradingRequirements({ syllabus, membershipStatus, rankAwarded
         met: attended >= syllabus.sessions ? true : null,
     });
     requirements.push(
-        { key: "techniques", label: "Target-grade techniques signed off", actual: `${signedCount} of ${items.length}`, required: `${items.length} of ${items.length}`, met: signedCount === items.length },
+        { key: "techniques", label: "Target-grade techniques signed off", actual: `${signedCount}`, required: `${items.length}`, met: signedCount === items.length },
         { key: "fees", label: "Fees up to date", actual: "Not recorded", required: "Clear", met: null },
     );
     return requirements;

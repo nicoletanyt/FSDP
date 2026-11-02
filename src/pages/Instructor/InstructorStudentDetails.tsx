@@ -11,6 +11,7 @@ import {
     ChevronRight,
     CircleHelp,
     HeartPulse,
+    History,
     Info,
     Mail,
     MapPin,
@@ -700,7 +701,8 @@ function StudentGrading({
                     setConfirmClose(true);
                 }}
             >
-                <div className="flex justify-end">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <h2 className="text-sm font-semibold">Grading eligibility</h2>
                     <DialogTrigger
                         render={<Button ref={gradingTriggerRef} disabled={!syllabus} />}
                     >
@@ -747,7 +749,10 @@ function StudentGrading({
                                     <span className="text-xs text-muted-foreground">
                                         Instructor:
                                     </span>
-                                    <InstructorAvatar profile={examinerProfile} interactive={false} />
+                                    <InstructorAvatar
+                                        profile={examinerProfile}
+                                        interactive={false}
+                                    />
                                 </div>
                             </div>
                         </DialogHeader>
@@ -810,16 +815,15 @@ function StudentGrading({
                 )}
             </Dialog>
             <Card>
-                <CardHeader>
-                    <CardTitle>Grading eligibility</CardTitle>
-                    {!syllabus && (
+                {!syllabus && (
+                    <CardHeader>
                         <CardDescription>
                             {profile.nextRank
                                 ? "No published syllabus is recorded for the next configured rank."
                                 : "No further grading level is configured for this grading system."}
                         </CardDescription>
-                    )}
-                </CardHeader>
+                    </CardHeader>
+                )}
                 <CardContent className="space-y-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                         <div className="flex flex-wrap items-center gap-2">
@@ -890,8 +894,8 @@ function StudentGrading({
                                                     {requirement.actual}
                                                 </span>
                                                 <span className="text-muted-foreground">
-                                                    {" "}
-                                                    / {requirement.required}
+                                                    {requirement.key === "techniques" ? "/" : " / "}
+                                                    {requirement.required}
                                                 </span>
                                             </span>
                                         </li>
@@ -1430,49 +1434,52 @@ function StudentDetailContent({
                             signOffs={signOffs}
                             onSignOffsChange={setSignOffs}
                         />
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Previous grading assessments</CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-5">
-                                {gradingHistory.length ? (
-                                    gradingHistory.map((assessment) => (
-                                        <article key={assessment.id} className="border-l-2 pl-3">
-                                            <div className="flex flex-wrap items-start justify-between gap-2">
-                                                <div>
-                                                    <div className="flex flex-wrap items-center gap-2">
-                                                        <GradeBadge
-                                                            rank={assessment.fromRank}
-                                                            system={student.gradingSystem}
-                                                        />
-                                                        <span aria-hidden="true">→</span>
-                                                        <GradeBadge
-                                                            rank={assessment.toRank}
-                                                            system={student.gradingSystem}
-                                                        />
+                        <section aria-label="Grading history" className="space-y-3">
+                            <h2 className="flex items-center gap-2 font-semibold">
+                                <History aria-hidden="true" className="size-4 text-muted-foreground" />
+                                Grading history
+                            </h2>
+                            <Card>
+                                <CardContent className="space-y-5">
+                                    {gradingHistory.length ? (
+                                        gradingHistory.map((assessment) => (
+                                            <article key={assessment.id} className="border-l-2 pl-3">
+                                                <div className="flex flex-wrap items-start justify-between gap-2">
+                                                    <div>
+                                                        <div className="flex flex-wrap items-center gap-2">
+                                                            <GradeBadge
+                                                                rank={assessment.fromRank}
+                                                                system={student.gradingSystem}
+                                                            />
+                                                            <span aria-hidden="true">→</span>
+                                                            <GradeBadge
+                                                                rank={assessment.toRank}
+                                                                system={student.gradingSystem}
+                                                            />
+                                                        </div>
+                                                        <p className="mt-1 text-2xs text-muted-foreground">
+                                                            {fullDate(assessment.date)} ·{" "}
+                                                            {assessment.instructor}
+                                                        </p>
                                                     </div>
-                                                    <p className="mt-1 text-2xs text-muted-foreground">
-                                                        {fullDate(assessment.date)} ·{" "}
-                                                        {assessment.instructor}
-                                                    </p>
+                                                    <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-2xs text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">
+                                                        {assessment.status}
+                                                    </span>
                                                 </div>
-                                                <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-2xs text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">
-                                                    {assessment.status}
-                                                </span>
-                                            </div>
-                                            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                                                {assessment.feedback}
-                                            </p>
-                                        </article>
-                                    ))
-                                ) : (
-                                    <p className="text-xs text-muted-foreground">
-                                        No previous grading assessments. The first assessment will
-                                        appear here.
-                                    </p>
-                                )}
-                            </CardContent>
-                        </Card>
+                                                <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                                                    {assessment.feedback}
+                                                </p>
+                                            </article>
+                                        ))
+                                    ) : (
+                                        <p className="text-xs text-muted-foreground">
+                                            No previous grading assessments. The first assessment will
+                                            appear here.
+                                        </p>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        </section>
                     </TabsContent>
                 </Tabs>
             </div>

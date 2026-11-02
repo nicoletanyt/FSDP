@@ -157,7 +157,8 @@ test('eligibility counts only target techniques and leaves missing facts unverif
     sessions: [], now: new Date(2026, 10, 2),
     signOffs: [{ itemId: 'children/black-2nd-kyu/ikkyo/ushiro-ryotedori' }],
   })
-  assert.equal(requirements.find(item => item.key === 'techniques').actual, '0 of 22')
+  assert.equal(requirements.find(item => item.key === 'techniques').actual, '0')
+  assert.equal(requirements.find(item => item.key === 'techniques').required, '22')
   for (const key of ['membership-length', 'age', 'fees', 'sessions']) {
     assert.equal(requirements.find(item => item.key === key).met, null)
   }
