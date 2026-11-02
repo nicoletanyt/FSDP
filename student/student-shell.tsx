@@ -2,22 +2,17 @@ import { useState, type ReactNode } from "react";
 import { Link, useLocation } from "react-router";
 import {
   CalendarDays,
-  ChevronDown,
   ClipboardCheck,
   IdCard,
   LayoutDashboard,
   LogOut,
+  Menu,
   Presentation,
+  X,
   UserCheck,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import ThemeToggle from "@/components/theme-toggle";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
@@ -34,18 +29,11 @@ const NAV = [
 
 /** Shared timetable-style frame for student pages. */
 export default function StudentShell({ children }: { children: ReactNode }) {
-  const { profile, signOut } = useAuth();
+  const { signOut } = useAuth();
   const { pathname } = useLocation();
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState("");
-  const name =
-    [profile?.first_name, profile?.last_name].filter(Boolean).join(" ") ||
-    "Student";
-  const initials = name
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join("");
+  const [menuOpen, setMenuOpen] = useState(false);
 
   async function handleSignOut() {
     setSigningOut(true);
@@ -62,10 +50,11 @@ export default function StudentShell({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-dvh flex-col bg-muted/30 text-foreground">
       <header className="shrink-0 border-b border-border bg-background">
-        <div className="mx-auto flex w-[80%] flex-wrap items-center justify-between gap-x-6 gap-y-3 py-3">
+        <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-x-4 gap-y-3 px-4 py-5 sm:px-6 lg:flex-nowrap lg:gap-x-6">
           <Link
             to="/dashboard"
-            className="flex items-center rounded-sm font-semibold tracking-tight focus-visible:outline-2 focus-visible:outline-ring"
+            onClick={() => setMenuOpen(false)}
+            className="flex shrink-0 items-center rounded-sm font-semibold tracking-tight focus-visible:outline-2 focus-visible:outline-ring"
           >
             <img
               src={logo}
@@ -78,64 +67,66 @@ export default function StudentShell({ children }: { children: ReactNode }) {
               Student Portal
             </span>
           </Link>
-          <div className="flex min-w-0 flex-wrap items-center justify-between gap-1">
-            <nav
-              aria-label="Student navigation"
-              className="order-3 flex w-full flex-wrap items-center gap-1 lg:order-0 lg:w-auto"
-            >
-              {NAV.map(({ label, to, icon: Icon }) => {
-                const active = pathname === to || pathname.startsWith(`${to}/`);
-                return (
-                  <Link
-                    key={to}
-                    to={to}
-                    aria-current={active ? "page" : undefined}
-                    className={cn(
-                      "flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring sm:px-3 sm:text-sm lg:flex-none",
-                      active && "bg-accent text-accent-foreground",
-                    )}
-                  >
-                    <Icon aria-hidden="true" className="size-4" />
-                    {label}
-                  </Link>
-                );
-              })}
-            </nav>
+          <div className="order-2 ml-auto flex shrink-0 items-center gap-1 lg:order-3 lg:ml-0">
             <ThemeToggle />
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={<Button variant="ghost" className="min-h-10 gap-2" />}
-                aria-label={`Account menu for ${name}`}
-                disabled={signingOut}
-              >
-                <span
-                  className="flex size-7 items-center justify-center rounded-full bg-muted text-xs font-semibold"
-                  aria-hidden="true"
-                >
-                  {initials}
-                </span>
-                <span className="hidden max-w-36 truncate md:inline">
-                  {signingOut ? "Signing out…" : name}
-                </span>
-                <ChevronDown aria-hidden="true" className="size-3.5" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <div className="border-b px-2 py-2">
-                  <p className="truncate font-medium">{name}</p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {profile?.email}
-                  </p>
-                </div>
-                <DropdownMenuItem
-                  onClick={() => void handleSignOut()}
-                  disabled={signingOut}
-                >
-                  <LogOut aria-hidden="true" />
-                  {signingOut ? "Signing out…" : "Sign out"}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <Button
+              variant="ghost"
+              onClick={() => void handleSignOut()}
+              disabled={signingOut}
+              className="hidden min-h-10 gap-2 lg:inline-flex"
+            >
+              <LogOut aria-hidden="true" className="size-4" />
+              {signingOut ? "Signing out…" : "Sign out"}
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="lg:hidden"
+              aria-label={menuOpen ? "Close navigation menu" : "Open navigation menu"}
+              aria-expanded={menuOpen}
+              aria-controls="student-navigation"
+              onClick={() => setMenuOpen((open) => !open)}
+            >
+              {menuOpen ? <X aria-hidden="true" /> : <Menu aria-hidden="true" />}
+            </Button>
           </div>
+          <nav
+            id="student-navigation"
+            aria-label="Student navigation"
+            className={cn(
+              "order-3 w-full flex-col gap-1 lg:order-2 lg:flex lg:w-auto lg:flex-row",
+              menuOpen ? "flex" : "hidden",
+            )}
+          >
+            {NAV.map(({ label, to, icon: Icon }) => {
+              const active = pathname === to || pathname.startsWith(`${to}/`);
+              return (
+                <Link
+                  key={to}
+                  to={to}
+                  aria-current={active ? "page" : undefined}
+                  onClick={() => setMenuOpen(false)}
+                  className={cn(
+                    "flex min-h-11 w-full items-center justify-start gap-3 rounded-lg px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring lg:w-auto lg:justify-center lg:px-3",
+                    label === "Membership Profile" && "whitespace-nowrap lg:gap-2 lg:px-2",
+                    active && "bg-accent text-accent-foreground",
+                  )}
+                >
+                  <Icon aria-hidden="true" className="size-4" />
+                  {label}
+                </Link>
+              );
+            })}
+            <Button
+              variant="ghost"
+              onClick={() => void handleSignOut()}
+              disabled={signingOut}
+              className="min-h-10 w-full justify-start gap-3 px-3 lg:hidden"
+            >
+              <LogOut aria-hidden="true" className="size-4" />
+              {signingOut ? "Signing out…" : "Sign out"}
+            </Button>
+          </nav>
         </div>
       </header>
       {signOutError && (

@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { Link } from "react-router";
 import {
   CalendarDays,
   ClipboardCheck,
   IdCard,
+  QrCode,
   Presentation,
   UserCheck,
   type LucideIcon,
@@ -10,6 +12,13 @@ import {
 
 import { buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { mockStudent, type Student } from "./student";
 import StudentShell from "./student-shell";
 
@@ -25,6 +34,11 @@ function formatWhen(iso: string) {
   const day = d.toLocaleDateString("en-SG", { weekday: "long", day: "numeric", month: "short" });
   const time = d.toLocaleTimeString("en-SG", { hour: "numeric", minute: "2-digit" });
   return `${day}, ${time}`;
+}
+
+function isClassDay(iso: string) {
+  const classDate = new Date(iso);
+  return !Number.isNaN(classDate.getTime()) && classDate.toDateString() === new Date().toDateString();
 }
 
 function gradingProgress(r: Student["requirements"]) {
@@ -93,8 +107,10 @@ function Tile({ title, status, to, icon: Icon, badge }: TileProps) {
 /* ---------- Page ---------- */
 export default function StudentHome() {
   // TODO: swap for a Supabase-backed hook, e.g. useStudentDashboard()
+  const [attendanceQrOpen, setAttendanceQrOpen] = useState(false);
   const student = mockStudent;
   const { belt, nextBelt, requirements: r, counts, nextClass } = student;
+  const attendanceQrAvailable = nextClass ? isClassDay(nextClass.startsAt) : false;
 
   const pct = gradingProgress(r);
   const ctaLabel = student.gradingOpen
@@ -192,27 +208,82 @@ export default function StudentHome() {
           <Card className="gap-3 rounded-2xl p-5">
             <h2 className="font-bold">Your next class</h2>
             {nextClass ? (
-              <dl className="grid gap-3">
-                <div>
-                  <dt className="text-xs text-muted-foreground">When</dt>
-                  <dd className="text-xl font-semibold tracking-tight">{formatWhen(nextClass.startsAt)}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-muted-foreground">Class</dt>
-                  <dd className="font-semibold">{nextClass.title}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-muted-foreground">Where</dt>
-                  <dd className="font-semibold">
-                    {nextClass.centre}, {nextClass.instructor}
-                  </dd>
-                </div>
-                {nextClass.recommended && (
-                  <span className="w-fit rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
-                    Recommended for your rank
-                  </span>
-                )}
-              </dl>
+              <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_11rem] sm:items-end">
+                <dl className="grid gap-3">
+                  <div>
+                    <dt className="text-xs text-muted-foreground">When</dt>
+                    <dd className="text-xl font-semibold tracking-tight">{formatWhen(nextClass.startsAt)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted-foreground">Class</dt>
+                    <dd className="font-semibold">{nextClass.title}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted-foreground">Where</dt>
+                    <dd className="font-semibold">
+                      {nextClass.centre}, {nextClass.instructor}
+                    </dd>
+                  </div>
+                  {nextClass.recommended && (
+                    <span className="w-fit rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
+                      Recommended for your rank
+                    </span>
+                  )}
+                </dl>
+                <Dialog open={attendanceQrOpen} onOpenChange={setAttendanceQrOpen}>
+                  <DialogTrigger
+                    render={
+                      <button
+                        type="button"
+                        disabled={!attendanceQrAvailable}
+                        aria-label={
+                          attendanceQrAvailable
+                            ? "Open attendance QR placeholder"
+                            : "Attendance QR unavailable until the class day"
+                        }
+                        className={`grid min-h-40 w-full place-items-center rounded-xl border border-dashed p-4 text-center transition focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed ${
+                          attendanceQrAvailable
+                            ? "border-primary/50 bg-primary/5 text-primary hover:bg-primary/10"
+                            : "border-border bg-muted/50 text-muted-foreground"
+                        }`}
+                      />
+                    }
+                  >
+                    <span className="grid justify-items-center gap-2">
+                      <QrCode className="size-8" aria-hidden="true" />
+                      <span className="font-semibold">
+                        {attendanceQrAvailable ? "Attendance QR" : "QR unavailable"}
+                      </span>
+                      <span className="text-sm">
+                        {attendanceQrAvailable
+                          ? "Tap to view attendance placeholder"
+                          : "Available on class day"}
+                      </span>
+                    </span>
+                  </DialogTrigger>
+                  <DialogContent className="w-[calc(100%-2rem)] max-w-lg p-6 sm:max-w-lg">
+                    <div className="grid justify-items-center gap-5 py-2 text-center">
+                      <div>
+                        <DialogTitle className="text-xl font-semibold">
+                          Attendance QR
+                        </DialogTitle>
+                        <DialogDescription className="mt-2">
+                          QR placeholder for {nextClass.title}. No attendance will be recorded yet.
+                        </DialogDescription>
+                      </div>
+                      <div
+                        aria-label="QR code placeholder; no code generated"
+                        className="grid size-64 place-items-center rounded-2xl border-2 border-dashed border-primary/40 bg-muted/50 text-primary sm:size-80"
+                      >
+                        <div className="grid justify-items-center gap-3">
+                          <QrCode className="size-16" aria-hidden="true" />
+                          <span className="text-sm font-medium">QR placeholder</span>
+                        </div>
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              </div>
             ) : (
               <div className="grid gap-3">
                 <p className="text-muted-foreground">No upcoming classes.</p>

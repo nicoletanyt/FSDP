@@ -8,6 +8,19 @@
 @theme inline {
     --font-heading: var(--font-sans);
     --font-sans: 'Geist Variable', sans-serif;
+    --text-xs: 20px;
+    --text-sm: 20px;
+    --text-base: 20px;
+    --text-lg: 22px;
+    --text-xl: 24px;
+    --text-2xl: 28px;
+    --text-3xl: 32px;
+    --text-4xl: 36px;
+    --text-5xl: 40px;
+    --text-6xl: 44px;
+    --text-7xl: 50px;
+    --text-8xl: 56px;
+    --text-9xl: 64px;
     --color-brand-blue: var(--brand-blue);
     --color-brand-red: var(--brand-red);
     --color-brand-red-ink: var(--brand-red-ink);
@@ -171,7 +184,7 @@
         @apply font-sans;
     }
     body {
-        @apply bg-background text-foreground antialiased;
+        @apply bg-background text-base text-foreground antialiased;
     }
     ::selection {
         @apply bg-primary text-primary-foreground;
