@@ -78,7 +78,6 @@ function SessionReport({
         }
         : currentInstructor;
     const authorName = session.reportAuthor?.name ?? session.instructor;
-
     return (
         <Card
             size="sm"
