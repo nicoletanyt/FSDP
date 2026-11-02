@@ -4,7 +4,7 @@ import { ArrowLeft } from "lucide-react";
 
 import { buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import StudentShell from "./student-shell";
+import StudentShell from "./StudentShell";
 import { formatDate, money, paymentStatusStyles } from "./format";
 import { mockProfile } from "./profile-data";
 

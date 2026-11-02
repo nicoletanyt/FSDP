@@ -20,7 +20,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { mockStudent, type Student } from "./student";
-import StudentShell from "./student-shell";
+import StudentShell from "./StudentShell";
 
 /* ---------- Helpers ---------- */
 function greetingFor(hour: number) {

@@ -4,7 +4,7 @@ import { CalendarX2, CheckCircle2, Lock } from "lucide-react";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import StudentShell from "./student-shell";
+import StudentShell from "./StudentShell";
 import { formatDate } from "./format";
 import { mockGradingWindow, type GradingSession } from "./grading";
 import { mockProfile } from "./profile-data";

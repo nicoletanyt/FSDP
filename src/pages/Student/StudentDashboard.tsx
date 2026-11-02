@@ -1,4 +1,4 @@
-import StudentHome from "../../student/homepage";
+import StudentHome from "./StudentHome";
 
 export default function StudentDashboard() {
   return <StudentHome />;
