@@ -2,15 +2,15 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { stripTypeScriptTypes } from 'node:module'
 import test from 'node:test'
-import { compareRanks, formatRank, getGrade, getNextGrade, gradingSystems } from '../src/lib/student-grades.ts'
-import { eventsForDate, loadSession, saveSession, students } from '../src/lib/instructor-calendar.ts'
+import { belts, compareRanks, formatRank, getGrade, getGradingSyllabus, getNextGrade, gradingSystems } from '../src/lib/student-grades.ts'
+import { eventsForDate, loadSession, resolveInstructorProfile, saveSession, students } from '../src/lib/instructor-calendar.ts'
 
 // Resolve the frontend aliases for these pure mock-data helpers without a browser.
 const source = await readFile(new URL('../src/lib/instructor-student-details.ts', import.meta.url), 'utf8')
 const output = stripTypeScriptTypes(source
   .replaceAll('"@/lib/instructor-calendar"', JSON.stringify(new URL('../src/lib/instructor-calendar.ts', import.meta.url).href))
   .replaceAll('"@/lib/student-grades"', JSON.stringify(new URL('../src/lib/student-grades.ts', import.meta.url).href)))
-const { getStudentProfile, studentGradingHistory } = await import(`data:text/javascript;base64,${Buffer.from(output).toString('base64')}`)
+const { getStudentProfile, studentGradingHistory, getGradingRequirements, getTechniqueSignOffs, saveTechniqueSignOffs, getExaminerSignature, saveExaminerSignature } = await import(`data:text/javascript;base64,${Buffer.from(output).toString('base64')}`)
 
 test('formal ranks use consistent ordinal and Kyu/Dan formatting', () => {
   for (const [rank, label] of [
@@ -21,13 +21,18 @@ test('formal ranks use consistent ordinal and Kyu/Dan formatting', () => {
   ]) assert.equal(formatRank(rank), label)
 })
 
-test('belt mappings depend on the configured grading system, not just the rank', () => {
-  assert.equal(getGrade('children', '6-kyu').belt, 'green')
-  assert.equal(getGrade('adults', '6-kyu').belt, 'white')
+test('belt mappings follow the published syllabus for both grading systems', () => {
+  assert.equal(getGrade('children', '10-kyu').belt, 'yellow')
+  assert.equal(getGrade('children', '7-kyu').belt, 'purple')
+  assert.equal(getGrade('children', '6-kyu').belt, 'blue')
+  assert.equal(getGrade('adults', '6-kyu').belt, 'blue')
+  assert.equal(getGrade('adults', '5-kyu').belt, 'blue-gold')
 })
 
 test('progression supports different ranks sharing a belt and the Kyu-to-Dan boundary', () => {
-  assert.deepEqual(getNextGrade('children', '10-kyu'), { rank: '9-kyu', belt: 'white' })
+  assert.deepEqual(getNextGrade('children', '10-kyu'), { rank: '9-kyu', belt: 'orange' })
+  assert.deepEqual(getNextGrade('children', '6-kyu'), { rank: '6-kyu-silver', belt: 'blue-silver' })
+  assert.equal(getNextGrade('children', '2-kyu-silver'), null)
   assert.deepEqual(getNextGrade('adults', '1-kyu'), { rank: '1-dan', belt: 'black' })
   assert.deepEqual(getNextGrade('adults', '1-dan'), { rank: '2-dan', belt: 'black' })
 })
@@ -83,5 +88,135 @@ test('saved technical assessments remain linked to the current and next formal r
     assert.equal(loadSession(event)[student.id].attendance, original[student.id].attendance)
   } finally {
     saveSession(event.id, original)
+  }
+})
+
+test('every published grade has matching syllabus colours and unique technique IDs', () => {
+  const ids = []
+  for (const [system, { levels }] of Object.entries(gradingSystems)) {
+    const ranks = levels.map(level => level.rank)
+    if (system === 'adults') ranks.push('junior-dan')
+    for (const rank of ranks) {
+      const syllabus = getGradingSyllabus(system, rank)
+      assert.ok(syllabus, `${system}: ${rank}`)
+      const beltName = syllabus.grade.includes(' Kyu)') ? syllabus.grade.split(' (')[0] : 'Black'
+      assert.equal(belts[getGrade(system, rank).belt].label, `${beltName} belt`)
+      ids.push(...syllabus.categories.flatMap(category => category.items.map(item => item.id)))
+    }
+  }
+  assert.equal(new Set(ids).size, ids.length)
+  assert.equal(getGradingSyllabus('children', '9-kyu').categories[0].items[0].id,
+    'children/orange-9th-kyu/attack/shomenuchi')
+})
+
+test('relocated grading helpers preserve saved records and isolate students', () => {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
+  const storage = new Map()
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: {
+    getItem: key => storage.get(key) ?? null,
+    setItem: (key, value) => storage.set(key, value),
+  } })
+  const signOff = {
+    itemId: 'children/orange-9th-kyu/attack/shomenuchi',
+    signedOffAt: '2026-11-02T10:00:00.000Z',
+    signedOffBy: { id: 'instructor-1', name: 'Alex Morgan' },
+  }
+  try {
+    storage.set('instructor-technique-sign-offs-v1:student-1', JSON.stringify([signOff]))
+    assert.deepEqual(getTechniqueSignOffs('student-1'), [signOff])
+    assert.deepEqual(getTechniqueSignOffs('student-2'), [])
+    saveTechniqueSignOffs('student-2', [signOff])
+    saveTechniqueSignOffs('student-1', [])
+    assert.deepEqual(getTechniqueSignOffs('student-1'), [])
+    assert.deepEqual(getTechniqueSignOffs('student-2'), [signOff])
+  } finally {
+    if (previous) Object.defineProperty(globalThis, 'localStorage', previous)
+    else delete globalThis.localStorage
+  }
+})
+
+test('sign-off profiles resolve by instructor ID despite renamed or identical display names', () => {
+  const signedIn = { id: 'signed-in-id', name: 'Alex Morgan', role: 'Instructor', avatarUrl: '/profile-photo.png' }
+  const known = resolveInstructorProfile('instructor-1', 'Outdated display name', signedIn)
+  assert.equal(known.id, 'instructor-1')
+  assert.equal(known.name, 'Alex Morgan')
+  assert.equal(known.avatarUrl, undefined, 'a matching name must not borrow another instructor’s photo')
+  assert.deepEqual(resolveInstructorProfile('signed-in-id', 'Old name', signedIn), signedIn)
+  const unknown = resolveInstructorProfile('former-instructor', 'Jamie Chen', signedIn)
+  assert.equal(unknown.id, 'former-instructor')
+  assert.equal(unknown.name, 'Jamie Chen')
+  assert.equal(unknown.role, 'Instructor')
+  assert.equal(unknown.avatarUrl, undefined)
+  assert.equal(resolveInstructorProfile('missing-id').name, 'Unknown instructor')
+})
+
+test('eligibility counts only target techniques and leaves missing facts unverified', () => {
+  const syllabus = getGradingSyllabus('adults', '2-kyu')
+  const requirements = getGradingRequirements({
+    syllabus, membershipStatus: 'Active', rankAwardedOn: new Date(2025, 0, 1),
+    sessions: [], now: new Date(2026, 10, 2),
+    signOffs: [{ itemId: 'children/black-2nd-kyu/ikkyo/ushiro-ryotedori' }],
+  })
+  assert.equal(requirements.find(item => item.key === 'techniques').actual, '0')
+  assert.equal(requirements.find(item => item.key === 'techniques').required, '22')
+  for (const key of ['membership-length', 'age', 'fees', 'sessions']) {
+    assert.equal(requirements.find(item => item.key === key).met, null)
+  }
+})
+
+test('examiner signatures preserve strokes and attribution and are scoped to student, track and grade', () => {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
+  const storage = new Map()
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: {
+    getItem: key => storage.get(key) ?? null,
+    setItem: (key, value) => storage.set(key, value),
+    removeItem: key => storage.delete(key),
+  } })
+  const signature = {
+    strokes: [[{ x: 0.1, y: 0.2 }, { x: 0.4, y: 0.7 }], [{ x: 0.8, y: 0.3 }]],
+    aspectRatio: 3,
+    signedAt: '2026-11-02T10:00:00.000Z',
+    signedBy: { id: 'instructor-1', name: 'Alex Morgan' },
+  }
+  try {
+    saveExaminerSignature('student-1', 'children', '9-kyu', signature)
+    assert.deepEqual(getExaminerSignature('student-1', 'children', '9-kyu'), signature)
+    assert.equal(getExaminerSignature('student-2', 'children', '9-kyu'), null)
+    assert.equal(getExaminerSignature('student-1', 'adults', '9-kyu'), null)
+    assert.equal(getExaminerSignature('student-1', 'children', '8-kyu'), null)
+    saveExaminerSignature('student-1', 'children', '8-kyu', signature)
+    saveExaminerSignature('student-1', 'children', '9-kyu', null)
+    assert.equal(getExaminerSignature('student-1', 'children', '9-kyu'), null)
+    assert.deepEqual(getExaminerSignature('student-1', 'children', '8-kyu'), signature)
+
+    const key = 'instructor-examiner-signature-v1:student-1:children:9-kyu'
+    for (const malformed of [
+      'invalid JSON', '{}', 'null',
+      JSON.stringify({ ...signature, strokes: [] }),
+      JSON.stringify({ ...signature, strokes: [[{ x: -1, y: 0.2 }]] }),
+      JSON.stringify({ ...signature, strokes: [[{ x: 0.5, y: 2 }]] }),
+      JSON.stringify({ ...signature, strokes: [[{ x: '0.1', y: 0.2 }]] }),
+      JSON.stringify({ ...signature, aspectRatio: 0 }),
+      JSON.stringify({ ...signature, signedAt: 'bad date' }),
+      JSON.stringify({ ...signature, signedBy: null }),
+    ]) {
+      storage.set(key, malformed)
+      assert.equal(getExaminerSignature('student-1', 'children', '9-kyu'), null)
+    }
+  } finally {
+    if (previous) Object.defineProperty(globalThis, 'localStorage', previous)
+    else delete globalThis.localStorage
+  }
+})
+
+test('student details loads through Vite without missing grading component imports', async () => {
+  const { createServer } = await import('vite')
+  const server = await createServer({ server: { middlewareMode: true, hmr: false }, appType: 'custom' })
+  try {
+    const page = await server.ssrLoadModule('/src/pages/Instructor/InstructorStudentDetails.tsx')
+    assert.equal(typeof page.default, 'function')
+    assert.ok((await server.transformRequest('/src/pages/Instructor/InstructorStudentDetails.tsx'))?.code)
+  } finally {
+    await server.close()
   }
 })

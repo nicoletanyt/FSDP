@@ -1,41 +1,914 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import type { PointerEvent as ReactPointerEvent } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
+import { Accordion as AccordionPrimitive } from "@base-ui/react/accordion";
+import { Checkbox as CheckboxPrimitive } from "@base-ui/react/checkbox";
 import {
+    Check,
+    CheckCircle2,
+    ChevronDown,
     ChevronLeft,
     ChevronRight,
+    CircleHelp,
     HeartPulse,
+    History,
+    Info,
     Mail,
     MapPin,
+    PenLine,
     Phone,
-    Target,
+    Plus,
     TriangleAlert,
+    Trash2,
+    Undo2,
+    XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import StudentSessionHistory from "@/components/instructor/StudentSessionHistory";
 import GradeBadge from "@/components/GradeBadge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { InstructorAvatar } from "@/components/ui/avatar";
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from "@/components/ui/card";
+import {
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ToastProvider } from "@/components/ui/toast";
+import { ToastProvider, useToast } from "@/components/ui/toast";
+import {
+    Popover,
+    PopoverContent,
+    PopoverTitle,
+    PopoverTrigger,
+} from "@/components/ui/popover";
+import { useAuth } from "@/hooks/use-auth";
 import {
     assessmentHref,
     calendarHref,
+    currentInstructor,
     findCalendarEvent,
     fullDate,
     studentDetailsHref,
     students,
 } from "@/lib/instructor-calendar";
-import type { CalendarEvent, Student } from "@/lib/instructor-calendar";
+import type {
+    CalendarEvent,
+    InstructorProfile,
+    ReportAuthor,
+    Student,
+} from "@/lib/instructor-calendar";
 import {
     getStudentProfile,
+    getGradingRequirements,
+    getExaminerSignature,
+    getTechniqueSignOffs,
+    gradingEligibility,
+    saveTechniqueSignOffs,
+    saveExaminerSignature,
     studentAttendanceSummary,
     studentGradingHistory,
     studentSessionHistory,
 } from "@/lib/instructor-student-details";
-import { gradingSystems } from "@/lib/student-grades";
+import type {
+    GradingRequirement,
+    ExaminerSignature,
+    SignaturePoint,
+    TechniqueSignOff,
+} from "@/lib/instructor-student-details";
+import { getGradingSyllabus, gradingSystems } from "@/lib/student-grades";
+import type {
+    GradingSyllabus,
+    GradingSystemId,
+    RankId,
+} from "@/lib/student-grades";
 import { cn } from "@/lib/utils";
 
 type Profile = ReturnType<typeof getStudentProfile>;
 type DetailTab = "overview" | "sessions" | "grading";
+
+const success = "text-emerald-700 dark:text-emerald-400";
+const signedDate = new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+});
+
+function TechniqueChecklist({
+    syllabus,
+    system,
+    targetRank,
+    signOffs,
+    onToggle,
+}: {
+    syllabus: GradingSyllabus;
+    system: GradingSystemId;
+    targetRank: RankId | null;
+    signOffs: TechniqueSignOff[];
+    onToggle: (itemId: string) => boolean;
+}) {
+    const checklistId = useId();
+    const signOffByItem = new Map(signOffs.map((item) => [item.itemId, item]));
+    const items = syllabus.categories.flatMap((category) => category.items);
+    const signedCount = items.filter((item) => signOffByItem.has(item.id)).length;
+    const percent = items.length
+        ? Math.round((signedCount / items.length) * 100)
+        : 0;
+    const complete = items.length > 0 && signedCount === items.length;
+
+    return (
+        <Card className="gap-4 rounded-none bg-transparent py-0 ring-0">
+            <CardHeader className="gap-3 px-0">
+                <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 space-y-1">
+                        <CardTitle className="text-sm font-semibold">
+                            <h2>Technique Checklist</h2>
+                        </CardTitle>
+                    </div>
+                    <Popover>
+                        <PopoverTrigger
+                            render={
+                                <Button
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    aria-label="About technique sign-offs"
+                                    className="-mr-1 text-muted-foreground"
+                                />
+                            }
+                        >
+                            <Info aria-hidden="true" className="size-4" />
+                        </PopoverTrigger>
+                        <PopoverContent
+                            align="end"
+                            className="w-80 gap-2 text-left text-xs leading-relaxed"
+                        >
+                            <PopoverTitle>About technique sign-offs</PopoverTitle>
+                            <p>
+                                Only techniques for {syllabus.grade} are required. Earlier
+                                grades are treated as completed history.
+                            </p>
+                            <p>
+                                {system === "children"
+                                    ? "Children’s syllabus · revised October 2014."
+                                    : "Adult syllabus · revised January 2021."}{" "}
+                                Sign-offs are saved in this browser.
+                            </p>
+                            {system === "adults" &&
+                                ["2-dan", "3-dan", "4-dan"].includes(targetRank ?? "") && (
+                                    <p>
+                                        Candidates aged 50 and above (by calendar year) take 20
+                                        ukemis instead of 30 from 2nd Dan.
+                                    </p>
+                                )}
+                        </PopoverContent>
+                    </Popover>
+                </div>
+                <div className="space-y-2">
+                    <p
+                        role="status"
+                        aria-atomic="true"
+                        className={cn(
+                            "flex items-center justify-between gap-3 text-xs tabular-nums",
+                            complete ? `font-medium ${success}` : "text-muted-foreground",
+                        )}
+                    >
+                        <span>
+                            {signedCount} of {items.length} completed
+                        </span>{" "}
+                        <span className="font-medium">{percent}%</span>
+                    </p>
+                    <progress
+                        aria-label={`${syllabus.grade} technique completion`}
+                        value={signedCount}
+                        max={items.length || 1}
+                        className={cn(
+                            "block h-1.5 w-full overflow-hidden rounded-full [&::-webkit-progress-bar]:rounded-full [&::-webkit-progress-bar]:bg-muted [&::-webkit-progress-value]:rounded-full",
+                            complete
+                                ? "[&::-webkit-progress-value]:bg-emerald-600 [&::-moz-progress-bar]:bg-emerald-600"
+                                : "[&::-webkit-progress-value]:bg-primary [&::-moz-progress-bar]:bg-primary",
+                        )}
+                    />
+                </div>
+            </CardHeader>
+            <CardContent className="px-0">
+                <AccordionPrimitive.Root
+                    multiple
+                    defaultValue={syllabus.categories.map((category) => category.id)}
+                    aria-label="Technique categories"
+                    className="flex w-full flex-col"
+                >
+                    {syllabus.categories.map((category) => {
+                        const count = category.items.filter((item) =>
+                            signOffByItem.has(item.id),
+                        ).length;
+                        return (
+                            <AccordionPrimitive.Item
+                                key={category.id}
+                                value={category.id}
+                                className="border-border/60 not-first:mt-6 not-first:border-t not-first:pt-4"
+                            >
+                                <AccordionPrimitive.Header className="mb-3 flex">
+                                    <AccordionPrimitive.Trigger
+                                        data-slot="accordion-trigger"
+                                        className="group/accordion-trigger flex min-w-0 flex-1 items-center justify-between gap-3 rounded-md py-1 text-left text-sm font-semibold transition-colors outline-none hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50"
+                                    >
+                                        <span className="min-w-0 flex-1 break-words">
+                                            {category.label}
+                                        </span>
+                                        <span
+                                            className={cn(
+                                                "shrink-0 text-xs font-normal tabular-nums",
+                                                count === category.items.length
+                                                    ? success
+                                                    : "text-muted-foreground",
+                                            )}
+                                        >
+                                            {count}/{category.items.length}
+                                            <span className="sr-only"> completed</span>
+                                        </span>
+                                        <ChevronDown
+                                            aria-hidden="true"
+                                            className="size-4 shrink-0 text-muted-foreground transition-transform group-aria-expanded/accordion-trigger:rotate-180 motion-reduce:transition-none"
+                                        />
+                                    </AccordionPrimitive.Trigger>
+                                </AccordionPrimitive.Header>
+                                <AccordionPrimitive.Panel className="h-(--accordion-panel-height) overflow-hidden text-sm transition-[height] duration-200 ease-out data-ending-style:h-0 data-starting-style:h-0 motion-reduce:transition-none">
+                                    <ul className="space-y-1">
+                                        {category.items.map((item) => {
+                                            const signOff = signOffByItem.get(item.id);
+                                            const checkboxId = `${checklistId}-${item.id}`;
+                                            return (
+                                                <li key={item.id}>
+                                                    <div
+                                                        className={cn(
+                                                            "flex min-h-12 items-start gap-3 rounded-lg px-4 py-3 text-sm leading-6 transition-colors",
+                                                            signOff
+                                                                ? "bg-emerald-50/60 hover:bg-emerald-50 dark:bg-emerald-950/25 dark:hover:bg-emerald-950/40"
+                                                                : "hover:bg-muted/50",
+                                                        )}
+                                                    >
+                                                        <CheckboxPrimitive.Root
+                                                            id={checkboxId}
+                                                            data-slot="checkbox"
+                                                            checked={Boolean(signOff)}
+                                                            onCheckedChange={() => {
+                                                                onToggle(item.id);
+                                                            }}
+                                                            aria-label={`${category.label}: ${item.label}${item.note ? ` · ${item.note}` : ""}`}
+                                                            className="mt-1 flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-[4px] border border-input transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30 data-checked:border-emerald-600 data-checked:bg-emerald-600 data-checked:text-white dark:data-checked:bg-emerald-600"
+                                                        >
+                                                            <CheckboxPrimitive.Indicator className="grid place-content-center text-current">
+                                                                <Check
+                                                                    aria-hidden="true"
+                                                                    className="size-3.5"
+                                                                />
+                                                            </CheckboxPrimitive.Indicator>
+                                                        </CheckboxPrimitive.Root>
+                                                        <div className="min-w-0 flex-1">
+                                                            <label
+                                                                htmlFor={checkboxId}
+                                                                className="block cursor-pointer break-words"
+                                                            >
+                                                                {item.label}
+                                                                {item.note && (
+                                                                    <span className="text-muted-foreground">
+                                                                        {" "}
+                                                                        · {item.note}
+                                                                    </span>
+                                                                )}
+                                                            </label>
+                                                        </div>
+                                                    </div>
+                                                </li>
+                                            );
+                                        })}
+                                    </ul>
+                                </AccordionPrimitive.Panel>
+                            </AccordionPrimitive.Item>
+                        );
+                    })}
+                </AccordionPrimitive.Root>
+            </CardContent>
+        </Card>
+    );
+}
+
+function ExaminerSignaturePad({
+    studentId,
+    system,
+    targetRank,
+    examiner,
+}: {
+    studentId: string;
+    system: GradingSystemId;
+    targetRank: RankId;
+    examiner: ReportAuthor;
+}) {
+    const [signature, setSignature] = useState(() =>
+        getExaminerSignature(studentId, system, targetRank),
+    );
+    const [isDrawing, setIsDrawing] = useState(false);
+    const [saveError, setSaveError] = useState(false);
+    const signatureRef = useRef<ExaminerSignature | null>(signature);
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const activeStrokeRef = useRef<SignaturePoint[]>([]);
+    const drawingAspectRef = useRef(1);
+    const activePointerRef = useRef<number | null>(null);
+    const headingId = useId();
+    const helpId = useId();
+    const toast = useToast();
+
+    function inkBounds(width: number, height: number, aspectRatio: number) {
+        const inkWidth = Math.min(width, height * aspectRatio);
+        const inkHeight = inkWidth / aspectRatio;
+        return {
+            width: inkWidth,
+            height: inkHeight,
+            left: (width - inkWidth) / 2,
+            top: (height - inkHeight) / 2,
+        };
+    }
+
+    function redraw() {
+        const canvas = canvasRef.current;
+        const context = canvas?.getContext("2d");
+        if (!canvas || !context) return;
+        const { width, height } = canvas.getBoundingClientRect();
+        if (!width || !height) return;
+        context.setTransform(
+            canvas.width / width,
+            0,
+            0,
+            canvas.height / height,
+            0,
+            0,
+        );
+        context.clearRect(0, 0, width, height);
+        context.strokeStyle = "#0f172a";
+        context.fillStyle = "#0f172a";
+        context.lineWidth = 2.5;
+        context.lineCap = "round";
+        context.lineJoin = "round";
+        const bounds = inkBounds(
+            width,
+            height,
+            signatureRef.current?.aspectRatio ?? drawingAspectRef.current,
+        );
+        const strokes = [
+            ...(signatureRef.current?.strokes ?? []),
+            activeStrokeRef.current,
+        ];
+        for (const stroke of strokes) {
+            if (!stroke.length) continue;
+            context.beginPath();
+            context.arc(
+                bounds.left + stroke[0].x * bounds.width,
+                bounds.top + stroke[0].y * bounds.height,
+                1.25,
+                0,
+                Math.PI * 2,
+            );
+            context.fill();
+            context.beginPath();
+            context.moveTo(
+                bounds.left + stroke[0].x * bounds.width,
+                bounds.top + stroke[0].y * bounds.height,
+            );
+            for (const point of stroke.slice(1))
+                context.lineTo(
+                    bounds.left + point.x * bounds.width,
+                    bounds.top + point.y * bounds.height,
+                );
+            context.stroke();
+        }
+    }
+
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const resize = () => {
+            const { width, height } = canvas.getBoundingClientRect();
+            const ratio = window.devicePixelRatio || 1;
+            canvas.width = Math.max(1, Math.round(width * ratio));
+            canvas.height = Math.max(1, Math.round(height * ratio));
+            redraw();
+        };
+        const observer = new ResizeObserver(resize);
+        observer.observe(canvas);
+        window.addEventListener("resize", resize);
+        resize();
+        return () => {
+            observer.disconnect();
+            window.removeEventListener("resize", resize);
+        };
+    }, []);
+
+    function updateSignature(next: ExaminerSignature | null) {
+        signatureRef.current = next;
+        setSignature(next);
+        redraw();
+        try {
+            saveExaminerSignature(studentId, system, targetRank, next);
+            setSaveError(false);
+        } catch {
+            setSaveError(true);
+            toast.add({
+                title: "Could not save the examiner signature. Please retry.",
+            });
+        }
+    }
+
+    function pointFromEvent(event: {
+        clientX: number;
+        clientY: number;
+    }): SignaturePoint {
+        const bounds = canvasRef.current!.getBoundingClientRect();
+        const ink = inkBounds(
+            bounds.width,
+            bounds.height,
+            signatureRef.current?.aspectRatio ?? drawingAspectRef.current,
+        );
+        return {
+            x: Math.max(
+                0,
+                Math.min(1, (event.clientX - bounds.left - ink.left) / ink.width),
+            ),
+            y: Math.max(
+                0,
+                Math.min(1, (event.clientY - bounds.top - ink.top) / ink.height),
+            ),
+        };
+    }
+
+    function beginStroke(event: ReactPointerEvent<HTMLCanvasElement>) {
+        if (
+            !event.isPrimary ||
+            event.button !== 0 ||
+            activePointerRef.current !== null
+        )
+            return;
+        event.preventDefault();
+        const { width, height } = event.currentTarget.getBoundingClientRect();
+        drawingAspectRef.current = width / height;
+        const previous = signatureRef.current;
+        // Rebase before new input so resizing preserves the signature's shape
+        // while leaving the entire current pad available for new strokes.
+        if (previous && previous.aspectRatio !== drawingAspectRef.current) {
+            const ink = inkBounds(width, height, previous.aspectRatio);
+            signatureRef.current = {
+                ...previous,
+                aspectRatio: drawingAspectRef.current,
+                strokes: previous.strokes.map((stroke) =>
+                    stroke.map((point) => ({
+                        x: (ink.left + point.x * ink.width) / width,
+                        y: (ink.top + point.y * ink.height) / height,
+                    })),
+                ),
+            };
+        }
+        event.currentTarget.setPointerCapture(event.pointerId);
+        activePointerRef.current = event.pointerId;
+        activeStrokeRef.current = [pointFromEvent(event)];
+        setIsDrawing(true);
+        redraw();
+    }
+
+    function continueStroke(event: ReactPointerEvent<HTMLCanvasElement>) {
+        if (event.pointerId !== activePointerRef.current) return;
+        event.preventDefault();
+        const samples = event.nativeEvent.getCoalescedEvents?.();
+        for (const sample of samples?.length ? samples : [event.nativeEvent]) {
+            activeStrokeRef.current.push(pointFromEvent(sample));
+        }
+        redraw();
+    }
+
+    function finishStroke(event: ReactPointerEvent<HTMLCanvasElement>) {
+        if (event.pointerId !== activePointerRef.current) return;
+        if (event.type === "pointerup")
+            activeStrokeRef.current.push(pointFromEvent(event));
+        const stroke = activeStrokeRef.current;
+        activeStrokeRef.current = [];
+        activePointerRef.current = null;
+        setIsDrawing(false);
+        if (event.currentTarget.hasPointerCapture(event.pointerId))
+            event.currentTarget.releasePointerCapture(event.pointerId);
+        if (stroke.length)
+            updateSignature({
+                strokes: [...(signatureRef.current?.strokes ?? []), stroke],
+                aspectRatio:
+                    signatureRef.current?.aspectRatio ?? drawingAspectRef.current,
+                signedAt: new Date().toISOString(),
+                signedBy: examiner,
+            });
+    }
+
+    function undoStroke() {
+        const strokes = signatureRef.current?.strokes.slice(0, -1) ?? [];
+        updateSignature(
+            strokes.length
+                ? {
+                    strokes,
+                    aspectRatio: signatureRef.current!.aspectRatio,
+                    signedAt: new Date().toISOString(),
+                    signedBy: examiner,
+                }
+                : null,
+        );
+    }
+
+    return (
+        <Card className="mt-8 gap-3" role="region" aria-labelledby={headingId}>
+            <CardHeader className="gap-2">
+                <CardTitle>
+                    <h3 id={headingId} className="flex items-center gap-2">
+                        <PenLine
+                            aria-hidden="true"
+                            className="size-4 shrink-0 text-muted-foreground"
+                        />
+                        Examiner Digital Stylus Signature
+                    </h3>
+                </CardTitle>
+                <CardDescription id={helpId} className="text-xs">
+                    Sign with a finger or mouse.
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+                <div className="relative isolate overflow-hidden rounded-lg border bg-white">
+                    <canvas
+                        ref={canvasRef}
+                        role="img"
+                        aria-label="Examiner signature pad"
+                        aria-describedby={helpId}
+                        className="block h-52 w-full touch-none cursor-crosshair select-none sm:h-60"
+                        onPointerDown={beginStroke}
+                        onPointerMove={continueStroke}
+                        onPointerUp={finishStroke}
+                        onPointerCancel={finishStroke}
+                        onLostPointerCapture={finishStroke}
+                    />
+                    {!signature && !isDrawing && (
+                        <span className="pointer-events-none absolute inset-0 flex items-center justify-center px-4 pb-6 text-center text-sm text-slate-400">
+                            Sign here
+                        </span>
+                    )}
+                    <span
+                        aria-hidden="true"
+                        className="pointer-events-none absolute inset-x-6 bottom-10 border-b border-dashed border-slate-300"
+                    />
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p
+                        role="status"
+                        className={cn(
+                            "min-w-0 text-xs leading-relaxed",
+                            saveError ? "text-destructive" : "text-muted-foreground",
+                        )}
+                    >
+                        {isDrawing
+                            ? "Signing…"
+                            : saveError
+                                ? "Signature not saved."
+                                : signature
+                                    ? `Signature saved · ${signedDate.format(new Date(signature.signedAt))}`
+                                    : "No signature yet."}
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                        {saveError && (
+                            <Button
+                                variant="outline"
+                                className="min-h-10"
+                                onClick={() => updateSignature(signatureRef.current)}
+                                disabled={isDrawing}
+                            >
+                                Retry save
+                            </Button>
+                        )}
+                        <Button
+                            variant="outline"
+                            className="min-h-10"
+                            onClick={undoStroke}
+                            disabled={!signature || isDrawing}
+                        >
+                            <Undo2 aria-hidden="true" />
+                            Undo
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            className="min-h-10"
+                            onClick={() => updateSignature(null)}
+                            disabled={!signature || isDrawing}
+                        >
+                            <Trash2 aria-hidden="true" />
+                            Clear
+                        </Button>
+                    </div>
+                </div>
+            </CardContent>
+        </Card>
+    );
+}
+
+function StudentGrading({
+    profile,
+    syllabus,
+    requirements,
+    signOffs,
+    onSignOffsChange,
+}: {
+    profile: Profile;
+    syllabus: GradingSyllabus | null;
+    requirements: GradingRequirement[];
+    signOffs: TechniqueSignOff[];
+    onSignOffsChange: (signOffs: TechniqueSignOff[]) => void;
+}) {
+    const [gradingOpen, setGradingOpen] = useState(false);
+    const [confirmClose, setConfirmClose] = useState(false);
+    const gradingTriggerRef = useRef<HTMLButtonElement>(null);
+    const keepEditingRef = useRef<HTMLButtonElement>(null);
+    const closeTriggerRef = useRef<HTMLElement | null>(null);
+    const { profile: instructorProfile } = useAuth();
+    const toast = useToast();
+    const eligibility = gradingEligibility(requirements);
+    const examiner = instructorProfile
+        ? {
+            id: instructorProfile.id,
+            name:
+                [instructorProfile.first_name, instructorProfile.last_name]
+                    .filter(Boolean)
+                    .join(" ") || instructorProfile.email,
+        }
+        : currentInstructor;
+    const examinerProfile: InstructorProfile = {
+        ...examiner,
+        role: "Instructor",
+    };
+
+    function toggleTechnique(itemId: string) {
+        const next = signOffs.some((item) => item.itemId === itemId)
+            ? signOffs.filter((item) => item.itemId !== itemId)
+            : [
+                ...signOffs,
+                {
+                    itemId,
+                    signedOffAt: new Date().toISOString(),
+                    signedOffBy: examiner,
+                },
+            ];
+        try {
+            saveTechniqueSignOffs(profile.id, next);
+            onSignOffsChange(next);
+            return true;
+        } catch {
+            toast.add({
+                title: "Could not save the technique sign-off. Please try again.",
+            });
+            return false;
+        }
+    }
+
+    return (
+        <>
+            <Dialog
+                open={gradingOpen}
+                onOpenChange={(open, details) => {
+                    if (open) {
+                        setGradingOpen(true);
+                        return;
+                    }
+                    details.cancel();
+                    const closeControl =
+                        details.event.target instanceof Element
+                            ? details.event.target.closest<HTMLElement>(
+                                '[data-slot="dialog-close"]',
+                            )
+                            : null;
+                    closeTriggerRef.current =
+                        closeControl ??
+                        (document.activeElement instanceof HTMLElement
+                            ? document.activeElement
+                            : null);
+                    setConfirmClose(true);
+                }}
+            >
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <h2 className="text-sm font-semibold">Grading eligibility</h2>
+                    <DialogTrigger
+                        render={<Button ref={gradingTriggerRef} disabled={!syllabus} />}
+                    >
+                        <Plus aria-hidden="true" />
+                        New Grading
+                    </DialogTrigger>
+                </div>
+                {syllabus && (
+                    <DialogContent
+                        finalFocus={gradingTriggerRef}
+                        className="flex max-h-[85vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl [&>[data-slot=dialog-close]]:top-5 [&>[data-slot=dialog-close]]:right-5"
+                    >
+                        <DialogHeader className="shrink-0 gap-0 border-b border-border/60 px-8 py-6">
+                            <DialogTitle className="pr-6 text-xl font-semibold tracking-tight">
+                                New Grading
+                            </DialogTitle>
+                            <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3 pt-4">
+                                <div className="min-w-0 space-y-2">
+                                    <DialogDescription className="break-words text-base font-medium text-foreground">
+                                        {profile.name}
+                                    </DialogDescription>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <GradeBadge
+                                            rank={profile.rank}
+                                            system={profile.gradingSystem}
+                                        />
+                                        {profile.nextRank && (
+                                            <>
+                                                <span
+                                                    aria-hidden="true"
+                                                    className="text-muted-foreground"
+                                                >
+                                                    →
+                                                </span>
+                                                <GradeBadge
+                                                    rank={profile.nextRank}
+                                                    system={profile.gradingSystem}
+                                                />
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2 pt-1 sm:justify-end">
+                                    <span className="text-xs text-muted-foreground">
+                                        Instructor:
+                                    </span>
+                                    <InstructorAvatar
+                                        profile={examinerProfile}
+                                        interactive={false}
+                                    />
+                                </div>
+                            </div>
+                        </DialogHeader>
+                        <div className="min-h-0 overflow-y-auto overscroll-contain px-8 pt-5 pb-8 [scrollbar-width:thin] [scrollbar-color:var(--border)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border/70">
+                            <TechniqueChecklist
+                                key={`${profile.id}:${profile.gradingSystem}:${profile.nextRank}`}
+                                syllabus={syllabus}
+                                system={profile.gradingSystem}
+                                targetRank={profile.nextRank}
+                                signOffs={signOffs}
+                                onToggle={toggleTechnique}
+                            />
+                            {profile.nextRank && (
+                                <ExaminerSignaturePad
+                                    key={`signature:${profile.id}:${profile.gradingSystem}:${profile.nextRank}`}
+                                    studentId={profile.id}
+                                    system={profile.gradingSystem}
+                                    targetRank={profile.nextRank}
+                                    examiner={examiner}
+                                />
+                            )}
+                        </div>
+                        <DialogFooter className="m-0 shrink-0 flex-row justify-end border-t border-border/60 px-8 py-5">
+                            <DialogClose render={<Button className="min-h-10 min-w-24" />}>
+                                Done
+                            </DialogClose>
+                        </DialogFooter>
+                        <Dialog open={confirmClose} onOpenChange={setConfirmClose}>
+                            <DialogContent
+                                initialFocus={keepEditingRef}
+                                finalFocus={gradingOpen ? closeTriggerRef : gradingTriggerRef}
+                                showCloseButton={false}
+                            >
+                                <DialogHeader>
+                                    <DialogTitle>Finish grading review?</DialogTitle>
+                                    <DialogDescription>
+                                        Technique sign-offs and signatures are saved automatically
+                                        as you edit. Confirm to close this grading review, or keep
+                                        editing.
+                                    </DialogDescription>
+                                </DialogHeader>
+                                <DialogFooter>
+                                    <DialogClose
+                                        render={<Button ref={keepEditingRef} variant="outline" />}
+                                    >
+                                        Keep editing
+                                    </DialogClose>
+                                    <Button
+                                        onClick={() => {
+                                            setConfirmClose(false);
+                                            setGradingOpen(false);
+                                        }}
+                                    >
+                                        Confirm and close
+                                    </Button>
+                                </DialogFooter>
+                            </DialogContent>
+                        </Dialog>
+                    </DialogContent>
+                )}
+            </Dialog>
+            <Card>
+                {!syllabus && (
+                    <CardHeader>
+                        <CardDescription>
+                            {profile.nextRank
+                                ? "No published syllabus is recorded for the next configured rank."
+                                : "No further grading level is configured for this grading system."}
+                        </CardDescription>
+                    </CardHeader>
+                )}
+                <CardContent className="space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <GradeBadge rank={profile.rank} system={profile.gradingSystem} />
+                            {profile.nextRank && (
+                                <>
+                                    <span aria-hidden="true" className="text-muted-foreground">
+                                        →
+                                    </span>
+                                    <GradeBadge
+                                        rank={profile.nextRank}
+                                        system={profile.gradingSystem}
+                                    />
+                                </>
+                            )}
+                        </div>
+                        {syllabus && (
+                            <span
+                                role="status"
+                                className={cn(
+                                    "rounded-md px-2 py-1 text-xs font-medium",
+                                    eligibility.label === "Eligible"
+                                        ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200"
+                                        : "bg-amber-50 text-amber-900 dark:bg-amber-950/50 dark:text-amber-200",
+                                )}
+                            >
+                                {eligibility.metCount}/{requirements.length} requirements met
+                            </span>
+                        )}
+                    </div>
+                    {syllabus && (
+                        <>
+                            <ul className="space-y-2">
+                                {requirements.map((requirement) => {
+                                    const Icon =
+                                        requirement.met === true
+                                            ? CheckCircle2
+                                            : requirement.met === false
+                                                ? XCircle
+                                                : CircleHelp;
+                                    const tone =
+                                        requirement.met === true
+                                            ? success
+                                            : requirement.met === false
+                                                ? "text-destructive"
+                                                : "text-muted-foreground";
+                                    return (
+                                        <li
+                                            key={requirement.key}
+                                            className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1 rounded-lg border border-border/70 bg-background/60 px-3 py-2"
+                                        >
+                                            <span className="flex min-w-0 items-start gap-2 text-sm">
+                                                <Icon
+                                                    aria-hidden="true"
+                                                    className={cn("mt-0.5 size-4 shrink-0", tone)}
+                                                />
+                                                <span className="sr-only">
+                                                    {requirement.met === true
+                                                        ? "Met: "
+                                                        : requirement.met === false
+                                                            ? "Not met: "
+                                                            : "Unverified: "}
+                                                </span>
+                                                {requirement.label}
+                                            </span>
+                                            <span className="ml-auto text-right text-xs tabular-nums">
+                                                <span className={cn("font-medium", tone)}>
+                                                    {requirement.actual}
+                                                </span>
+                                                <span className="text-muted-foreground">
+                                                    {requirement.key === "techniques" ? "/" : " / "}
+                                                    {requirement.required}
+                                                </span>
+                                            </span>
+                                        </li>
+                                    );
+                                })}
+                            </ul>
+                        </>
+                    )}
+                </CardContent>
+            </Card>
+        </>
+    );
+}
 
 function StudentInformation({ profile }: { profile: Profile }) {
     return (
@@ -48,8 +921,15 @@ function StudentInformation({ profile }: { profile: Profile }) {
                 <p className="text-xs text-muted-foreground">{profile.studentNumber}</p>
                 <div className="mt-2 space-y-1.5">
                     <p className="text-2xs text-muted-foreground">Current rank</p>
-                    <GradeBadge rank={profile.rank} system={profile.gradingSystem} showBeltLabel className="px-3 py-1.5 text-base" />
-                    <p className="text-2xs text-muted-foreground">{gradingSystems[profile.gradingSystem].label}</p>
+                    <GradeBadge
+                        rank={profile.rank}
+                        system={profile.gradingSystem}
+                        showBeltLabel
+                        className="px-3 py-1.5 text-base"
+                    />
+                    <p className="text-2xs text-muted-foreground">
+                        {gradingSystems[profile.gradingSystem].label}
+                    </p>
                 </div>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
@@ -146,100 +1026,27 @@ function StudentInformation({ profile }: { profile: Profile }) {
     );
 }
 
-function GradingRequirements({
-    profile,
-    attended,
-}: {
-    profile: Profile;
-    attended: number;
-}) {
-    if (!profile.nextRank) return (
-        <Card>
-            <CardHeader><CardTitle>Next grading</CardTitle></CardHeader>
-            <CardContent className="text-xs text-muted-foreground">No further grading level is configured for this grading system.</CardContent>
-        </Card>
-    );
-    const requirements = [
-        { label: "Training sessions", current: attended, required: 12 },
-        {
-            label: "Technique syllabus checks",
-            current: profile.techniqueChecks,
-            required: 8,
-        },
-        {
-            label: "Kata assessment",
-            current: profile.kataComplete ? 1 : 0,
-            required: 1,
-        },
-    ];
-    const progress = Math.round(
-        (requirements.reduce(
-            (total, item) => total + Math.min(item.current / item.required, 1),
-            0,
-        ) /
-            requirements.length) *
-        100,
-    );
-    return (
-        <Card>
-            <CardHeader>
-                <div className="flex items-center justify-between gap-3">
-                    <CardTitle className="flex items-center gap-2">
-                        <Target
-                            aria-hidden="true"
-                            className="size-4 text-muted-foreground"
-                        />
-                        Next grading
-                    </CardTitle>
-                    <span className="text-xs font-medium tabular-nums">
-                        {progress}% ready
-                    </span>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                    <GradeBadge rank={profile.rank} system={profile.gradingSystem} />
-                    <span aria-hidden="true" className="text-muted-foreground">→</span>
-                    <GradeBadge rank={profile.nextRank} system={profile.gradingSystem} />
-                </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-                {requirements.map((item) => (
-                    <div key={item.label} className="space-y-1.5">
-                        <div className="flex items-center justify-between gap-2 text-xs">
-                            <span>{item.label}</span>
-                            <span className="text-muted-foreground tabular-nums">
-                                {item.current}/{item.required}
-                            </span>
-                        </div>
-                        <progress
-                            aria-label={item.label}
-                            value={Math.min(item.current, item.required)}
-                            max={item.required}
-                            className="block h-1.5 w-full overflow-hidden rounded-full [&::-webkit-progress-bar]:bg-muted [&::-webkit-progress-value]:bg-primary [&::-moz-progress-bar]:bg-primary"
-                        />
-                    </div>
-                ))}
-                <p className="text-2xs text-muted-foreground">
-                    Illustrative grading requirements · Dummy data
-                </p>
-            </CardContent>
-        </Card>
-    );
-}
-
 function NextGradingSummary({
     profile,
     assessmentRecorded,
+    eligibility,
     onViewGrading,
 }: {
     profile: Profile;
     assessmentRecorded: boolean;
+    eligibility: string;
     onViewGrading: () => void;
 }) {
     return (
         <section className="space-y-3">
             <div className="flex min-h-7 flex-wrap items-center gap-x-3 gap-y-1">
                 <h2 className="text-sm font-semibold">Next grading</h2>
-                <Button variant="ghost" size="sm" onClick={onViewGrading} className="ml-auto">
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={onViewGrading}
+                    className="ml-auto"
+                >
                     View grading
                     <ChevronRight aria-hidden="true" />
                 </Button>
@@ -249,17 +1056,29 @@ function NextGradingSummary({
                     <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
                         <div>
                             <dt className="text-muted-foreground">Current rank</dt>
-                            <dd className="mt-1"><GradeBadge rank={profile.rank} system={profile.gradingSystem} /></dd>
+                            <dd className="mt-1">
+                                <GradeBadge
+                                    rank={profile.rank}
+                                    system={profile.gradingSystem}
+                                />
+                            </dd>
                         </div>
                         <div>
                             <dt className="text-muted-foreground">Next rank</dt>
-                            <dd className="mt-1">{profile.nextRank
-                                ? <GradeBadge rank={profile.nextRank} system={profile.gradingSystem} />
-                                : "Not configured"}</dd>
+                            <dd className="mt-1">
+                                {profile.nextRank ? (
+                                    <GradeBadge
+                                        rank={profile.nextRank}
+                                        system={profile.gradingSystem}
+                                    />
+                                ) : (
+                                    "Not configured"
+                                )}
+                            </dd>
                         </div>
                         <div>
                             <dt className="text-muted-foreground">Eligibility</dt>
-                            <dd className="mt-1 font-medium">Not yet verified</dd>
+                            <dd className="mt-1 font-medium">{eligibility}</dd>
                         </div>
                         <div>
                             <dt className="text-muted-foreground">Technical assessment</dt>
@@ -294,6 +1113,9 @@ function StudentDetailContent({
         tabParam === "sessions" || tabParam === "grading" ? tabParam : "overview";
     const [sessions, setSessions] = useState(() =>
         studentSessionHistory(student, now, context),
+    );
+    const [signOffs, setSignOffs] = useState(() =>
+        getTechniqueSignOffs(student.id),
     );
     const sidebarRef = useRef<HTMLElement>(null);
     const [sidebarFits, setSidebarFits] = useState(false);
@@ -342,13 +1164,22 @@ function StudentDetailContent({
             assessment.fromRank === profile.rank &&
             assessment.toRank === profile.nextRank,
     );
-    const monthsInRank = Math.max(
-        0,
-        (today.getFullYear() - profile.rankAwardedOn.getFullYear()) * 12 +
-        today.getMonth() -
-        profile.rankAwardedOn.getMonth() -
-        (today.getDate() < profile.rankAwardedOn.getDate() ? 1 : 0),
-    );
+    const syllabus = getGradingSyllabus(profile.gradingSystem, profile.nextRank);
+    const requirements = syllabus
+        ? getGradingRequirements({
+            syllabus,
+            membershipStatus: profile.membershipStatus,
+            rankAwardedOn: profile.rankAwardedOn,
+            sessions,
+            signOffs,
+            now,
+        })
+        : [];
+    const eligibility = syllabus
+        ? gradingEligibility(requirements).label
+        : profile.nextRank
+            ? "Syllabus unavailable"
+            : "No further grade";
 
     function selectTab(value: DetailTab) {
         setParams(
@@ -515,7 +1346,9 @@ function StudentDetailContent({
                         </section>
                         <section className="space-y-3">
                             <div className="flex min-h-7 flex-wrap items-center gap-x-3 gap-y-1">
-                                <h2 className="text-sm font-semibold">Recent lesson feedback</h2>
+                                <h2 className="text-sm font-semibold">
+                                    Recent lesson feedback
+                                </h2>
                                 <Button
                                     variant="ghost"
                                     size="sm"
@@ -530,7 +1363,10 @@ function StudentDetailContent({
                                 <CardContent className="space-y-4">
                                     {recentFeedback.length ? (
                                         recentFeedback.map((session) => (
-                                            <article key={session.event.id} className="border-l-2 pl-3">
+                                            <article
+                                                key={session.event.id}
+                                                className="border-l-2 pl-3"
+                                            >
                                                 <p className="text-xs font-medium">
                                                     {session.event.name}{" "}
                                                     <span className="font-normal text-muted-foreground">
@@ -554,6 +1390,7 @@ function StudentDetailContent({
                         <NextGradingSummary
                             profile={profile}
                             assessmentRecorded={assessmentRecorded}
+                            eligibility={eligibility}
                             onViewGrading={() => selectTab("grading")}
                         />
                     </TabsContent>
@@ -590,70 +1427,59 @@ function StudentDetailContent({
                                 </CardContent>
                             </Card>
                         )}
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Current rank</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <dl className="grid grid-cols-2 gap-4 text-sm">
-                                    <div>
-                                        <dt className="text-xs text-muted-foreground">
-                                            Current rank
-                                        </dt>
-                                        <dd className="mt-1"><GradeBadge rank={student.rank} system={student.gradingSystem} showBeltLabel /></dd>
-                                    </div>
-                                    <div>
-                                        <dt className="text-xs text-muted-foreground">
-                                            Time in rank
-                                        </dt>
-                                        <dd className="mt-1 font-medium">
-                                            {monthsInRank} {monthsInRank === 1 ? "month" : "months"}
-                                        </dd>
-                                        <dd className="mt-1 text-2xs text-muted-foreground">
-                                            Since {fullDate(profile.rankAwardedOn)}
-                                        </dd>
-                                    </div>
-                                </dl>
-                            </CardContent>
-                        </Card>
-                        <GradingRequirements profile={profile} attended={attended} />
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Previous grading assessments</CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-5">
-                                {gradingHistory.length ? (
-                                    gradingHistory.map((assessment) => (
-                                        <article key={assessment.id} className="border-l-2 pl-3">
-                                            <div className="flex flex-wrap items-start justify-between gap-2">
-                                                <div>
-                                                    <div className="flex flex-wrap items-center gap-2">
-                                                        <GradeBadge rank={assessment.fromRank} system={student.gradingSystem} />
-                                                        <span aria-hidden="true">→</span>
-                                                        <GradeBadge rank={assessment.toRank} system={student.gradingSystem} />
+                        <StudentGrading
+                            profile={profile}
+                            syllabus={syllabus}
+                            requirements={requirements}
+                            signOffs={signOffs}
+                            onSignOffsChange={setSignOffs}
+                        />
+                        <section aria-label="Grading history" className="space-y-3">
+                            <h2 className="flex items-center gap-2 font-semibold">
+                                <History aria-hidden="true" className="size-4 text-muted-foreground" />
+                                Grading history
+                            </h2>
+                            <Card>
+                                <CardContent className="space-y-5">
+                                    {gradingHistory.length ? (
+                                        gradingHistory.map((assessment) => (
+                                            <article key={assessment.id} className="border-l-2 pl-3">
+                                                <div className="flex flex-wrap items-start justify-between gap-2">
+                                                    <div>
+                                                        <div className="flex flex-wrap items-center gap-2">
+                                                            <GradeBadge
+                                                                rank={assessment.fromRank}
+                                                                system={student.gradingSystem}
+                                                            />
+                                                            <span aria-hidden="true">→</span>
+                                                            <GradeBadge
+                                                                rank={assessment.toRank}
+                                                                system={student.gradingSystem}
+                                                            />
+                                                        </div>
+                                                        <p className="mt-1 text-2xs text-muted-foreground">
+                                                            {fullDate(assessment.date)} ·{" "}
+                                                            {assessment.instructor}
+                                                        </p>
                                                     </div>
-                                                    <p className="mt-1 text-2xs text-muted-foreground">
-                                                        {fullDate(assessment.date)} ·{" "}
-                                                        {assessment.instructor}
-                                                    </p>
+                                                    <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-2xs text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">
+                                                        {assessment.status}
+                                                    </span>
                                                 </div>
-                                                <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-2xs text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">
-                                                    {assessment.status}
-                                                </span>
-                                            </div>
-                                            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                                                {assessment.feedback}
-                                            </p>
-                                        </article>
-                                    ))
-                                ) : (
-                                    <p className="text-xs text-muted-foreground">
-                                        No previous grading assessments. The first assessment will
-                                        appear here.
-                                    </p>
-                                )}
-                            </CardContent>
-                        </Card>
+                                                <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                                                    {assessment.feedback}
+                                                </p>
+                                            </article>
+                                        ))
+                                    ) : (
+                                        <p className="text-xs text-muted-foreground">
+                                            No previous grading assessments. The first assessment will
+                                            appear here.
+                                        </p>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        </section>
                     </TabsContent>
                 </Tabs>
             </div>

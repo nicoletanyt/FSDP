@@ -31,6 +31,10 @@ const AdminInstructors = lazy(() => import('./pages/admin/Instructors'))
 const AdminProfile = lazy(() => import('./pages/admin/Profile'))
 const AdminReports = lazy(() => import('./pages/admin/Reports'))
 
+const ForgetPassword = lazy(() => import('./pages/ForgetPassword')) 
+const ApplyMembership = lazy(() => import('./pages/Student/ApplyMembership'))
+const ApplicationSuccess = lazy(() => import('./pages/Student/ApplicationSuccess'))
+
 const StudentDashboard = lazy(() => import('./pages/Student/StudentDashboard'))
 const StudentClasses = lazy(() => import('./pages/StudentClasses'))
 const StudentAttendance = lazy(() => import('./pages/StudentAttendance'))
@@ -57,10 +61,13 @@ export default function App() {
               <Route path="login" element={<Login />} />
               <Route path="signup" element={<Signup />} />
               <Route path="staff/login" element={<Login staff />} />
+              <Route path="forgot-password" element={<ForgetPassword />} />
             </Route>
           </Route>
           <Route element={<ProtectedRoute role="student" />}>
             <Route element={<StudentLayout />}>
+              <Route path="apply-membership" element={<ApplyMembership />} />
+              <Route path="apply-membership/success" element={<ApplicationSuccess />} /> 
               <Route path="dashboard" element={<StudentDashboard />} />
               <Route path="timetable" element={<StudentClasses />} />
               <Route path="classes" element={<StudentClasses />} />

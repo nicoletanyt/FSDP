@@ -23,7 +23,7 @@ export function PasswordInput({
         id={inputId}
         type={visible ? 'text' : 'password'}
         disabled={disabled}
-        className={cn('pr-20', className)}
+        className={cn('pr-24', className)}
       />
       <Button
         type="button"

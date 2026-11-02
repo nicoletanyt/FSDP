@@ -1,9 +1,10 @@
-import { useState } from "react";
-import type { SubmitEvent } from "react";
-import { Check, ChevronRight, LockKeyhole, LogOut, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import type { ChangeEvent, SubmitEvent } from "react";
+import { Check, ChevronRight, LockKeyhole, LogOut, Trash2, Upload, X } from "lucide-react";
 import { useLocation, useNavigate } from "react-router";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { InstructorAvatar, useInstructorPhoto } from "@/components/ui/avatar";
 import {
     Card,
     CardContent,
@@ -23,6 +24,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
 import { useAuth } from "@/hooks/use-auth";
+import { prepareInstructorPhoto, saveInstructorPhoto } from "@/lib/instructor-calendar";
 import { supabase } from "@/lib/supabase";
 
 export default function InstructorProfile() {
@@ -37,6 +39,60 @@ export default function InstructorProfile() {
     const [passwordEdited, setPasswordEdited] = useState(false);
     const [signingOut, setSigningOut] = useState(false);
     const [signOutError, setSignOutError] = useState("");
+    const photo = useInstructorPhoto(profile?.id);
+    const photoInputRef = useRef<HTMLInputElement>(null);
+    const photoRequestRef = useRef(0);
+    const [photoPending, setPhotoPending] = useState(false);
+    const [photoError, setPhotoError] = useState("");
+    const [photoFeedback, setPhotoFeedback] = useState("");
+    const instructorName = [profile?.first_name, profile?.last_name].filter(Boolean).join(" ") || profile?.email || "Instructor";
+    const photoControlsDisabled = !profile?.id || photoPending || pending || signingOut;
+
+    useEffect(() => {
+        setPhotoError("");
+        setPhotoFeedback("");
+        setPhotoPending(false);
+        return () => { photoRequestRef.current += 1; };
+    }, [profile?.id]);
+
+    async function handlePhotoUpload(event: ChangeEvent<HTMLInputElement>) {
+        const file = event.currentTarget.files?.[0];
+        event.currentTarget.value = "";
+        if (!file || !profile?.id || photoPending) return;
+        const instructorId = profile.id;
+        const request = ++photoRequestRef.current;
+        setPhotoPending(true);
+        setPhotoError("");
+        setPhotoFeedback("");
+        try {
+            const prepared = await prepareInstructorPhoto(file);
+            if (request !== photoRequestRef.current) return;
+            try {
+                saveInstructorPhoto(instructorId, prepared);
+            } catch {
+                throw new Error("Could not save your photo in this browser. Please try again.");
+            }
+            setPhotoFeedback("Profile picture updated.");
+        } catch (failure) {
+            if (request === photoRequestRef.current) {
+                setPhotoError(failure instanceof Error ? failure.message : "Could not upload your photo. Please try again.");
+            }
+        } finally {
+            if (request === photoRequestRef.current) setPhotoPending(false);
+        }
+    }
+
+    function removePhoto() {
+        if (!profile?.id || photoControlsDisabled) return;
+        setPhotoError("");
+        setPhotoFeedback("");
+        try {
+            saveInstructorPhoto(profile.id, null);
+            setPhotoFeedback("Profile picture removed.");
+        } catch {
+            setPhotoError("Could not remove your photo from this browser. Please try again.");
+        }
+    }
     const passwordsMatch =
         newPassword.length > 0 && newPassword === confirmPassword;
     const passwordRequirements = [
@@ -139,14 +195,49 @@ export default function InstructorProfile() {
                 <CardHeader>
                     <CardTitle>Instructor information</CardTitle>
                 </CardHeader>
-                <CardContent>
-                    <dl className="space-y-4 text-sm">
+                <CardContent className="space-y-5">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                        <div className="shrink-0" role="img" aria-label={`${instructorName}'s profile picture`}>
+                            <InstructorAvatar
+                                profile={{ id: profile?.id ?? "", name: instructorName, role: "Instructor" }}
+                                interactive={false}
+                                showName={false}
+                                avatarClassName="size-24"
+                                fallbackClassName="text-3xl"
+                            />
+                        </div>
+                        <div className="min-w-0 flex-1 space-y-3" aria-busy={photoPending}>
+                            <div className="space-y-1">
+                                <Label htmlFor="instructor-profile-photo">Profile picture</Label>
+                                <p id="instructor-photo-hint" className="text-xs leading-relaxed text-muted-foreground">JPG, PNG or WebP, up to 5 MB. Stored only in this browser.</p>
+                            </div>
+                            <input
+                                ref={photoInputRef}
+                                id="instructor-profile-photo"
+                                type="file"
+                                accept="image/jpeg,image/png,image/webp"
+                                className="sr-only"
+                                tabIndex={-1}
+                                disabled={photoControlsDisabled}
+                                aria-describedby="instructor-photo-hint"
+                                onChange={(event) => { void handlePhotoUpload(event); }}
+                            />
+                            <div className="flex flex-wrap gap-2">
+                                <Button type="button" variant="outline" onClick={() => photoInputRef.current?.click()} disabled={photoControlsDisabled}>
+                                    <Upload aria-hidden="true" className="size-4" />
+                                    {photoPending ? "Saving photo…" : photo ? "Change photo" : "Upload photo"}
+                                </Button>
+                                {photo && <Button type="button" variant="destructive" onClick={removePhoto} disabled={photoControlsDisabled}><Trash2 aria-hidden="true" className="size-4" />Remove photo</Button>}
+                            </div>
+                            {photoError && <Alert variant="destructive" role="alert"><AlertDescription>{photoError}</AlertDescription></Alert>}
+                            {photoFeedback && <p role="status" className="text-xs text-emerald-700 dark:text-emerald-400">{photoFeedback}</p>}
+                        </div>
+                    </div>
+                    <dl className="space-y-4 border-t pt-5 text-sm">
                         <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
                             <dt className="text-muted-foreground">Name</dt>
                             <dd className="min-w-0 break-words font-medium sm:text-right">
-                                {profile
-                                    ? `${profile.first_name} ${profile.last_name}`
-                                    : "Instructor"}
+                                {instructorName}
                             </dd>
                         </div>
                         <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
