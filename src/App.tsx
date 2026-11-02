@@ -5,13 +5,13 @@ import FloatingChatbot from '@/components/FloatingChatbot'
 import AuthLayout from './layouts/AuthLayout'
 import RootLayout from './layouts/RootLayout'
 import InstructorLayout from './layouts/InstructorLayout'
+import StudentLayout from './layouts/StudentLayout'
 import CheckoutCancel from './pages/CheckoutCancel'
 import CheckoutSuccess from './pages/CheckoutSuccess'
 import NotFound from './pages/NotFound'
 
 const Login = lazy(() => import('./pages/Login'))
 const Signup = lazy(() => import('./pages/Signup'))
-const StudentDashboard = lazy(() => import('./pages/StudentDashboard'))
 
 const AdminLayout = lazy(() => import('./pages/admin/AdminLayout'))
 const AdminOverview = lazy(() => import('./pages/admin/Overview'))
@@ -30,6 +30,13 @@ const AdminNotifications = lazy(() => import('./pages/admin/Notifications'))
 const AdminInstructors = lazy(() => import('./pages/admin/Instructors'))
 const AdminProfile = lazy(() => import('./pages/admin/Profile'))
 const AdminReports = lazy(() => import('./pages/admin/Reports'))
+
+const StudentDashboard = lazy(() => import('./pages/Student/StudentDashboard'))
+const StudentClasses = lazy(() => import('./pages/StudentClasses'))
+const StudentAttendance = lazy(() => import('./pages/StudentAttendance'))
+const StudentProfile = lazy(() => import('./pages/Student/StudentProfile'))
+const StudentPayments = lazy(() => import('./pages/Student/StudentPayments'))
+const StudentGrading = lazy(() => import('./pages/Student/StudentGrading'))
 
 const InstructorDashboard = lazy(() => import('./pages/Instructor/InstructorDashboard'))
 const InstructorStudents = lazy(() => import('./pages/Instructor/InstructorStudents'))
@@ -53,7 +60,15 @@ export default function App() {
             </Route>
           </Route>
           <Route element={<ProtectedRoute role="student" />}>
-            <Route path="dashboard" element={<StudentDashboard />} />
+            <Route element={<StudentLayout />}>
+              <Route path="dashboard" element={<StudentDashboard />} />
+              <Route path="timetable" element={<StudentClasses />} />
+              <Route path="classes" element={<StudentClasses />} />
+              <Route path="attendance" element={<StudentAttendance />} />
+              <Route path="profile" element={<StudentProfile />} />
+              <Route path="payments" element={<StudentPayments />} />
+              <Route path="grading" element={<StudentGrading />} />
+            </Route>
           </Route>
           <Route path="instructor">
             <Route index element={<InstructorIndexRedirect />} />

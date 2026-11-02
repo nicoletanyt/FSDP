@@ -1,5 +1,6 @@
 import { Suspense, useState } from 'react'
 import { Link, Outlet, useLocation, useMatch } from 'react-router'
+import StudentNavigation from '@/components/student/StudentNavigation'
 import ThemeToggle from '@/components/theme-toggle'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/hooks/use-auth'
@@ -11,9 +12,13 @@ export default function RootLayout() {
   const [signingOut, setSigningOut] = useState(false)
   const [error, setError] = useState('')
   const location = useLocation()
-  const isAdmin = location.pathname === '/admin' || location.pathname.startsWith('/admin/')
+  const isAdmin =
+    location.pathname === '/admin' ||
+    location.pathname.startsWith('/admin/')
   const isInstructorPortal = useMatch('/instructor/*')
-  const homePath = profile?.role === 'administrator' ? dashboardPaths.administrator : '/'
+  const isStudent = Boolean(session && profile?.role === 'student')
+  const homePath =
+    profile?.role === 'administrator' ? dashboardPaths.administrator : '/'
 
   async function handleSignOut() {
     setSigningOut(true)
@@ -42,59 +47,119 @@ export default function RootLayout() {
   }
 
   return (
-    <div className={cn('flex min-h-screen flex-col text-foreground', isAdmin ? 'bg-muted/30' : 'bg-background')}>
-      {!isAdmin && (
-        <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur">
-          <nav
-            aria-label="Main navigation"
-            className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-6 py-3"
-          >
-            <Link
-              to={homePath}
-              className="flex items-center gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+    <div
+      className={cn(
+        'flex min-h-screen flex-col text-foreground',
+        isAdmin ? 'bg-muted/30' : 'bg-background',
+      )}
+    >
+      {isStudent ? (
+        <StudentNavigation />
+      ) : (
+        !isAdmin && (
+          <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur">
+            <nav
+              aria-label="Main navigation"
+              className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-4 px-6 py-5"
             >
-              <img
-                src="/logo.png"
-                alt="Aikido Shinju-Kai logo"
-                width={40}
-                height={40}
-                className="size-10 rounded-full"
-              />
-              <span className="text-base font-semibold tracking-tight">
-                <span className="text-primary">Aikido</span>{' '}
-                <span className="text-brand-red-ink">Shinju-Kai</span>
-              </span>
-            </Link>
-            <ThemeToggle />
-            {!loading && (
-              <div className="flex items-center gap-4 text-sm">
-                {session ? <>
-                  {profile && <Link to={dashboardPaths[profile.role]} className="font-medium hover:underline">Dashboard</Link>}
-                  <Button variant="outline" onClick={handleSignOut} disabled={signingOut}>
-                    {signingOut ? 'Signing out…' : 'Sign out'}
-                  </Button>
-                </> : <>
-                  <Link to="/login" className="hover:underline">Sign in</Link>
-                  <Link to="/signup" className="font-medium hover:underline">Sign up</Link>
-                </>}
+              <Link
+                to={homePath}
+                className="flex items-center gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                <img
+                  src="/logo.png"
+                  alt="Aikido Shinju-Kai logo"
+                  width={40}
+                  height={40}
+                  className="size-10 rounded-full"
+                />
+                <span className="text-base font-semibold tracking-tight">
+                  <span className="text-primary">Aikido</span>{' '}
+                  <span className="text-brand-red-ink">Shinju-Kai</span>
+                </span>
+              </Link>
+              <div className="flex items-center gap-4">
+                <ThemeToggle />
+                {!loading && (
+                  <div className="flex items-center gap-4 text-sm">
+                    {session ? (
+                      <>
+                        {profile && (
+                          <Link
+                            to={dashboardPaths[profile.role]}
+                            className="font-medium hover:underline"
+                          >
+                            Dashboard
+                          </Link>
+                        )}
+                        <Button
+                          variant="outline"
+                          onClick={handleSignOut}
+                          disabled={signingOut}
+                        >
+                          {signingOut ? 'Signing out…' : 'Sign out'}
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <Link to="/login" className="hover:underline">
+                          Sign in
+                        </Link>
+                        <Link
+                          to="/signup"
+                          className="font-medium hover:underline"
+                        >
+                          Sign up
+                        </Link>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
+            </nav>
+            {error && (
+              <p
+                role="alert"
+                className="mx-auto w-[70%] pb-3 text-sm text-destructive"
+              >
+                {error}
+              </p>
             )}
-          </nav>
-          {error && <p role="alert" className="mx-auto w-[70%] pb-3 text-sm text-destructive">{error}</p>}
-        </header>
+          </header>
+        )
       )}
       {isAdmin ? (
-        <Suspense fallback={<p role="status" className="px-4 py-12 text-muted-foreground sm:px-6">Loading…</p>}>
+        <Suspense
+          fallback={
+            <p
+              role="status"
+              className="px-4 py-12 text-muted-foreground sm:px-6"
+            >
+              Loading…
+            </p>
+          }
+        >
           <Outlet />
         </Suspense>
       ) : (
-        <main className="mx-auto w-[70%] py-12">
-          <Suspense fallback={<p role="status" className="py-12 text-muted-foreground">Loading…</p>}>
+        <main
+          className={cn(
+            'mx-auto w-[70%]',
+            isStudent ? 'py-6 sm:py-8' : 'py-12',
+          )}
+        >
+          <Suspense
+            fallback={
+              <p role="status" className="py-12 text-muted-foreground">
+                Loading…
+              </p>
+            }
+          >
             <Outlet />
           </Suspense>
         </main>
       )}
-      {!isAdmin && (
+      {!isAdmin && !isStudent && (
         <footer className="border-t border-border">
           <div className="mx-auto flex w-full max-w-5xl flex-col gap-1 px-6 py-6 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
             <p>&copy; {new Date().getFullYear()} Aikido Shinju-Kai</p>
