@@ -29,7 +29,7 @@ export default function StudentClasses() {
       && (eligibility !== 'recommended' || isRecommended(c, schedule.belt))
   }), [classes, centre, day, period, instructor, eligibility, schedule.belt])
   return <div className="space-y-6">
-    <div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="text-2xl font-semibold">Class timetable & enrolment</h2><p className="mt-1 text-sm text-muted-foreground">Explore training sessions at different centres and enrol in a suitable class.</p></div><Button variant="outline" render={<Link to="/dashboard/attendance" />}>View my schedule</Button></div>
+    <div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="text-2xl font-semibold">Class timetable & enrolment</h2><p className="mt-1 text-sm text-muted-foreground">Explore training sessions at different centres and enrol in a suitable class.</p></div><Button variant="outline" render={<Link to="/attendance" />}>View my schedule</Button></div>
     <div className="rounded-xl border bg-card p-4 shadow-sm"><h3 className="mb-4 flex items-center gap-2 font-semibold"><SlidersHorizontal className="size-4" /> Filter classes</h3><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
       <label className="space-y-1 text-sm"><span>Training centre</span><select className={field} value={centre} onChange={e => setCentre(e.target.value)}><option value="all">All centres</option>{centres.map(c => <option key={c}>{c}</option>)}</select></label>
       <label className="space-y-1 text-sm"><span>Day of week</span><select className={field} value={day} onChange={e => setDay(e.target.value)}><option value="all">Any day</option>{days.map((d, i) => <option key={d} value={i}>{d}</option>)}</select></label>

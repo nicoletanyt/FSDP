@@ -4,9 +4,9 @@ import { ArrowLeft } from "lucide-react";
 
 import { buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import StudentShell from "./student-shell";
-import { formatDate, money, paymentStatusStyles } from "./format";
-import { mockProfile } from "./profile-data";
+import PaymentStatusBadge from "@/components/student/PaymentStatusBadge";
+import { formatDate, money } from "@/lib/format";
+import { mockProfile } from "@/lib/student-profile";
 
 const ALL = "All";
 
@@ -28,7 +28,6 @@ export default function StudentPayments() {
   const totalPaid = rows.filter((p) => p.status === "Paid").reduce((sum, p) => sum + p.amount, 0);
 
   return (
-    <StudentShell>
       <main className="w-full">
         <Link to="/profile" className={buttonVariants({ variant: "ghost", size: "sm", className: "-ml-2 gap-1.5" })}>
           <ArrowLeft className="size-4" aria-hidden="true" />
@@ -96,9 +95,7 @@ export default function StudentPayments() {
                       <td className="px-3 py-3">{p.method}</td>
                       <td className="px-3 py-3 text-right tabular-nums">{money.format(p.amount)}</td>
                       <td className="px-5 py-3">
-                        <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${paymentStatusStyles[p.status]}`}>
-                          {p.status}
-                        </span>
+                        <PaymentStatusBadge status={p.status} className="px-2.5" />
                       </td>
                     </tr>
                   ))}
@@ -108,6 +105,5 @@ export default function StudentPayments() {
           )}
         </Card>
       </main>
-    </StudentShell>
   );
 }

@@ -3,9 +3,9 @@ import { ArrowRight } from "lucide-react";
 
 import { buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import StudentShell from "./student-shell";
-import { formatDate, money, paymentStatusStyles } from "./format";
-import { mockProfile, type Payment, type Profile } from "./profile-data";
+import PaymentStatusBadge from "@/components/student/PaymentStatusBadge";
+import { formatDate, money } from "@/lib/format";
+import { mockProfile, type Payment, type Profile } from "@/lib/student-profile";
 
 /* ---------- Helpers ---------- */
 const PREVIEW_COUNT = 3;
@@ -133,7 +133,6 @@ export default function StudentProfile() {
   const groups = groupByItem(profile.payments);
 
   return (
-    <StudentShell>
       <main className="w-full">
         <header>
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-red-ink">
@@ -211,9 +210,7 @@ export default function StudentProfile() {
                       </div>
                       <div className="flex shrink-0 flex-col items-end gap-1">
                         <span className="font-semibold tabular-nums">{money.format(p.amount)}</span>
-                        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${paymentStatusStyles[p.status]}`}>
-                          {p.status}
-                        </span>
+                        <PaymentStatusBadge status={p.status} />
                       </div>
                     </li>
                   ))}
@@ -223,6 +220,5 @@ export default function StudentProfile() {
           </div>
         )}
       </main>
-    </StudentShell>
   );
 }

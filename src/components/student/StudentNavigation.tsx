@@ -4,8 +4,8 @@ import { cn } from '@/lib/utils'
 
 const routes = [
   { label: 'Overview', path: '/dashboard', icon: LayoutDashboard },
-  { label: 'Browse classes', path: '/dashboard/classes', icon: CalendarDays },
-  { label: 'My schedule & attendance', path: '/dashboard/attendance', icon: ClipboardCheck },
+  { label: 'Browse classes', path: '/classes', icon: CalendarDays },
+  { label: 'My schedule & attendance', path: '/attendance', icon: ClipboardCheck },
 ]
 export default function StudentNavigation() {
   const { pathname } = useLocation()

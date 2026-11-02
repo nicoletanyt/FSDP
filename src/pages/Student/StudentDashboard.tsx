@@ -19,21 +19,14 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { mockStudent, type Student } from "./student";
-import StudentShell from "./student-shell";
+import { formatDateTime } from "@/lib/format";
+import { mockStudent, type Student } from "@/lib/student-dashboard";
 
 /* ---------- Helpers ---------- */
 function greetingFor(hour: number) {
   if (hour < 12) return "Good morning";
   if (hour < 18) return "Good afternoon";
   return "Good evening";
-}
-
-function formatWhen(iso: string) {
-  const d = new Date(iso);
-  const day = d.toLocaleDateString("en-SG", { weekday: "long", day: "numeric", month: "short" });
-  const time = d.toLocaleTimeString("en-SG", { hour: "numeric", minute: "2-digit" });
-  return `${day}, ${time}`;
 }
 
 function isClassDay(iso: string) {
@@ -105,7 +98,7 @@ function Tile({ title, status, to, icon: Icon, badge }: TileProps) {
 }
 
 /* ---------- Page ---------- */
-export default function StudentHome() {
+export default function StudentDashboard() {
   // TODO: swap for a Supabase-backed hook, e.g. useStudentDashboard()
   const [attendanceQrOpen, setAttendanceQrOpen] = useState(false);
   const student = mockStudent;
@@ -134,7 +127,6 @@ export default function StudentHome() {
   ];
 
   return (
-    <StudentShell>
       <main className="flex flex-col gap-6">
         <header>
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-red-ink">
@@ -212,7 +204,7 @@ export default function StudentHome() {
                 <dl className="grid gap-3">
                   <div>
                     <dt className="text-xs text-muted-foreground">When</dt>
-                    <dd className="text-xl font-semibold tracking-tight">{formatWhen(nextClass.startsAt)}</dd>
+                    <dd className="text-xl font-semibold tracking-tight">{formatDateTime(nextClass.startsAt)}</dd>
                   </div>
                   <div>
                     <dt className="text-xs text-muted-foreground">Class</dt>
@@ -306,6 +298,5 @@ export default function StudentHome() {
           ))}
         </nav>
       </main>
-    </StudentShell>
   );
 }
