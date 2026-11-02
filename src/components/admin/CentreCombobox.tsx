@@ -20,6 +20,7 @@ export default function CentreCombobox({
   className,
   placeholder = 'Search dojos…',
   ariaLabel = 'Filter by centre',
+  includeAll = true,
 }: {
   centres: Centre[]
   value: string
@@ -28,25 +29,31 @@ export default function CentreCombobox({
   className?: string
   placeholder?: string
   ariaLabel?: string
+  includeAll?: boolean
 }) {
   const items = useMemo(
-    () => [ALL_CENTRES, ...centres.map((centre) => centre.id)],
-    [centres],
+    () =>
+      includeAll
+        ? [ALL_CENTRES, ...centres.map((centre) => centre.id)]
+        : centres.map((centre) => centre.id),
+    [centres, includeAll],
   )
 
   const labels = useMemo(() => {
-    const map = new Map<string, string>([[ALL_CENTRES, 'All centres']])
+    const map = new Map<string, string>()
+    if (includeAll) map.set(ALL_CENTRES, 'All centres')
     for (const centre of centres) map.set(centre.id, centre.name)
     return map
-  }, [centres])
+  }, [centres, includeAll])
 
-  const selected = labels.has(value) ? value : ALL_CENTRES
+  const fallback = includeAll ? ALL_CENTRES : (centres[0]?.id ?? '')
+  const selected = labels.has(value) ? value : fallback
 
   return (
     <Combobox
       items={items}
       value={selected}
-      onValueChange={(next) => onChange(next ?? ALL_CENTRES)}
+      onValueChange={(next) => onChange(next ?? fallback)}
       itemToStringLabel={(centreId) => labels.get(centreId) ?? ''}
       isItemEqualToValue={(itemValue, currentValue) => itemValue === currentValue}
     >

@@ -73,47 +73,32 @@ export default function AttendanceClassDetails({
   const [statusesById, setStatusesById] = useState<Record<string, AttendanceStatus>>(
     () => initialStatuses(event, attendance),
   )
-  const [saved, setSaved] = useState(false)
 
   const isFuture = event.session.date > todayIso()
   const roster = event.roster
 
-  const counts = roster.reduce(
-    (total, student) => {
-      const status = statusesById[student.id] ?? 'present'
-      total[status]++
-      return total
-    },
-    { present: 0, late: 0, absent: 0, excused: 0 } as Record<
-      AttendanceStatus,
-      number
-    >,
-  )
-
-  function setStatus(studentId: string, status: AttendanceStatus) {
-    setStatusesById((current) => ({ ...current, [studentId]: status }))
-    setSaved(false)
-  }
-
-  function markAllPresent() {
-    setStatusesById((current) => {
-      const next = { ...current }
-      for (const student of roster) next[student.id] = 'present'
-      return next
-    })
-    setSaved(false)
-  }
-
-  function handleSave() {
+  function persist(next: Record<string, AttendanceStatus>) {
     if (!roster.length) return
     saveAttendance(
       event.session.id,
       roster.map((student) => ({
         studentId: student.id,
-        status: statusesById[student.id] ?? 'present',
+        status: next[student.id] ?? 'present',
       })),
     )
-    setSaved(true)
+  }
+
+  function setStatus(studentId: string, status: AttendanceStatus) {
+    const next = { ...statusesById, [studentId]: status }
+    setStatusesById(next)
+    persist(next)
+  }
+
+  function markAllPresent() {
+    const next = { ...statusesById }
+    for (const student of roster) next[student.id] = 'present'
+    setStatusesById(next)
+    persist(next)
   }
 
   return (
@@ -201,45 +186,16 @@ export default function AttendanceClassDetails({
           Scheduled class · attendance can be recorded on the class day.
         </p>
       ) : (
-        <div className="space-y-2 p-3">
-          <div className="flex flex-wrap gap-1.5 text-[11px] font-medium">
-            <span className="rounded-md bg-emerald-100 px-1.5 py-0.5 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
-              {counts.present} present
-            </span>
-            <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
-              {counts.late} late
-            </span>
-            <span className="rounded-md bg-red-100 px-1.5 py-0.5 text-red-600 dark:bg-red-950 dark:text-red-400">
-              {counts.absent} absent
-            </span>
-            <span className="rounded-md bg-muted px-1.5 py-0.5 text-muted-foreground">
-              {counts.excused} excused
-            </span>
-          </div>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={markAllPresent}
-              disabled={!roster.length}
-              className="h-auto min-h-7 min-w-0 shrink py-1 whitespace-normal"
-            >
-              Mark all present
-            </Button>
-            <Button
-              size="sm"
-              onClick={handleSave}
-              disabled={!roster.length}
-            >
-              Save attendance
-            </Button>
-          </div>
-          {saved && (
-            <p role="status" className="text-[11px] text-success">
-              Attendance saved for {roster.length}{' '}
-              {roster.length === 1 ? 'student' : 'students'}.
-            </p>
-          )}
+        <div className="p-3">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={markAllPresent}
+            disabled={!roster.length}
+            className="h-auto min-h-7 min-w-0 shrink py-1 whitespace-normal"
+          >
+            Mark all present
+          </Button>
         </div>
       )}
     </div>

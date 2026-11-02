@@ -30,7 +30,7 @@ function AdminShell() {
           'mx-auto w-full max-w-[1400px] flex-1 px-4 py-6 sm:px-6',
           isAttendanceRegister
             ? 'flex min-h-0 flex-col lg:overflow-hidden'
-            : 'space-y-5',
+            : 'space-y-6 sm:py-8',
         )}
       >
         {showFilters && <AdminFilterBar />}

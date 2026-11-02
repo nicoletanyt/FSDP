@@ -75,9 +75,8 @@ export default function Reports() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <PageHeader
-        eyebrow="Reports"
         title="Centre reporting"
         description="A consolidated view of attendance, membership, and grading readiness."
         actions={

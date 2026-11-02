@@ -10,7 +10,7 @@ const tabs = [
 
 export default function Grading() {
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <nav aria-label="Grading sections" className="flex flex-wrap gap-1 border-b border-border">
         {tabs.map((tab) => (
           <NavLink

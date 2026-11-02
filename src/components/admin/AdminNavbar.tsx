@@ -102,11 +102,11 @@ export default function AdminNavbar() {
             <img
               src="/logo.png"
               alt="Aikido Shinju-Kai logo"
-              width={36}
-              height={36}
-              className="size-9 rounded-full"
+              width={40}
+              height={40}
+              className="size-10 rounded-full"
             />
-            <span className="hidden text-sm font-semibold tracking-tight sm:inline">
+            <span className="hidden text-base font-semibold tracking-tight sm:inline">
               <span className="text-primary">Aikido</span>{' '}
               <span className="text-brand-red-ink">Shinju-Kai</span>
             </span>

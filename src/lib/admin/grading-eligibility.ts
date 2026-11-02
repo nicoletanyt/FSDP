@@ -206,8 +206,8 @@ export function evaluateEligibility(
     requirements.push({
       key: 'techniques',
       label: 'Target-grade techniques signed off',
-      actual: `${signedCount} of ${syllabus.length}`,
-      required: `${syllabus.length} of ${syllabus.length}`,
+      actual: `${signedCount}`,
+      required: `${syllabus.length}`,
       met: signedCount === syllabus.length,
     })
   }

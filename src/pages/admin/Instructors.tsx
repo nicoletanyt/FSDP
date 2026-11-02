@@ -13,9 +13,8 @@ export default function Instructors() {
   ).length
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <PageHeader
-        eyebrow="Manage"
         title="Instructors"
         description="See who leads each centre and create staff accounts for new instructors."
       />

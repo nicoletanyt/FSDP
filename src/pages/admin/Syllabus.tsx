@@ -111,7 +111,7 @@ export default function Syllabus() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <nav
         aria-label="Syllabus parts"
         className="flex flex-wrap gap-1 border-b border-border"

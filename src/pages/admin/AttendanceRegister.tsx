@@ -4,6 +4,7 @@ import { CalendarDays, List, MapPin } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router'
 import AttendanceCalendar from '@/components/admin/AttendanceCalendar'
 import AttendanceSessionList from '@/components/admin/AttendanceSessionList'
+import CentreCombobox from '@/components/admin/CentreCombobox'
 import SessionFormDialog from '@/components/admin/SessionFormDialog'
 import { NativeSelect } from '@/components/admin/form-controls'
 import { Button } from '@/components/ui/button'
@@ -412,18 +413,23 @@ export default function AttendanceRegister() {
       <Card className="shrink-0 gap-3">
         <CardContent className="space-y-3">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <PickerField
-              id="attendance-centre"
-              label="Centre"
-              value={selectedCentreId}
-              onChange={handleCentreChange}
-            >
-              {centreOptions.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.name}
-                </option>
-              ))}
-            </PickerField>
+            <div className="space-y-1.5">
+              <label
+                className="text-xs text-muted-foreground"
+                htmlFor="attendance-centre"
+              >
+                Centre
+              </label>
+              <CentreCombobox
+                id="attendance-centre"
+                centres={centreOptions}
+                value={selectedCentreId}
+                onChange={handleCentreChange}
+                ariaLabel="Centre"
+                includeAll={false}
+                className="w-full cursor-pointer"
+              />
+            </div>
 
             <div className="space-y-1.5">
               <label
@@ -436,7 +442,7 @@ export default function AttendanceRegister() {
                 <PopoverTrigger
                   id="attendance-date"
                   type="button"
-                  className="flex h-8 w-full items-center justify-between gap-2 rounded-lg border border-input bg-transparent px-2.5 text-left text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-expanded:bg-muted dark:bg-input/30"
+                  className="flex h-8 w-full items-center justify-between gap-2 rounded-lg border border-input bg-background px-2.5 text-left text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-expanded:bg-muted dark:bg-input/30"
                 >
                   <span className="truncate">{dateLabel}</span>
                   <CalendarDays

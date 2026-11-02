@@ -19,10 +19,8 @@ import {
 } from '@/components/ui/table'
 import { useAdminData } from '@/lib/admin/admin-data-context'
 import { useAdminFilters } from '@/lib/admin/admin-filters'
-import { getAttendanceStats } from '@/lib/admin/attendance-risk'
 import {
   formatDate,
-  formatPercent,
   fullName,
   initials,
 } from '@/lib/admin/format'
@@ -134,7 +132,7 @@ export default function GradingEligibility() {
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Find a student"
             aria-label="Search eligibility by student"
-            className="h-8 w-full rounded-lg border border-input bg-transparent pr-2.5 pl-8 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+            className="h-8 w-full rounded-lg border border-input bg-background pr-2.5 pl-8 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
           />
         </div>
         <div className="w-36">
@@ -187,7 +185,6 @@ export default function GradingEligibility() {
                   <TableHead>Centre</TableHead>
                   <TableHead>Next grade</TableHead>
                   <TableHead>Requirements</TableHead>
-                  <TableHead className="text-right">90-day attendance</TableHead>
                   <TableHead>Last graded</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
@@ -198,12 +195,6 @@ export default function GradingEligibility() {
                     (item) => item.id === assessment.studentId,
                   )
                   if (!student) return null
-                  const attendance90 = getAttendanceStats(
-                    attendance,
-                    sessions,
-                    student.id,
-                    90,
-                  )
                   const isExpanded = expanded === student.id
                   const hasTechniques = assessment.requirements.some(
                     (requirement) => requirement.key === 'techniques',
@@ -263,9 +254,6 @@ export default function GradingEligibility() {
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {formatPercent(attendance90.rate)}
-                        </TableCell>
                         <TableCell className="text-muted-foreground">
                           {student.lastGradedAt ? formatDate(student.lastGradedAt) : 'Never'}
                         </TableCell>
@@ -275,7 +263,7 @@ export default function GradingEligibility() {
                       </TableRow>
                       {isExpanded && (
                         <TableRow>
-                          <TableCell colSpan={7} className="bg-muted/30">
+                          <TableCell colSpan={6} className="bg-muted/30">
                             <div>
                               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                                 Requirement breakdown
@@ -336,10 +324,6 @@ export default function GradingEligibility() {
               off before a student can be invited.
             </li>
             <li>• Applications close 14 days before the grading.</li>
-            <li>
-              • 90-day attendance is shown as a readiness signal, not a pass/fail
-              requirement.
-            </li>
             <li>
               • Ages are calendar-year (“by year”), and students move to the
               adult syllabus at 13. A Junior Dan holder restarts the 9-month

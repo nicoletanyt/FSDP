@@ -34,9 +34,8 @@ export default function Profile() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <PageHeader
-        eyebrow="Account"
         title="Administrator profile"
         description="Review your account details and end your administrator session."
       />

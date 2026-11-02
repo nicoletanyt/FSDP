@@ -186,9 +186,8 @@ export default function Centres() {
   ).length
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <PageHeader
-        eyebrow="Monitor"
         title="Centres"
         description="Every Aikido Shinju-Kai dojo, its location and operating status, plus the student directory in one view."
         actions={
@@ -252,7 +251,7 @@ export default function Centres() {
                   onChange={(event) => updateParam('dojoQ', event.target.value)}
                   placeholder="Search by dojo or address"
                   aria-label="Search dojos"
-                  className="h-8 w-full rounded-lg border border-input bg-transparent pr-2.5 pl-8 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+                  className="h-8 w-full rounded-lg border border-input bg-background pr-2.5 pl-8 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
                 />
               </div>
               <div className="w-full sm:w-48">
@@ -376,7 +375,7 @@ export default function Centres() {
                     onChange={(event) => updateParam('q', event.target.value)}
                     placeholder="Search by name, member number, or email"
                     aria-label="Search students"
-                    className="h-8 w-full rounded-lg border border-input bg-transparent pr-2.5 pl-8 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+                    className="h-8 w-full rounded-lg border border-input bg-background pr-2.5 pl-8 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">

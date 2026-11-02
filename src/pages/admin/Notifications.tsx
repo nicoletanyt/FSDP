@@ -43,9 +43,8 @@ export default function Notifications() {
   )
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <PageHeader
-        eyebrow="Grading"
         title="Notifications"
         description="Send targeted messages to eligible or at-risk students and review delivery history."
       />

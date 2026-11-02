@@ -30,7 +30,10 @@ export default function EligibilityChecklist({
             <span className={cn('font-medium', requirement.met ? 'text-success' : 'text-destructive')}>
               {requirement.actual}
             </span>
-            <span className="text-muted-foreground"> / {requirement.required}</span>
+            <span className="text-muted-foreground">
+              {requirement.key === 'techniques' ? '/' : ' / '}
+              {requirement.required}
+            </span>
           </span>
         </li>
       ))}

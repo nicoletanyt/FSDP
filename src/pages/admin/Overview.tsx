@@ -98,7 +98,6 @@ export default function Overview() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Overview"
         title="Dojo operations"
         description="Monitor attendance, spot students who need support, and keep the grading pipeline moving across every centre."
         actions={

@@ -106,16 +106,15 @@ export default function StudentDetail() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <Button variant="ghost" size="sm" render={<Link to="/admin/centres" />}>
         <ArrowLeft />
         All centres
       </Button>
 
       <PageHeader
-        eyebrow={centre?.name}
         title={fullName(student)}
-        description={`${student.memberNo} · ${student.currentGrade} · Joined ${formatDate(student.joinedAt)}`}
+        description={`${student.memberNo} · ${student.currentGrade} · ${centre?.name ?? 'Unknown centre'} · Joined ${formatDate(student.joinedAt)}`}
         actions={
           <>
             <Button
