@@ -27,6 +27,7 @@ const AdminGrading = lazy(() => import('./pages/admin/Grading'))
 const AdminGradingEligibility = lazy(() => import('./pages/admin/GradingEligibility'))
 const AdminGradingOpportunities = lazy(() => import('./pages/admin/GradingOpportunities'))
 const AdminGradingApplications = lazy(() => import('./pages/admin/GradingApplications'))
+const AdminGradingSyllabus = lazy(() => import('./pages/admin/Syllabus'))
 const AdminNotifications = lazy(() => import('./pages/admin/Notifications'))
 const AdminInstructors = lazy(() => import('./pages/admin/Instructors'))
 const AdminProfile = lazy(() => import('./pages/admin/Profile'))
@@ -87,6 +88,7 @@ export default function App() {
                 <Route path="eligibility" element={<AdminGradingEligibility />} />
                 <Route path="opportunities" element={<AdminGradingOpportunities />} />
                 <Route path="applications" element={<AdminGradingApplications />} />
+                <Route path="syllabus" element={<AdminGradingSyllabus />} />
               </Route>
               <Route path="notifications" element={<AdminNotifications />} />
               <Route path="instructors" element={<AdminInstructors />} />

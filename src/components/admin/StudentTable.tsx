@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button'
 import { useAdminData } from '@/lib/admin/admin-data-context'
 import { getRiskAssessment } from '@/lib/admin/attendance-risk'
 import { formatPercent, fullName, initials, relativeDay } from '@/lib/admin/format'
-import { getEligibilityForStudent } from '@/lib/admin/grading-eligibility'
+import { getEligibilityForStudent, studentAge } from '@/lib/admin/grading-eligibility'
 import type { Student } from '@/lib/admin/types'
 import { EligibilityBadge, MembershipBadge, RiskBadge } from './StatusBadge'
 
@@ -26,7 +26,7 @@ export default function StudentTable({
   showCentre?: boolean
   caption?: string
 }) {
-  const { centres, attendance, sessions } = useAdminData()
+  const { centres, attendance, sessions, techniqueSignOffs } = useAdminData()
   const centreNames = new Map(centres.map((centre) => [centre.id, centre.name]))
 
   return (
@@ -47,7 +47,12 @@ export default function StudentTable({
       <TableBody>
         {students.map((student) => {
           const risk = getRiskAssessment(student, attendance, sessions)
-          const eligibility = getEligibilityForStudent(student, attendance, sessions)
+          const eligibility = getEligibilityForStudent(
+            student,
+            attendance,
+            sessions,
+            techniqueSignOffs,
+          )
           return (
             <TableRow key={student.id}>
               <TableCell>
@@ -57,7 +62,9 @@ export default function StudentTable({
                   </span>
                   <div className="min-w-0">
                     <p className="truncate font-medium">{fullName(student)}</p>
-                    <p className="text-xs text-muted-foreground">{student.memberNo}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {studentAge(student)} years
+                    </p>
                   </div>
                 </div>
               </TableCell>

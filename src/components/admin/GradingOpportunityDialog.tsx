@@ -30,7 +30,10 @@ function deadlineFor(dateIso: string): string {
 }
 
 function firstGradeFor(track: GradeTrack): Grade {
-  return grades.find((grade) => getGradeMeta(grade)?.track === track) ?? '6th Kyu'
+  return (
+    grades.find((grade) => getGradeMeta(grade)?.tracks.includes(track)) ??
+    'Blue (6th Kyu)'
+  )
 }
 
 export default function GradingOpportunityDialog({
@@ -48,6 +51,7 @@ export default function GradingOpportunityDialog({
     students,
     attendance,
     sessions,
+    techniqueSignOffs,
     createOpportunity,
     sendNotification,
   } = useAdminData()
@@ -65,7 +69,7 @@ export default function GradingOpportunityDialog({
   const [date, setDate] = useState(daysAheadIso(21))
   const [deadline, setDeadline] = useState(deadlineFor(daysAheadIso(21)))
   const [deadlineTouched, setDeadlineTouched] = useState(false)
-  const [targetGrades, setTargetGrades] = useState<Grade[]>(['6th Kyu'])
+  const [targetGrades, setTargetGrades] = useState<Grade[]>(['Blue (6th Kyu)'])
   const [notifyNow, setNotifyNow] = useState(true)
 
   const availableInstructors = useMemo(
@@ -87,7 +91,7 @@ export default function GradingOpportunityDialog({
     setDeadline(deadlineFor(daysAheadIso(21)))
     setDeadlineTouched(false)
     setGradingType('adult')
-    setTargetGrades(['6th Kyu'])
+    setTargetGrades(['Blue (6th Kyu)'])
     setNotifyNow(true)
   }, [open, defaultCentreId, firstCentre, instructors])
 
@@ -97,6 +101,7 @@ export default function GradingOpportunityDialog({
     sessions,
     centreId,
     targetGrades,
+    techniqueSignOffs,
   )
 
   function toggleGrade(grade: Grade) {
@@ -119,8 +124,8 @@ export default function GradingOpportunityDialog({
 
   const recommendedDeadline = deadlineFor(date)
   const lateDeadline = deadline > recommendedDeadline
-  const trackGrades = grades.filter(
-    (grade) => getGradeMeta(grade)?.track === gradingType,
+  const trackGrades = grades.filter((grade) =>
+    getGradeMeta(grade)?.tracks.includes(gradingType),
   )
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {

@@ -28,12 +28,19 @@ import { useAdminData } from '@/lib/admin/admin-data-context'
 import { useAdminFilters } from '@/lib/admin/admin-filters'
 import { downloadCsv } from '@/lib/admin/export'
 import { formatDate, fullName, initials } from '@/lib/admin/format'
-import { getEligibilityForStudent } from '@/lib/admin/grading-eligibility'
+import { getEligibilityForStudent, studentAge } from '@/lib/admin/grading-eligibility'
 import type { GradingApplication } from '@/lib/admin/types'
 
 export default function GradingApplications() {
-  const { centres, students, sessions, attendance, opportunities, applications } =
-    useAdminData()
+  const {
+    centres,
+    students,
+    sessions,
+    attendance,
+    opportunities,
+    applications,
+    techniqueSignOffs,
+  } = useAdminData()
   const { centreId } = useAdminFilters()
   const [statusFilter, setStatusFilter] = useState('all')
   const [query, setQuery] = useState('')
@@ -83,7 +90,12 @@ export default function GradingApplications() {
     ? opportunities.find((opportunity) => opportunity.id === selected.opportunityId)
     : undefined
   const selectedEligibility = selectedStudent
-    ? getEligibilityForStudent(selectedStudent, attendance, sessions)
+    ? getEligibilityForStudent(
+        selectedStudent,
+        attendance,
+        sessions,
+        techniqueSignOffs,
+      )
     : undefined
 
   function exportApplications() {
@@ -173,7 +185,9 @@ export default function GradingApplications() {
                         </span>
                         <div>
                           <p className="font-medium">{fullName(student)}</p>
-                          <p className="text-xs text-muted-foreground">{student.memberNo}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {studentAge(student)} years
+                          </p>
                         </div>
                       </div>
                     </TableCell>

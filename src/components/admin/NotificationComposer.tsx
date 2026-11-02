@@ -45,6 +45,7 @@ export default function NotificationComposer({
     students,
     attendance,
     sessions,
+    techniqueSignOffs,
     sendNotification,
   } = useAdminData()
   const [audience, setAudience] = useState<ComposerAudience>(initialAudience)
@@ -70,7 +71,12 @@ export default function NotificationComposer({
   const recipients = useMemo(() => {
     if (audience === 'all') return centreStudents
     if (audience === 'eligible') {
-      const assessments = getEligibilityAssessments(centreStudents, attendance, sessions)
+      const assessments = getEligibilityAssessments(
+        centreStudents,
+        attendance,
+        sessions,
+        techniqueSignOffs,
+      )
       return centreStudents.filter((student) =>
         assessments.some(
           (assessment) =>
@@ -89,7 +95,7 @@ export default function NotificationComposer({
     return selectedStudentId
       ? centreStudents.filter((student) => student.id === selectedStudentId)
       : []
-  }, [audience, centreStudents, attendance, sessions, selectedStudentId])
+  }, [audience, centreStudents, attendance, sessions, techniqueSignOffs, selectedStudentId])
 
   const previewNames = recipients
     .slice(0, 3)

@@ -2,6 +2,7 @@ import { Fragment, useMemo, useState } from 'react'
 import { Bell, CheckCircle2, ChevronDown, Search } from 'lucide-react'
 import EmptyState from '@/components/admin/EmptyState'
 import EligibilityChecklist from '@/components/admin/EligibilityChecklist'
+import TechniqueRequirementBreakdown from '@/components/admin/TechniqueRequirementBreakdown'
 import { EligibilityBadge } from '@/components/admin/StatusBadge'
 import { NativeSelect } from '@/components/admin/form-controls'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -29,13 +30,16 @@ import {
   formatMonths,
   getEligibilityAssessments,
   getGradeRequirement,
+  studentAge,
 } from '@/lib/admin/grading-eligibility'
+import { countSyllabusItems } from '@/lib/admin/syllabus'
 import type { Grade, GradeTrack } from '@/lib/admin/types'
 import { getGradeMeta, grades } from '@/lib/admin/types'
 import { cn } from 'cn'
 
 export default function GradingEligibility() {
-  const { centres, students, attendance, sessions, sendNotification } = useAdminData()
+  const { centres, students, attendance, sessions, techniqueSignOffs, sendNotification } =
+    useAdminData()
   const { centreId } = useAdminFilters()
   const [statusFilter, setStatusFilter] = useState('all')
   const [gradeFilter, setGradeFilter] = useState('all')
@@ -52,8 +56,14 @@ export default function GradingEligibility() {
     [students, centreId],
   )
   const assessments = useMemo(
-    () => getEligibilityAssessments(scopedStudents, attendance, sessions),
-    [scopedStudents, attendance, sessions],
+    () =>
+      getEligibilityAssessments(
+        scopedStudents,
+        attendance,
+        sessions,
+        techniqueSignOffs,
+      ),
+    [scopedStudents, attendance, sessions, techniqueSignOffs],
   )
 
   const filtered = useMemo(() => {
@@ -196,6 +206,9 @@ export default function GradingEligibility() {
                     90,
                   )
                   const isExpanded = expanded === student.id
+                  const hasTechniques = assessment.requirements.some(
+                    (requirement) => requirement.key === 'techniques',
+                  )
                   return (
                     <Fragment key={student.id}>
                       <TableRow>
@@ -206,7 +219,9 @@ export default function GradingEligibility() {
                             </span>
                             <div>
                               <p className="font-medium">{fullName(student)}</p>
-                              <p className="text-xs text-muted-foreground">{student.memberNo}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {studentAge(student)} years
+                              </p>
                             </div>
                           </div>
                         </TableCell>
@@ -271,14 +286,32 @@ export default function GradingEligibility() {
                       {isExpanded && (
                         <TableRow>
                           <TableCell colSpan={8} className="bg-muted/30">
-                            <div className="max-w-2xl">
+                            <div>
                               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                                 Requirement breakdown
                               </p>
-                              <EligibilityChecklist
-                                requirements={assessment.requirements}
-                                compact
-                              />
+                              <div
+                                className={cn(
+                                  'grid gap-6',
+                                  hasTechniques && 'lg:grid-cols-2',
+                                )}
+                              >
+                                <div>
+                                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                    Requirements
+                                  </p>
+                                  <EligibilityChecklist
+                                    requirements={assessment.requirements}
+                                    compact
+                                  />
+                                </div>
+                                {hasTechniques && (
+                                  <TechniqueRequirementBreakdown
+                                    student={student}
+                                    targetGrade={assessment.targetGrade}
+                                  />
+                                )}
+                              </div>
                             </div>
                           </TableCell>
                         </TableRow>
@@ -297,8 +330,8 @@ export default function GradingEligibility() {
           <CardTitle>Eligibility rules</CardTitle>
           <CardDescription>
             Applied automatically to every student. Months are time in the
-            current grade, not cumulative. Source: Aikido Shinju-Kai grading
-            information.
+            current grade, not cumulative; technique sign-offs cover only the
+            target grade’s row. Source: Aikido Shinju-Kai grading information.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -308,14 +341,20 @@ export default function GradingEligibility() {
           </div>
           <ul className="grid gap-1 border-t border-border pt-3 text-sm text-muted-foreground">
             <li>• Member for at least 3 months, with no outstanding fees.</li>
+            <li>
+              • Every technique in the target grade’s syllabus row must be signed
+              off before a student can be invited.
+            </li>
             <li>• Applications close 14 days before the grading.</li>
             <li>
               • 90-day attendance is shown as a readiness signal, not a pass/fail
               requirement.
             </li>
             <li>
-              • 2nd Kyu and above also need the weapons assessment, tracked
-              separately.
+              • Ages are calendar-year (“by year”), and students move to the
+              adult syllabus at 13. A Junior Dan holder restarts the 9-month
+              1st Dan clock at the Junior Dan award, so the wait is longer than
+              the direct path.
             </li>
           </ul>
         </CardContent>
@@ -324,8 +363,8 @@ export default function GradingEligibility() {
   )
 }
 
-function requirementText(grade: Grade): string {
-  const requirement = getGradeRequirement(grade)
+function requirementText(grade: Grade, track: GradeTrack): string {
+  const requirement = getGradeRequirement(grade, track)
   if (!requirement) return '—'
   const parts: string[] = []
   if (requirement.minAge !== undefined) parts.push(`age ${requirement.minAge}+`)
@@ -333,6 +372,8 @@ function requirementText(grade: Grade): string {
     parts.push(formatMonths(requirement.minMonths, requirement.maxMonths))
   }
   if (requirement.sessions !== undefined) parts.push(`${requirement.sessions} sessions`)
+  const syllabusCount = countSyllabusItems(grade, track)
+  if (syllabusCount > 0) parts.push(`${syllabusCount} techniques`)
   return parts.join(' · ')
 }
 
@@ -344,7 +385,7 @@ function RuleList({ title, track }: { title: string; track: GradeTrack }) {
       </p>
       <dl className="mt-2 space-y-1 text-sm">
         {grades
-          .filter((grade) => getGradeMeta(grade)?.track === track)
+          .filter((grade) => getGradeMeta(grade)?.tracks.includes(track))
           .map((grade) => (
             <div
               key={grade}
@@ -352,7 +393,7 @@ function RuleList({ title, track }: { title: string; track: GradeTrack }) {
             >
               <dt className="text-muted-foreground">{grade}</dt>
               <dd className="shrink-0 text-right tabular-nums">
-                {requirementText(grade)}
+                {requirementText(grade, track)}
               </dd>
             </div>
           ))}

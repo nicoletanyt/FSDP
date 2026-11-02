@@ -12,6 +12,7 @@ import EligibilityChecklist from '@/components/admin/EligibilityChecklist'
 import EmptyState from '@/components/admin/EmptyState'
 import PageHeader from '@/components/admin/PageHeader'
 import Sparkline from '@/components/admin/Sparkline'
+import TechniqueChecklist from '@/components/admin/TechniqueChecklist'
 import {
   ApplicationBadge,
   AttendanceBadge,
@@ -52,7 +53,7 @@ type TabId = (typeof tabs)[number]['id']
 export default function StudentDetail() {
   const { studentId } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
-  const { centres, instructors, students, attendance, sessions, opportunities, applications } =
+  const { centres, instructors, students, attendance, sessions, opportunities, applications, techniqueSignOffs } =
     useAdminData()
 
   const student = students.find((item) => item.id === studentId)
@@ -69,7 +70,12 @@ export default function StudentDetail() {
   const tab = (searchParams.get('tab') as TabId | null) ?? 'overview'
   const centre = centres.find((item) => item.id === student.homeCentreId)
   const risk = getRiskAssessment(student, attendance, sessions)
-  const eligibility = getEligibilityForStudent(student, attendance, sessions)
+  const eligibility = getEligibilityForStudent(
+    student,
+    attendance,
+    sessions,
+    techniqueSignOffs,
+  )
   const attendance30 = getAttendanceStats(attendance, sessions, student.id, 30)
   const attendance90 = getAttendanceStats(attendance, sessions, student.id, 90)
   const weekly = getStudentWeeklyTrend(attendance, sessions, student.id, 8)
@@ -363,6 +369,20 @@ export default function StudentDetail() {
                   <CardContent className="space-y-4">
                     <EligibilityBadge status={eligibility.status} />
                     <EligibilityChecklist requirements={eligibility.requirements} />
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Technique checklist</CardTitle>
+                    <CardDescription>
+                      Techniques the student must have signed off for{' '}
+                      {eligibility.targetGrade}. Tick each item as the instructor
+                      confirms it.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <TechniqueChecklist student={student} />
                   </CardContent>
                 </Card>
 

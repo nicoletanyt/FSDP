@@ -8,6 +8,7 @@ const tabs = [
   { to: 'eligibility', label: 'Eligibility' },
   { to: 'opportunities', label: 'Opportunities' },
   { to: 'applications', label: 'Applications' },
+  { to: 'syllabus', label: 'Syllabus' },
 ]
 
 export default function Grading() {
@@ -16,7 +17,7 @@ export default function Grading() {
       <PageHeader
         eyebrow="Grading"
         title="Grading pipeline"
-        description="See who is eligible, create grading opportunities, notify students, and monitor submitted applications."
+        description="See who is eligible, create grading opportunities, notify students, monitor submitted applications, and browse the technique syllabus."
         actions={
           <Button render={<Link to="/admin/grading/opportunities" />}>
             <GraduationCap />

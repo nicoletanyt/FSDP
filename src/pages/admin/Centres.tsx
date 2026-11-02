@@ -26,7 +26,8 @@ const dojoStatusOptions = [
 ]
 
 export default function Centres() {
-  const { centres, students, attendance, sessions } = useAdminData()
+  const { centres, students, attendance, sessions, techniqueSignOffs } =
+    useAdminData()
   const { centreId } = useAdminFilters()
   const [searchParams, setSearchParams] = useSearchParams()
 
@@ -86,11 +87,14 @@ export default function Centres() {
   const eligibilityById = useMemo(
     () =>
       new Map(
-        getEligibilityAssessments(scopedStudents, attendance, sessions).map(
-          (assessment) => [assessment.studentId, assessment],
-        ),
+        getEligibilityAssessments(
+          scopedStudents,
+          attendance,
+          sessions,
+          techniqueSignOffs,
+        ).map((assessment) => [assessment.studentId, assessment]),
       ),
-    [scopedStudents, attendance, sessions],
+    [scopedStudents, attendance, sessions, techniqueSignOffs],
   )
 
   const filtered = useMemo(() => {

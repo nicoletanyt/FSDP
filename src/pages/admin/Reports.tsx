@@ -21,8 +21,15 @@ import { formatPercent } from '@/lib/admin/format'
 import { getEligibilityAssessments } from '@/lib/admin/grading-eligibility'
 
 export default function Reports() {
-  const { centres, students, attendance, sessions, applications, opportunities } =
-    useAdminData()
+  const {
+    centres,
+    students,
+    attendance,
+    sessions,
+    applications,
+    opportunities,
+    techniqueSignOffs,
+  } = useAdminData()
   const { centreId } = useAdminFilters()
 
   const trend = getWeeklyAttendanceTrend(attendance, sessions, centreId, 12)
@@ -31,13 +38,17 @@ export default function Reports() {
     students,
     attendance,
     sessions,
+    techniqueSignOffs,
   ).filter((item) => centreId === 'all' || item.centreId === centreId)
   const scopedStudents = students.filter(
     (student) => centreId === 'all' || student.homeCentreId === centreId,
   )
-  const eligible = getEligibilityAssessments(scopedStudents, attendance, sessions).filter(
-    (assessment) => assessment.status === 'eligible',
-  ).length
+  const eligible = getEligibilityAssessments(
+    scopedStudents,
+    attendance,
+    sessions,
+    techniqueSignOffs,
+  ).filter((assessment) => assessment.status === 'eligible').length
   const scopedApplications = applications.filter((application) => {
     const student = students.find((item) => item.id === application.studentId)
     return centreId === 'all' || student?.homeCentreId === centreId

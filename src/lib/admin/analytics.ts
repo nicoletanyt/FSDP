@@ -7,6 +7,7 @@ import type {
   CentreStats,
   Session,
   Student,
+  TechniqueSignOff,
 } from './types'
 
 export function getCentreStats(
@@ -14,6 +15,7 @@ export function getCentreStats(
   students: Student[],
   records: AttendanceRecord[],
   sessions: Session[],
+  signOffs: TechniqueSignOff[],
 ): CentreStats[] {
   return centres
     .map((centre) => {
@@ -21,9 +23,12 @@ export function getCentreStats(
         (student) => student.homeCentreId === centre.id,
       )
       const declining = getDecliningAssessments(centreStudents, records, sessions)
-      const eligible = getEligibilityAssessments(centreStudents, records, sessions).filter(
-        (assessment) => assessment.status === 'eligible',
-      )
+      const eligible = getEligibilityAssessments(
+        centreStudents,
+        records,
+        sessions,
+        signOffs,
+      ).filter((assessment) => assessment.status === 'eligible')
 
       return {
         centreId: centre.id,

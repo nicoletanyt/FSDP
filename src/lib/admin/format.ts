@@ -102,6 +102,16 @@ export function ageFromIso(iso: string, reference = todayIso()): number {
   return Math.floor(monthsBetween(iso, reference) / 12)
 }
 
+/**
+ * Calendar-year age ("by year"), which is how the syllabi gate age: a student
+ * born in 2013 is 13 for the whole of 2026, whatever their birthday.
+ */
+export function yearAgeFromIso(iso: string, reference = todayIso()): number {
+  const birth = new Date(`${iso}T00:00:00`)
+  const now = new Date(`${reference}T00:00:00`)
+  return Math.max(0, now.getFullYear() - birth.getFullYear())
+}
+
 export function daysBetween(fromIso: string, toIso: string): number {
   const from = new Date(`${fromIso}T00:00:00`).getTime()
   const to = new Date(`${toIso}T00:00:00`).getTime()

@@ -21,6 +21,7 @@ export default function GradingOpportunities() {
     sessions,
     opportunities,
     applications,
+    techniqueSignOffs,
     sendNotification,
   } = useAdminData()
   const { centreId } = useAdminFilters()
@@ -58,6 +59,7 @@ export default function GradingOpportunities() {
       sessions,
       opportunity.centreId,
       opportunity.targetGrades,
+      techniqueSignOffs,
     )
     if (count === 0) return
     sendNotification({
@@ -118,6 +120,7 @@ export default function GradingOpportunities() {
                   sessions,
                   opportunity.centreId,
                   opportunity.targetGrades,
+                  techniqueSignOffs,
                 )}
                 applicationCount={
                   applications.filter(
@@ -150,6 +153,7 @@ export default function GradingOpportunities() {
                   sessions,
                   opportunity.centreId,
                   opportunity.targetGrades,
+                  techniqueSignOffs,
                 )}
                 applicationCount={
                   applications.filter(

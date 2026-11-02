@@ -3,89 +3,174 @@ export type GradeTrack = 'children' | 'adult'
 export const UNRANKED = 'Unranked' as const
 
 /**
- * Ranked grades. Children's and adult ladders overlap by kyu number, so labels
- * carry a colour suffix where needed to stay unique (Kyu 6 Blue vs Kyu 6
- * Blue-Silver).
+ * Ranked grades, labelled with the wording printed in each syllabus coverage
+ * column ("BLUE (6TH KYU)" on the adult sheet, "BLUE 6th KYU" on the
+ * children's sheets). The silver grades are children's steps: adults are
+ * awarded them as intermediate grades but never grade into them as a target.
  */
 export const grades = [
-  // Adult ladder
-  '6th Kyu',
-  '5th Kyu',
-  '4th Kyu',
-  '3rd Kyu',
-  '2nd Kyu',
-  '1st Kyu',
-  'Shodan',
-  'Nidan',
+  'Red (12th Kyu)',
+  'Red-Gold (11th Kyu)',
+  'Yellow (10th Kyu)',
+  'Orange (9th Kyu)',
+  'Green (8th Kyu)',
+  'Purple (7th Kyu)',
+  'Blue (6th Kyu)',
+  'Blue-Silver (6th Kyu)',
+  'Blue-Gold (5th Kyu)',
+  'Brown (4th Kyu)',
+  'Brown-Silver (4th Kyu)',
+  'Brown-Gold (3rd Kyu)',
+  'Black (2nd Kyu)',
+  'Black-Silver (2nd Kyu)',
+  'Black-Gold (1st Kyu)',
+  'Junior Dan',
+  '1st Dan',
+  '2nd Dan',
   '3rd Dan',
   '4th Dan',
-  // Children's ladder
-  '12th Kyu (Red)',
-  '11th Kyu (Red-Gold)',
-  '10th Kyu (Yellow)',
-  '9th Kyu (Orange)',
-  '8th Kyu (Green)',
-  '7th Kyu (Purple)',
-  '6th Kyu (Blue)',
-  '6th Kyu (Blue-Silver)',
-  '5th Kyu (Blue-Gold)',
-  '4th Kyu (Brown)',
-  '4th Kyu (Brown-Silver)',
-  '3rd Kyu (Brown-Silver)',
-  '2nd Kyu (Black)',
-  '2nd Kyu (Black-Silver)',
-  '1st Kyu (Black-Gold)',
-  'Junior Dan',
 ] as const
 
 export type RankedGrade = (typeof grades)[number]
 export type Grade = RankedGrade | typeof UNRANKED
 
 export interface GradeMeta {
-  shortLabel: string
   colour: string
-  track: GradeTrack
-  order: number
-  next: Grade | null
+  /** Ladders that can award or target this grade. */
+  tracks: GradeTrack[]
 }
 
 const rankedGradeMeta: Record<RankedGrade, GradeMeta> = {
-  '6th Kyu': { shortLabel: '6th Kyu', colour: 'Blue', track: 'adult', order: 1, next: '5th Kyu' },
-  '5th Kyu': { shortLabel: '5th Kyu', colour: 'Blue-Gold', track: 'adult', order: 2, next: '4th Kyu' },
-  '4th Kyu': { shortLabel: '4th Kyu', colour: 'Brown', track: 'adult', order: 3, next: '3rd Kyu' },
-  '3rd Kyu': { shortLabel: '3rd Kyu', colour: 'Brown-Gold', track: 'adult', order: 4, next: '2nd Kyu' },
-  '2nd Kyu': { shortLabel: '2nd Kyu', colour: 'Black', track: 'adult', order: 5, next: '1st Kyu' },
-  '1st Kyu': { shortLabel: '1st Kyu', colour: 'Black-Gold', track: 'adult', order: 6, next: 'Shodan' },
-  Shodan: { shortLabel: 'Shodan', colour: 'Black', track: 'adult', order: 7, next: 'Nidan' },
-  Nidan: { shortLabel: 'Nidan', colour: 'Black', track: 'adult', order: 8, next: '3rd Dan' },
-  '3rd Dan': { shortLabel: '3rd Dan', colour: 'Black', track: 'adult', order: 9, next: '4th Dan' },
-  '4th Dan': { shortLabel: '4th Dan', colour: 'Black', track: 'adult', order: 10, next: null },
-
-  '12th Kyu (Red)': { shortLabel: '12th Kyu', colour: 'Red', track: 'children', order: 1, next: '11th Kyu (Red-Gold)' },
-  '11th Kyu (Red-Gold)': { shortLabel: '11th Kyu', colour: 'Red-Gold', track: 'children', order: 2, next: '10th Kyu (Yellow)' },
-  '10th Kyu (Yellow)': { shortLabel: '10th Kyu', colour: 'Yellow', track: 'children', order: 3, next: '9th Kyu (Orange)' },
-  '9th Kyu (Orange)': { shortLabel: '9th Kyu', colour: 'Orange', track: 'children', order: 4, next: '8th Kyu (Green)' },
-  '8th Kyu (Green)': { shortLabel: '8th Kyu', colour: 'Green', track: 'children', order: 5, next: '7th Kyu (Purple)' },
-  '7th Kyu (Purple)': { shortLabel: '7th Kyu', colour: 'Purple', track: 'children', order: 6, next: '6th Kyu (Blue)' },
-  '6th Kyu (Blue)': { shortLabel: '6th Kyu', colour: 'Blue', track: 'children', order: 7, next: '6th Kyu (Blue-Silver)' },
-  '6th Kyu (Blue-Silver)': { shortLabel: '6th Kyu', colour: 'Blue-Silver', track: 'children', order: 8, next: '5th Kyu (Blue-Gold)' },
-  '5th Kyu (Blue-Gold)': { shortLabel: '5th Kyu', colour: 'Blue-Gold', track: 'children', order: 9, next: '4th Kyu (Brown)' },
-  '4th Kyu (Brown)': { shortLabel: '4th Kyu', colour: 'Brown', track: 'children', order: 10, next: '4th Kyu (Brown-Silver)' },
-  '4th Kyu (Brown-Silver)': { shortLabel: '4th Kyu', colour: 'Brown-Silver', track: 'children', order: 11, next: '3rd Kyu (Brown-Silver)' },
-  '3rd Kyu (Brown-Silver)': { shortLabel: '3rd Kyu', colour: 'Brown-Silver', track: 'children', order: 12, next: '2nd Kyu (Black)' },
-  '2nd Kyu (Black)': { shortLabel: '2nd Kyu', colour: 'Black', track: 'children', order: 13, next: '2nd Kyu (Black-Silver)' },
-  '2nd Kyu (Black-Silver)': { shortLabel: '2nd Kyu', colour: 'Black-Silver', track: 'children', order: 14, next: '1st Kyu (Black-Gold)' },
-  '1st Kyu (Black-Gold)': { shortLabel: '1st Kyu', colour: 'Black-Gold', track: 'children', order: 15, next: 'Junior Dan' },
-  'Junior Dan': { shortLabel: 'Junior Dan', colour: 'Black', track: 'children', order: 16, next: 'Shodan' },
+  'Red (12th Kyu)': { colour: 'Red', tracks: ['children'] },
+  'Red-Gold (11th Kyu)': { colour: 'Red-Gold', tracks: ['children'] },
+  'Yellow (10th Kyu)': { colour: 'Yellow', tracks: ['children'] },
+  'Orange (9th Kyu)': { colour: 'Orange', tracks: ['children'] },
+  'Green (8th Kyu)': { colour: 'Green', tracks: ['children'] },
+  'Purple (7th Kyu)': { colour: 'Purple', tracks: ['children'] },
+  'Blue (6th Kyu)': { colour: 'Blue', tracks: ['children', 'adult'] },
+  'Blue-Silver (6th Kyu)': { colour: 'Blue-Silver', tracks: ['children'] },
+  'Blue-Gold (5th Kyu)': { colour: 'Blue-Gold', tracks: ['children', 'adult'] },
+  'Brown (4th Kyu)': { colour: 'Brown', tracks: ['children', 'adult'] },
+  'Brown-Silver (4th Kyu)': { colour: 'Brown-Silver', tracks: ['children'] },
+  'Brown-Gold (3rd Kyu)': { colour: 'Brown-Gold', tracks: ['children', 'adult'] },
+  'Black (2nd Kyu)': { colour: 'Black', tracks: ['children', 'adult'] },
+  'Black-Silver (2nd Kyu)': { colour: 'Black-Silver', tracks: ['children'] },
+  'Black-Gold (1st Kyu)': { colour: 'Black-Gold', tracks: ['adult'] },
+  'Junior Dan': { colour: 'Black', tracks: ['adult'] },
+  '1st Dan': { colour: 'Black', tracks: ['adult'] },
+  '2nd Dan': { colour: 'Black', tracks: ['adult'] },
+  '3rd Dan': { colour: 'Black', tracks: ['adult'] },
+  '4th Dan': { colour: 'Black', tracks: ['adult'] },
 }
+
+/** Children's grading as published: 12th Kyu through 2nd Kyu (Black-Silver). */
+export const childrenLadder: RankedGrade[] = [
+  'Red (12th Kyu)',
+  'Red-Gold (11th Kyu)',
+  'Yellow (10th Kyu)',
+  'Orange (9th Kyu)',
+  'Green (8th Kyu)',
+  'Purple (7th Kyu)',
+  'Blue (6th Kyu)',
+  'Blue-Silver (6th Kyu)',
+  'Blue-Gold (5th Kyu)',
+  'Brown (4th Kyu)',
+  'Brown-Silver (4th Kyu)',
+  'Brown-Gold (3rd Kyu)',
+  'Black (2nd Kyu)',
+  'Black-Silver (2nd Kyu)',
+]
+
+/**
+ * Adult grading as published: 6th Kyu through 4th Dan. Junior Dan branches off
+ * 1st Kyu for candidates aged 14 and below, so it is tracked separately.
+ */
+export const adultLadder: RankedGrade[] = [
+  'Blue (6th Kyu)',
+  'Blue-Gold (5th Kyu)',
+  'Brown (4th Kyu)',
+  'Brown-Gold (3rd Kyu)',
+  'Black (2nd Kyu)',
+  'Black-Gold (1st Kyu)',
+  '1st Dan',
+  '2nd Dan',
+  '3rd Dan',
+  '4th Dan',
+]
+
+export const juniorDanLadder: RankedGrade[] = [
+  ...adultLadder.slice(0, 6),
+  'Junior Dan',
+]
+
+/**
+ * A student who turns 13 keeps their belt and continues on the adult syllabus
+ * at the "most corresponding grade" (adult sheet notes 5 and 6). 7th Kyu and
+ * below submit directly for 6th Kyu; an intermediate award counts as having
+ * passed its kyu.
+ */
+const adultEntryFromChildren: Partial<Record<RankedGrade, RankedGrade>> = {
+  'Red (12th Kyu)': 'Blue (6th Kyu)',
+  'Red-Gold (11th Kyu)': 'Blue (6th Kyu)',
+  'Yellow (10th Kyu)': 'Blue (6th Kyu)',
+  'Orange (9th Kyu)': 'Blue (6th Kyu)',
+  'Green (8th Kyu)': 'Blue (6th Kyu)',
+  'Purple (7th Kyu)': 'Blue (6th Kyu)',
+  'Blue (6th Kyu)': 'Blue-Gold (5th Kyu)',
+  'Blue-Silver (6th Kyu)': 'Blue-Gold (5th Kyu)',
+  'Blue-Gold (5th Kyu)': 'Brown (4th Kyu)',
+  'Brown (4th Kyu)': 'Brown-Gold (3rd Kyu)',
+  'Brown-Silver (4th Kyu)': 'Brown-Gold (3rd Kyu)',
+  'Brown-Gold (3rd Kyu)': 'Black (2nd Kyu)',
+  'Black (2nd Kyu)': 'Black-Gold (1st Kyu)',
+  'Black-Silver (2nd Kyu)': 'Black-Gold (1st Kyu)',
+}
+
+function ladderNext(
+  ladder: RankedGrade[],
+): Partial<Record<RankedGrade, RankedGrade>> {
+  const next: Partial<Record<RankedGrade, RankedGrade>> = {}
+  ladder.forEach((grade, index) => {
+    const following = ladder[index + 1]
+    if (following) next[grade] = following
+  })
+  return next
+}
+
+const childrenNext = ladderNext(childrenLadder)
+const adultNext = ladderNext(adultLadder)
 
 export function getGradeMeta(grade: Grade): GradeMeta | null {
   return grade === UNRANKED ? null : rankedGradeMeta[grade]
 }
 
-export function nextGrade(grade: Grade, track: GradeTrack): Grade | null {
-  if (grade === UNRANKED) return track === 'children' ? '12th Kyu (Red)' : '6th Kyu'
-  return rankedGradeMeta[grade].next
+export function ladderFor(track: GradeTrack): RankedGrade[] {
+  return track === 'children' ? childrenLadder : adultLadder
+}
+
+/**
+ * Next grade on the student's ladder. `age` (calendar-year age) resolves the
+ * Junior Dan branch at 1st Kyu; without it the full Dan path is assumed.
+ */
+export function nextGrade(
+  grade: Grade,
+  track: GradeTrack,
+  age?: number,
+): Grade | null {
+  if (grade === UNRANKED) {
+    return track === 'children' ? 'Red (12th Kyu)' : 'Blue (6th Kyu)'
+  }
+
+  if (track === 'children') {
+    return childrenNext[grade] ?? null
+  }
+
+  if (grade === 'Black-Gold (1st Kyu)') {
+    return age !== undefined && age <= 14 ? 'Junior Dan' : '1st Dan'
+  }
+  if (grade === 'Junior Dan') return '1st Dan'
+
+  return adultNext[grade] ?? adultEntryFromChildren[grade] ?? null
 }
 
 export function gradeTrackForAge(age: number): GradeTrack {
@@ -161,6 +246,21 @@ export interface AttendanceRecord {
   status: AttendanceStatus
   recordedAt: string
   recordedBy: string
+}
+
+/**
+ * One syllabus item an instructor has signed off for a student. `itemId` is
+ * the stable id from `syllabus.ts` (`track/grade/column/item`), so a sign-off
+ * stays attached if the checklist is re-ordered and a children's sign-off never
+ * counts towards the adult sheet.
+ */
+export interface TechniqueSignOff {
+  id: string
+  studentId: string
+  itemId: string
+  signedOffAt: string
+  signedOffBy: string
+  note?: string
 }
 
 export interface GradingOpportunity {

@@ -17,6 +17,7 @@ import { useAdminData } from '@/lib/admin/admin-data-context'
 import { useAdminFilters } from '@/lib/admin/admin-filters'
 import { downloadCsv } from '@/lib/admin/export'
 import { daysAgoIso, formatDate, fullName } from '@/lib/admin/format'
+import { studentAge } from '@/lib/admin/grading-eligibility'
 import { NativeSelect } from '@/components/admin/form-controls'
 
 export default function AttendanceRecords() {
@@ -190,7 +191,9 @@ export default function AttendanceRecords() {
                     </TableCell>
                     <TableCell>
                       <p className="font-medium">{fullName(student)}</p>
-                      <p className="text-xs text-muted-foreground">{student.memberNo}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {studentAge(student)} years
+                      </p>
                     </TableCell>
                     <TableCell>
                       <p>{session.title}</p>

@@ -1,13 +1,14 @@
 import {
   addDays,
-  ageFromIso,
   daysAgoIso,
   daysAheadIso,
   fullName,
   startOfDay,
   toIsoDate,
+  yearAgeFromIso,
 } from './format'
-import { nextGrade } from './types'
+import { getGradeSyllabusItems } from './syllabus'
+import { gradeTrackForAge, nextGrade } from './types'
 import type {
   AttendanceRecord,
   AttendanceStatus,
@@ -20,6 +21,7 @@ import type {
   NotificationEntry,
   Session,
   Student,
+  TechniqueSignOff,
 } from './types'
 
 const reference = startOfDay()
@@ -555,39 +557,38 @@ const studentNames: [string, string][] = [
 /** Weighted pools so each dojo covers a handful of neighbouring grades. */
 const adultGradePool = [
   'Unranked',
-  '6th Kyu',
-  '6th Kyu',
-  '5th Kyu',
-  '5th Kyu',
-  '4th Kyu',
-  '4th Kyu',
-  '3rd Kyu',
-  '3rd Kyu',
-  '2nd Kyu',
-  '1st Kyu',
-  'Shodan',
-  'Nidan',
+  'Blue (6th Kyu)',
+  'Blue (6th Kyu)',
+  'Blue-Gold (5th Kyu)',
+  'Blue-Gold (5th Kyu)',
+  'Brown (4th Kyu)',
+  'Brown (4th Kyu)',
+  'Brown-Gold (3rd Kyu)',
+  'Brown-Gold (3rd Kyu)',
+  'Black (2nd Kyu)',
+  'Black-Gold (1st Kyu)',
+  '1st Dan',
+  '2nd Dan',
   '3rd Dan',
-  'Shodan',
+  '1st Dan',
 ] as const
 
 const childrenGradePool = [
   'Unranked',
-  '12th Kyu (Red)',
-  '11th Kyu (Red-Gold)',
-  '10th Kyu (Yellow)',
-  '9th Kyu (Orange)',
-  '8th Kyu (Green)',
-  '7th Kyu (Purple)',
-  '6th Kyu (Blue)',
-  '6th Kyu (Blue-Silver)',
-  '5th Kyu (Blue-Gold)',
-  '4th Kyu (Brown)',
-  '4th Kyu (Brown-Silver)',
-  '3rd Kyu (Brown-Silver)',
-  '2nd Kyu (Black)',
-  '2nd Kyu (Black-Silver)',
-  '1st Kyu (Black-Gold)',
+  'Red (12th Kyu)',
+  'Red-Gold (11th Kyu)',
+  'Yellow (10th Kyu)',
+  'Orange (9th Kyu)',
+  'Green (8th Kyu)',
+  'Purple (7th Kyu)',
+  'Blue (6th Kyu)',
+  'Blue-Silver (6th Kyu)',
+  'Blue-Gold (5th Kyu)',
+  'Brown (4th Kyu)',
+  'Brown-Silver (4th Kyu)',
+  'Brown-Gold (3rd Kyu)',
+  'Black (2nd Kyu)',
+  'Black-Silver (2nd Kyu)',
 ] as const
 
 function dateOfBirthFor(index: number, track: 'children' | 'adult'): string {
@@ -638,6 +639,33 @@ export const students: Student[] = studentNames.map(([firstName, lastName], inde
     outstandingFees: index % 11 === 0,
   }
 })
+
+/**
+ * Deterministic syllabus sign-offs for each student's target grade row.
+ * Roughly half are fully signed off and the rest are partway through, so the
+ * eligibility spread stays believable without a backend.
+ */
+export const techniqueSignOffs: TechniqueSignOff[] = students.flatMap(
+  (student, index) => {
+    const age = yearAgeFromIso(student.dateOfBirth)
+    const track = gradeTrackForAge(age)
+    const target = nextGrade(student.currentGrade, track, age)
+    if (!target) return []
+
+    const items = getGradeSyllabusItems(target, track)
+    const ratio = [1, 1, 1, 0.9, 0.75, 0.5][hashString(student.id) % 6] ?? 1
+    const signedCount = Math.floor(items.length * ratio)
+    const instructor = instructors[index % instructors.length]
+
+    return items.slice(0, signedCount).map((item, itemIndex) => ({
+      id: `signoff-${student.id}-${itemIndex}`,
+      studentId: student.id,
+      itemId: item.id,
+      signedOffAt: isoOffset(-(12 + ((index + itemIndex) % 9) * 6)),
+      signedOffBy: fullName(instructor),
+    }))
+  },
+)
 
 function sessionTypeFor(index: number) {
   return index % 3 === 0 ? 'weapons' : 'regular'
@@ -810,7 +838,7 @@ export const opportunities: GradingOpportunity[] = [
     gradingType: 'children',
     date: daysAheadIso(21),
     applicationDeadline: daysAheadIso(7),
-    targetGrades: ['4th Kyu (Brown-Silver)', '2nd Kyu (Black)'],
+    targetGrades: ['Brown-Silver (4th Kyu)', 'Black (2nd Kyu)'],
     status: 'open',
   },
   {
@@ -821,7 +849,7 @@ export const opportunities: GradingOpportunity[] = [
     gradingType: 'children',
     date: daysAheadIso(28),
     applicationDeadline: daysAheadIso(14),
-    targetGrades: ['7th Kyu (Purple)'],
+    targetGrades: ['Purple (7th Kyu)'],
     status: 'open',
   },
   {
@@ -832,7 +860,7 @@ export const opportunities: GradingOpportunity[] = [
     gradingType: 'adult',
     date: daysAheadIso(42),
     applicationDeadline: daysAheadIso(28),
-    targetGrades: ['4th Kyu', '3rd Kyu', '2nd Kyu'],
+    targetGrades: ['Brown (4th Kyu)', 'Brown-Gold (3rd Kyu)', 'Black (2nd Kyu)'],
     status: 'open',
   },
   {
@@ -843,7 +871,7 @@ export const opportunities: GradingOpportunity[] = [
     gradingType: 'children',
     date: daysAgoIso(30),
     applicationDeadline: daysAgoIso(44),
-    targetGrades: ['4th Kyu (Brown)'],
+    targetGrades: ['Brown (4th Kyu)'],
     status: 'closed',
   },
 ]
@@ -854,14 +882,19 @@ function takeStudentForGrade(
   centreId?: string,
   index = 0,
 ): string {
-  const matches = students.filter((student) => {
-    const studentTrack = ageFromIso(student.dateOfBirth) < 13 ? 'children' : 'adult'
+  const candidates = students.filter((student) => {
+    const age = yearAgeFromIso(student.dateOfBirth)
     return (
-      studentTrack === track &&
-      nextGrade(student.currentGrade, track) === targetGrade &&
-      (centreId === undefined || student.homeCentreId === centreId)
+      gradeTrackForAge(age) === track &&
+      nextGrade(student.currentGrade, track, age) === targetGrade
     )
   })
+  // Prefer the requested centre, but keep the mock application on a student who
+  // actually targets this grade (e.g. an away student withdrawing).
+  const scoped = centreId
+    ? candidates.filter((student) => student.homeCentreId === centreId)
+    : candidates
+  const matches = scoped.length > 0 ? scoped : candidates
   return matches[index % Math.max(matches.length, 1)]?.id ?? students[0].id
 }
 
@@ -869,62 +902,62 @@ export const applications: GradingApplication[] = [
   {
     id: 'application-001',
     studentId: takeStudentForGrade(
-      '4th Kyu (Brown-Silver)',
+      'Brown-Silver (4th Kyu)',
       'children',
       'centre-btcc',
     ),
     opportunityId: 'opportunity-autumn-bukit-timah',
-    targetGrade: '4th Kyu (Brown-Silver)',
+    targetGrade: 'Brown-Silver (4th Kyu)',
     submittedAt: daysAgoIso(4),
     status: 'submitted',
     notes: 'Attending Tuesday and Thursday sessions.',
   },
   {
     id: 'application-002',
-    studentId: takeStudentForGrade('2nd Kyu (Black)', 'children', 'centre-btcc'),
+    studentId: takeStudentForGrade('Black (2nd Kyu)', 'children', 'centre-btcc'),
     opportunityId: 'opportunity-autumn-bukit-timah',
-    targetGrade: '2nd Kyu (Black)',
+    targetGrade: 'Black (2nd Kyu)',
     submittedAt: daysAgoIso(6),
     status: 'under_review',
   },
   {
     id: 'application-003',
-    studentId: takeStudentForGrade('7th Kyu (Purple)', 'children', 'centre-cycc'),
+    studentId: takeStudentForGrade('Purple (7th Kyu)', 'children', 'centre-cycc'),
     opportunityId: 'opportunity-autumn-serangoon',
-    targetGrade: '7th Kyu (Purple)',
+    targetGrade: 'Purple (7th Kyu)',
     submittedAt: daysAgoIso(8),
     status: 'submitted',
   },
   {
     id: 'application-004',
-    studentId: takeStudentForGrade('7th Kyu (Purple)', 'children', 'centre-tgpc'),
+    studentId: takeStudentForGrade('Purple (7th Kyu)', 'children', 'centre-tgpc'),
     opportunityId: 'opportunity-autumn-serangoon',
-    targetGrade: '7th Kyu (Purple)',
+    targetGrade: 'Purple (7th Kyu)',
     submittedAt: daysAgoIso(5),
     status: 'withdrawn',
     notes: 'Withdrawn — unable to attend the Ci Yuan date.',
   },
   {
     id: 'application-005',
-    studentId: takeStudentForGrade('4th Kyu', 'adult', 'centre-oth'),
+    studentId: takeStudentForGrade('Brown (4th Kyu)', 'adult', 'centre-oth'),
     opportunityId: 'opportunity-winter-tampines',
-    targetGrade: '4th Kyu',
+    targetGrade: 'Brown (4th Kyu)',
     submittedAt: daysAgoIso(9),
     status: 'submitted',
   },
   {
     id: 'application-006',
-    studentId: takeStudentForGrade('3rd Kyu', 'adult', 'centre-oth'),
+    studentId: takeStudentForGrade('Brown-Gold (3rd Kyu)', 'adult', 'centre-oth'),
     opportunityId: 'opportunity-winter-tampines',
-    targetGrade: '3rd Kyu',
+    targetGrade: 'Brown-Gold (3rd Kyu)',
     submittedAt: daysAgoIso(12),
     status: 'under_review',
   },
   {
     id: 'application-007',
-    studentId: takeStudentForGrade('2nd Kyu', 'adult', 'centre-oth'),
+    studentId: takeStudentForGrade('Black (2nd Kyu)', 'adult', 'centre-oth'),
     opportunityId: 'opportunity-winter-tampines',
-    targetGrade: '2nd Kyu',
+    targetGrade: 'Black (2nd Kyu)',
     submittedAt: daysAgoIso(2),
     status: 'submitted',
     notes: 'First grading attempt.',
@@ -998,6 +1031,7 @@ export const initialAdminData = {
   centres,
   instructors,
   students,
+  techniqueSignOffs,
   sessions,
   attendance,
   opportunities,

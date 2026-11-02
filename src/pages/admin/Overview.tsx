@@ -35,7 +35,7 @@ import {
 import { getEligibilityAssessments } from '@/lib/admin/grading-eligibility'
 
 export default function Overview() {
-  const { centres, instructors, students, attendance, sessions, opportunities, applications, notifications } =
+  const { centres, instructors, students, attendance, sessions, opportunities, applications, notifications, techniqueSignOffs } =
     useAdminData()
   const { centreId, dateRange } = useAdminFilters()
 
@@ -43,7 +43,12 @@ export default function Overview() {
     (student) => centreId === 'all' || student.homeCentreId === centreId,
   )
   const declining = getDecliningAssessments(scopedStudents, attendance, sessions)
-  const eligibility = getEligibilityAssessments(scopedStudents, attendance, sessions)
+  const eligibility = getEligibilityAssessments(
+    scopedStudents,
+    attendance,
+    sessions,
+    techniqueSignOffs,
+  )
   const eligible = eligibility.filter((assessment) => assessment.status === 'eligible')
   const attendanceRate = getOverallAttendanceRate(
     attendance,
@@ -59,6 +64,7 @@ export default function Overview() {
     students,
     attendance,
     sessions,
+    techniqueSignOffs,
   ).filter((stats) => centreId === 'all' || stats.centreId === centreId)
   const comparisonStats = centreStats.slice(0, 8)
   const upcoming = getUpcomingSessions(sessions, centreId, 5)
