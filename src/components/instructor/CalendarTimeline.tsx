@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import type { PointerEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { availabilityStyle } from "@/components/instructor/CalendarAvailability";
@@ -45,6 +45,7 @@ export default function CalendarTimeline({
     date,
     now,
     view,
+    focusRequest = 0,
     slots,
     selectedId,
     onSelectClass,
@@ -55,6 +56,7 @@ export default function CalendarTimeline({
     date: Date;
     now: Date;
     view: "day" | "week";
+    focusRequest?: number;
     slots: AvailabilitySlot[];
     selectedId: string | null;
     onSelectClass: (event: CalendarEvent) => void;
@@ -66,8 +68,57 @@ export default function CalendarTimeline({
     const [drag, setDrag] = useState<DragRange | null>(null);
     const dragRef = useRef<DragRange | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const scrollRef = useRef<HTMLDivElement>(null);
+    const headerRef = useRef<HTMLDivElement>(null);
+    const focusDayRef = useRef<HTMLDivElement>(null);
+    const nowRef = useRef(now);
+    nowRef.current = now;
+    const rangeKey = `${view}:${dateKey(days[0])}`;
+    const todayKey = dateKey(now);
+    const focusDayKey = days.some(day => dateKey(day) === todayKey) ? todayKey : dateKey(date);
     const nowMinutes =
         now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60;
+
+    // Only navigation/Today requests refocus; clock ticks just update the marker.
+    useLayoutEffect(() => {
+        const viewport = scrollRef.current;
+        if (!viewport) return;
+
+        const focusCurrentTime = () => {
+            const headerHeight = headerRef.current?.offsetHeight ?? 0;
+            const visibleHoursHeight = viewport.clientHeight - headerHeight;
+            if (visibleHoursHeight <= 0) return false;
+            const current = nowRef.current;
+            const minute = Math.max(TIMELINE_START, Math.min(TIMELINE_END,
+                current.getHours() * 60 + current.getMinutes() + current.getSeconds() / 60,
+            ));
+            const position = (minute - TIMELINE_START) * PIXELS_PER_MINUTE;
+            let left = viewport.scrollLeft;
+            const column = focusDayRef.current;
+            if (column) {
+                const gutterWidth = headerRef.current?.offsetWidth ?? 64;
+                const columnLeft = column.getBoundingClientRect().left
+                    - viewport.getBoundingClientRect().left + viewport.scrollLeft - viewport.clientLeft;
+                left = columnLeft - gutterWidth
+                    - Math.max(0, viewport.clientWidth - gutterWidth - column.offsetWidth) / 2;
+            }
+            // Keep some earlier hours visible above now, below the sticky header.
+            viewport.scrollTo({
+                top: Math.max(0, position - visibleHoursHeight / 3),
+                left: Math.max(0, left),
+                behavior: "instant",
+            });
+            return true;
+        };
+
+        if (focusCurrentTime()) return;
+        // A timeline mounted in a hidden/unsized panel focuses once it is visible.
+        const observer = new ResizeObserver(() => {
+            if (focusCurrentTime()) observer.disconnect();
+        });
+        observer.observe(viewport);
+        return () => observer.disconnect();
+    }, [rangeKey, focusRequest]);
 
     function selectRange(range: AvailabilityRange) {
         const nextError = availabilityError(range, slots);
@@ -96,7 +147,7 @@ export default function CalendarTimeline({
                     {error}
                 </p>
             )}
-            <div className="min-h-0 flex-1 overflow-auto overscroll-contain rounded-xl border bg-card">
+            <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto overscroll-contain rounded-xl border bg-card">
                 <div
                     className="grid"
                     style={{
@@ -104,7 +155,7 @@ export default function CalendarTimeline({
                         gridTemplateColumns: `64px repeat(${days.length}, minmax(0, 1fr))`,
                     }}
                 >
-                    <div className="sticky top-0 left-0 z-30 border-r border-b bg-card p-2 text-[10px] text-muted-foreground"></div>
+                    <div ref={headerRef} className="sticky top-0 left-0 z-30 border-r border-b bg-card p-2 text-[10px] text-muted-foreground"></div>
                     {days.map((day) => {
                         const isToday = dateKey(day) === dateKey(now);
                         return (
@@ -185,6 +236,7 @@ export default function CalendarTimeline({
                         return (
                             <div
                                 key={key}
+                                ref={key === focusDayKey ? focusDayRef : undefined}
                                 className={cn(
                                     "relative border-r",
                                     isToday && "bg-primary/[0.025]",

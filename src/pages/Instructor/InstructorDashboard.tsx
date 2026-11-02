@@ -530,6 +530,7 @@ export default function InstructorDashboard() {
     const [searchParams, setSearchParams] = useSearchParams();
     const [weekOverview, setWeekOverview] = useState(false);
     const [displayMode, setDisplayMode] = useState<"timeline" | "list">("list");
+    const [timelineFocusRequest, setTimelineFocusRequest] = useState(0);
     const [now, setNow] = useState(() => new Date());
     useEffect(() => {
         const timer = window.setInterval(() => setNow(new Date()), 30_000);
@@ -756,6 +757,8 @@ export default function InstructorDashboard() {
                                 variant="outline"
                                 onClick={() => {
                                     const now = new Date();
+                                    setNow(now);
+                                    setTimelineFocusRequest(request => request + 1);
                                     updateSelection(
                                         new Date(
                                             now.getFullYear(),
@@ -884,6 +887,7 @@ export default function InstructorDashboard() {
                             date={selectedDate}
                             now={now}
                             view={view}
+                            focusRequest={timelineFocusRequest}
                             slots={availability}
                             selectedId={selectedAvailability?.id ?? expandedClassId}
                             onSelectClass={calendarProps.onToggleClass}
