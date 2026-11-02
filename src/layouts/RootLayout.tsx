@@ -4,17 +4,12 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import { dashboardPaths } from "@/lib/auth";
 import ThemeToggle from "@/components/theme-toggle";
+import StudentNavigation from "@/components/student/StudentNavigation";
 
 export default function RootLayout() {
     const { session, profile, loading, signOut } = useAuth();
     const isInstructorPortal = useMatch("/instructor/*");
-    const isStudentDashboard = useMatch("/dashboard");
-    const isStudentProfile = useMatch("/profile");
-    const isStudentPayments = useMatch("/payments");
-    const isStudentGrading = useMatch("/grading");
-    const isStudentPage = Boolean(
-        isStudentDashboard || isStudentProfile || isStudentPayments || isStudentGrading,
-    );
+    const isStudent = Boolean(session && profile?.role === "student");
     const [signingOut, setSigningOut] = useState(false);
     const [error, setError] = useState("");
 
@@ -32,7 +27,7 @@ export default function RootLayout() {
         }
     }
 
-    if (isInstructorPortal || isStudentPage) {
+    if (isInstructorPortal) {
         return (
             <Suspense
                 fallback={
@@ -51,10 +46,10 @@ export default function RootLayout() {
 
     return (
         <div className="flex min-h-screen flex-col bg-background text-foreground">
-            <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur">
+            {isStudent ? <StudentNavigation /> : <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur">
                 <nav
                     aria-label="Main navigation"
-                    className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-6 py-5"
+                    className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-4 px-6 py-5"
                 >
                     <Link
                         to="/"
@@ -72,39 +67,41 @@ export default function RootLayout() {
                             <span className="text-brand-red-ink">Shinju-Kai</span>
                         </span>
                     </Link>
-                    <ThemeToggle />
-                    {!loading && (
-                        <div className="flex items-center gap-4 text-sm">
-                            {session ? (
-                                <>
-                                    {profile && (
-                                        <Link
-                                            to={dashboardPaths[profile.role]}
-                                            className="font-medium hover:underline"
+                    <div className="flex items-center gap-4">
+                        <ThemeToggle />
+                        {!loading && (
+                            <div className="flex items-center gap-4 text-sm">
+                                {session ? (
+                                    <>
+                                        {profile && (
+                                            <Link
+                                                to={dashboardPaths[profile.role]}
+                                                className="font-medium hover:underline"
+                                            >
+                                                Dashboard
+                                            </Link>
+                                        )}
+                                        <Button
+                                            variant="outline"
+                                            onClick={handleSignOut}
+                                            disabled={signingOut}
                                         >
-                                            Dashboard
+                                            {signingOut ? "Signing out…" : "Sign out"}
+                                        </Button>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Link to="/login" className="hover:underline">
+                                            Sign in
                                         </Link>
-                                    )}
-                                    <Button
-                                        variant="outline"
-                                        onClick={handleSignOut}
-                                        disabled={signingOut}
-                                    >
-                                        {signingOut ? "Signing out…" : "Sign out"}
-                                    </Button>
-                                </>
-                            ) : (
-                                <>
-                                    <Link to="/login" className="hover:underline">
-                                        Sign in
-                                    </Link>
-                                    <Link to="/signup" className="font-medium hover:underline">
-                                        Sign up
-                                    </Link>
-                                </>
-                            )}
-                        </div>
-                    )}
+                                        <Link to="/signup" className="font-medium hover:underline">
+                                            Sign up
+                                        </Link>
+                                    </>
+                                )}
+                            </div>
+                        )}
+                    </div>
                 </nav>
                 {error && (
                     <p
@@ -114,8 +111,8 @@ export default function RootLayout() {
                         {error}
                     </p>
                 )}
-            </header>
-            <main className="mx-auto w-[70%] py-12">
+            </header>}
+            <main className={`mx-auto w-[70%] ${isStudent ? "py-6 sm:py-8" : "py-12"}`}>
                 <Suspense
                     fallback={
                         <p role="status" className="py-12 text-muted-foreground">
@@ -126,12 +123,12 @@ export default function RootLayout() {
                     <Outlet />
                 </Suspense>
             </main>
-            <footer className="border-t border-border">
+            {!isStudent && <footer className="border-t border-border">
                 <div className="mx-auto flex w-full max-w-5xl flex-col gap-1 px-6 py-6 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
                     <p>&copy; {new Date().getFullYear()} Aikido Shinju-Kai</p>
                     <p>FSDP project portal</p>
                 </div>
-            </footer>
+            </footer>}
         </div>
     );
 }

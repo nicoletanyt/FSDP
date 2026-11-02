@@ -10,7 +10,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-import { buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/student/button";
 import { Card } from "@/components/ui/card";
 import {
   Dialog,
@@ -19,21 +19,14 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { mockStudent, type Student } from "./student";
-import StudentShell from "./student-shell";
+import { formatDateTime } from "@/lib/format";
+import { mockStudent, type Student } from "@/lib/student-dashboard";
 
 /* ---------- Helpers ---------- */
 function greetingFor(hour: number) {
   if (hour < 12) return "Good morning";
   if (hour < 18) return "Good afternoon";
   return "Good evening";
-}
-
-function formatWhen(iso: string) {
-  const d = new Date(iso);
-  const day = d.toLocaleDateString("en-SG", { weekday: "long", day: "numeric", month: "short" });
-  const time = d.toLocaleTimeString("en-SG", { hour: "numeric", minute: "2-digit" });
-  return `${day}, ${time}`;
 }
 
 function isClassDay(iso: string) {
@@ -63,7 +56,7 @@ function BeltIcon({ hex }: { hex: string }) {
 
 function Requirement({ label, value, done }: { label: string; value: string; done: boolean }) {
   return (
-    <li className="rounded-xl bg-muted px-3 py-2.5 text-sm">
+    <li className="min-w-0 rounded-lg bg-muted px-4 py-3 text-sm">
       <span className="text-muted-foreground">{label}</span>
       <b className="block text-base tabular-nums">
         {value}
@@ -85,11 +78,11 @@ function Tile({ title, status, to, icon: Icon, badge }: TileProps) {
   return (
     <Link
       to={to}
-      className="group relative flex min-h-40 flex-col items-center justify-center gap-3 rounded-2xl border bg-card p-5 text-center shadow-sm transition hover:-translate-y-0.5 hover:border-primary hover:shadow-md focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      className="relative flex min-w-0 flex-col items-center justify-center gap-3 rounded-xl bg-card p-5 text-center text-sm text-card-foreground ring-1 ring-foreground/10 transition-colors hover:bg-accent hover:ring-primary/50 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
     >
       {!!badge && (
         <span
-          className="absolute right-3 top-3 grid h-6 min-w-6 place-items-center rounded-full bg-destructive px-2 text-xs font-bold text-destructive-foreground"
+          className="absolute right-3 top-3 grid min-h-7 min-w-7 place-items-center rounded-full bg-destructive px-2 py-0.5 text-xs font-bold text-destructive-foreground"
           aria-label={`${badge} pending`}
         >
           {badge}
@@ -99,13 +92,13 @@ function Tile({ title, status, to, icon: Icon, badge }: TileProps) {
         <Icon className="size-7" strokeWidth={1.8} aria-hidden="true" />
       </span>
       <span className="font-semibold">{title}</span>
-      <span className="text-sm text-muted-foreground">{status}</span>
+      <span className="text-muted-foreground">{status}</span>
     </Link>
   );
 }
 
 /* ---------- Page ---------- */
-export default function StudentHome() {
+export default function StudentDashboard() {
   // TODO: swap for a Supabase-backed hook, e.g. useStudentDashboard()
   const [attendanceQrOpen, setAttendanceQrOpen] = useState(false);
   const student = mockStudent;
@@ -134,85 +127,86 @@ export default function StudentHome() {
   ];
 
   return (
-    <StudentShell>
-      <main className="flex flex-col gap-6">
-        <header>
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-red-ink">
-            Student dashboard
-          </p>
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-            {greetingFor(new Date().getHours())}, {student.firstName}
-          </h1>
-          <p className="mt-2 inline-flex rounded-full border border-border bg-secondary px-3 py-1 text-sm font-medium text-secondary-foreground">
+      <main className="w-full">
+        <header className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-semibold">
+              {greetingFor(new Date().getHours())}, {student.firstName}
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Your training progress, upcoming classes and student services.
+            </p>
+          </div>
+          <p className="inline-flex rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
             Membership {student.membershipStatus.toLowerCase()}
           </p>
         </header>
 
         {/* Overview */}
-        <section aria-label="Overview" className="mt-6 grid gap-4 md:grid-cols-[1.6fr_1fr]">
+        <section aria-label="Overview" className="mt-6 grid gap-4 xl:grid-cols-2">
           {/* Belt rank */}
-          <Card className="gap-4 rounded-2xl p-5">
+          <Card className="min-w-0 gap-5 p-5">
             <div className="flex items-center gap-4">
-              <div className="grid size-20 shrink-0 place-items-center rounded-2xl bg-primary/10">
+              <div className="grid size-16 shrink-0 place-items-center rounded-2xl bg-primary/10">
                 <BeltIcon hex={belt.hex} />
               </div>
-              <div>
-                <h2 className="text-xl font-extrabold leading-tight tracking-tight">
+              <div className="min-w-0">
+                <h3 className="text-lg font-semibold">
                   {belt.name} ({belt.colour} belt)
-                </h2>
+                </h3>
                 <p className="text-sm text-muted-foreground">Training towards {nextBelt.name}</p>
               </div>
             </div>
 
             <div>
-  <div className="mb-1.5 flex justify-between text-sm">
-    <span>Progress to {nextBelt.name} grading</span>
-    <strong className="tabular-nums">{pct}%</strong>
-  </div>
+              <div className="mb-1.5 flex justify-between gap-3 text-sm">
+                <span>Progress to {nextBelt.name} grading</span>
+                <strong className="tabular-nums">{pct}%</strong>
+              </div>
 
-  <div
-    role="progressbar"
-    aria-label={`Progress to ${nextBelt.name} grading`}
-    aria-valuemin={0}
-    aria-valuemax={100}
-    aria-valuenow={pct}
-    className="h-3 overflow-hidden rounded-full bg-muted"
-  >
-    <div
-      className="h-full bg-primary transition-all"
-      style={{ width: `${pct}%` }}
-    />
-  </div>
-</div>
+              <div
+                role="progressbar"
+                aria-label={`Progress to ${nextBelt.name} grading`}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={pct}
+                className="h-3 overflow-hidden rounded-full bg-muted"
+              >
+                <div
+                  className="h-full bg-primary transition-all"
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+            </div>
 
-<ul className="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-2.5">
-  <Requirement
-    label="Sessions attended"
-    value={`${r.sessions.done} / ${r.sessions.required}`}
-    done={r.sessions.done >= r.sessions.required}
-  />
-  <Requirement
-    label="Time in rank"
-    value={`${r.monthsInRank.done} / ${r.monthsInRank.required} months`}
-    done={r.monthsInRank.done >= r.monthsInRank.required}
-  />
-  <Requirement label="Grading fee" value={r.feePaid ? "Paid" : "Unpaid"} done={r.feePaid} />
-</ul>
+            <ul className="grid gap-2.5 sm:grid-cols-3">
+              <Requirement
+                label="Sessions attended"
+                value={`${r.sessions.done} / ${r.sessions.required}`}
+                done={r.sessions.done >= r.sessions.required}
+              />
+              <Requirement
+                label="Time in rank"
+                value={`${r.monthsInRank.done} / ${r.monthsInRank.required} months`}
+                done={r.monthsInRank.done >= r.monthsInRank.required}
+              />
+              <Requirement label="Grading fee" value={r.feePaid ? "Paid" : "Unpaid"} done={r.feePaid} />
+            </ul>
 
-<Link to="/grading" className={buttonVariants({ className: "self-start" })}>
-  {ctaLabel}
-</Link>
+            <Link to="/grading" className={buttonVariants({ className: "mt-auto w-full self-start whitespace-normal sm:w-auto" })}>
+              {ctaLabel}
+            </Link>
           </Card>
 
           {/* Next class */}
-          <Card className="gap-3 rounded-2xl p-5">
-            <h2 className="font-bold">Your next class</h2>
+          <Card className="min-w-0 gap-4 p-5">
+            <h3 className="text-lg font-semibold">Your next class</h3>
             {nextClass ? (
-              <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_11rem] sm:items-end">
-                <dl className="grid gap-3">
+              <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_11rem] sm:items-end xl:grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_11rem]">
+                <dl className="min-w-0 space-y-4">
                   <div>
                     <dt className="text-xs text-muted-foreground">When</dt>
-                    <dd className="text-xl font-semibold tracking-tight">{formatWhen(nextClass.startsAt)}</dd>
+                    <dd className="text-lg font-semibold tracking-tight">{formatDateTime(nextClass.startsAt)}</dd>
                   </div>
                   <div>
                     <dt className="text-xs text-muted-foreground">Class</dt>
@@ -225,7 +219,7 @@ export default function StudentHome() {
                     </dd>
                   </div>
                   {nextClass.recommended && (
-                    <span className="w-fit rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
+                    <span className="inline-flex w-fit rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
                       Recommended for your rank
                     </span>
                   )}
@@ -241,7 +235,7 @@ export default function StudentHome() {
                             ? "Open attendance QR placeholder"
                             : "Attendance QR unavailable until the class day"
                         }
-                        className={`grid min-h-40 w-full place-items-center rounded-xl border border-dashed p-4 text-center transition focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed ${
+                        className={`grid min-h-40 w-full place-items-center rounded-xl border border-dashed p-5 text-center transition focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed ${
                           attendanceQrAvailable
                             ? "border-primary/50 bg-primary/5 text-primary hover:bg-primary/10"
                             : "border-border bg-muted/50 text-muted-foreground"
@@ -299,13 +293,14 @@ export default function StudentHome() {
         </section>
 
         {/* Tiles */}
-        <h2 className="mb-3.5 mt-8 text-lg font-semibold">Self-service</h2>
-        <nav aria-label="Student self-service" className="grid grid-cols-2 gap-4 sm:grid-cols-[repeat(auto-fill,minmax(210px,1fr))]">
-          {tiles.map((t) => (
-            <Tile key={t.to} {...t} />
-          ))}
-        </nav>
+        <section aria-labelledby="self-service-heading" className="mt-8">
+          <h3 id="self-service-heading" className="mb-3.5 text-lg font-semibold">Self-service</h3>
+          <nav aria-label="Student self-service" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {tiles.map((t) => (
+              <Tile key={t.to} {...t} />
+            ))}
+          </nav>
+        </section>
       </main>
-    </StudentShell>
   );
 }
