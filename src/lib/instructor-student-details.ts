@@ -1,5 +1,6 @@
 import { addDays, classTemplates, currentInstructor, dateKey, eventsForDate, getSavedStudentSession, instructors, students } from "@/lib/instructor-calendar";
 import type { Attendance, CalendarEvent, ReportAuthor, Student } from "@/lib/instructor-calendar";
+import { getNextGrade, gradingSystems } from "@/lib/student-grades";
 
 export type StudentHistorySession = {
     event: CalendarEvent;
@@ -15,26 +16,13 @@ const feedbackExamples = [
     "Strong effort throughout the lesson. Footwork is improving; continue working on timing with a partner.",
     "Kata sequence is coming together well. Slow the transitions down and maintain a steady posture.",
 ];
-const beltOrder = ["White belt", "Yellow belt", "Orange belt", "Green belt", "Blue belt", "Brown belt", "Black belt · 1st Dan"];
-const beltColors: Record<string, string> = {
-    White: "border-slate-300 bg-white dark:border-slate-500",
-    Yellow: "border-yellow-500 bg-yellow-400",
-    Orange: "border-orange-500 bg-orange-500",
-    Green: "border-green-600 bg-green-600",
-    Blue: "border-blue-600 bg-blue-600",
-    Brown: "border-amber-900 bg-amber-800",
-    Black: "border-slate-950 bg-slate-950 dark:border-slate-300",
-};
-
-export function beltColorClass(grade: string) {
-    return beltColors[grade.split(" ")[0]] ?? "border-border bg-muted";
-}
 
 export function getStudentProfile(student: Student, today: Date) {
     const index = students.findIndex((item) => item.id === student.id);
     const surname = student.name.split(" ").at(-1);
     return {
         ...student,
+        nextRank: getNextGrade(student.gradingSystem, student.rank)?.rank ?? null,
         studentNumber: `STU-${String(index + 1).padStart(4, "0")}`,
         principalDojo: index % 3 === 1 ? "Northside Dojo" : "Central Dojo",
         membershipStatus: index === 10 ? "Paused" : "Active",
@@ -124,12 +112,13 @@ export function studentAttendanceSummary(sessions: StudentHistorySession[], now:
 
 export function studentGradingHistory(student: Student, today: Date, context?: CalendarEvent) {
     const profile = getStudentProfile(student, today);
-    const beltIndex = beltOrder.indexOf(student.beltGrade);
-    const previous = [0, 1].filter((offset) => beltIndex - offset > 0).map((offset) => ({
+    const levels = gradingSystems[student.gradingSystem].levels;
+    const rankIndex = levels.findIndex((level) => level.rank === student.rank);
+    const previous = [0, 1].filter((offset) => rankIndex - offset > 0).map((offset) => ({
         id: `${student.id}-grading-${offset}`,
         date: offset === 0 ? profile.rankAwardedOn : addDays(profile.rankAwardedOn, -120),
-        fromGrade: beltOrder[beltIndex - offset - 1],
-        toGrade: beltOrder[beltIndex - offset],
+        fromRank: levels[rankIndex - offset - 1].rank,
+        toRank: levels[rankIndex - offset].rank,
         status: "Passed",
         feedback: offset === 0 ? "A confident assessment with good control and clear progress in technique. Keep developing consistency in partner work." : "Demonstrated the required techniques and a positive attitude. Continue practising stance and kata transitions.",
         instructor: currentInstructor.name,
@@ -139,8 +128,8 @@ export function studentGradingHistory(student: Student, today: Date, context?: C
     if (context?.type === "grading" && context.date <= today && context.studentIds.includes(student.id) && !assessments.some((event) => event.id === context.id)) assessments.push(context);
     const completed = assessments.flatMap((event) => {
         const saved = getSavedStudentSession(event.id, student.id);
-        return saved?.assessmentStatus === "completed" ? [{
-            id: event.id, date: event.date, fromGrade: student.beltGrade, toGrade: student.targetGrade,
+        return saved?.assessmentStatus === "completed" && profile.nextRank ? [{
+            id: event.id, date: event.date, fromRank: student.rank, toRank: profile.nextRank,
             status: "Completed", feedback: saved.assessmentNotes || "No assessment feedback recorded.", instructor: currentInstructor.name,
         }] : [];
     });

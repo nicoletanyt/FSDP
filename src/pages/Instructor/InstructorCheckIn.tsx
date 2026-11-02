@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useOutletContext } from "react-router";
 import { ChevronDown, LogOut, Maximize, UserCheck } from "lucide-react";
 import CheckInScanner from "@/components/instructor/CheckInScanner";
+import GradeBadge from "@/components/GradeBadge";
 import type { ScanFeedback } from "@/components/instructor/CheckInScanner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -103,7 +104,7 @@ export default function InstructorCheckIn() {
             setFeedback({
                 tone: "success",
                 title: result.student.name,
-                beltGrade: result.student.beltGrade,
+                grade: { rank: result.student.rank, gradingSystem: result.student.gradingSystem },
                 description: "You’re checked in. Welcome to class!",
             });
         } else if (result.status === "duplicate") {
@@ -237,7 +238,7 @@ export default function InstructorCheckIn() {
                         <p
                             aria-live="polite"
                             aria-atomic="true"
-                            className="text-[11px] text-muted-foreground"
+                            className="text-2xs text-muted-foreground"
                         >
                             <span className="font-semibold tabular-nums text-foreground pr-1">
                                 {attendance.length}/{roster.length}
@@ -258,9 +259,10 @@ export default function InstructorCheckIn() {
                                     key={record.studentId}
                                     className="flex items-center justify-between gap-3 py-3.5"
                                 >
-                                    <span className="min-w-0 break-words text-sm font-medium">
-                                        {student?.name ?? "Student"}
-                                    </span>
+                                    <div className="min-w-0 space-y-1">
+                                        <p className="break-words text-sm font-medium">{student?.name ?? "Student"}</p>
+                                        {student && <GradeBadge rank={student.rank} system={student.gradingSystem} />}
+                                    </div>
                                     <time
                                         dateTime={record.checkedInAt}
                                         className="shrink-0 text-xs tabular-nums text-muted-foreground"
