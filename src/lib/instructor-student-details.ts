@@ -1,6 +1,7 @@
 import { addDays, classTemplates, currentInstructor, dateKey, eventsForDate, getSavedStudentSession, instructors, students } from "@/lib/instructor-calendar";
 import type { Attendance, CalendarEvent, ReportAuthor, Student } from "@/lib/instructor-calendar";
 import { getNextGrade, gradingSystems } from "@/lib/student-grades";
+import type { GradingSyllabus, GradingSystemId, RankId } from "@/lib/student-grades";
 
 export type StudentHistorySession = {
     event: CalendarEvent;
@@ -31,8 +32,6 @@ export function getStudentProfile(student: Student, today: Date) {
         emergencyContact: { name: `Sam ${surname}`, relationship: index % 2 ? "Partner" : "Parent / guardian", phone: `+44 7700 900${String(index + 201).padStart(3, "0")}` },
         medicalAlerts: index === 0 ? ["Mild asthma. Carries an inhaler to training."] : index === 4 ? ["Previous left ankle injury. Avoid high-impact drills if uncomfortable."] : [],
         rankAwardedOn: new Date(today.getFullYear(), today.getMonth() - 3 - index % 4, 12),
-        techniqueChecks: 4 + index % 4,
-        kataComplete: index % 3 !== 0,
     };
 }
 
@@ -134,4 +133,112 @@ export function studentGradingHistory(student: Student, today: Date, context?: C
         }] : [];
     });
     return [...completed, ...previous].sort((a, b) => b.date.getTime() - a.date.getTime());
+}
+
+export type TechniqueSignOff = { itemId: string; signedOffAt: string; signedOffBy: ReportAuthor };
+export type GradingRequirement = { key: string; label: string; actual: string; required: string; met: boolean | null };
+
+const techniqueStorageKey = (studentId: string) => `instructor-technique-sign-offs-v1:${studentId}`;
+
+export function getTechniqueSignOffs(studentId: string): TechniqueSignOff[] {
+    try {
+        const saved: unknown = JSON.parse(localStorage.getItem(techniqueStorageKey(studentId)) ?? "[]");
+        return Array.isArray(saved) ? saved.filter((item): item is TechniqueSignOff =>
+            typeof item?.itemId === "string" && typeof item?.signedOffAt === "string" &&
+            Number.isFinite(Date.parse(item.signedOffAt)) && typeof item?.signedOffBy?.id === "string" &&
+            typeof item?.signedOffBy?.name === "string",
+        ) : [];
+    } catch {
+        return [];
+    }
+}
+
+export function saveTechniqueSignOffs(studentId: string, signOffs: TechniqueSignOff[]) {
+    localStorage.setItem(techniqueStorageKey(studentId), JSON.stringify(signOffs));
+}
+
+export type SignaturePoint = { x: number; y: number };
+export type ExaminerSignature = {
+    strokes: SignaturePoint[][];
+    aspectRatio: number;
+    signedAt: string;
+    signedBy: ReportAuthor;
+};
+
+const signatureStorageKey = (studentId: string, system: GradingSystemId, rank: RankId) =>
+    `instructor-examiner-signature-v1:${studentId}:${system}:${rank}`;
+
+export function getExaminerSignature(studentId: string, system: GradingSystemId, rank: RankId): ExaminerSignature | null {
+    try {
+        const saved = JSON.parse(localStorage.getItem(signatureStorageKey(studentId, system, rank)) ?? "null") as ExaminerSignature | null;
+        if (!saved || !Number.isFinite(saved.aspectRatio) || saved.aspectRatio <= 0
+            || typeof saved.signedAt !== "string" || !Number.isFinite(Date.parse(saved.signedAt))
+            || typeof saved.signedBy?.id !== "string" || typeof saved.signedBy?.name !== "string"
+            || !Array.isArray(saved.strokes) || saved.strokes.length === 0) return null;
+        const valid = saved.strokes.every(stroke => Array.isArray(stroke) && stroke.length > 0
+            && stroke.every(point => point && Number.isFinite(point.x) && Number.isFinite(point.y)
+                && point.x >= 0 && point.x <= 1 && point.y >= 0 && point.y <= 1));
+        return valid ? saved : null;
+    } catch {
+        return null;
+    }
+}
+
+export function saveExaminerSignature(studentId: string, system: GradingSystemId, rank: RankId, signature: ExaminerSignature | null) {
+    const key = signatureStorageKey(studentId, system, rank);
+    if (signature) localStorage.setItem(key, JSON.stringify(signature));
+    else localStorage.removeItem(key);
+}
+
+export function monthsSince(start: Date, today: Date) {
+    return Math.max(0, (today.getFullYear() - start.getFullYear()) * 12 + today.getMonth() - start.getMonth()
+        - (today.getDate() < start.getDate() ? 1 : 0));
+}
+
+export function getGradingRequirements({ syllabus, membershipStatus, rankAwardedOn, sessions, signOffs, now }: {
+    syllabus: GradingSyllabus;
+    membershipStatus: string;
+    rankAwardedOn: Date;
+    sessions: StudentHistorySession[];
+    signOffs: TechniqueSignOff[];
+    now: Date;
+}): GradingRequirement[] {
+    const months = monthsSince(rankAwardedOn, now);
+    const signed = new Set(signOffs.map((item) => item.itemId));
+    const items = syllabus.categories.flatMap((category) => category.items);
+    const signedCount = items.filter((item) => signed.has(item.id)).length;
+    const attended = sessions.filter((session) => session.attendance === "present"
+        && session.event.date >= rankAwardedOn && sessionPhase(session.event, now) === "past").length;
+    const requirements: GradingRequirement[] = [
+        { key: "membership", label: "Active membership", actual: membershipStatus, required: "Active", met: membershipStatus === "Active" },
+        { key: "membership-length", label: "Time as a member", actual: "Not recorded", required: "3 months", met: null },
+    ];
+    // Missing joining dates, dates of birth and fee records remain unverified.
+    if (syllabus.minAge !== undefined) requirements.push({
+        key: "age", label: "Minimum age (by calendar year)", actual: "Not recorded", required: `${syllabus.minAge} years`, met: null,
+    });
+    if (syllabus.minMonths > 0) requirements.push({
+        key: "time", label: "Time in current grade", actual: `${months} ${months === 1 ? "month" : "months"}`,
+        required: syllabus.maxMonths ? `${syllabus.minMonths}–${syllabus.maxMonths} months` : `${syllabus.minMonths} months`,
+        met: months >= syllabus.minMonths,
+    });
+    if (syllabus.sessions !== undefined) requirements.push({
+        key: "sessions", label: "Training sessions since last grading", actual: `${attended} recorded`, required: `${syllabus.sessions}`,
+        // History is a limited reporting window, not a complete lifetime record.
+        met: attended >= syllabus.sessions ? true : null,
+    });
+    requirements.push(
+        { key: "techniques", label: "Target-grade techniques signed off", actual: `${signedCount}`, required: `${items.length}`, met: signedCount === items.length },
+        { key: "fees", label: "Fees up to date", actual: "Not recorded", required: "Clear", met: null },
+    );
+    return requirements;
+}
+
+export function gradingEligibility(requirements: GradingRequirement[]) {
+    const metCount = requirements.filter((item) => item.met === true).length;
+    return {
+        metCount,
+        label: requirements.some((item) => item.met === false) ? "Not yet eligible"
+            : requirements.some((item) => item.met === null) ? "Not yet verified" : "Eligible",
+    };
 }

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { stripTypeScriptTypes } from 'node:module'
 import test from 'node:test'
+import { getInstructorPhoto, prepareInstructorPhoto, saveInstructorPhoto, subscribeInstructorPhotos } from '../src/lib/instructor-calendar.ts'
 
 // Load the frontend-only helpers without adding a test framework or changing app imports.
 const source = await readFile(new URL('../src/lib/instructor-availability.ts', import.meta.url), 'utf8')
@@ -69,4 +70,67 @@ test('mock availability is future-only, non-overlapping, and includes multiple s
   assert.ok(slots.length >= 2)
   assert.equal(slots[0].date.getTime(), slots[1].date.getTime())
   for (const entry of slots) assert.equal(availabilityError(entry, slots, entry.id, now), null)
+})
+
+test('local instructor photos are isolated by ID and notify avatars only after successful changes', () => {
+  const previousStorage = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window')
+  const values = new Map()
+  const events = new EventTarget()
+  let failWrites = false
+  Object.defineProperty(globalThis, 'window', { configurable: true, value: events })
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: {
+    getItem: key => values.get(key) ?? null,
+    setItem: (key, value) => {
+      if (failWrites) throw new DOMException('Storage full', 'QuotaExceededError')
+      values.set(key, value)
+    },
+    removeItem: key => values.delete(key),
+  } })
+  let changes = 0
+  const unsubscribe = subscribeInstructorPhotos(() => changes++)
+  const alicePhoto = 'data:image/jpeg;base64,YWxpY2U='
+  const bobPhoto = 'data:image/png;base64,Ym9i'
+  try {
+    assert.equal(getInstructorPhoto(undefined), null)
+    assert.equal(getInstructorPhoto('alice'), null)
+    saveInstructorPhoto('alice', alicePhoto)
+    assert.equal(getInstructorPhoto('alice'), alicePhoto)
+    assert.equal(getInstructorPhoto('bob'), null)
+    assert.equal(changes, 1)
+    saveInstructorPhoto('bob', bobPhoto)
+    failWrites = true
+    assert.throws(() => saveInstructorPhoto('alice', bobPhoto), /Storage full/)
+    assert.equal(getInstructorPhoto('alice'), alicePhoto)
+    assert.equal(changes, 2)
+    failWrites = false
+    saveInstructorPhoto('alice', null)
+    assert.equal(getInstructorPhoto('alice'), null)
+    assert.equal(getInstructorPhoto('bob'), bobPhoto)
+    assert.equal(changes, 3)
+    values.set('instructor-profile-photo-v1:broken', 'not an image')
+    assert.equal(getInstructorPhoto('broken'), null)
+    const unrelated = new Event('storage')
+    Object.defineProperty(unrelated, 'key', { value: 'theme' })
+    events.dispatchEvent(unrelated)
+    assert.equal(changes, 3)
+    const otherTabPhoto = new Event('storage')
+    Object.defineProperty(otherTabPhoto, 'key', { value: 'instructor-profile-photo-v1:bob' })
+    events.dispatchEvent(otherTabPhoto)
+    assert.equal(changes, 4)
+    unsubscribe()
+    saveInstructorPhoto('alice', alicePhoto)
+    assert.equal(changes, 4)
+  } finally {
+    unsubscribe()
+    if (previousStorage) Object.defineProperty(globalThis, 'localStorage', previousStorage)
+    else delete globalThis.localStorage
+    if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow)
+    else delete globalThis.window
+  }
+})
+
+test('photo uploads reject unsupported and oversized files before image processing', async () => {
+  await assert.rejects(prepareInstructorPhoto(new File(['document'], 'profile.pdf', { type: 'application/pdf' })), /JPG, PNG or WebP/)
+  await assert.rejects(prepareInstructorPhoto(new File([new Uint8Array(5 * 1024 * 1024 + 1)], 'large.jpg', { type: 'image/jpeg' })), /5 MB/)
 })

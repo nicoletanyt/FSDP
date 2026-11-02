@@ -13,6 +13,7 @@ import {
     Users,
 } from "lucide-react";
 import ClassSessionDetails from "@/components/instructor/ClassSessionDetails";
+import DayClassDetails from "@/components/instructor/DayClassDetails";
 import SelectedClassIndicator from "@/components/instructor/SelectedClassIndicator";
 import CalendarTimeline from "@/components/instructor/CalendarTimeline";
 import {
@@ -530,6 +531,8 @@ export default function InstructorDashboard() {
     const [searchParams, setSearchParams] = useSearchParams();
     const [weekOverview, setWeekOverview] = useState(false);
     const [displayMode, setDisplayMode] = useState<"timeline" | "list">("list");
+    const [dayDisplayMode, setDayDisplayMode] = useState<"timeline" | "list">("timeline");
+    const [timelineFocusRequest, setTimelineFocusRequest] = useState(0);
     const [now, setNow] = useState(() => new Date());
     useEffect(() => {
         const timer = window.setInterval(() => setNow(new Date()), 30_000);
@@ -700,7 +703,8 @@ export default function InstructorDashboard() {
                 changeView(nextView);
             } else if (key === "t" || key === "l") {
                 event.preventDefault();
-                setDisplayMode(key === "t" ? "timeline" : "list");
+                if (view === "day") setDayDisplayMode(key === "t" ? "timeline" : "list");
+                else setDisplayMode(key === "t" ? "timeline" : "list");
                 if (view === "month") changeView("week");
             }
         }
@@ -734,7 +738,8 @@ export default function InstructorDashboard() {
         onSelectAvailability: selectAvailability,
     };
 
-    const isTimeline = view !== "month" && displayMode === "timeline";
+    const activeDisplayMode = view === "day" ? dayDisplayMode : displayMode;
+    const isTimeline = view !== "month" && activeDisplayMode === "timeline";
     const showSidePanel = expandedClassId !== null;
 
     return (
@@ -756,6 +761,8 @@ export default function InstructorDashboard() {
                                 variant="outline"
                                 onClick={() => {
                                     const now = new Date();
+                                    setNow(now);
+                                    setTimelineFocusRequest(request => request + 1);
                                     updateSelection(
                                         new Date(
                                             now.getFullYear(),
@@ -823,11 +830,11 @@ export default function InstructorDashboard() {
                                     <TooltipTrigger render={
                                         <DropdownMenuTrigger
                                             render={<Button variant="outline" className="h-10 min-w-28 justify-between gap-3 px-4" />}
-                                            aria-label={`Calendar display mode: ${displayMode}`}
+                                            aria-label={`Calendar display mode: ${activeDisplayMode}`}
                                         />
                                     }>
-                                        {displayMode === "timeline" ? <CalendarDaysIcon aria-hidden="true" /> : <List aria-hidden="true" />}
-                                        {displayMode === "timeline" ? "Timeline" : "List"}
+                                        {activeDisplayMode === "timeline" ? <CalendarDaysIcon aria-hidden="true" /> : <List aria-hidden="true" />}
+                                        {activeDisplayMode === "timeline" ? "Timeline" : "List"}
                                         <ChevronDown aria-hidden="true" />
                                     </TooltipTrigger>
                                     <TooltipContent>Calendar display mode</TooltipContent>
@@ -835,9 +842,12 @@ export default function InstructorDashboard() {
                                 <DropdownMenuContent className="p-1.5">
                                     <DropdownMenuRadioGroup
                                         aria-label="Calendar display mode"
-                                        value={displayMode}
+                                        value={activeDisplayMode}
                                         onValueChange={(value) => {
-                                            if (value === "timeline" || value === "list") setDisplayMode(value);
+                                            if (value === "timeline" || value === "list") {
+                                                if (view === "day") setDayDisplayMode(value);
+                                                else setDisplayMode(value);
+                                            }
                                         }}
                                     >
                                         <DropdownMenuRadioItem value="timeline" closeOnClick aria-keyshortcuts="t" className="gap-3 py-2.5 pr-4 pl-9">
@@ -876,7 +886,12 @@ export default function InstructorDashboard() {
                         </Popover>
                     </div>
                 </div>
-                <div className={cn("flex min-h-0 flex-1 flex-col", showSidePanel && "grid grid-cols-1 grid-rows-[repeat(2,minmax(320px,1fr))] gap-3 overflow-y-auto overscroll-contain lg:grid-cols-[minmax(0,1fr)_320px] lg:grid-rows-1 lg:overflow-hidden")}>
+                <div className={cn(
+                    "flex min-h-0 flex-1 flex-col",
+                    showSidePanel && (view === "day"
+                        ? "gap-3 overflow-hidden lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:grid-rows-1"
+                        : "grid grid-cols-1 grid-rows-[repeat(2,minmax(320px,1fr))] gap-3 overflow-y-auto overscroll-contain lg:grid-cols-[minmax(0,1fr)_320px] lg:grid-rows-1 lg:overflow-hidden"),
+                )}>
                     {view === "month" ? (
                         <CalendarMonth {...calendarProps} onSelectDate={selectMonthDate} />
                     ) : isTimeline ? (
@@ -884,6 +899,7 @@ export default function InstructorDashboard() {
                             date={selectedDate}
                             now={now}
                             view={view}
+                            focusRequest={timelineFocusRequest}
                             slots={availability}
                             selectedId={selectedAvailability?.id ?? expandedClassId}
                             onSelectClass={calendarProps.onToggleClass}
@@ -902,7 +918,17 @@ export default function InstructorDashboard() {
                             }
                         />
                     )}
-                    {showSidePanel && requestedSession && (
+                    {showSidePanel && requestedSession && (view === "day" ? (
+                        <DayClassDetails onClose={() => updateSelection(selectedDate)}>
+                            <EventCard
+                                key={requestedSession.id}
+                                event={requestedSession}
+                                layout="panel"
+                                expanded
+                                onToggle={() => updateSelection(selectedDate)}
+                            />
+                        </DayClassDetails>
+                    ) : (
                         <aside aria-label="Calendar selection details" className="flex min-h-0 min-w-0 flex-col overflow-hidden">
                             <EventCard
                                 key={requestedSession.id}
@@ -912,7 +938,7 @@ export default function InstructorDashboard() {
                                 onToggle={() => updateSelection(selectedDate)}
                             />
                         </aside>
-                    )}
+                    ))}
                 </div>
             </section>
             {availabilityDialog && <AvailabilityDialog
