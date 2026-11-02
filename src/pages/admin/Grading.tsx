@@ -1,7 +1,4 @@
-import { GraduationCap } from 'lucide-react'
-import { Link, NavLink, Outlet } from 'react-router'
-import PageHeader from '@/components/admin/PageHeader'
-import { Button } from '@/components/ui/button'
+import { NavLink, Outlet } from 'react-router'
 import { cn } from 'cn'
 
 const tabs = [
@@ -14,17 +11,6 @@ const tabs = [
 export default function Grading() {
   return (
     <div className="space-y-5">
-      <PageHeader
-        eyebrow="Grading"
-        title="Grading pipeline"
-        description="See who is eligible, create grading opportunities, notify students, monitor submitted applications, and browse the technique syllabus."
-        actions={
-          <Button render={<Link to="/admin/grading/opportunities" />}>
-            <GraduationCap />
-            New opportunity
-          </Button>
-        }
-      />
       <nav aria-label="Grading sections" className="flex flex-wrap gap-1 border-b border-border">
         {tabs.map((tab) => (
           <NavLink

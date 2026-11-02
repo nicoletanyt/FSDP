@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import { Download, Eye, Search } from 'lucide-react'
+import { Download, Search } from 'lucide-react'
 import EmptyState from '@/components/admin/EmptyState'
 import EligibilityChecklist from '@/components/admin/EligibilityChecklist'
 import { ApplicationBadge } from '@/components/admin/StatusBadge'
@@ -172,12 +172,22 @@ export default function GradingApplications() {
                   <TableHead>Opportunity</TableHead>
                   <TableHead>Submitted</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Details</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {rows.map(({ application, student, opportunity }) => (
-                  <TableRow key={application.id}>
+                  <TableRow
+                    key={application.id}
+                    className="cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50"
+                    tabIndex={0}
+                    aria-haspopup="dialog"
+                    onClick={() => setSelected(application)}
+                    onKeyDown={(event) => {
+                      if (event.key !== 'Enter' && event.key !== ' ') return
+                      event.preventDefault()
+                      setSelected(application)
+                    }}
+                  >
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <span className="flex size-8 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
@@ -206,18 +216,6 @@ export default function GradingApplications() {
                     </TableCell>
                     <TableCell>
                       <ApplicationBadge status={application.status} />
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex justify-end">
-                        <Button
-                          variant="outline"
-                          size="xs"
-                          onClick={() => setSelected(application)}
-                        >
-                          <Eye />
-                          View
-                        </Button>
-                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

@@ -1,5 +1,5 @@
 import { Fragment, useMemo, useState } from 'react'
-import { Bell, CheckCircle2, ChevronDown, Search } from 'lucide-react'
+import { Bell, CheckCircle2, Search } from 'lucide-react'
 import EmptyState from '@/components/admin/EmptyState'
 import EligibilityChecklist from '@/components/admin/EligibilityChecklist'
 import TechniqueRequirementBreakdown from '@/components/admin/TechniqueRequirementBreakdown'
@@ -190,7 +190,6 @@ export default function GradingEligibility() {
                   <TableHead className="text-right">90-day attendance</TableHead>
                   <TableHead>Last graded</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Details</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -211,7 +210,17 @@ export default function GradingEligibility() {
                   )
                   return (
                     <Fragment key={student.id}>
-                      <TableRow>
+                      <TableRow
+                        className="cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50"
+                        tabIndex={0}
+                        aria-expanded={isExpanded}
+                        onClick={() => setExpanded(isExpanded ? null : student.id)}
+                        onKeyDown={(event) => {
+                          if (event.key !== 'Enter' && event.key !== ' ') return
+                          event.preventDefault()
+                          setExpanded(isExpanded ? null : student.id)
+                        }}
+                      >
                         <TableCell>
                           <div className="flex items-center gap-3">
                             <span className="flex size-8 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
@@ -263,29 +272,10 @@ export default function GradingEligibility() {
                         <TableCell>
                           <EligibilityBadge status={assessment.status} />
                         </TableCell>
-                        <TableCell>
-                          <div className="flex justify-end">
-                            <Button
-                              variant="ghost"
-                              size="icon-xs"
-                              aria-label={`Show requirements for ${fullName(student)}`}
-                              onClick={() =>
-                                setExpanded(isExpanded ? null : student.id)
-                              }
-                            >
-                              <ChevronDown
-                                className={cn(
-                                  'transition-transform',
-                                  isExpanded && 'rotate-180',
-                                )}
-                              />
-                            </Button>
-                          </div>
-                        </TableCell>
                       </TableRow>
                       {isExpanded && (
                         <TableRow>
-                          <TableCell colSpan={8} className="bg-muted/30">
+                          <TableCell colSpan={7} className="bg-muted/30">
                             <div>
                               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                                 Requirement breakdown
