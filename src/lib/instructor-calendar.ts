@@ -18,6 +18,7 @@ export type ClassTemplate = Omit<CalendarEvent, "id" | "date"> & { id: string; w
 export type Student = { id: string; name: string } & StudentRank;
 export type Attendance = "unmarked" | "present" | "absent";
 export type ReportAuthor = { id: string; name: string };
+export type InstructorProfile = ReportAuthor & { role: string; avatarUrl?: string };
 export type StudentSession = {
     attendance: Attendance;
     comment: string;
@@ -33,6 +34,23 @@ export const instructors = [
     { id: "instructor-2", name: "Jamie Chen" },
 ];
 export const currentInstructor = instructors[0];
+
+// Sign-offs retain a name snapshot for older/unknown accounts, but identity and
+// live profile lookup always use the instructor ID, never a display-name match.
+export function resolveInstructorProfile(
+    instructorId: string,
+    fallbackName = "",
+    currentProfile?: InstructorProfile | null,
+): InstructorProfile {
+    if (currentProfile?.id === instructorId) return currentProfile;
+    const instructor = instructors.find(item => item.id === instructorId);
+    return {
+        id: instructorId,
+        name: (instructor?.name ?? fallbackName.trim()) || "Unknown instructor",
+        role: "Instructor",
+    };
+}
+
 export const dojoCapacities: Record<string, number> = {
     "Central Dojo": 24,
     "Northside Dojo": 18,
