@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useOutletContext } from 'react-router'
 import { CalendarDays, ChevronLeft, ChevronRight, List, MapPin } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Button } from '@/components/student/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import type { StudentContext } from '@/layouts/StudentLayout'
 import { addDays, dateTime, formatTime, isEligible, prettyDate } from '@/lib/student-schedule'

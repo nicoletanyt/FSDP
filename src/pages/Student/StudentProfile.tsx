@@ -1,9 +1,11 @@
+import { useState } from "react";
 import { Link } from "react-router";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, LogOut } from "lucide-react";
 
-import { buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/student/button";
 import { Card } from "@/components/ui/card";
 import PaymentStatusBadge from "@/components/student/PaymentStatusBadge";
+import { useAuth } from "@/hooks/use-auth";
 import { formatDate, money } from "@/lib/format";
 import { mockProfile, type Payment, type Profile } from "@/lib/student-profile";
 
@@ -124,6 +126,9 @@ function MembershipCard({ profile }: { profile: Profile }) {
 
 /* ---------- Page ---------- */
 export default function StudentProfile() {
+  const { signOut } = useAuth();
+  const [signingOut, setSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState("");
   // TODO: swap for a Supabase-backed hook, e.g. useStudentProfile()
   const profile = mockProfile;
   const { membership } = profile;
@@ -132,15 +137,43 @@ export default function StudentProfile() {
   const expiringSoon = membership.standing === "Active" && daysLeft >= 0 && daysLeft <= 30;
   const groups = groupByItem(profile.payments);
 
+  async function handleSignOut() {
+    if (signingOut) return;
+    setSigningOut(true);
+    setSignOutError("");
+    try {
+      await signOut();
+    } catch (failure) {
+      setSignOutError(
+        failure instanceof Error ? failure.message : "Unable to sign out. Try again.",
+      );
+    } finally {
+      setSigningOut(false);
+    }
+  }
+
   return (
       <main className="w-full">
-        <header>
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-red-ink">
-            Aikido Shinju-Kai
-          </p>
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Membership Profile</h1>
-          <p className="mt-1 text-muted-foreground">Your membership card and recent payments.</p>
+        <header className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-red-ink">
+              Aikido Shinju-Kai
+            </p>
+            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Membership Profile</h1>
+            <p className="mt-1 text-muted-foreground">Your membership card and recent payments.</p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleSignOut}
+            disabled={signingOut}
+            aria-busy={signingOut}
+          >
+            <LogOut aria-hidden="true" className="size-4" />
+            {signingOut ? "Signing out…" : "Sign out"}
+          </Button>
         </header>
+        {signOutError && <p role="alert" className="mt-3 text-sm text-destructive">{signOutError}</p>}
 
         {/* Card + details */}
         <section aria-label="Membership" className="mt-6 grid items-start gap-4 md:grid-cols-[auto_1fr]">

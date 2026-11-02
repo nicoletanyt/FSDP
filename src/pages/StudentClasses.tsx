@@ -2,13 +2,13 @@ import { useMemo, useState } from 'react'
 import { Link, useOutletContext } from 'react-router'
 import { SlidersHorizontal } from 'lucide-react'
 import ClassCard from '@/components/student/ClassCard'
-import { Button } from '@/components/ui/button'
+import { Button } from '@/components/student/button'
 import type { StudentContext } from '@/layouts/StudentLayout'
 import { beltRanks, dateTime, isEligible, isRecommended } from '@/lib/student-schedule'
 import type { BeltRank } from '@/lib/student-schedule'
 
 const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-const field = 'w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring'
+const field = 'min-h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring'
 export default function StudentClasses() {
   const { classes, schedule } = useOutletContext<StudentContext>()
   const [centre, setCentre] = useState('all')
@@ -30,7 +30,7 @@ export default function StudentClasses() {
   }), [classes, centre, day, period, instructor, eligibility, schedule.belt])
   return <div className="space-y-6">
     <div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="text-2xl font-semibold">Class timetable & enrolment</h2><p className="mt-1 text-sm text-muted-foreground">Explore training sessions at different centres and enrol in a suitable class.</p></div><Button variant="outline" render={<Link to="/attendance" />}>View my schedule</Button></div>
-    <div className="rounded-xl border bg-card p-4 shadow-sm"><h3 className="mb-4 flex items-center gap-2 font-semibold"><SlidersHorizontal className="size-4" /> Filter classes</h3><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="rounded-xl border bg-card p-5 shadow-sm"><h3 className="mb-4 flex items-center gap-2 font-semibold"><SlidersHorizontal className="size-4" /> Filter classes</h3><div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       <label className="space-y-1 text-sm"><span>Training centre</span><select className={field} value={centre} onChange={e => setCentre(e.target.value)}><option value="all">All centres</option>{centres.map(c => <option key={c}>{c}</option>)}</select></label>
       <label className="space-y-1 text-sm"><span>Day of week</span><select className={field} value={day} onChange={e => setDay(e.target.value)}><option value="all">Any day</option>{days.map((d, i) => <option key={d} value={i}>{d}</option>)}</select></label>
       <label className="space-y-1 text-sm"><span>Time of day</span><select className={field} value={period} onChange={e => setPeriod(e.target.value)}><option value="all">Any time</option><option value="morning">Morning (before 12 PM)</option><option value="afternoon">Afternoon (12–5 PM)</option><option value="evening">Evening (5 PM onwards)</option></select></label>
