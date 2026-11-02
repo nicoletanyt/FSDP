@@ -1,6 +1,7 @@
 import { Link, useParams } from "react-router";
 import { ChevronLeft, FileText } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import GradeBadge from "@/components/GradeBadge";
 import {
     addDays,
     calendarHref,
@@ -64,9 +65,7 @@ export default function InstructorStudentReports() {
                                     {student.name}
                                 </Link>
                             </CardTitle>
-                            <p className="text-xs text-muted-foreground">
-                                {student.beltGrade}
-                            </p>
+                            <div><GradeBadge rank={student.rank} system={student.gradingSystem} /></div>
                         </CardHeader>
                         <CardContent className="space-y-4 text-sm">
                             <div className="rounded-lg bg-muted/50 p-3">
