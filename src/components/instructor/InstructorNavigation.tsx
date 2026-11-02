@@ -2,6 +2,7 @@ import { Link, useLocation } from "react-router";
 import { CalendarDays, ScanLine, Users } from "lucide-react";
 import logo from "@/assets/logo.png";
 import ThemeToggle from "@/components/theme-toggle";
+import { InstructorAvatar } from "@/components/ui/avatar";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 
@@ -23,11 +24,6 @@ export default function InstructorNavigation({
     const name =
         [profile?.first_name, profile?.last_name].filter(Boolean).join(" ") ||
         "Instructor";
-    const initials = name
-        .split(/\s+/)
-        .slice(0, 2)
-        .map((part) => part[0])
-        .join("");
     const isCalendarRelated =
         pathname === "/instructor/dashboard" ||
         pathname.startsWith("/instructor/assessments/") ||
@@ -100,12 +96,13 @@ export default function InstructorNavigation({
                             pathname === "/instructor/profile" && "bg-accent",
                         )}
                     >
-                        <span
-                            className="flex size-7 items-center justify-center rounded-full bg-muted text-xs font-semibold"
-                            aria-hidden="true"
-                        >
-                            {initials}
-                        </span>
+                        <InstructorAvatar
+                            profile={{ id: profile?.id ?? "", name, role: "Instructor" }}
+                            interactive={false}
+                            showName={false}
+                            avatarClassName="size-7"
+                            fallbackClassName="text-xs font-semibold"
+                        />
                     </Link>
                 </div>
             </div>

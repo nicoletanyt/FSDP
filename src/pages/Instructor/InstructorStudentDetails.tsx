@@ -636,7 +636,7 @@ function StudentGrading({
     const gradingTriggerRef = useRef<HTMLButtonElement>(null);
     const keepEditingRef = useRef<HTMLButtonElement>(null);
     const closeTriggerRef = useRef<HTMLElement | null>(null);
-    const { profile: instructorProfile, session } = useAuth();
+    const { profile: instructorProfile } = useAuth();
     const toast = useToast();
     const eligibility = gradingEligibility(requirements);
     const examiner = instructorProfile
@@ -651,11 +651,6 @@ function StudentGrading({
     const examinerProfile: InstructorProfile = {
         ...examiner,
         role: "Instructor",
-        avatarUrl:
-            session?.user.id === examiner.id &&
-                typeof session.user.user_metadata?.avatar_url === "string"
-                ? session.user.user_metadata.avatar_url
-                : undefined,
     };
 
     function toggleTechnique(itemId: string) {
