@@ -8,6 +8,13 @@ import ThemeToggle from "@/components/theme-toggle";
 export default function RootLayout() {
     const { session, profile, loading, signOut } = useAuth();
     const isInstructorPortal = useMatch("/instructor/*");
+    const isStudentDashboard = useMatch("/dashboard");
+    const isStudentProfile = useMatch("/profile");
+    const isStudentPayments = useMatch("/payments");
+    const isStudentGrading = useMatch("/grading");
+    const isStudentPage = Boolean(
+        isStudentDashboard || isStudentProfile || isStudentPayments || isStudentGrading,
+    );
     const [signingOut, setSigningOut] = useState(false);
     const [error, setError] = useState("");
 
@@ -25,7 +32,7 @@ export default function RootLayout() {
         }
     }
 
-    if (isInstructorPortal) {
+    if (isInstructorPortal || isStudentPage) {
         return (
             <Suspense
                 fallback={
@@ -47,7 +54,7 @@ export default function RootLayout() {
             <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur">
                 <nav
                     aria-label="Main navigation"
-                    className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-6 py-3"
+                    className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-6 py-5"
                 >
                     <Link
                         to="/"

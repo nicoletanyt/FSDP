@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import StudentSessionHistory from "@/components/instructor/StudentSessionHistory";
+import GradeBadge from "@/components/GradeBadge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToastProvider } from "@/components/ui/toast";
@@ -25,12 +26,12 @@ import {
 } from "@/lib/instructor-calendar";
 import type { CalendarEvent, Student } from "@/lib/instructor-calendar";
 import {
-    beltColorClass,
     getStudentProfile,
     studentAttendanceSummary,
     studentGradingHistory,
     studentSessionHistory,
 } from "@/lib/instructor-student-details";
+import { gradingSystems } from "@/lib/student-grades";
 import { cn } from "@/lib/utils";
 
 type Profile = ReturnType<typeof getStudentProfile>;
@@ -45,16 +46,11 @@ function StudentInformation({ profile }: { profile: Profile }) {
                     <h1>{profile.name}</h1>
                 </CardTitle>
                 <p className="text-xs text-muted-foreground">{profile.studentNumber}</p>
-                <p className="mt-1 flex items-center gap-2 text-sm">
-                    <span
-                        aria-hidden="true"
-                        className={cn(
-                            "size-3 shrink-0 rounded-full border",
-                            beltColorClass(profile.beltGrade),
-                        )}
-                    />
-                    {profile.beltGrade}
-                </p>
+                <div className="mt-2 space-y-1.5">
+                    <p className="text-2xs text-muted-foreground">Current rank</p>
+                    <GradeBadge rank={profile.rank} system={profile.gradingSystem} showBeltLabel className="px-3 py-1.5 text-base" />
+                    <p className="text-2xs text-muted-foreground">{gradingSystems[profile.gradingSystem].label}</p>
+                </div>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
                 <dl className="grid grid-cols-2 gap-3 border-t pt-3">
@@ -102,7 +98,7 @@ function StudentInformation({ profile }: { profile: Profile }) {
                         {profile.phone}
                     </a>
                     <div className="space-y-1 pt-2" aria-label="Emergency contact">
-                        <h3 className="text-[11px] font-medium text-muted-foreground">
+                        <h3 className="text-2xs font-medium text-muted-foreground">
                             Emergency contact
                         </h3>
                         <p className="text-xs">
@@ -157,6 +153,12 @@ function GradingRequirements({
     profile: Profile;
     attended: number;
 }) {
+    if (!profile.nextRank) return (
+        <Card>
+            <CardHeader><CardTitle>Next grading</CardTitle></CardHeader>
+            <CardContent className="text-xs text-muted-foreground">No further grading level is configured for this grading system.</CardContent>
+        </Card>
+    );
     const requirements = [
         { label: "Training sessions", current: attended, required: 12 },
         {
@@ -193,10 +195,11 @@ function GradingRequirements({
                         {progress}% ready
                     </span>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                    {profile.beltGrade} <span aria-hidden="true">→</span>{" "}
-                    {profile.targetGrade}
-                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                    <GradeBadge rank={profile.rank} system={profile.gradingSystem} />
+                    <span aria-hidden="true" className="text-muted-foreground">→</span>
+                    <GradeBadge rank={profile.nextRank} system={profile.gradingSystem} />
+                </div>
             </CardHeader>
             <CardContent className="space-y-4">
                 {requirements.map((item) => (
@@ -215,7 +218,7 @@ function GradingRequirements({
                         />
                     </div>
                 ))}
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-2xs text-muted-foreground">
                     Illustrative grading requirements · Dummy data
                 </p>
             </CardContent>
@@ -246,20 +249,13 @@ function NextGradingSummary({
                     <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
                         <div>
                             <dt className="text-muted-foreground">Current rank</dt>
-                            <dd className="mt-1 flex items-center gap-2 font-medium">
-                                <span
-                                    aria-hidden="true"
-                                    className={cn(
-                                        "size-2.5 shrink-0 rounded-full border",
-                                        beltColorClass(profile.beltGrade),
-                                    )}
-                                />
-                                {profile.beltGrade}
-                            </dd>
+                            <dd className="mt-1"><GradeBadge rank={profile.rank} system={profile.gradingSystem} /></dd>
                         </div>
                         <div>
-                            <dt className="text-muted-foreground">Next grade</dt>
-                            <dd className="mt-1 font-medium">{profile.targetGrade}</dd>
+                            <dt className="text-muted-foreground">Next rank</dt>
+                            <dd className="mt-1">{profile.nextRank
+                                ? <GradeBadge rank={profile.nextRank} system={profile.gradingSystem} />
+                                : "Not configured"}</dd>
                         </div>
                         <div>
                             <dt className="text-muted-foreground">Eligibility</dt>
@@ -272,7 +268,7 @@ function NextGradingSummary({
                             </dd>
                         </div>
                     </dl>
-                    <p className="text-[11px] text-muted-foreground">
+                    <p className="text-2xs text-muted-foreground">
                         Eligibility is separate from technical assessment.
                     </p>
                 </CardContent>
@@ -343,8 +339,8 @@ function StudentDetailContent({
     const assessmentRecorded = gradingHistory.some(
         (assessment) =>
             assessment.status === "Completed" &&
-            assessment.fromGrade === profile.beltGrade &&
-            assessment.toGrade === profile.targetGrade,
+            assessment.fromRank === profile.rank &&
+            assessment.toRank === profile.nextRank,
     );
     const monthsInRank = Math.max(
         0,
@@ -463,7 +459,7 @@ function StudentDetailContent({
                         <section className="space-y-3">
                             <div className="flex min-h-7 flex-wrap items-center gap-x-3 gap-y-1">
                                 <h2 className="text-sm font-semibold">Attendance</h2>
-                                <p className="ml-auto text-right text-[11px] text-muted-foreground">
+                                <p className="ml-auto text-right text-2xs text-muted-foreground">
                                     {periodStart && periodEnd
                                         ? `Reporting period: ${fullDate(periodStart)} – ${fullDate(periodEnd)}`
                                         : "No completed sessions recorded"}
@@ -495,7 +491,7 @@ function StudentDetailContent({
                                                 ? fullDate(lastAttended.event.date)
                                                 : "Not recorded"}
                                         </p>
-                                        <p className="mt-1 text-[11px] text-muted-foreground">
+                                        <p className="mt-1 text-2xs text-muted-foreground">
                                             {lastAttended
                                                 ? `${lastAttended.event.name} · ${lastAttended.event.dojo}`
                                                 : "No attended sessions in this history"}
@@ -602,18 +598,9 @@ function StudentDetailContent({
                                 <dl className="grid grid-cols-2 gap-4 text-sm">
                                     <div>
                                         <dt className="text-xs text-muted-foreground">
-                                            Belt grade
+                                            Current rank
                                         </dt>
-                                        <dd className="mt-1 flex items-center gap-2 font-medium">
-                                            <span
-                                                aria-hidden="true"
-                                                className={cn(
-                                                    "size-3 shrink-0 rounded-full border",
-                                                    beltColorClass(student.beltGrade),
-                                                )}
-                                            />
-                                            {student.beltGrade}
-                                        </dd>
+                                        <dd className="mt-1"><GradeBadge rank={student.rank} system={student.gradingSystem} showBeltLabel /></dd>
                                     </div>
                                     <div>
                                         <dt className="text-xs text-muted-foreground">
@@ -622,7 +609,7 @@ function StudentDetailContent({
                                         <dd className="mt-1 font-medium">
                                             {monthsInRank} {monthsInRank === 1 ? "month" : "months"}
                                         </dd>
-                                        <dd className="mt-1 text-[11px] text-muted-foreground">
+                                        <dd className="mt-1 text-2xs text-muted-foreground">
                                             Since {fullDate(profile.rankAwardedOn)}
                                         </dd>
                                     </div>
@@ -640,15 +627,17 @@ function StudentDetailContent({
                                         <article key={assessment.id} className="border-l-2 pl-3">
                                             <div className="flex flex-wrap items-start justify-between gap-2">
                                                 <div>
-                                                    <p className="text-xs font-medium">
-                                                        {assessment.fromGrade} → {assessment.toGrade}
-                                                    </p>
-                                                    <p className="mt-1 text-[11px] text-muted-foreground">
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        <GradeBadge rank={assessment.fromRank} system={student.gradingSystem} />
+                                                        <span aria-hidden="true">→</span>
+                                                        <GradeBadge rank={assessment.toRank} system={student.gradingSystem} />
+                                                    </div>
+                                                    <p className="mt-1 text-2xs text-muted-foreground">
                                                         {fullDate(assessment.date)} ·{" "}
                                                         {assessment.instructor}
                                                     </p>
                                                 </div>
-                                                <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">
+                                                <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-2xs text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">
                                                     {assessment.status}
                                                 </span>
                                             </div>

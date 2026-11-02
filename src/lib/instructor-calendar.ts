@@ -1,9 +1,13 @@
+import type { StudentRank } from "./student-grades";
+
 export type EventType = "training" | "grading";
+export type ClassType = keyof typeof classTypes;
 export type CalendarEvent = {
     id: string;
     date: Date;
     name: string;
     type: EventType;
+    classType?: ClassType;
     startTime: string;
     endTime: string;
     dojo: string;
@@ -11,7 +15,7 @@ export type CalendarEvent = {
     studentIds: string[];
 };
 export type ClassTemplate = Omit<CalendarEvent, "id" | "date"> & { id: string; weekday: number };
-export type Student = { id: string; name: string; beltGrade: string; targetGrade: string };
+export type Student = { id: string; name: string } & StudentRank;
 export type Attendance = "unmarked" | "present" | "absent";
 export type ReportAuthor = { id: string; name: string };
 export type StudentSession = {
@@ -29,32 +33,117 @@ export const instructors = [
     { id: "instructor-2", name: "Jamie Chen" },
 ];
 export const currentInstructor = instructors[0];
+export const dojoCapacities: Record<string, number> = {
+    "Central Dojo": 24,
+    "Northside Dojo": 18,
+};
+
 export const students: Student[] = [
-    { id: "student-1", name: "Emma Wilson", beltGrade: "White belt", targetGrade: "Yellow belt" },
-    { id: "student-2", name: "Noah Patel", beltGrade: "Yellow belt", targetGrade: "Orange belt" },
-    { id: "student-3", name: "Olivia Chen", beltGrade: "White belt", targetGrade: "Yellow belt" },
-    { id: "student-4", name: "Liam Taylor", beltGrade: "Green belt", targetGrade: "Blue belt" },
-    { id: "student-5", name: "Ava Thompson", beltGrade: "Orange belt", targetGrade: "Green belt" },
-    { id: "student-6", name: "Ethan Lee", beltGrade: "Brown belt", targetGrade: "Black belt · 1st Dan" },
-    { id: "student-7", name: "Mia Roberts", beltGrade: "White belt", targetGrade: "Yellow belt" },
-    { id: "student-8", name: "Lucas Evans", beltGrade: "Yellow belt", targetGrade: "Orange belt" },
-    { id: "student-9", name: "Isla James", beltGrade: "Blue belt", targetGrade: "Brown belt" },
-    { id: "student-10", name: "Oliver Scott", beltGrade: "Green belt", targetGrade: "Blue belt" },
-    { id: "student-11", name: "Amelia Lewis", beltGrade: "Orange belt", targetGrade: "Green belt" },
-    { id: "student-12", name: "Leo Martin", beltGrade: "Brown belt", targetGrade: "Black belt · 1st Dan" },
+    { id: "student-1", name: "Emma Wilson", gradingSystem: "children", rank: "10-kyu" },
+    { id: "student-2", name: "Noah Patel", gradingSystem: "children", rank: "8-kyu" },
+    { id: "student-3", name: "Olivia Chen", gradingSystem: "children", rank: "10-kyu" },
+    { id: "student-4", name: "Liam Taylor", gradingSystem: "adults", rank: "3-kyu" },
+    { id: "student-5", name: "Ava Thompson", gradingSystem: "children", rank: "7-kyu" },
+    { id: "student-6", name: "Ethan Lee", gradingSystem: "adults", rank: "1-kyu" },
+    { id: "student-7", name: "Mia Roberts", gradingSystem: "children", rank: "10-kyu" },
+    { id: "student-8", name: "Lucas Evans", gradingSystem: "children", rank: "8-kyu" },
+    { id: "student-9", name: "Isla James", gradingSystem: "adults", rank: "2-kyu" },
+    { id: "student-10", name: "Oliver Scott", gradingSystem: "adults", rank: "3-kyu" },
+    { id: "student-11", name: "Amelia Lewis", gradingSystem: "adults", rank: "4-kyu" },
+    { id: "student-12", name: "Leo Martin", gradingSystem: "adults", rank: "1-dan" },
+    { id: "student-13", name: "Sophie Tan", gradingSystem: "children", rank: "10-kyu" },
+    { id: "student-14", name: "Jayden Lim", gradingSystem: "children", rank: "8-kyu" },
+    { id: "student-15", name: "Ella Ng", gradingSystem: "children", rank: "10-kyu" },
+    { id: "student-16", name: "Daniel Wong", gradingSystem: "adults", rank: "2-kyu" },
+    { id: "student-17", name: "Grace Teo", gradingSystem: "adults", rank: "3-kyu" },
+    { id: "student-18", name: "Michael Ong", gradingSystem: "adults", rank: "6-kyu" },
+    { id: "student-19", name: "Chloe Tan", gradingSystem: "adults", rank: "6-kyu" },
+    { id: "student-20", name: "Sophia Lim", gradingSystem: "adults", rank: "5-kyu" },
+    { id: "student-21", name: "Hannah Goh", gradingSystem: "adults", rank: "3-kyu" },
+    { id: "student-22", name: "Rachel Ho", gradingSystem: "adults", rank: "2-kyu" },
 ];
 export const classTemplates: ClassTemplate[] = [
-    { id: "children-beginners-mon", weekday: 1, name: "Children Beginners", type: "training", startTime: "17:00", endTime: "18:00", dojo: "Central Dojo", instructorId: "instructor-1", studentIds: ["student-1", "student-2", "student-3", "student-5", "student-7", "student-8"] },
-    { id: "adults-tue", weekday: 2, name: "Adults", type: "training", startTime: "18:00", endTime: "19:00", dojo: "Northside Dojo", instructorId: "instructor-1", studentIds: ["student-4", "student-6", "student-9", "student-10", "student-11", "student-12"] },
-    { id: "intermediate-wed", weekday: 3, name: "Intermediate", type: "training", startTime: "17:30", endTime: "18:30", dojo: "Central Dojo", instructorId: "instructor-1", studentIds: ["student-2", "student-4", "student-5", "student-8", "student-10", "student-11"] },
-    { id: "advanced-wed", weekday: 3, name: "Advanced", type: "training", startTime: "19:00", endTime: "20:30", dojo: "Central Dojo", instructorId: "instructor-1", studentIds: ["student-6", "student-9", "student-12"] },
-    { id: "children-beginners-thu", weekday: 4, name: "Children Beginners", type: "training", startTime: "16:00", endTime: "17:00", dojo: "Northside Dojo", instructorId: "instructor-1", studentIds: ["student-1", "student-2", "student-3", "student-5", "student-7", "student-8"] },
-    { id: "mixed-family-fri", weekday: 5, name: "Mixed/Family", type: "training", startTime: "18:00", endTime: "19:30", dojo: "Central Dojo", instructorId: "instructor-1", studentIds: students.map((student) => student.id) },
-    { id: "weapons-sat", weekday: 6, name: "Weapons", type: "training", startTime: "14:30", endTime: "16:00", dojo: "Central Dojo", instructorId: "instructor-1", studentIds: ["student-4", "student-6", "student-9", "student-12"] },
+    { id: "children-beginners-mon", weekday: 1, name: "Children Beginners", type: "training", classType: "children-beginners", startTime: "17:00", endTime: "18:00", dojo: "Central Dojo", instructorId: "instructor-1", studentIds: ["student-1", "student-2", "student-3", "student-5", "student-7", "student-8"] },
+    { id: "adults-tue", weekday: 2, name: "Adults", type: "training", classType: "adults", startTime: "18:00", endTime: "19:00", dojo: "Northside Dojo", instructorId: "instructor-1", studentIds: ["student-4", "student-6", "student-9", "student-10", "student-11", "student-12"] },
+    { id: "intermediate-wed", weekday: 3, name: "Intermediate", type: "training", classType: "intermediate", startTime: "17:30", endTime: "18:30", dojo: "Central Dojo", instructorId: "instructor-1", studentIds: ["student-2", "student-4", "student-5", "student-8", "student-10", "student-11"] },
+    { id: "advanced-wed", weekday: 3, name: "Advanced", type: "training", classType: "advanced", startTime: "19:00", endTime: "20:00", dojo: "Central Dojo", instructorId: "instructor-1", studentIds: ["student-6", "student-9", "student-12"] },
+    { id: "children-beginners-thu", weekday: 4, name: "Children Beginners", type: "training", classType: "children-beginners", startTime: "16:00", endTime: "17:00", dojo: "Northside Dojo", instructorId: "instructor-1", studentIds: ["student-1", "student-2", "student-3", "student-5", "student-7", "student-8"] },
+    { id: "mixed-family-fri", weekday: 5, name: "Mixed/Family", type: "training", classType: "mixed-family", startTime: "18:00", endTime: "19:00", dojo: "Central Dojo", instructorId: "instructor-1", studentIds: students.map((student) => student.id) },
+    { id: "weapons-sat", weekday: 6, name: "Weapons", type: "training", classType: "weapons", startTime: "14:30", endTime: "15:30", dojo: "Central Dojo", instructorId: "instructor-1", studentIds: ["student-4", "student-6", "student-9", "student-12"] },
     { id: "children-grading-sat", weekday: 6, name: "Children Grading", type: "grading", startTime: "10:00", endTime: "12:00", dojo: "Central Dojo", instructorId: "instructor-1", studentIds: ["student-1", "student-2", "student-3", "student-5"] },
     { id: "adults-grading-sat", weekday: 6, name: "Adults Grading", type: "grading", startTime: "12:30", endTime: "14:00", dojo: "Central Dojo", instructorId: "instructor-1", studentIds: ["student-4", "student-6", "student-9", "student-12"] },
-    { id: "other-instructor", weekday: 1, name: "Adults", type: "training", startTime: "19:00", endTime: "20:00", dojo: "Northside Dojo", instructorId: "instructor-2", studentIds: ["student-2", "student-6"] },
+    { id: "other-instructor", weekday: 1, name: "Adults", type: "training", classType: "adults", startTime: "19:00", endTime: "20:00", dojo: "Northside Dojo", instructorId: "instructor-2", studentIds: ["student-2", "student-6"] },
+    { id: "children-juniors-tue", weekday: 2, name: "Children Juniors", type: "training", classType: "children-juniors", startTime: "16:00", endTime: "17:00", dojo: "Northside Dojo", instructorId: "instructor-1", studentIds: ["student-13", "student-14", "student-15"] },
+    { id: "sg50-sun", weekday: 0, name: "SG50", type: "training", classType: "sg50", startTime: "09:00", endTime: "10:00", dojo: "Central Dojo", instructorId: "instructor-1", studentIds: ["student-16", "student-17", "student-18"] },
+    { id: "ladies-thu", weekday: 4, name: "Ladies", type: "training", classType: "ladies", startTime: "18:00", endTime: "19:00", dojo: "Central Dojo", instructorId: "instructor-1", studentIds: ["student-19", "student-20", "student-21", "student-22"] },
 ];
+
+// Reference timetable colours, shared by every calendar layout and the info popover.
+export const classTypes = {
+    "children-beginners": {
+        label: "Children Beginners",
+        description: "7th Kyu & above, ages 4 to 12",
+        card: "border-[#598fb3] bg-[#5995bc] text-white hover:bg-[#5995bc] hover:text-white dark:border-[#6ca9cd] dark:bg-[#28516b] dark:text-white dark:hover:bg-[#28516b]",
+        badge: "border-[#598fb3] bg-[#5995bc] text-white dark:border-[#6ca9cd] dark:bg-[#28516b] dark:text-white",
+        dot: "bg-[#5995bc]",
+    },
+    "children-juniors": {
+        label: "Children Juniors",
+        description: "Suitable for all grades, ages 4 to 6",
+        card: "border-[#81b6c8] bg-[#98cddd] text-[#102b37] dark:border-[#5d9fb3] dark:bg-[#244955] dark:text-cyan-50",
+        badge: "border-[#81b6c8] bg-[#98cddd] text-[#102b37] dark:border-[#5d9fb3] dark:bg-[#244955] dark:text-cyan-50",
+        dot: "bg-[#98cddd]",
+    },
+    adults: {
+        label: "Adults",
+        description: "13 years & above",
+        card: "border-[#cbaa62] bg-[#f2e4b9] text-[#302a19] dark:border-[#a99052] dark:bg-[#51452a] dark:text-amber-50",
+        badge: "border-[#cbaa62] bg-[#f2e4b9] text-[#302a19] dark:border-[#a99052] dark:bg-[#51452a] dark:text-amber-50",
+        dot: "bg-[#f2e4b9]",
+    },
+    "mixed-family": {
+        label: "Mixed/Family",
+        description: "Suitable for all adults & children",
+        card: "border-[#7661b4] bg-[#c9c2df] text-[#29213f] dark:border-[#9c88d1] dark:bg-[#3d345d] dark:text-violet-50",
+        badge: "border-[#7661b4] bg-[#c9c2df] text-[#29213f] dark:border-[#9c88d1] dark:bg-[#3d345d] dark:text-violet-50",
+        dot: "bg-[#c9c2df]",
+    },
+    weapons: {
+        label: "Weapons",
+        description: "Weapons class",
+        card: "border-[#6ca34f] bg-[#c8d9c2] text-[#23331c] dark:border-[#82b268] dark:bg-[#30472b] dark:text-green-50",
+        badge: "border-[#6ca34f] bg-[#c8d9c2] text-[#23331c] dark:border-[#82b268] dark:bg-[#30472b] dark:text-green-50",
+        dot: "bg-[#c8d9c2]",
+    },
+    intermediate: {
+        label: "Intermediate",
+        description: "4th Kyu & above",
+        card: "border-[#488fd5] bg-[#c3daf0] text-[#19344e] dark:border-[#6ba9e4] dark:bg-[#263f5c] dark:text-blue-50",
+        badge: "border-[#488fd5] bg-[#c3daf0] text-[#19344e] dark:border-[#6ba9e4] dark:bg-[#263f5c] dark:text-blue-50",
+        dot: "bg-[#c3daf0]",
+    },
+    advanced: {
+        label: "Advanced",
+        description: "1st Kyu & above only",
+        card: "border-[#488998] bg-[#c3d8dd] text-[#1c373e] dark:border-[#6da8b5] dark:bg-[#29474e] dark:text-cyan-50",
+        badge: "border-[#488998] bg-[#c3d8dd] text-[#1c373e] dark:border-[#6da8b5] dark:bg-[#29474e] dark:text-cyan-50",
+        dot: "bg-[#c3d8dd]",
+    },
+    sg50: {
+        label: "SG50",
+        description: "Energy | KI Training",
+        card: "border-[#b44c88] bg-[#dbc5d2] text-[#442236] dark:border-[#d47aaf] dark:bg-[#543345] dark:text-pink-50",
+        badge: "border-[#b44c88] bg-[#dbc5d2] text-[#442236] dark:border-[#d47aaf] dark:bg-[#543345] dark:text-pink-50",
+        dot: "bg-[#dbc5d2]",
+    },
+    ladies: {
+        label: "Ladies",
+        description: "Ladies only",
+        card: "border-[#d96b7a] bg-[#e8c2c7] text-[#48232a] dark:border-[#e38a96] dark:bg-[#5b343e] dark:text-rose-50",
+        badge: "border-[#d96b7a] bg-[#e8c2c7] text-[#48232a] dark:border-[#e38a96] dark:bg-[#5b343e] dark:text-rose-50",
+        dot: "bg-[#e8c2c7]",
+    },
+} as const;
 
 export const eventStyles = {
     training: {
@@ -71,6 +160,12 @@ export const eventStyles = {
     },
 };
 
+export function getEventStyle(event: Pick<CalendarEvent, "type" | "classType">) {
+    return event.type === "training" && event.classType
+        ? { ...classTypes[event.classType], label: eventStyles.training.label }
+        : eventStyles[event.type];
+}
+
 export function dateKey(date: Date) {
     return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
 }
@@ -79,12 +174,27 @@ export function addDays(date: Date, amount: number) {
     return new Date(date.getFullYear(), date.getMonth(), date.getDate() + amount);
 }
 
+export function addMonths(date: Date, amount: number) {
+    const month = new Date(date.getFullYear(), date.getMonth() + amount, 1);
+    const lastDay = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
+    return new Date(month.getFullYear(), month.getMonth(), Math.min(date.getDate(), lastDay));
+}
+
 export function startOfWeek(date: Date) {
     return addDays(date, -((date.getDay() + 6) % 7));
 }
 
 export function weekDates(date: Date) {
     return Array.from({ length: 7 }, (_, index) => addDays(startOfWeek(date), index));
+}
+
+export function monthDates(date: Date) {
+    const start = startOfWeek(new Date(date.getFullYear(), date.getMonth(), 1));
+    const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+    const end = addDays(startOfWeek(lastDay), 6);
+    const days: Date[] = [];
+    for (let day = start; day <= end; day = addDays(day, 1)) days.push(day);
+    return days;
 }
 
 export function eventsForDate(date: Date): CalendarEvent[] {
