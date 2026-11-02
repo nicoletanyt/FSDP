@@ -12,13 +12,16 @@ import NotFound from './pages/NotFound'
 const Login = lazy(() => import('./pages/Login'))
 const Signup = lazy(() => import('./pages/Signup'))
 const StudentDashboard = lazy(() => import('./pages/StudentDashboard'))
-const InstructorDashboard = lazy(() => import('./pages/Instructor/InstructorDashboard'))
-const InstructorStudents = lazy(() => import('./pages/Instructor/InstructorStudents'))
-const InstructorProfile = lazy(() => import('./pages/Instructor/InstructorProfile'))
-const InstructorCheckIn = lazy(() => import('./pages/Instructor/InstructorCheckIn'))
-const InstructorStudentDetails = lazy(() => import('./pages/Instructor/InstructorStudentDetails'))
-const InstructorStudentReports = lazy(() => import('./pages/Instructor/InstructorStudentReports'))
-const InstructorGradingAssessment = lazy(() => import('./pages/Instructor/InstructorGradingAssessment'))
+const StudentProfile = lazy(() => import('../student/profile'))
+const StudentPayments = lazy(() => import('../student/payments'))
+const StudentGrading = lazy(() => import('../student/grading-page'))
+const InstructorDashboard = lazy(() => import('./pages/InstructorDashboard'))
+const InstructorStudents = lazy(() => import('./pages/InstructorStudents'))
+const InstructorProfile = lazy(() => import('./pages/InstructorProfile'))
+const InstructorCheckIn = lazy(() => import('./pages/InstructorCheckIn'))
+const InstructorStudentDetails = lazy(() => import('./pages/InstructorStudentDetails'))
+const InstructorStudentReports = lazy(() => import('./pages/InstructorStudentReports'))
+const InstructorGradingAssessment = lazy(() => import('./pages/InstructorGradingAssessment'))
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'))
 
 export default function App() {
@@ -36,6 +39,9 @@ export default function App() {
           </Route>
           <Route element={<ProtectedRoute role="student" />}>
             <Route path="dashboard" element={<StudentDashboard />} />
+            <Route path="profile" element={<StudentProfile />} />
+            <Route path="payments" element={<StudentPayments />} />
+            <Route path="grading" element={<StudentGrading />} />
           </Route>
           <Route path="instructor">
             <Route index element={<InstructorIndexRedirect />} />

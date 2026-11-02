@@ -1,5 +1,5 @@
-import Dashboard from '@/components/auth/Dashboard'
+import StudentHome from "../../student/homepage";
 
 export default function StudentDashboard() {
-  return <Dashboard title="Student dashboard" />
+  return <StudentHome />;
 }
