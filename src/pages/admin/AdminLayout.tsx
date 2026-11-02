@@ -21,16 +21,16 @@ function AdminShell() {
     <div
       className={cn(
         'flex flex-1 flex-col',
-        isAttendanceRegister && 'lg:h-dvh lg:min-h-0 lg:overflow-hidden',
+        isAttendanceRegister && 'min-h-0 overflow-hidden',
       )}
     >
       <AdminNavbar />
       <main
         className={cn(
-          'mx-auto w-full max-w-[1400px] flex-1 px-4 py-6 sm:px-6',
+          'mx-auto flex-1',
           isAttendanceRegister
-            ? 'flex min-h-0 flex-col lg:overflow-hidden'
-            : 'space-y-6 sm:py-8',
+            ? 'flex min-h-0 w-[calc(100%-2rem)] max-w-[1600px] flex-col overflow-hidden py-4 sm:w-[94%] sm:py-6'
+            : 'w-full max-w-[1400px] space-y-6 px-4 py-6 sm:px-6 sm:py-8',
         )}
       >
         {showFilters && <AdminFilterBar />}

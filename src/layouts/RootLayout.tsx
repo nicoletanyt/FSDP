@@ -15,6 +15,9 @@ export default function RootLayout() {
   const isAdmin =
     location.pathname === '/admin' ||
     location.pathname.startsWith('/admin/')
+  const isAttendanceRegister =
+    location.pathname === '/admin/attendance/register' ||
+    location.pathname.startsWith('/admin/attendance/register/')
   const isInstructorPortal = useMatch('/instructor/*')
   const isStudent = Boolean(session && profile?.role === 'student')
   const homePath =
@@ -49,7 +52,8 @@ export default function RootLayout() {
   return (
     <div
       className={cn(
-        'flex min-h-screen flex-col text-foreground',
+        'flex flex-col text-foreground',
+        isAttendanceRegister ? 'h-dvh overflow-hidden' : 'min-h-screen',
         isAdmin ? 'bg-muted/30' : 'bg-background',
       )}
     >

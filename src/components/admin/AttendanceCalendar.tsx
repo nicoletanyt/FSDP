@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef } from 'react'
 import {
   Check,
   ChevronDown,
@@ -508,18 +508,11 @@ function CalendarMonth({
   )
 }
 
-const SLOT_HEIGHT = 36
-const PIXELS_PER_MINUTE = SLOT_HEIGHT / 30
-const TIMELINE_HEIGHT = (TIMELINE_END - TIMELINE_START) * PIXELS_PER_MINUTE
-const intervals = Array.from(
-  { length: (TIMELINE_END - TIMELINE_START) / 30 },
-  (_, index) => TIMELINE_START + index * 30,
-)
-
 function CalendarTimeline({
   date,
   now,
   view,
+  focusRequest,
   events,
   selectedSessionId,
   onSelectDate,
@@ -528,30 +521,106 @@ function CalendarTimeline({
   date: Date
   now: Date
   view: 'day' | 'week'
+  focusRequest: number
   events: AdminCalendarEvent[]
   selectedSessionId: string | null
   onSelectDate: (date: Date) => void
   onToggleSession: (event: AdminCalendarEvent) => void
 }) {
+  const isDay = view === 'day'
+  const timelineStart = isDay ? 0 : TIMELINE_START
+  const timelineEnd = isDay ? 24 * 60 : TIMELINE_END
+  const slotHeight = isDay ? 48 : 36
+  const pixelsPerMinute = slotHeight / 30
+  const height = (timelineEnd - timelineStart) * pixelsPerMinute
+  const intervals = Array.from(
+    { length: (timelineEnd - timelineStart) / 30 },
+    (_, index) => timelineStart + index * 30,
+  )
   const days = view === 'day' ? [date] : weekDates(date)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const headerRef = useRef<HTMLDivElement>(null)
+  const focusDayRef = useRef<HTMLDivElement>(null)
+  const nowRef = useRef(now)
+  nowRef.current = now
+  const rangeKey = `${view}:${dateKey(days[0])}`
+  const todayKey = dateKey(now)
+  const focusDayKey = days.some((day) => dateKey(day) === todayKey)
+    ? todayKey
+    : dateKey(date)
   const nowMinutes =
     now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60
+
+  // Focus when navigating, but don't jump the scroll position on clock updates.
+  useLayoutEffect(() => {
+    const viewport = scrollRef.current
+    if (!viewport) return
+
+    const focusCurrentTime = () => {
+      const headerHeight = headerRef.current?.offsetHeight ?? 0
+      const visibleHeight = viewport.clientHeight - headerHeight
+      if (visibleHeight <= 0) return false
+      const current = nowRef.current
+      const viewingToday = dateKey(date) === dateKey(current)
+      const focusMinute =
+        isDay && !viewingToday
+          ? TIMELINE_START
+          : current.getHours() * 60 + current.getMinutes() + current.getSeconds() / 60
+      const minute = Math.max(timelineStart, Math.min(timelineEnd, focusMinute))
+      const position = (minute - timelineStart) * pixelsPerMinute
+      let left = viewport.scrollLeft
+      const column = focusDayRef.current
+      if (column) {
+        const gutterWidth = headerRef.current?.offsetWidth ?? (isDay ? 56 : 64)
+        const columnLeft =
+          column.getBoundingClientRect().left -
+          viewport.getBoundingClientRect().left +
+          viewport.scrollLeft -
+          viewport.clientLeft
+        left =
+          columnLeft -
+          gutterWidth -
+          Math.max(0, viewport.clientWidth - gutterWidth - column.offsetWidth) / 2
+      }
+      viewport.scrollTo({
+        top: Math.max(0, position - visibleHeight / 3),
+        left: Math.max(0, left),
+        behavior: 'instant',
+      })
+      return true
+    }
+
+    if (focusCurrentTime()) return
+    const observer = new ResizeObserver(() => {
+      if (focusCurrentTime()) observer.disconnect()
+    })
+    observer.observe(viewport)
+    return () => observer.disconnect()
+  }, [rangeKey, focusRequest, timelineStart, timelineEnd, pixelsPerMinute, isDay])
 
   return (
     <section
       aria-label={`${view === 'day' ? 'Daily' : 'Weekly'} hourly timeline`}
       className="flex min-h-0 min-w-0 flex-1 flex-col gap-2"
     >
-      <div className="min-h-0 flex-1 overflow-auto overscroll-contain rounded-xl border bg-card">
+      <div
+        ref={scrollRef}
+        className="min-h-0 flex-1 overflow-auto overscroll-contain rounded-xl border bg-card"
+      >
         <div
           className="grid"
           style={{
-            minWidth: view === 'week' ? 910 : 300,
-            gridTemplateColumns: `64px repeat(${days.length}, minmax(0, 1fr))`,
+            minWidth: view === 'week' ? 910 : undefined,
+            gridTemplateColumns: `${isDay ? 56 : 64}px repeat(${days.length}, minmax(0, 1fr))`,
           }}
         >
-          <div className="sticky top-0 left-0 z-30 border-r border-b bg-card p-2 text-[10px] text-muted-foreground" />
-          {days.map((day) => {
+          {!isDay && (
+            <div
+              ref={headerRef}
+              className="sticky top-0 left-0 z-30 border-r border-b bg-card p-2 text-[10px] text-muted-foreground"
+            />
+          )}
+          {!isDay && days.map((day) => {
             const isToday = dateKey(day) === dateKey(now)
             return (
               <div
@@ -585,25 +654,25 @@ function CalendarTimeline({
 
           <div
             className="sticky left-0 z-10 border-r bg-card"
-            style={{ height: TIMELINE_HEIGHT + 20 }}
+            style={{ height: height + 20 }}
             aria-hidden="true"
           >
             {Array.from(
-              { length: 15 },
-              (_, index) => TIMELINE_START + index * 60,
+              { length: (timelineEnd - timelineStart) / 60 + 1 },
+              (_, index) => timelineStart + index * 60,
             ).map((minute) => (
               <span
                 key={minute}
                 className="absolute right-2 text-[10px] text-muted-foreground tabular-nums"
                 style={{
-                  top: (minute - TIMELINE_START) * PIXELS_PER_MINUTE,
+                  top: (minute - timelineStart) * pixelsPerMinute,
                   transform:
-                    minute === TIMELINE_START
+                    minute === timelineStart
                       ? undefined
                       : 'translateY(-50%)',
                 }}
               >
-                {formatTime(minutesTime(minute)).replace(':00', '')}
+                {formatTime(minutesTime(minute % (24 * 60))).replace(':00', '')}
               </span>
             ))}
           </div>
@@ -613,21 +682,22 @@ function CalendarTimeline({
             const isToday = key === dateKey(now)
             const items = eventsForDate(events, day).filter(
               (event) =>
-                timeMinutes(event.endTime) > TIMELINE_START &&
-                timeMinutes(event.startTime) < TIMELINE_END,
+                timeMinutes(event.endTime) > timelineStart &&
+                timeMinutes(event.startTime) < timelineEnd,
             )
             return (
               <div
                 key={key}
+                ref={key === focusDayKey ? focusDayRef : undefined}
                 className={cn(
                   'relative border-r',
-                  isToday && 'bg-primary/[0.025]',
+                  isToday && !isDay && 'bg-primary/[0.025]',
                 )}
-                style={{ height: TIMELINE_HEIGHT + 20 }}
+                style={{ height: height + 20 }}
               >
                 <div
                   className="relative select-none"
-                  style={{ height: TIMELINE_HEIGHT }}
+                  style={{ height }}
                 >
                   {intervals.map((minute) => (
                     <div
@@ -635,21 +705,21 @@ function CalendarTimeline({
                       aria-hidden="true"
                       className={cn(
                         'absolute inset-x-0 w-full border-t border-border/60',
-                        minute % 60 !== 0 && 'border-dashed',
+                        minute % 60 !== 0 && (isDay ? 'border-border/25' : 'border-dashed'),
                       )}
                       style={{
-                        top: (minute - TIMELINE_START) * PIXELS_PER_MINUTE,
-                        height: SLOT_HEIGHT,
+                        top: (minute - timelineStart) * pixelsPerMinute,
+                        height: slotHeight,
                       }}
                     />
                   ))}
                   {layoutTimelineItems(items).map(({ item, lane, lanes }) => {
                     const start = Math.max(
-                      TIMELINE_START,
+                      timelineStart,
                       timeMinutes(item.startTime),
                     )
                     const end = Math.min(
-                      TIMELINE_END,
+                      timelineEnd,
                       timeMinutes(item.endTime),
                     )
                     const selected = selectedSessionId === item.id
@@ -665,12 +735,13 @@ function CalendarTimeline({
                           getSessionStyle(item.session).card,
                           selected &&
                             'z-[15] ring-2 ring-primary ring-offset-2 ring-offset-card',
+                          isDay && 'rounded-lg px-2.5 py-[3px] text-[12px] leading-tight',
                         )}
                         style={{
-                          top: (start - TIMELINE_START) * PIXELS_PER_MINUTE,
-                          height: (end - start) * PIXELS_PER_MINUTE,
-                          left: `calc(${(lane * 100) / lanes}% + 3px)`,
-                          width: `calc(${100 / lanes}% - 6px)`,
+                          top: (start - timelineStart) * pixelsPerMinute,
+                          height: (end - start) * pixelsPerMinute,
+                          left: `calc(${(lane * 100) / lanes}% + ${isDay ? 6 : 3}px)`,
+                          width: `calc(${100 / lanes}% - ${isDay ? 12 : 6}px)`,
                         }}
                       >
                         {selected && (
@@ -688,7 +759,13 @@ function CalendarTimeline({
                           {formatTime(item.startTime)} –{' '}
                           {formatTime(item.endTime)}
                         </span>
-                        {end - start >= 60 && (
+                        {isDay && (
+                          <span className="flex max-w-full items-center gap-1 text-[10px] leading-tight opacity-80">
+                            <MapPin aria-hidden="true" className="size-3 shrink-0" />
+                            <span className="truncate">{item.centreName}</span>
+                          </span>
+                        )}
+                        {end - start >= 60 && !isDay && (
                           <span className="mt-1 flex w-full flex-col gap-0.5 text-[10px] leading-tight opacity-80">
                             <span className="min-w-0 truncate">
                               {item.instructorName}
@@ -705,15 +782,15 @@ function CalendarTimeline({
                     )
                   })}
                   {isToday &&
-                    nowMinutes >= TIMELINE_START &&
-                    nowMinutes <= TIMELINE_END && (
+                    nowMinutes >= timelineStart &&
+                    nowMinutes <= timelineEnd && (
                       <div
                         role="img"
                         aria-label={`Current time: ${formatTime(minutesTime(Math.floor(nowMinutes)))}`}
                         className="pointer-events-none absolute inset-x-0 z-20 border-t-2 border-red-500"
                         style={{
                           top:
-                            (nowMinutes - TIMELINE_START) * PIXELS_PER_MINUTE,
+                            (nowMinutes - timelineStart) * pixelsPerMinute,
                         }}
                       >
                         <span className="absolute -top-[5px] -left-1 size-2 rounded-full bg-red-500" />
@@ -733,6 +810,7 @@ export default function AttendanceCalendar({
   date,
   today,
   now,
+  focusRequest = 0,
   view,
   display,
   events,
@@ -744,6 +822,7 @@ export default function AttendanceCalendar({
   date: Date
   today: Date
   now: Date
+  focusRequest?: number
   view: CalendarView
   display: CalendarDisplay
   events: AdminCalendarEvent[]
@@ -770,6 +849,7 @@ export default function AttendanceCalendar({
       <CalendarTimeline
         date={date}
         now={now}
+        focusRequest={focusRequest}
         view={view}
         events={events}
         selectedSessionId={selectedSessionId}

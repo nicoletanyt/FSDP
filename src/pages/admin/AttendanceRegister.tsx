@@ -75,6 +75,7 @@ export default function AttendanceRegister() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [newSessionOpen, setNewSessionOpen] = useState(false)
   const [weekOverview, setWeekOverview] = useState(false)
+  const [timelineFocusRequest, setTimelineFocusRequest] = useState(0)
   const [now, setNow] = useState(() => new Date())
 
   useEffect(() => {
@@ -317,6 +318,7 @@ export default function AttendanceRegister() {
   }
 
   function goToday() {
+    setTimelineFocusRequest((request) => request + 1)
     commit({ date: today, session: null })
     setWeekOverview(false)
   }
@@ -501,6 +503,9 @@ export default function AttendanceRegister() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
+      <h1 className="shrink-0 text-3xl font-semibold tracking-tight">
+        Attendance calendar
+      </h1>
       {focusStudent && (
         <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-border/70 bg-muted/40 px-3 py-2 text-sm">
           <p>
@@ -578,6 +583,7 @@ export default function AttendanceRegister() {
         <div className="flex flex-wrap items-center gap-3">
           {display !== 'table' && (
             <Button
+              variant="outline"
               onClick={() => setNewSessionOpen(true)}
               className="h-10 gap-2 px-4"
             >
@@ -754,9 +760,11 @@ export default function AttendanceRegister() {
 
       <div
         className={cn(
-          'flex min-h-[520px] flex-1 flex-col lg:min-h-0',
+          'flex min-h-0 flex-1 flex-col',
           showSidePanel &&
-            'grid grid-cols-1 grid-rows-[repeat(2,minmax(320px,1fr))] gap-3 overflow-y-auto overscroll-contain lg:grid-cols-[minmax(0,1fr)_360px] lg:grid-rows-1 lg:overflow-hidden',
+            (view === 'day'
+              ? 'gap-3 overflow-hidden lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:grid-rows-1'
+              : 'grid grid-cols-1 grid-rows-[repeat(2,minmax(320px,1fr))] gap-3 overflow-y-auto overscroll-contain lg:grid-cols-[minmax(0,1fr)_320px] lg:grid-rows-1 lg:overflow-hidden'),
         )}
       >
         {display === 'table' ? (
@@ -767,6 +775,7 @@ export default function AttendanceRegister() {
               date={selectedDate}
               today={today}
               now={now}
+              focusRequest={timelineFocusRequest}
               view={view}
               display={display}
               events={calendarEvents}
@@ -782,6 +791,7 @@ export default function AttendanceRegister() {
                 event={selectedEvent}
                 focusStudentId={focusStudent?.id}
                 onClose={() => commit({ session: null })}
+                dayView={view === 'day'}
               />
             )}
           </>

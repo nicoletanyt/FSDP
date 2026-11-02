@@ -83,14 +83,24 @@ function isActive(pathname: string, to: string, end = false): boolean {
 
 export default function AdminNavbar() {
   const { pathname } = useLocation()
+  const isAttendanceRegister =
+    pathname === '/admin/attendance/register' ||
+    pathname.startsWith('/admin/attendance/register/')
   const { profile } = useAuth()
   const { notifications } = useAdminData()
   const unread = notifications.filter((notification) => notification.channel === 'in_app').length
   const instructorsActive = isActive(pathname, '/admin/instructors')
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur">
-      <div className="mx-auto grid w-full max-w-[1400px] grid-cols-[1fr_auto_1fr] items-center gap-2 px-4 py-3 sm:gap-3 sm:px-6">
+    <header className="sticky top-0 z-40 shrink-0 border-b border-border bg-background/90 backdrop-blur">
+      <div
+        className={cn(
+          'mx-auto grid grid-cols-[1fr_auto_1fr] items-center gap-2 py-3 sm:gap-3',
+          isAttendanceRegister
+            ? 'w-[calc(100%-2rem)] max-w-[1600px] sm:w-[94%]'
+            : 'w-full max-w-[1400px] px-4 sm:px-6',
+        )}
+      >
         <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           <AdminMobileNav />
 
