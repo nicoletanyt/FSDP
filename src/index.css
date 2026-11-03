@@ -77,6 +77,7 @@
  * Grey   #352b29  oklch(0.2995 0.0153 31.23)   foreground
  */
 :root {
+    --mobile-site-nav-height: calc(4.75rem + env(safe-area-inset-top));
     --brand-blue: #2c3f67;
     --brand-red: #e62128;
     --brand-grey: #352b29;

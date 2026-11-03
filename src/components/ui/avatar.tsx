@@ -51,7 +51,7 @@ function InstructorAvatar({ profile, showName = true, interactive = true, classN
         type="button"
         data-instructor-id={profile.id}
         aria-label={`View instructor profile: ${profile.name}`}
-        className={cn("group/instructor inline-flex min-w-0 max-w-full cursor-pointer items-center gap-2 rounded-md text-left text-foreground outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring/50", className)}
+        className={cn("group/instructor inline-flex min-h-11 min-w-0 max-w-full cursor-pointer items-center gap-2 rounded-md text-left text-foreground outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring/50 lg:min-h-0", className)}
       >
         {content}
       </PopoverTrigger>

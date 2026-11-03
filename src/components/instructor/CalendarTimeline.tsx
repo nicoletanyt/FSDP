@@ -4,6 +4,7 @@ import { CalendarCheck, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { availabilityStyle } from "@/components/instructor/CalendarAvailability";
 import SelectedClassIndicator from "@/components/instructor/SelectedClassIndicator";
+import CalendarDaySelector from "@/components/instructor/CalendarDaySelector";
 import {
     availabilityError,
     layoutTimelineItems,
@@ -46,6 +47,7 @@ export default function CalendarTimeline({
     onSelectAvailability,
     onSelectRange,
     onSelectDate,
+    isDesktop,
 }: {
     date: Date;
     now: Date;
@@ -57,18 +59,19 @@ export default function CalendarTimeline({
     onSelectAvailability: (slot: AvailabilitySlot) => void;
     onSelectRange: (range: AvailabilityRange) => void;
     onSelectDate: (day: Date) => void;
+    isDesktop: boolean;
 }) {
     const isDay = view === "day";
     const timelineStart = isDay ? 0 : TIMELINE_START;
     const timelineEnd = isDay ? 24 * 60 : TIMELINE_END;
-    const slotHeight = isDay ? 48 : 36;
+    const slotHeight = isDay ? 48 : isDesktop ? 36 : 44;
     const pixelsPerMinute = slotHeight / 30;
     const height = (timelineEnd - timelineStart) * pixelsPerMinute;
     const intervals = Array.from(
         { length: (timelineEnd - timelineStart) / 30 },
         (_, index) => timelineStart + index * 30,
     );
-    const days = view === "day" ? [date] : weekDates(date);
+    const days = view === "day" || !isDesktop ? [date] : weekDates(date);
     const [drag, setDrag] = useState<DragRange | null>(null);
     const dragRef = useRef<DragRange | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -160,8 +163,9 @@ export default function CalendarTimeline({
     return (
         <section
             aria-label={`${view === "day" ? "Daily" : "Weekly"} hourly timeline`}
-            className="flex min-h-0 min-w-0 flex-1 flex-col gap-2"
+            className="flex min-w-0 flex-col gap-2 lg:min-h-0 lg:flex-1"
         >
+            {!isDesktop && view === "week" && <CalendarDaySelector date={date} today={now} onSelectDate={onSelectDate} />}
             {error && (
                 <p role="alert" className="text-xs text-destructive">
                     {error}
@@ -169,12 +173,12 @@ export default function CalendarTimeline({
             )}
             <div
                 ref={scrollRef}
-                className="min-h-0 flex-1 overflow-auto overscroll-contain rounded-xl border bg-card"
+                className="h-[min(60dvh,36rem)] min-h-48 overflow-auto overscroll-contain rounded-xl border bg-card lg:h-auto lg:min-h-0 lg:flex-1"
             >
                 <div
                     className="grid"
                     style={{
-                        minWidth: view === "week" ? 910 : undefined,
+                        minWidth: view === "week" && isDesktop ? 910 : undefined,
                         gridTemplateColumns: `${isDay ? 56 : 64}px repeat(${days.length}, minmax(0, 1fr))`,
                     }}
                 >

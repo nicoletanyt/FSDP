@@ -9,6 +9,7 @@ import {
     MessageSquare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@/components/ui/popover";
 import GradeBadge from "@/components/GradeBadge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -49,7 +50,7 @@ function AttendanceControls({
                     ? "Absent"
                     : "Unmarked";
         return (
-            <div className="flex w-15 shrink-0 items-center justify-center">
+            <div className="flex size-11 shrink-0 items-center justify-center text-xs lg:h-auto lg:w-15">
                 <span
                     role="img"
                     aria-label={`Attendance for ${student.name}: ${label}`}
@@ -79,7 +80,7 @@ function AttendanceControls({
         <div
             role="group"
             aria-label={`Attendance for ${student.name}`}
-            className="grid w-15 shrink-0 grid-cols-2 gap-1"
+            className="flex shrink-0 lg:grid lg:w-15 lg:grid-cols-2 lg:gap-1"
         >
             <Tooltip>
                 <TooltipTrigger render={
@@ -90,7 +91,7 @@ function AttendanceControls({
                         aria-label={`Mark ${student.name} present${value === "present" ? " · selected, click again to clear" : ""}`}
                         onClick={() => onChange(value === "present" ? "unmarked" : "present")}
                         className={cn(
-                            "size-7 rounded-md text-foreground/70 transition-colors hover:bg-emerald-100 hover:text-emerald-800 dark:hover:bg-emerald-950 dark:hover:text-emerald-300",
+                            "size-11 rounded-md px-0 text-xs text-foreground/70 transition-colors hover:bg-emerald-100 hover:text-emerald-800 lg:size-7 dark:hover:bg-emerald-950 dark:hover:text-emerald-300",
                             value === "present" &&
                             "bg-emerald-600 text-white hover:bg-emerald-700 hover:text-white dark:bg-emerald-500 dark:text-emerald-950 dark:hover:bg-emerald-400 dark:hover:text-emerald-950",
                         )}
@@ -109,7 +110,7 @@ function AttendanceControls({
                         aria-label={`Mark ${student.name} absent${value === "absent" ? " · selected, click again to clear" : ""}`}
                         onClick={() => onChange(value === "absent" ? "unmarked" : "absent")}
                         className={cn(
-                            "size-7 rounded-md text-foreground/70 transition-colors hover:bg-rose-100 hover:text-rose-800 dark:hover:bg-rose-950 dark:hover:text-rose-300",
+                            "size-11 rounded-md px-0 text-xs text-foreground/70 transition-colors hover:bg-rose-100 hover:text-rose-800 lg:size-7 dark:hover:bg-rose-950 dark:hover:text-rose-300",
                             value === "absent" &&
                             "bg-rose-600 text-white hover:bg-rose-700 hover:text-white dark:bg-rose-500 dark:text-rose-950 dark:hover:bg-rose-400 dark:hover:text-rose-950",
                         )}
@@ -203,7 +204,7 @@ export default function ClassSessionDetails({
         <div
             className={cn(
                 "bg-background text-foreground",
-                fillHeight && "flex min-h-0 flex-1 flex-col",
+                fillHeight && "lg:flex lg:min-h-0 lg:flex-1 lg:flex-col",
                 !summary && "border-t border-foreground/10",
             )}
         >
@@ -230,7 +231,7 @@ export default function ClassSessionDetails({
             <div
                 id={summary ? `attendance-${event.id}` : undefined}
                 hidden={summary && !expanded}
-                className={cn(fillHeight && (!summary || expanded) && "flex min-h-0 flex-1 flex-col")}
+                className={cn(fillHeight && (!summary || expanded) && "lg:flex lg:min-h-0 lg:flex-1 lg:flex-col")}
             >
                 {!summary && (
                     <div className="shrink-0 space-y-2 px-3 py-2.5">
@@ -249,18 +250,27 @@ export default function ClassSessionDetails({
                     <ul
                         aria-label="Student roster"
                         className={cn(
-                            "my-2 divide-y divide-border/50 overflow-y-auto overscroll-contain bg-muted/25",
-                            fillHeight ? "min-h-0 flex-1" : "max-h-80",
+                            "my-2 divide-y divide-border/50 bg-muted/25 lg:overflow-y-auto lg:overscroll-contain",
+                            fillHeight ? "lg:min-h-0 lg:flex-1" : "lg:max-h-80",
                         )}
                     >
                         {roster.map((student) => {
                             const value = record[student.id];
                             return (
-                                <li key={student.id} className="grid h-14 grid-cols-[minmax(0,1fr)_92px] grid-rows-[28px_16px] items-center gap-x-2 gap-y-0.5 px-3 py-1">
-                                    <span title={student.name} className="min-w-0 truncate text-2xs font-medium">
-                                        {student.name}
-                                    </span>
-                                    <div className="col-start-2 row-span-2 row-start-1 grid w-[92px] grid-cols-[60px_28px] items-center gap-1 self-center">
+                                <li key={student.id} className="grid grid-cols-[minmax(0,1fr)_auto_132px] items-center gap-x-2 py-2 lg:h-14 lg:grid-cols-[minmax(0,1fr)_92px] lg:grid-rows-[28px_16px] lg:gap-y-0.5 lg:px-3 lg:py-1">
+                                    <div className="min-w-0">
+                                        <Popover>
+                                            <PopoverTrigger aria-label={`Student details: ${student.name}`} className="flex min-h-11 w-full min-w-0 items-center rounded-md text-left text-2xs font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring lg:hidden">
+                                                <span className="truncate">{student.name}</span>
+                                            </PopoverTrigger>
+                                            <PopoverContent align="start" className="gap-2">
+                                                <PopoverTitle>{student.name}</PopoverTitle>
+                                                <GradeBadge rank={student.rank} system={student.gradingSystem} showBeltLabel />
+                                            </PopoverContent>
+                                        </Popover>
+                                        <span title={student.name} className="hidden min-w-0 truncate text-2xs font-medium lg:block">{student.name}</span>
+                                    </div>
+                                    <div className="col-start-3 row-start-1 flex w-[132px] items-center justify-end lg:col-start-2 lg:row-span-2 lg:grid lg:w-[92px] lg:grid-cols-[60px_28px] lg:gap-1 lg:self-center">
                                         <AttendanceControls
                                             student={student}
                                             value={value.attendance}
@@ -280,21 +290,21 @@ export default function ClassSessionDetails({
                                                         ? `View grading details for ${student.name}`
                                                         : `View sessions and feedback for ${student.name}`}
                                                     className={cn(
-                                                        "size-7 rounded-md text-foreground/70 hover:text-foreground",
+                                                        "size-11 rounded-md text-foreground/70 hover:text-foreground lg:size-7",
                                                         value.comment && "bg-accent text-foreground",
                                                     )}
                                                 />
                                             }>
                                                 <MessageSquare aria-hidden="true" />
                                             </TooltipTrigger>
-                                            <TooltipContent>Note</TooltipContent>
+                                            <TooltipContent>{isGrading ? "Grading details" : "Report"}</TooltipContent>
                                         </Tooltip>
                                     </div>
-                                    <div className="col-start-1 row-start-2 flex min-w-0 items-center">
+                                    <div className="col-start-2 row-start-1 flex min-w-0 items-center lg:col-start-1 lg:row-start-2">
                                         <GradeBadge
                                             rank={student.rank}
                                             system={student.gradingSystem}
-                                            className="h-4 rounded-none border-0 bg-transparent p-0 text-[11px] leading-4 text-muted-foreground [&>span:first-child]:font-normal [&>[aria-hidden]]:h-1.5 [&>[aria-hidden]]:w-3"
+                                            className="h-auto max-w-16 flex-nowrap rounded-none border-0 bg-transparent p-0 text-[11px] text-muted-foreground lg:h-4 lg:max-w-full lg:leading-4 [&>span:first-child]:min-w-0 [&>span:first-child]:truncate [&>span:first-child]:font-normal [&>[aria-hidden]]:h-1.5 [&>[aria-hidden]]:w-2 lg:[&>[aria-hidden]]:w-3"
                                         />
                                     </div>
                                 </li>
@@ -309,7 +319,7 @@ export default function ClassSessionDetails({
                                 variant="outline"
                                 size="sm"
                                 onClick={toggleAllAttendance}
-                                className="h-auto min-h-8 min-w-0 shrink px-3 py-1.5 text-xs whitespace-normal"
+                                className="h-auto min-h-11 min-w-0 shrink px-3 py-1.5 text-xs whitespace-normal lg:min-h-8"
                             >
                                 {allPresent ? (
                                     <CircleX aria-hidden="true" />

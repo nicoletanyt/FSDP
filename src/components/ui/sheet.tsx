@@ -8,7 +8,7 @@ function Sheet(props: SheetPrimitive.Root.Props) {
     return <SheetPrimitive.Root data-slot="sheet" {...props} />;
 }
 
-function SheetContent({ className, children, ...props }: SheetPrimitive.Popup.Props) {
+function SheetContent({ className, children, side = "right", ...props }: SheetPrimitive.Popup.Props & { side?: "left" | "right" }) {
     return (
         <SheetPrimitive.Portal>
             <SheetPrimitive.Backdrop
@@ -18,13 +18,14 @@ function SheetContent({ className, children, ...props }: SheetPrimitive.Popup.Pr
             <SheetPrimitive.Popup
                 data-slot="sheet-content"
                 className={cn(
-                    "fixed inset-y-0 right-0 z-50 flex h-dvh w-full max-w-sm flex-col gap-4 border-l bg-background p-4 text-foreground shadow-lg outline-none duration-200 data-open:animate-in data-open:slide-in-from-right data-closed:animate-out data-closed:slide-out-to-right motion-reduce:animate-none",
+                    "fixed inset-y-0 z-50 flex h-dvh w-full max-w-sm flex-col gap-4 bg-background p-4 text-foreground shadow-lg outline-none duration-200 data-open:animate-in data-closed:animate-out motion-reduce:animate-none",
+                    side === "left" ? "left-0 border-r data-open:slide-in-from-left data-closed:slide-out-to-left" : "right-0 border-l data-open:slide-in-from-right data-closed:slide-out-to-right",
                     className,
                 )}
                 {...props}
             >
                 {children}
-                <SheetPrimitive.Close render={<Button variant="ghost" size="icon" className="absolute top-3 right-3 size-10" />}>
+                <SheetPrimitive.Close render={<Button variant="ghost" size="icon" className="absolute top-4 right-4 size-11 lg:top-3 lg:right-3 lg:size-10" />}>
                     <XIcon aria-hidden="true" />
                     <span className="sr-only">Close</span>
                 </SheetPrimitive.Close>
@@ -45,4 +46,7 @@ function SheetDescription({ className, ...props }: SheetPrimitive.Description.Pr
     return <SheetPrimitive.Description data-slot="sheet-description" className={cn("text-sm text-muted-foreground", className)} {...props} />;
 }
 
-export { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription };
+const SheetTrigger = SheetPrimitive.Trigger;
+const SheetClose = SheetPrimitive.Close;
+
+export { Sheet, SheetTrigger, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetDescription };

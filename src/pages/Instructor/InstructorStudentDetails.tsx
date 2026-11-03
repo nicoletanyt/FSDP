@@ -713,9 +713,9 @@ function StudentGrading({
                 {syllabus && (
                     <DialogContent
                         finalFocus={gradingTriggerRef}
-                        className="flex max-h-[85vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl [&>[data-slot=dialog-close]]:top-5 [&>[data-slot=dialog-close]]:right-5"
+                        className="flex max-h-[85vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl [&>[data-slot=dialog-close]]:top-4 [&>[data-slot=dialog-close]]:right-4 lg:[&>[data-slot=dialog-close]]:top-5 lg:[&>[data-slot=dialog-close]]:right-5"
                     >
-                        <DialogHeader className="shrink-0 gap-0 border-b border-border/60 px-8 py-6">
+                        <DialogHeader className="shrink-0 gap-0 border-b border-border/60 p-4 lg:px-8 lg:py-6">
                             <DialogTitle className="pr-6 text-xl font-semibold tracking-tight">
                                 New Grading
                             </DialogTitle>
@@ -756,7 +756,7 @@ function StudentGrading({
                                 </div>
                             </div>
                         </DialogHeader>
-                        <div className="min-h-0 overflow-y-auto overscroll-contain px-8 pt-5 pb-8 [scrollbar-width:thin] [scrollbar-color:var(--border)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border/70">
+                        <div className="min-h-0 overflow-y-auto overscroll-contain p-4 lg:px-8 lg:pt-5 lg:pb-8 [scrollbar-width:thin] [scrollbar-color:var(--border)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border/70">
                             <TechniqueChecklist
                                 key={`${profile.id}:${profile.gradingSystem}:${profile.nextRank}`}
                                 syllabus={syllabus}
@@ -775,7 +775,7 @@ function StudentGrading({
                                 />
                             )}
                         </div>
-                        <DialogFooter className="m-0 shrink-0 flex-row justify-end border-t border-border/60 px-8 py-5">
+                        <DialogFooter className="m-0 shrink-0 flex-row justify-end border-t border-border/60 p-4 lg:px-8 lg:py-5">
                             <DialogClose render={<Button className="min-h-10 min-w-24" />}>
                                 Done
                             </DialogClose>

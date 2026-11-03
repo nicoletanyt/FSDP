@@ -166,7 +166,7 @@ export default function InstructorCheckIn() {
                                 render={
                                     <Button
                                         variant="ghost"
-                                        className="-ml-2 min-h-11 max-w-full gap-2 px-2 text-left text-xl font-semibold whitespace-normal"
+                                        className="-ml-2 h-auto min-h-11 max-w-full gap-2 px-2 py-1 text-left text-xl font-semibold whitespace-normal [overflow-wrap:anywhere]"
                                     />
                                 }
                                 aria-label={`Active class: ${session.name}. Change class session`}
@@ -199,8 +199,7 @@ export default function InstructorCheckIn() {
                         </DropdownMenu>
                     </h1>
                     <p
-                        title={sessionDetails}
-                        className="max-w-full truncate text-xs text-muted-foreground"
+                        className="max-w-full text-xs text-muted-foreground [overflow-wrap:anywhere]"
                     >
                         {sessionDetails}
                     </p>
@@ -209,7 +208,7 @@ export default function InstructorCheckIn() {
                     ref={enterKioskRef}
                     onClick={toggleKiosk}
                     aria-pressed={isKiosk}
-                    className="ml-auto min-h-11 gap-2 px-4"
+                    className="min-h-11 w-full gap-2 px-4 sm:ml-auto sm:w-auto"
                 >
                     <Maximize aria-hidden="true" />
                     Enter Kiosk Mode
@@ -248,7 +247,7 @@ export default function InstructorCheckIn() {
                     </div>
                     <ul
                         aria-label="Checked-in students"
-                        className="max-h-64 min-h-0 flex-1 divide-y overflow-y-auto overscroll-contain px-4 md:max-h-none"
+                        className="divide-y px-4 md:min-h-0 md:flex-1 md:overflow-y-auto md:overscroll-contain"
                     >
                         {recent.map((record) => {
                             const student = students.find(
@@ -257,7 +256,7 @@ export default function InstructorCheckIn() {
                             return (
                                 <li
                                     key={record.studentId}
-                                    className="flex items-center justify-between gap-3 py-3.5"
+                                    className="flex flex-wrap items-center justify-between gap-3 py-3.5 md:flex-nowrap"
                                 >
                                     <div className="min-w-0 space-y-1">
                                         <p className="break-words text-sm font-medium">{student?.name ?? "Student"}</p>
@@ -287,7 +286,7 @@ export default function InstructorCheckIn() {
             </div>
             {isKiosk && (
                 <>
-                    <footer className="shrink-0 border-t border-white/10 px-6 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
+                    <footer className="shrink-0 border-t border-white/10 px-4 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:px-6 sm:pt-3 sm:pb-[max(1rem,env(safe-area-inset-bottom))]">
                         <div className="mx-auto w-full max-w-lg space-y-2">
                             <p
                                 aria-live="polite"

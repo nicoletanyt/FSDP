@@ -17,7 +17,7 @@ function TooltipContent({ className, sideOffset = 6, children, ...props }: Toolt
     return (
         <TooltipPrimitive.Portal>
             <TooltipPrimitive.Positioner sideOffset={sideOffset} className="z-50">
-                <TooltipPrimitive.Popup data-slot="tooltip-content" className={cn("rounded-md bg-foreground px-3 py-1.5 text-xs text-background shadow-md", className)} {...props}>
+                <TooltipPrimitive.Popup data-slot="tooltip-content" className={cn("max-w-[calc(100vw-2rem)] rounded-md bg-foreground px-3 py-1.5 text-xs break-words [overflow-wrap:anywhere] text-background shadow-md", className)} {...props}>
                     {children}
                 </TooltipPrimitive.Popup>
             </TooltipPrimitive.Positioner>

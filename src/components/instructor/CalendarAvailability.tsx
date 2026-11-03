@@ -29,7 +29,7 @@ export function AvailabilityDialog({ initial, editingId, slots, onSave, onClose,
     const [error, setError] = useState<string | null>(null);
     return (
         <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-            <DialogContent className="p-6 sm:max-w-md [&_[data-slot=dialog-close]]:size-10 [&_[data-slot=dialog-close]_svg]:size-6">
+            <DialogContent className="p-4 sm:max-w-md lg:p-6 [&_[data-slot=dialog-close]]:size-11 lg:[&_[data-slot=dialog-close]]:size-10 [&_[data-slot=dialog-close]_svg]:size-6">
                 <form className="grid gap-5" onSubmit={(event) => {
                     event.preventDefault();
                     const parsed = parseCalendarDate(date);
@@ -45,16 +45,16 @@ export function AvailabilityDialog({ initial, editingId, slots, onSave, onClose,
                     </DialogHeader>
                     <div className="grid gap-2">
                         <Label htmlFor="availability-date">Date</Label>
-                        <Input id="availability-date" type="date" required className="h-10 px-3" min={dateInputValue(new Date())} value={date} onChange={(event) => { setDate(event.target.value); setError(null); }} />
+                        <Input id="availability-date" type="date" required className="h-11 px-3 lg:h-10" min={dateInputValue(new Date())} value={date} onChange={(event) => { setDate(event.target.value); setError(null); }} />
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="grid gap-2"><Label htmlFor="availability-start">Start time</Label><Input id="availability-start" type="time" required className="h-10 px-3" min="08:00" max="21:59" value={startTime} onChange={(event) => { setStartTime(event.target.value); setError(null); }} /></div>
-                        <div className="grid gap-2"><Label htmlFor="availability-end">End time</Label><Input id="availability-end" type="time" required className="h-10 px-3" min="08:01" max="22:00" value={endTime} onChange={(event) => { setEndTime(event.target.value); setError(null); }} /></div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="grid min-w-0 gap-2"><Label htmlFor="availability-start">Start time</Label><Input id="availability-start" type="time" required className="h-11 px-3 lg:h-10" min="08:00" max="21:59" value={startTime} onChange={(event) => { setStartTime(event.target.value); setError(null); }} /></div>
+                        <div className="grid min-w-0 gap-2"><Label htmlFor="availability-end">End time</Label><Input id="availability-end" type="time" required className="h-11 px-3 lg:h-10" min="08:01" max="22:00" value={endTime} onChange={(event) => { setEndTime(event.target.value); setError(null); }} /></div>
                     </div>
                     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-                    <DialogFooter className="-mx-6 -mb-6 gap-3 p-5">
-                        {editingId && <Button type="button" variant="destructive" onClick={onDelete} className="h-10 gap-2 px-4 sm:mr-auto"><Trash2 aria-hidden="true" />Delete</Button>}
-                        <Button type="submit" className="h-10 px-4">{editingId ? "Save changes" : "Add availability"}</Button>
+                    <DialogFooter className="-mx-4 -mb-4 gap-3 p-4 lg:-mx-6 lg:-mb-6 lg:p-5">
+                        {editingId && <Button type="button" variant="destructive" onClick={onDelete} className="h-11 gap-2 px-4 sm:mr-auto lg:h-10"><Trash2 aria-hidden="true" />Delete</Button>}
+                        <Button type="submit" className="h-11 px-4 lg:h-10">{editingId ? "Save changes" : "Add availability"}</Button>
                     </DialogFooter>
                 </form>
             </DialogContent>
