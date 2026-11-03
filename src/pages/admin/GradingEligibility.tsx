@@ -1,0 +1,427 @@
+import { Fragment, useEffect, useMemo, useState } from 'react'
+import { Bell, CheckCircle2, Search } from 'lucide-react'
+import EmptyState from '@/components/admin/EmptyState'
+import EligibilityChecklist from '@/components/admin/EligibilityChecklist'
+import TechniqueRequirementBreakdown from '@/components/admin/TechniqueRequirementBreakdown'
+import { EligibilityBadge } from '@/components/admin/StatusBadge'
+import { NativeSelect } from '@/components/admin/form-controls'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import { useAdminData } from '@/lib/admin/admin-data-context'
+import { useAdminFilters } from '@/lib/admin/admin-filters'
+import {
+  formatDate,
+  fullName,
+  initials,
+} from '@/lib/admin/format'
+import {
+  formatMonths,
+  getEligibilityAssessments,
+  getGradeRequirement,
+  studentAge,
+} from '@/lib/admin/grading-eligibility'
+import { countSyllabusItems } from '@/lib/admin/syllabus'
+import type { Grade, GradeTrack } from '@/lib/admin/types'
+import { getGradeMeta, grades } from '@/lib/admin/types'
+import { cn } from 'cn'
+import { supabase } from '@/lib/supabase'
+
+export default function GradingEligibility() {
+  const { centres, students, attendance, sessions, techniqueSignOffs } =
+    useAdminData()
+  const { centreId } = useAdminFilters()
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [gradeFilter, setGradeFilter] = useState('all')
+  const [query, setQuery] = useState('')
+  const [expanded, setExpanded] = useState<string | null>(null)
+  const [notice, setNotice] = useState('')
+  const [events, setEvents] = useState<{ id: string; name: string }[]>([])
+  const [eventId, setEventId] = useState('')
+  const [preview, setPreview] = useState<{ eligible: number; bcc_count: number; bcc_emails: string[] } | null>(null)
+  const [sending, setSending] = useState(false)
+
+  useEffect(() => {
+    void supabase.from('events').select('id,name,starts_at,gradings!inner(application_status)')
+      .eq('event_type', 'grading').eq('status', 'scheduled').eq('gradings.application_status', 'open')
+      .gt('starts_at', new Date().toISOString()).order('starts_at')
+      .then(({ data, error }) => {
+        if (error) setNotice('Unable to load persisted grading events.')
+        else setEvents((data ?? []).map(({ id, name }) => ({ id, name })))
+      })
+  }, [])
+
+  const centreNames = new Map(centres.map((centre) => [centre.id, centre.name]))
+  const scopedStudents = useMemo(
+    () =>
+      students.filter(
+        (student) => centreId === 'all' || student.homeCentreId === centreId,
+      ),
+    [students, centreId],
+  )
+  const assessments = useMemo(
+    () =>
+      getEligibilityAssessments(
+        scopedStudents,
+        attendance,
+        sessions,
+        techniqueSignOffs,
+      ),
+    [scopedStudents, attendance, sessions, techniqueSignOffs],
+  )
+
+  const filtered = useMemo(() => {
+    const needle = query.trim().toLowerCase()
+    return assessments
+      .filter(
+        (assessment) => statusFilter === 'all' || assessment.status === statusFilter,
+      )
+      .filter(
+        (assessment) =>
+          gradeFilter === 'all' || assessment.targetGrade === (gradeFilter as Grade),
+      )
+      .filter((assessment) => {
+        if (!needle) return true
+        const student = scopedStudents.find((item) => item.id === assessment.studentId)
+        return student
+          ? [fullName(student), student.memberNo, student.email].some((value) =>
+              value.toLowerCase().includes(needle),
+            )
+          : false
+      })
+  }, [assessments, statusFilter, gradeFilter, query, scopedStudents])
+
+  const eligible = assessments.filter((assessment) => assessment.status === 'eligible')
+  const almost = assessments.filter((assessment) => assessment.status === 'almost')
+  const notEligible = assessments.filter(
+    (assessment) => assessment.status === 'not_eligible',
+  )
+
+  async function notifyEligible(confirm: boolean) {
+    if (!eventId) return
+    if (confirm && !window.confirm(`Send ONE email to suroulomg@gmail.com, BCC ${preview?.bcc_count ?? 0} addresses? This includes mq07110@gmail.com. Continue?`)) return
+    setSending(true)
+    setNotice('')
+    try {
+      const { data, error } = await supabase.functions.invoke('send-grading-invitation', {
+        body: { event_id: eventId, confirm },
+      })
+      if (error) {
+        const details = await error.context?.json?.().catch(() => null)
+        throw new Error(details?.error ?? error.message)
+      }
+      if (confirm) {
+        setNotice(`EmailJS accepted one invitation send (BCC: ${data.bcc_count} addresses). This does not confirm delivery.`)
+        setPreview(null)
+      } else setPreview(data)
+    } catch (failure) {
+      setNotice(failure instanceof Error ? failure.message : 'Invitation failed.')
+    } finally { setSending(false) }
+  }
+
+  return (
+    <div className="space-y-4">
+      {notice && (
+        <Alert>
+          <CheckCircle2 className="size-4 text-success" aria-hidden="true" />
+          <AlertDescription>{notice}</AlertDescription>
+        </Alert>
+      )}
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Summary label="Eligible now" value={eligible.length} tone="text-success" />
+        <Summary label="One requirement left" value={almost.length} tone="text-warning-foreground dark:text-warning" />
+        <Summary label="Not yet eligible" value={notEligible.length} />
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative min-w-48 flex-1">
+          <Search
+            className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
+            aria-hidden="true"
+          />
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Find a student"
+            aria-label="Search eligibility by student"
+            className="h-8 w-full rounded-lg border border-input bg-background pr-2.5 pl-8 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+          />
+        </div>
+        <div className="w-36">
+          <NativeSelect
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value)}
+            aria-label="Filter by eligibility status"
+          >
+            <option value="all">All statuses</option>
+            <option value="eligible">Eligible</option>
+            <option value="almost">Almost</option>
+            <option value="not_eligible">Not eligible</option>
+          </NativeSelect>
+        </div>
+        <div className="w-44">
+          <NativeSelect
+            value={gradeFilter}
+            onChange={(event) => setGradeFilter(event.target.value)}
+            aria-label="Filter by target grade"
+          >
+            <option value="all">All grades</option>
+            {grades.map((grade) => (
+              <option key={grade} value={grade}>
+                {grade}
+              </option>
+            ))}
+          </NativeSelect>
+        </div>
+        <NativeSelect value={eventId} onChange={(event) => { setEventId(event.target.value); setPreview(null) }} aria-label="Select persisted grading event">
+          <option value="">Select grading event</option>
+          {events.map((event) => <option key={event.id} value={event.id}>{event.name}</option>)}
+        </NativeSelect>
+        <Button variant="outline" onClick={() => void notifyEligible(false)} disabled={!eventId || sending}>
+          <Bell />
+          Preview real recipients
+        </Button>
+      </div>
+      <p className="text-xs text-muted-foreground">Eligibility table below uses demo data; invitations use only persisted students and server-calculated eligibility for the selected event.</p>
+      {preview && <Card className="gap-3 p-4">
+        <p>Server-eligible students: {preview.eligible}. One email to suroulomg@gmail.com; {preview.bcc_count} BCC addresses (including mq07110@gmail.com).</p>
+        <p className="text-xs break-all text-muted-foreground">BCC: {preview.bcc_emails.join(', ')}</p>
+        <Button disabled={sending || preview.eligible === 0} onClick={() => void notifyEligible(true)}>Confirm one EmailJS send</Button>
+      </Card>}
+
+      {filtered.length === 0 ? (
+        <EmptyState
+          title="No students match these filters"
+          description="Try another eligibility status or target grade."
+        />
+      ) : (
+        <Card className="overflow-hidden py-0">
+          <CardContent className="px-0">
+            <Table>
+              <TableCaption className="sr-only">
+                Grading eligibility assessments
+              </TableCaption>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Student</TableHead>
+                  <TableHead>Centre</TableHead>
+                  <TableHead>Next grade</TableHead>
+                  <TableHead>Requirements</TableHead>
+                  <TableHead>Last graded</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filtered.map((assessment) => {
+                  const student = scopedStudents.find(
+                    (item) => item.id === assessment.studentId,
+                  )
+                  if (!student) return null
+                  const isExpanded = expanded === student.id
+                  const hasTechniques = assessment.requirements.some(
+                    (requirement) => requirement.key === 'techniques',
+                  )
+                  return (
+                    <Fragment key={student.id}>
+                      <TableRow
+                        className="cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50"
+                        tabIndex={0}
+                        aria-expanded={isExpanded}
+                        onClick={() => setExpanded(isExpanded ? null : student.id)}
+                        onKeyDown={(event) => {
+                          if (event.key !== 'Enter' && event.key !== ' ') return
+                          event.preventDefault()
+                          setExpanded(isExpanded ? null : student.id)
+                        }}
+                      >
+                        <TableCell>
+                          <div className="flex items-center gap-3">
+                            <span className="flex size-8 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                              {initials(student.firstName, student.lastName)}
+                            </span>
+                            <div>
+                              <p className="font-medium">{fullName(student)}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {studentAge(student)} years
+                              </p>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {centreNames.get(student.homeCentreId)}
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-muted-foreground">{student.currentGrade}</span>{' '}
+                          → <span className="font-medium">{assessment.targetGrade}</span>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium tabular-nums">
+                              {assessment.metCount}/{assessment.total}
+                            </span>
+                            <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
+                              <div
+                                className={cn(
+                                  'h-full rounded-full',
+                                  assessment.status === 'eligible'
+                                    ? 'bg-success'
+                                    : assessment.status === 'almost'
+                                      ? 'bg-warning'
+                                      : 'bg-destructive',
+                                )}
+                                style={{
+                                  width: `${(assessment.metCount / assessment.total) * 100}%`,
+                                }}
+                              />
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {student.lastGradedAt ? formatDate(student.lastGradedAt) : 'Never'}
+                        </TableCell>
+                        <TableCell>
+                          <EligibilityBadge status={assessment.status} />
+                        </TableCell>
+                      </TableRow>
+                      {isExpanded && (
+                        <TableRow>
+                          <TableCell colSpan={6} className="bg-muted/30">
+                            <div>
+                              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                Requirement breakdown
+                              </p>
+                              <div
+                                className={cn(
+                                  'grid gap-6',
+                                  hasTechniques && 'lg:grid-cols-2',
+                                )}
+                              >
+                                <div>
+                                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                    Requirements
+                                  </p>
+                                  <EligibilityChecklist
+                                    requirements={assessment.requirements}
+                                    compact
+                                  />
+                                </div>
+                                {hasTechniques && (
+                                  <TechniqueRequirementBreakdown
+                                    student={student}
+                                    targetGrade={assessment.targetGrade}
+                                  />
+                                )}
+                              </div>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </Fragment>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Eligibility rules</CardTitle>
+          <CardDescription>
+            Applied automatically to every student. Months are time in the
+            current grade, not cumulative; technique sign-offs cover only the
+            target grade’s row. Source: Aikido Shinju-Kai grading information.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <RuleList title="Adult grading" track="adult" />
+            <RuleList title="Children's grading" track="children" />
+          </div>
+          <ul className="grid gap-1 border-t border-border pt-3 text-sm text-muted-foreground">
+            <li>• Member for at least 3 months, with no outstanding fees.</li>
+            <li>
+              • Every technique in the target grade’s syllabus row must be signed
+              off before a student can be invited.
+            </li>
+            <li>• Applications close 14 days before the grading.</li>
+            <li>
+              • Ages are calendar-year (“by year”), and students move to the
+              adult syllabus at 13. A Junior Dan holder restarts the 9-month
+              1st Dan clock at the Junior Dan award, so the wait is longer than
+              the direct path.
+            </li>
+          </ul>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+function requirementText(grade: Grade, track: GradeTrack): string {
+  const requirement = getGradeRequirement(grade, track)
+  if (!requirement) return '—'
+  const parts: string[] = []
+  if (requirement.minAge !== undefined) parts.push(`age ${requirement.minAge}+`)
+  if (requirement.minMonths > 0) {
+    parts.push(formatMonths(requirement.minMonths, requirement.maxMonths))
+  }
+  if (requirement.sessions !== undefined) parts.push(`${requirement.sessions} sessions`)
+  const syllabusCount = countSyllabusItems(grade, track)
+  if (syllabusCount > 0) parts.push(`${syllabusCount} techniques`)
+  return parts.join(' · ')
+}
+
+function RuleList({ title, track }: { title: string; track: GradeTrack }) {
+  return (
+    <div>
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        {title}
+      </p>
+      <dl className="mt-2 space-y-1 text-sm">
+        {grades
+          .filter((grade) => getGradeMeta(grade)?.tracks.includes(track))
+          .map((grade) => (
+            <div
+              key={grade}
+              className="flex items-baseline justify-between gap-3"
+            >
+              <dt className="text-muted-foreground">{grade}</dt>
+              <dd className="shrink-0 text-right tabular-nums">
+                {requirementText(grade, track)}
+              </dd>
+            </div>
+          ))}
+      </dl>
+    </div>
+  )
+}
+
+function Summary({
+  label,
+  value,
+  tone,
+}: {
+  label: string
+  value: number
+  tone?: string
+}) {
+  return (
+    <div className="rounded-xl bg-card p-3 ring-1 ring-foreground/10">
+      <p className="text-xs font-medium text-muted-foreground">{label}</p>
+      <p className={`mt-1 text-xl font-semibold tabular-nums ${tone ?? ''}`}>{value}</p>
+    </div>
+  )
+}

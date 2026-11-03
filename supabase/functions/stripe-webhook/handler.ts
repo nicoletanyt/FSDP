@@ -1,4 +1,5 @@
 import { cryptoProvider, getStripe, requireEnv } from '../_shared/stripe.ts'
+import { adminClient } from '../_shared/grading.ts'
 
 export async function handleRequest(request: Request): Promise<Response> {
   if (request.method !== 'POST') {
@@ -44,6 +45,19 @@ export async function handleRequest(request: Request): Promise<Response> {
       const session = event.data.object
 
       if (session.mode === 'payment' && session.payment_status === 'paid') {
+        if (session.metadata?.grading_attempt_id) {
+          const verified = await stripe.checkout.sessions.retrieve(session.id)
+          if (verified.payment_status !== 'paid' || verified.amount_total !== 6000 || verified.currency !== 'sgd' ||
+            verified.metadata?.grading_attempt_id !== session.metadata.grading_attempt_id) {
+            return new Response('Grading payment mismatch.', { status: 400 })
+          }
+          const { error } = await adminClient().rpc('finalize_grading_checkout', {
+            attempt: verified.metadata.grading_attempt_id,
+            stripe_session: session.id, paid_amount: verified.amount_total, paid_currency: verified.currency,
+          })
+          if (error) throw error
+          return Response.json({ received: true })
+        }
         // A fixed assignment stays idempotent even after Stripe's key expires.
         // Both event types use the same key, including concurrent deliveries.
         await stripe.checkout.sessions.update(session.id, {
