@@ -7,7 +7,6 @@ import {
   Info,
   List,
   Plus,
-  Table2,
 } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router'
 import AttendanceCalendar from '@/components/admin/AttendanceCalendar'
@@ -15,7 +14,6 @@ import type {
   CalendarDisplay,
   CalendarView,
 } from '@/components/admin/AttendanceCalendar'
-import AttendanceSessionList from '@/components/admin/AttendanceSessionList'
 import AttendanceSessionPanel from '@/components/admin/AttendanceSessionPanel'
 import CentreCombobox from '@/components/admin/CentreCombobox'
 import SessionFormDialog from '@/components/admin/SessionFormDialog'
@@ -53,8 +51,6 @@ import { sessionTypeStyles } from '@/lib/admin/session-styles'
 import type { Session } from '@/lib/admin/types'
 import { cn } from 'cn'
 
-type DisplayMode = CalendarDisplay | 'table'
-
 function latestFirst(left: Session, right: Session) {
   return `${right.date}T${right.startTime}`.localeCompare(
     `${left.date}T${left.startTime}`,
@@ -91,24 +87,20 @@ export default function AttendanceRegister() {
   const view: CalendarView =
     viewParam === 'day' || viewParam === 'month' ? viewParam : 'week'
   const displayParam = searchParams.get('display')
-  const requestedDisplay: DisplayMode =
-    legacyList || displayParam === 'table'
-      ? 'table'
-      : displayParam === 'list'
-        ? 'list'
-        : 'timeline'
-  const display: DisplayMode =
-    view === 'month' && requestedDisplay === 'table'
-      ? 'timeline'
-      : requestedDisplay
+  const display: CalendarDisplay =
+    legacyList ||
+    displayParam === 'list' ||
+    (displayParam === 'table' && view !== 'month')
+      ? 'list'
+      : 'timeline'
 
   useEffect(() => {
-    if (!legacyList) return
+    if (!legacyList && displayParam !== 'table') return
     const next = new URLSearchParams(searchParams)
-    next.set('view', 'week')
-    next.set('display', 'table')
+    if (legacyList) next.set('view', 'week')
+    next.set('display', legacyList || view !== 'month' ? 'list' : 'timeline')
     setSearchParams(next, { replace: true })
-  }, [legacyList, searchParams, setSearchParams])
+  }, [legacyList, displayParam, view, searchParams, setSearchParams])
 
   const sessionParam = searchParams.get('session')
   const dateParam = searchParams.get('date')
@@ -194,7 +186,6 @@ export default function AttendanceRegister() {
   const selectedSession = requestedSession
 
   const calendarEvents = useMemo(() => {
-    if (display === 'table') return []
     const range =
       view === 'day'
         ? [selectedDate]
@@ -214,7 +205,6 @@ export default function AttendanceRegister() {
         }),
       )
   }, [
-    display,
     view,
     selectedDate,
     centreSessions,
@@ -251,7 +241,7 @@ export default function AttendanceRegister() {
       date?: Date | null
       session?: string | null
       view?: CalendarView
-      display?: DisplayMode
+      display?: CalendarDisplay
     },
     { clearStudent = true }: { clearStudent?: boolean } = {},
   ) {
@@ -300,7 +290,6 @@ export default function AttendanceRegister() {
         date,
         session: null,
         view: 'day',
-        display: display === 'table' ? 'list' : display,
       })
       setWeekOverview(false)
       return
@@ -363,29 +352,18 @@ export default function AttendanceRegister() {
     if (nextView !== 'day' && nextView !== 'week' && nextView !== 'month')
       return
     if (nextView === view) return
-    commit({
-      view: nextView,
-      display: nextView === 'month' && display === 'table' ? 'list' : display,
-    })
+    commit({ view: nextView })
     if (nextView !== 'month') setWeekOverview(false)
   }
 
   function changeDisplay(nextDisplay: unknown) {
-    if (
-      nextDisplay !== 'timeline' &&
-      nextDisplay !== 'list' &&
-      nextDisplay !== 'table'
-    )
-      return
+    if (nextDisplay !== 'timeline' && nextDisplay !== 'list') return
     if (nextDisplay === display) return
-    const nextView =
-      nextDisplay !== 'table' && view === 'month' ? 'week' : view
     commit({
       display: nextDisplay,
-      view: nextView,
-      session: nextDisplay === 'table' ? null : undefined,
+      view: view === 'month' ? 'week' : view,
     })
-    if (nextView !== 'month') setWeekOverview(false)
+    setWeekOverview(false)
   }
 
   useEffect(() => {
@@ -487,19 +465,15 @@ export default function AttendanceRegister() {
   }
 
   const heading =
-    display === 'table'
-      ? 'Session table'
-      : view === 'week'
-        ? weekLabel(selectedDate)
-        : selectedDate.toLocaleDateString('en-GB', {
-            ...(view === 'day'
-              ? { weekday: 'long', day: 'numeric' }
-              : {}),
-            month: 'long',
-            year: 'numeric',
-          })
+    view === 'week'
+      ? weekLabel(selectedDate)
+      : selectedDate.toLocaleDateString('en-GB', {
+          ...(view === 'day' ? { weekday: 'long', day: 'numeric' } : {}),
+          month: 'long',
+          year: 'numeric',
+        })
 
-  const showSidePanel = display !== 'table' && selectedEvent !== undefined
+  const showSidePanel = selectedEvent !== undefined
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
@@ -547,7 +521,7 @@ export default function AttendanceRegister() {
           <div
             role="group"
             aria-label={`${view[0].toUpperCase()}${view.slice(1)} navigation`}
-            className={cn('flex items-center gap-2', display === 'table' && 'hidden')}
+            className="flex items-center gap-2"
           >
             <Button
               variant="outline"
@@ -581,74 +555,70 @@ export default function AttendanceRegister() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          {display !== 'table' && (
-            <Button
-              variant="outline"
-              onClick={() => setNewSessionOpen(true)}
-              className="h-10 gap-2 px-4"
+          <Button
+            variant="outline"
+            onClick={() => setNewSessionOpen(true)}
+            className="h-10 gap-2 px-4"
+          >
+            <Plus aria-hidden="true" />
+            New session
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  variant="outline"
+                  className="h-10 min-w-28 justify-between gap-3 px-4"
+                />
+              }
+              aria-label={`Calendar date range: ${view}`}
             >
-              <Plus aria-hidden="true" />
-              New session
-            </Button>
-          )}
-          {display !== 'table' && (
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <Button
-                    variant="outline"
-                    className="h-10 min-w-28 justify-between gap-3 px-4"
-                  />
-                }
-                aria-label={`Calendar date range: ${view}`}
+              {view[0].toUpperCase()}
+              {view.slice(1)}
+              <ChevronDown aria-hidden="true" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="p-1.5">
+              <DropdownMenuRadioGroup
+                value={view}
+                onValueChange={changeView}
+                aria-label="Calendar date range"
               >
-                {view[0].toUpperCase()}
-                {view.slice(1)}
-                <ChevronDown aria-hidden="true" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="p-1.5">
-                <DropdownMenuRadioGroup
-                  value={view}
-                  onValueChange={changeView}
-                  aria-label="Calendar date range"
+                <DropdownMenuRadioItem
+                  value="day"
+                  closeOnClick
+                  aria-keyshortcuts="d"
+                  className="py-2.5 pr-4 pl-9"
                 >
-                  <DropdownMenuRadioItem
-                    value="day"
-                    closeOnClick
-                    aria-keyshortcuts="d"
-                    className="py-2.5 pr-4 pl-9"
-                  >
-                    Day
-                    <Kbd className="ml-auto" aria-hidden="true">
-                      D
-                    </Kbd>
-                  </DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem
-                    value="week"
-                    closeOnClick
-                    aria-keyshortcuts="w"
-                    className="py-2.5 pr-4 pl-9"
-                  >
-                    Week
-                    <Kbd className="ml-auto" aria-hidden="true">
-                      W
-                    </Kbd>
-                  </DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem
-                    value="month"
-                    closeOnClick
-                    aria-keyshortcuts="m"
-                    className="py-2.5 pr-4 pl-9"
-                  >
-                    Month
-                    <Kbd className="ml-auto" aria-hidden="true">
-                      M
-                    </Kbd>
-                  </DropdownMenuRadioItem>
-                </DropdownMenuRadioGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
+                  Day
+                  <Kbd className="ml-auto" aria-hidden="true">
+                    D
+                  </Kbd>
+                </DropdownMenuRadioItem>
+                <DropdownMenuRadioItem
+                  value="week"
+                  closeOnClick
+                  aria-keyshortcuts="w"
+                  className="py-2.5 pr-4 pl-9"
+                >
+                  Week
+                  <Kbd className="ml-auto" aria-hidden="true">
+                    W
+                  </Kbd>
+                </DropdownMenuRadioItem>
+                <DropdownMenuRadioItem
+                  value="month"
+                  closeOnClick
+                  aria-keyshortcuts="m"
+                  className="py-2.5 pr-4 pl-9"
+                >
+                  Month
+                  <Kbd className="ml-auto" aria-hidden="true">
+                    M
+                  </Kbd>
+                </DropdownMenuRadioItem>
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           {view !== 'month' && (
             <DropdownMenu>
@@ -663,16 +633,10 @@ export default function AttendanceRegister() {
               >
                 {display === 'timeline' ? (
                   <CalendarDaysIcon aria-hidden="true" />
-                ) : display === 'list' ? (
-                  <List aria-hidden="true" />
                 ) : (
-                  <Table2 aria-hidden="true" />
+                  <List aria-hidden="true" />
                 )}
-                {display === 'timeline'
-                  ? 'Timeline'
-                  : display === 'list'
-                    ? 'List'
-                    : 'Table'}
+                {display === 'timeline' ? 'Timeline' : 'List'}
                 <ChevronDown aria-hidden="true" />
               </DropdownMenuTrigger>
               <DropdownMenuContent className="p-1.5">
@@ -704,14 +668,6 @@ export default function AttendanceRegister() {
                     <Kbd className="ml-auto" aria-hidden="true">
                       L
                     </Kbd>
-                  </DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem
-                    value="table"
-                    closeOnClick
-                    className="gap-3 py-2.5 pr-4 pl-9"
-                  >
-                    <Table2 aria-hidden="true" className="size-4" />
-                    Table
                   </DropdownMenuRadioItem>
                 </DropdownMenuRadioGroup>
               </DropdownMenuContent>
@@ -767,34 +723,28 @@ export default function AttendanceRegister() {
               : 'grid grid-cols-1 grid-rows-[repeat(2,minmax(320px,1fr))] gap-3 overflow-y-auto overscroll-contain lg:grid-cols-[minmax(0,1fr)_320px] lg:grid-rows-1 lg:overflow-hidden'),
         )}
       >
-        {display === 'table' ? (
-          <AttendanceSessionList centreId={selectedCentreId} />
-        ) : (
-          <>
-            <AttendanceCalendar
-              date={selectedDate}
-              today={today}
-              now={now}
-              focusRequest={timelineFocusRequest}
-              view={view}
-              display={display}
-              events={calendarEvents}
-              selectedSessionId={selectedSession?.id ?? null}
-              expandSelectedDay={
-                view === 'day' || !weekOverview || selectedSession !== null
-              }
-              onSelectDate={selectCalendarDate}
-              onToggleSession={toggleSession}
-            />
-            {selectedEvent && (
-              <AttendanceSessionPanel
-                event={selectedEvent}
-                focusStudentId={focusStudent?.id}
-                onClose={() => commit({ session: null })}
-                dayView={view === 'day'}
-              />
-            )}
-          </>
+        <AttendanceCalendar
+          date={selectedDate}
+          today={today}
+          now={now}
+          focusRequest={timelineFocusRequest}
+          view={view}
+          display={display}
+          events={calendarEvents}
+          selectedSessionId={selectedSession?.id ?? null}
+          expandSelectedDay={
+            view === 'day' || !weekOverview || selectedSession !== null
+          }
+          onSelectDate={selectCalendarDate}
+          onToggleSession={toggleSession}
+        />
+        {selectedEvent && (
+          <AttendanceSessionPanel
+            event={selectedEvent}
+            focusStudentId={focusStudent?.id}
+            onClose={() => commit({ session: null })}
+            dayView={view === 'day'}
+          />
         )}
       </div>
 

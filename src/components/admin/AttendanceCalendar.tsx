@@ -617,7 +617,7 @@ function CalendarTimeline({
           {!isDay && (
             <div
               ref={headerRef}
-              className="sticky top-0 left-0 z-30 border-r border-b bg-card p-2 text-[10px] text-muted-foreground"
+              className="sticky top-0 left-0 z-40 border-r border-b bg-card p-2 text-[10px] text-muted-foreground"
             />
           )}
           {!isDay && days.map((day) => {
@@ -626,7 +626,7 @@ function CalendarTimeline({
               <div
                 key={dateKey(day)}
                 className={cn(
-                  'sticky top-0 z-20 border-r border-b bg-card px-3 py-2.5 text-center',
+                  'sticky top-0 z-30 border-r border-b bg-card px-3 py-2.5 text-center',
                   isToday && 'bg-accent',
                 )}
               >
