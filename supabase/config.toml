@@ -12,14 +12,6 @@ verify_jwt = false
 [functions.create-instructor]
 verify_jwt = false
 
-# The handler checks the caller JWT and public.users.role.
-[functions.send-test-notification]
-verify_jwt = false
-
-# Resend authenticates via a signed webhook payload, not a user JWT.
-[functions.resend-webhook]
-verify_jwt = false
-
 [functions.send-grading-invitation]
 verify_jwt = false
 

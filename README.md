@@ -89,7 +89,7 @@ link, and theme, notification, and profile controls. The logo returns to
 | `/admin/grading/eligibility` | Automatic eligibility checks and invitations |
 | `/admin/grading/opportunities` | Create grading opportunities and assign an assessing instructor |
 | `/admin/grading/applications` | Read-only view and CSV export of submitted applications |
-| `/admin/notifications` | Compose targeted notifications and review delivery history |
+| `/admin/notifications` | Review EmailJS grading invitation requests |
 | `/admin/reports` | Consolidated centre reporting and CSV export |
 | `/admin/instructors` | Teaching team and instructor account creation |
 | `/admin/profile` | Administrator account details and sign out |
@@ -97,10 +97,11 @@ link, and theme, notification, and profile controls. The logo returns to
 The console uses deterministic mock data from `src/lib/admin/mock-data.ts`
 through an in-memory provider. Attendance, sessions, opportunities, and
 follow-up changes reset on reload. Instructor account creation uses the
-`create-instructor` Edge Function. The admin Notifications page sends **test
-emails only**, one per click to the configured test mailbox; its delivery
-history is loaded from Supabase and updated by Resend webhooks. Mock student
-emails in the browser do not replace the unique addresses in `public.students`.
+`create-instructor` Edge Function. Grading invitation preview and confirmation
+use persisted eligibility and the `send-grading-invitation` Edge Function;
+the Notifications page shows EmailJS request status (accepted/failed, not
+individual delivery). Mock student emails in the browser do not replace the
+unique addresses in `public.students`.
 
 Grading results, belt promotions, and application approvals are intentionally
 out of scope. Applications are displayed read-only for administrators.
@@ -150,16 +151,19 @@ npx vercel@latest deploy --prod
 ### Edge Functions — Supabase Cloud
 
 Replace `YOUR_PROJECT_REF` with your Supabase project reference. Configure
-`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID`, `APP_URL`, and
-`AUTH_ALLOWED_ORIGINS` in **Edge Functions → Secrets**, using the root `.env` as
-the source. Supabase supplies the function's built-in `SUPABASE_*` credentials.
+`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID`,
+`STRIPE_GRADING_FEE_ID`, `APP_URL`, `AUTH_ALLOWED_ORIGINS`,
+`EMAILJS_SERVICE_ID`, `EMAILJS_TEMPLATE_ID`, and `EMAILJS_PUBLIC_KEY` in
+**Edge Functions → Secrets**, using the root `.env` as the source. If EmailJS
+private-key authorization is enabled, also set `EMAILJS_PRIVATE_KEY`. Supabase
+supplies the function's built-in `SUPABASE_*` credentials.
 
 ```sh
 npx supabase@latest login
 npx supabase@latest functions deploy create-checkout-session --project-ref YOUR_PROJECT_REF --use-api
 npx supabase@latest functions deploy stripe-webhook --project-ref YOUR_PROJECT_REF --use-api
-npx supabase@latest functions deploy send-test-notification --project-ref YOUR_PROJECT_REF --use-api
-npx supabase@latest functions deploy resend-webhook --project-ref YOUR_PROJECT_REF --use-api
+npx supabase@latest functions deploy send-grading-invitation --project-ref YOUR_PROJECT_REF --use-api
+npx supabase@latest functions deploy create-grading-checkout --project-ref YOUR_PROJECT_REF --use-api
 ```
 
 Set `APP_URL` to the frontend origin for Checkout redirects and CORS. Configure
@@ -168,13 +172,12 @@ Stripe's test-mode webhook destination as
 `checkout.session.completed` and `checkout.session.async_payment_succeeded`.
 Store its signing secret as `STRIPE_WEBHOOK_SECRET` in Supabase.
 
-For admin test emails, configure `RESEND_API_KEY` and `RESEND_FROM_EMAIL` in
-**Edge Functions → Secrets**. The sender must be on a verified Resend domain.
-Set `APP_URL` to the exact deployed frontend origin (and use
-`AUTH_ALLOWED_ORIGINS` for local development). In Resend, add a webhook for
-`email.sent`, `email.delivered`, `email.failed`, and `email.bounced` pointing to
-`https://YOUR_PROJECT_REF.supabase.co/functions/v1/resend-webhook`. Store its
-signing secret as `RESEND_WEBHOOK_SECRET` in Supabase Edge Function secrets.
-Until both the sender and webhook signing secret are configured, sending and
-delivery tracking will remain unavailable; do not treat accepted sends as
-delivered. Do not use the test composer for a real student mailing list.
+Configure the EmailJS template's To field as `{{to_email}}`, BCC as
+`{{bcc_emails}}`, and its application link as `{{application_url}}`. The server
+sets To to `suroulomg@gmail.com`, BCC to eligible students' usable addresses
+plus `mq07110@gmail.com` once, and the link to the existing `/grading` route.
+Only a signed-in administrator can preview and confirm the single request;
+deploying does not send an invitation. An accepted request does not establish
+delivery to any recipient. `STRIPE_GRADING_FEE_ID` must be an active test-mode
+one-time price of SGD 60.00; only the verified Stripe webhook submits grading
+applications. The guest Checkout price remains separate.
