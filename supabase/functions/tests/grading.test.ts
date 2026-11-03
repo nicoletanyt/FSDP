@@ -71,3 +71,79 @@ Deno.test('verified paid grading session finalizes once per webhook delivery; un
     names.forEach((name, index) => previous[index] === undefined ? Deno.env.delete(name) : Deno.env.set(name, previous[index]!))
   }
 })
+
+Deno.test('admin grading preview does not send; confirmation sends one email with the dummy BCC and unchanged link', async () => {
+  const environment: Record<string, string> = {
+    APP_URL: 'http://localhost:5173', SUPABASE_URL: 'https://example.supabase.co',
+    SUPABASE_ANON_KEY: 'unit_test_anon', SUPABASE_SERVICE_ROLE_KEY: 'unit_test_service',
+    EMAILJS_SERVICE_ID: 'service_test', EMAILJS_TEMPLATE_ID: 'template_test', EMAILJS_PUBLIC_KEY: 'public_test',
+  }
+  const original = new Map(Object.keys(environment).map((name) => [name, Deno.env.get(name)]))
+  const originalFetch = globalThis.fetch
+  for (const [name, value] of Object.entries(environment)) Deno.env.set(name, value)
+  const eventId = '699dbd22-d137-4be4-81bd-10b6a2ab710c'
+  let sends = 0
+  let reservations = 0
+  let accepted = false
+  globalThis.fetch = async (input, init) => {
+    const request = new Request(input, init)
+    const url = new URL(request.url)
+    if (url.hostname === 'api.emailjs.com') {
+      sends++
+      assert.equal(request.method, 'POST')
+      const payload = await request.json()
+      assert.equal(payload.service_id, environment.EMAILJS_SERVICE_ID)
+      assert.equal(payload.template_id, environment.EMAILJS_TEMPLATE_ID)
+      assert.deepEqual(payload.template_params, {
+        to_email: 'suroulomg@gmail.com', bcc_emails: 'test@example.com,mq07110@gmail.com',
+        grading_date: '30 November 2026', grading_time: '9:00 am',
+        grading_location: 'Ci Yuan Dojo', application_deadline: '2026-11-16',
+        application_url: `${environment.APP_URL}/grading`,
+      })
+      return new Response('OK')
+    }
+    if (url.pathname === '/auth/v1/user') return Response.json({ id: '00000000-0000-4000-8000-000000000001' })
+    if (url.pathname === '/rest/v1/users') return Response.json({ role: 'administrator' })
+    if (url.pathname === '/rest/v1/events') return Response.json({ name: 'Ci Yuan grading',
+      starts_at: '2026-11-30T01:00:00+00:00', centres: [{ name: 'Ci Yuan Dojo' }],
+      gradings: [{ application_deadline: '2026-11-16' }] })
+    if (url.pathname === '/rest/v1/rpc/eligible_grading_students') {
+      return Response.json([{ email: 'test@example.com' }, { email: 'test@example.com' }])
+    }
+    if (url.pathname === '/rest/v1/grading_email_sends' && request.method === 'POST') {
+      reservations++
+      if (accepted) return Response.json({ code: '23505', message: 'duplicate' }, { status: 409 })
+      const body = await request.json()
+      assert.equal(body.recipient_count, 2)
+      return Response.json({ id: '00000000-0000-4000-8000-000000000002' })
+    }
+    if (url.pathname === '/rest/v1/grading_email_sends' && request.method === 'PATCH') {
+      const body = await request.json()
+      assert.equal(body.status, 'accepted')
+      accepted = true
+      return new Response(null, { status: 204 })
+    }
+    throw new Error(`Unexpected request: ${request.method} ${request.url}`)
+  }
+  const makeRequest = (confirm: boolean) => new Request('http://localhost/functions/v1/send-grading-invitation', {
+    method: 'POST', headers: { authorization: 'Bearer signed-in-test-admin', origin: environment.APP_URL },
+    body: JSON.stringify({ event_id: eventId, confirm }),
+  })
+  try {
+    const preview = await invitation(makeRequest(false))
+    assert.equal(preview.status, 200)
+    assert.deepEqual((await preview.json()).bcc_emails, ['test@example.com', 'mq07110@gmail.com'])
+    assert.equal(sends, 0)
+    assert.equal(reservations, 0)
+    assert.equal((await invitation(makeRequest(true))).status, 200)
+    assert.equal((await invitation(makeRequest(true))).status, 409)
+    assert.equal(sends, 1)
+    assert.equal(reservations, 2)
+  } finally {
+    globalThis.fetch = originalFetch
+    for (const [name, value] of original) {
+      if (value === undefined) Deno.env.delete(name)
+      else Deno.env.set(name, value)
+    }
+  }
+})
