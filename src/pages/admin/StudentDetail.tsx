@@ -119,7 +119,7 @@ export default function StudentDetail() {
           <>
             <Button
               variant="outline"
-              render={<Link to={`/admin/attendance/register?student=${student.id}`} />}
+              render={<Link to={`/admin/calendar?student=${student.id}`} />}
             >
               <CalendarCheck />
               Record attendance

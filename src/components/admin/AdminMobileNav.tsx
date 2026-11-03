@@ -33,7 +33,7 @@ const groups: { label: string; items: NavItem[] }[] = [
     label: 'Monitor',
     items: [
       { to: '/admin', label: 'Overview', icon: LayoutDashboard, end: true },
-      { to: '/admin/attendance', label: 'Attendance', icon: CalendarCheck },
+      { to: '/admin/calendar', label: 'Calendar', icon: CalendarCheck },
       { to: '/admin/centres', label: 'Centres', icon: Building2 },
     ],
   },

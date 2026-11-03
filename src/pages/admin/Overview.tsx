@@ -101,7 +101,7 @@ export default function Overview() {
         title="Dojo operations"
         description="Monitor attendance, spot students who need support, and keep the grading pipeline moving across every centre."
         actions={
-          <Button render={<Link to="/admin/attendance/register" />}>
+          <Button render={<Link to="/admin/calendar" />}>
             <CalendarCheck />
             Record attendance
           </Button>
@@ -187,7 +187,7 @@ export default function Overview() {
                 Students flagged for low or declining attendance.
               </CardDescription>
             </div>
-            <Button variant="ghost" size="sm" render={<Link to="/admin/attendance/monitoring" />}>
+            <Button variant="ghost" size="sm" render={<Link to="/admin/calendar/monitoring" />}>
               View all
               <ChevronRight />
             </Button>
@@ -247,7 +247,7 @@ export default function Overview() {
                 <CardTitle>Upcoming sessions</CardTitle>
                 <CardDescription>Next classes across the dojos.</CardDescription>
               </div>
-              <Button variant="ghost" size="sm" render={<Link to="/admin/attendance/register?view=week&display=list" />}>
+              <Button variant="ghost" size="sm" render={<Link to="/admin/calendar?view=week&display=list" />}>
                 View calendar
                 <ChevronRight />
               </Button>
@@ -275,7 +275,7 @@ export default function Overview() {
                     <Button
                       variant="outline"
                       size="xs"
-                      render={<Link to={`/admin/attendance/register?centre=${session.centreId}&date=${session.date}&session=${session.id}&view=day&display=list`} />}
+                      render={<Link to={`/admin/calendar?centre=${session.centreId}&date=${session.date}&session=${session.id}&view=day&display=list`} />}
                     >
                       Manage
                     </Button>

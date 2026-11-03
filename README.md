@@ -83,10 +83,9 @@ link, and theme, notification, and profile controls. The logo returns to
 | --- | --- |
 | `/admin` | Overview of attendance, declining students, and the grading pipeline |
 | `/admin/centres` | Centre directory: search and filter students; open a full student profile |
-| `/admin/attendance/register` | Mark a session roster present, late, absent, or excused |
-| `/admin/attendance/sessions` | Create sessions and assign an instructor, including external sessions |
-| `/admin/attendance/records` | Review and export attendance history |
-| `/admin/attendance/monitoring` | Flag declining attendance, notify students, and track follow-up |
+| `/admin/calendar` | View sessions, create sessions (including external sessions), and mark rosters present, late, absent, or excused |
+| `/admin/calendar/records` | Review and export attendance history |
+| `/admin/calendar/monitoring` | Flag declining attendance, notify students, and track follow-up |
 | `/admin/grading/eligibility` | Automatic eligibility checks and invitations |
 | `/admin/grading/opportunities` | Create grading opportunities and assign an assessing instructor |
 | `/admin/grading/applications` | Read-only view and CSV export of submitted applications |
@@ -96,10 +95,12 @@ link, and theme, notification, and profile controls. The logo returns to
 | `/admin/profile` | Administrator account details and sign out |
 
 The console uses deterministic mock data from `src/lib/admin/mock-data.ts`
-through an in-memory provider. Attendance, sessions, opportunities,
-notifications, and follow-up changes reset on reload; no admin data is written to
-Supabase yet. Instructor account creation on `/admin/instructors` is the one live
-backend action, using the existing `create-instructor` Edge Function.
+through an in-memory provider. Attendance, sessions, opportunities, and
+follow-up changes reset on reload. Instructor account creation uses the
+`create-instructor` Edge Function. The admin Notifications page sends **test
+emails only**, one per click to the configured test mailbox; its delivery
+history is loaded from Supabase and updated by Resend webhooks. Mock student
+emails in the browser do not replace the unique addresses in `public.students`.
 
 Grading results, belt promotions, and application approvals are intentionally
 out of scope. Applications are displayed read-only for administrators.
@@ -157,6 +158,8 @@ the source. Supabase supplies the function's built-in `SUPABASE_*` credentials.
 npx supabase@latest login
 npx supabase@latest functions deploy create-checkout-session --project-ref YOUR_PROJECT_REF --use-api
 npx supabase@latest functions deploy stripe-webhook --project-ref YOUR_PROJECT_REF --use-api
+npx supabase@latest functions deploy send-test-notification --project-ref YOUR_PROJECT_REF --use-api
+npx supabase@latest functions deploy resend-webhook --project-ref YOUR_PROJECT_REF --use-api
 ```
 
 Set `APP_URL` to the frontend origin for Checkout redirects and CORS. Configure
@@ -164,3 +167,14 @@ Stripe's test-mode webhook destination as
 `https://YOUR_PROJECT_REF.supabase.co/functions/v1/stripe-webhook` for
 `checkout.session.completed` and `checkout.session.async_payment_succeeded`.
 Store its signing secret as `STRIPE_WEBHOOK_SECRET` in Supabase.
+
+For admin test emails, configure `RESEND_API_KEY` and `RESEND_FROM_EMAIL` in
+**Edge Functions → Secrets**. The sender must be on a verified Resend domain.
+Set `APP_URL` to the exact deployed frontend origin (and use
+`AUTH_ALLOWED_ORIGINS` for local development). In Resend, add a webhook for
+`email.sent`, `email.delivered`, `email.failed`, and `email.bounced` pointing to
+`https://YOUR_PROJECT_REF.supabase.co/functions/v1/resend-webhook`. Store its
+signing secret as `RESEND_WEBHOOK_SECRET` in Supabase Edge Function secrets.
+Until both the sender and webhook signing secret are configured, sending and
+delivery tracking will remain unavailable; do not treat accepted sends as
+delivered. Do not use the test composer for a real student mailing list.

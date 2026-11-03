@@ -21,7 +21,6 @@ import {
   navigationMenuTriggerStyle,
 } from '@/components/ui/navigation-menu'
 import { useAuth } from '@/hooks/use-auth'
-import { useAdminData } from '@/lib/admin/admin-data-context'
 import { initials } from '@/lib/admin/format'
 import { cn } from 'cn'
 
@@ -45,9 +44,9 @@ const groups: { label: string; items: NavItem[] }[] = [
         end: true,
       },
       {
-        to: '/admin/attendance',
-        label: 'Attendance',
-        description: 'Register, sessions, records, and monitoring',
+        to: '/admin/calendar',
+        label: 'Calendar',
+        description: 'Sessions, records, and monitoring',
         icon: CalendarCheck,
       },
       {
@@ -83,12 +82,8 @@ function isActive(pathname: string, to: string, end = false): boolean {
 
 export default function AdminNavbar() {
   const { pathname } = useLocation()
-  const isAttendanceRegister =
-    pathname === '/admin/attendance/register' ||
-    pathname.startsWith('/admin/attendance/register/')
+  const isCalendar = pathname === '/admin/calendar'
   const { profile } = useAuth()
-  const { notifications } = useAdminData()
-  const unread = notifications.filter((notification) => notification.channel === 'in_app').length
   const instructorsActive = isActive(pathname, '/admin/instructors')
 
   return (
@@ -96,7 +91,7 @@ export default function AdminNavbar() {
       <div
         className={cn(
           'mx-auto grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 py-3 sm:gap-3 lg:grid-cols-[1fr_auto_1fr]',
-          isAttendanceRegister
+          isCalendar
             ? 'w-[calc(100%-2rem)] max-w-[1600px] sm:w-[94%]'
             : 'w-full max-w-[1400px] px-4 sm:px-6',
         )}
@@ -202,18 +197,11 @@ export default function AdminNavbar() {
           <Button
             variant="ghost"
             size="icon"
-            aria-label={`Notifications${unread ? `, ${unread} unread` : ''}`}
+            aria-label="Notifications"
             title="Notifications"
             render={<Link to="/admin/notifications" />}
-            className="relative"
           >
             <Bell />
-            {unread > 0 && (
-              <span
-                className="absolute top-1 right-1 size-2 rounded-full bg-brand-red"
-                aria-hidden="true"
-              />
-            )}
           </Button>
 
           <Button

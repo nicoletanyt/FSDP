@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "check:functions": "deno check --no-lock supabase/functions/create-checkout-session/index.ts supabase/functions/stripe-webhook/index.ts supabase/functions/create-instructor/index.ts",
+    "check:functions": "deno check --no-lock supabase/functions/create-checkout-session/index.ts supabase/functions/stripe-webhook/index.ts supabase/functions/create-instructor/index.ts supabase/functions/send-test-notification/index.ts supabase/functions/resend-webhook/index.ts supabase/functions/send-grading-invitation/index.ts supabase/functions/create-grading-checkout/index.ts",
     "test:functions": "deno test --no-lock --allow-env supabase/functions/tests/",
     "seed:admin": "node --env-file=.env scripts/seed-admin.mjs",
     "test:auth-db": "node --test tests/auth-db.test.mjs",

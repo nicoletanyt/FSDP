@@ -598,10 +598,6 @@ function dateOfBirthFor(index: number, track: 'children' | 'adult'): string {
   return toIsoDate(new Date(reference.getFullYear() - age, month, day))
 }
 
-function studentEmail(firstName: string, lastName: string): string {
-  return `${firstName}.${lastName}`.toLowerCase().replace(/[^a-z.]/g, '') + '@example.test'
-}
-
 export const students: Student[] = studentNames.map(([firstName, lastName], index) => {
   const centre = activeCentres[index % activeCentres.length]
   const track = index % 5 < 2 ? 'children' : 'adult'
@@ -622,7 +618,8 @@ export const students: Student[] = studentNames.map(([firstName, lastName], inde
     memberNo: `SK-${String(1001 + index)}`,
     firstName,
     lastName,
-    email: studentEmail(firstName, lastName),
+    // Mock UI only. The unique emails in public.students are not overwritten.
+    email: 'mq07110@gmail.com',
     phone: `+65 9${String(1000 + index * 37).slice(-3)} ${String(2000 + index * 53).slice(-4)}`,
     homeCentreId: centre.id,
     dateOfBirth: dateOfBirthFor(index, track),

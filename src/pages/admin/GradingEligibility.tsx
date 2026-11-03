@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { Bell, CheckCircle2, Search } from 'lucide-react'
 import EmptyState from '@/components/admin/EmptyState'
 import EligibilityChecklist from '@/components/admin/EligibilityChecklist'
@@ -34,9 +34,10 @@ import { countSyllabusItems } from '@/lib/admin/syllabus'
 import type { Grade, GradeTrack } from '@/lib/admin/types'
 import { getGradeMeta, grades } from '@/lib/admin/types'
 import { cn } from 'cn'
+import { supabase } from '@/lib/supabase'
 
 export default function GradingEligibility() {
-  const { centres, students, attendance, sessions, techniqueSignOffs, sendNotification } =
+  const { centres, students, attendance, sessions, techniqueSignOffs } =
     useAdminData()
   const { centreId } = useAdminFilters()
   const [statusFilter, setStatusFilter] = useState('all')
@@ -44,6 +45,20 @@ export default function GradingEligibility() {
   const [query, setQuery] = useState('')
   const [expanded, setExpanded] = useState<string | null>(null)
   const [notice, setNotice] = useState('')
+  const [events, setEvents] = useState<{ id: string; name: string }[]>([])
+  const [eventId, setEventId] = useState('')
+  const [preview, setPreview] = useState<{ eligible: number; bcc_count: number; bcc_emails: string[] } | null>(null)
+  const [sending, setSending] = useState(false)
+
+  useEffect(() => {
+    void supabase.from('events').select('id,name,starts_at,gradings!inner(application_status)')
+      .eq('event_type', 'grading').eq('status', 'scheduled').eq('gradings.application_status', 'open')
+      .gt('starts_at', new Date().toISOString()).order('starts_at')
+      .then(({ data, error }) => {
+        if (error) setNotice('Unable to load persisted grading events.')
+        else setEvents((data ?? []).map(({ id, name }) => ({ id, name })))
+      })
+  }, [])
 
   const centreNames = new Map(centres.map((centre) => [centre.id, centre.name]))
   const scopedStudents = useMemo(
@@ -91,18 +106,26 @@ export default function GradingEligibility() {
     (assessment) => assessment.status === 'not_eligible',
   )
 
-  function notifyEligible() {
-    if (eligible.length === 0) return
-    sendNotification({
-      channel: 'email',
-      template: 'Grading invitation',
-      audience:
-        centreId === 'all'
-          ? 'Eligible students — all centres'
-          : `Eligible students — ${centreNames.get(centreId) ?? 'selected centre'}`,
-      recipientCount: eligible.length,
-    })
-    setNotice(`Grading invitation queued for ${eligible.length} eligible students.`)
+  async function notifyEligible(confirm: boolean) {
+    if (!eventId) return
+    if (confirm && !window.confirm(`Send ONE email to suroulomg@gmail.com, BCC ${preview?.bcc_count ?? 0} addresses? This includes mq07110@gmail.com. Continue?`)) return
+    setSending(true)
+    setNotice('')
+    try {
+      const { data, error } = await supabase.functions.invoke('send-grading-invitation', {
+        body: { event_id: eventId, confirm },
+      })
+      if (error) {
+        const details = await error.context?.json?.().catch(() => null)
+        throw new Error(details?.error ?? error.message)
+      }
+      if (confirm) {
+        setNotice(`EmailJS accepted one invitation send (BCC: ${data.bcc_count} addresses). This does not confirm delivery.`)
+        setPreview(null)
+      } else setPreview(data)
+    } catch (failure) {
+      setNotice(failure instanceof Error ? failure.message : 'Invitation failed.')
+    } finally { setSending(false) }
   }
 
   return (
@@ -161,11 +184,21 @@ export default function GradingEligibility() {
             ))}
           </NativeSelect>
         </div>
-        <Button variant="outline" onClick={notifyEligible} disabled={eligible.length === 0}>
+        <NativeSelect value={eventId} onChange={(event) => { setEventId(event.target.value); setPreview(null) }} aria-label="Select persisted grading event">
+          <option value="">Select grading event</option>
+          {events.map((event) => <option key={event.id} value={event.id}>{event.name}</option>)}
+        </NativeSelect>
+        <Button variant="outline" onClick={() => void notifyEligible(false)} disabled={!eventId || sending}>
           <Bell />
-          Notify eligible ({eligible.length})
+          Preview real recipients
         </Button>
       </div>
+      <p className="text-xs text-muted-foreground">Eligibility table below uses demo data; invitations use only persisted students and server-calculated eligibility for the selected event.</p>
+      {preview && <Card className="gap-3 p-4">
+        <p>Server-eligible students: {preview.eligible}. One email to suroulomg@gmail.com; {preview.bcc_count} BCC addresses (including mq07110@gmail.com).</p>
+        <p className="text-xs break-all text-muted-foreground">BCC: {preview.bcc_emails.join(', ')}</p>
+        <Button disabled={sending || preview.eligible === 0} onClick={() => void notifyEligible(true)}>Confirm one EmailJS send</Button>
+      </Card>}
 
       {filtered.length === 0 ? (
         <EmptyState

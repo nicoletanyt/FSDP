@@ -9,26 +9,24 @@ import { cn } from 'cn'
 function AdminShell() {
   const { pathname } = useLocation()
   const [searchParams] = useSearchParams()
-  const isAttendanceRegister =
-    pathname === '/admin/attendance' ||
-    pathname.startsWith('/admin/attendance/register')
+  const isCalendar = pathname === '/admin/calendar'
   const isDojosTab =
     pathname === '/admin/centres' && searchParams.get('tab') !== 'students'
   const showFilters =
-    pathname !== '/admin/profile' && !isAttendanceRegister && !isDojosTab
+    pathname !== '/admin/profile' && !isCalendar && !isDojosTab
 
   return (
     <div
       className={cn(
         'flex flex-1 flex-col',
-        isAttendanceRegister && 'min-h-0 overflow-hidden',
+        isCalendar && 'min-h-0 overflow-hidden',
       )}
     >
       <AdminNavbar />
       <main
         className={cn(
           'mx-auto flex-1',
-          isAttendanceRegister
+          isCalendar
             ? 'flex min-h-0 w-[calc(100%-2rem)] max-w-[1600px] flex-col overflow-hidden py-4 sm:w-[94%] sm:py-6'
             : 'w-full max-w-[1400px] space-y-6 px-4 py-6 sm:px-6 sm:py-8',
         )}

@@ -104,7 +104,7 @@ export default function StudentTable({
                     variant="ghost"
                     size="icon-xs"
                     aria-label={`Record attendance for ${fullName(student)}`}
-                    render={<Link to={`/admin/attendance/register?student=${student.id}`} />}
+                    render={<Link to={`/admin/calendar?student=${student.id}`} />}
                   >
                     <CalendarCheck />
                   </Button>

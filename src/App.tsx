@@ -105,10 +105,8 @@ export default function App() {
               <Route path="students" element={<Navigate to="/admin/centres" replace />} />
               <Route path="students/:studentId" element={<AdminStudentDetail />} />
               <Route path="centres" element={<AdminCentres />} />
-              <Route path="attendance" element={<AdminAttendance />}>
-                <Route index element={<Navigate to="register" replace />} />
-                <Route path="register" element={<AdminAttendanceRegister />} />
-                <Route path="sessions" element={<Navigate to="/admin/attendance/register?view=week&display=list" replace />} />
+              <Route path="calendar" element={<AdminAttendance />}>
+                <Route index element={<AdminAttendanceRegister />} />
                 <Route path="records" element={<AdminAttendanceRecords />} />
                 <Route path="monitoring" element={<AdminAttendanceMonitoring />} />
               </Route>

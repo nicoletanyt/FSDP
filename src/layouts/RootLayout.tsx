@@ -15,9 +15,7 @@ export default function RootLayout() {
   const isAdmin =
     location.pathname === '/admin' ||
     location.pathname.startsWith('/admin/')
-  const isAttendanceRegister =
-    location.pathname === '/admin/attendance/register' ||
-    location.pathname.startsWith('/admin/attendance/register/')
+  const isAdminCalendar = location.pathname === '/admin/calendar'
   const isInstructorPortal = useMatch('/instructor/*')
   const isStudent = Boolean(session && profile?.role === 'student')
   const homePath =
@@ -53,7 +51,7 @@ export default function RootLayout() {
     <div
       className={cn(
         'flex flex-col text-foreground',
-        isAttendanceRegister ? 'h-dvh overflow-hidden' : 'min-h-screen',
+        isAdminCalendar ? 'h-dvh overflow-hidden' : 'min-h-screen',
         isAdmin ? 'bg-muted/30' : 'bg-background',
       )}
     >
