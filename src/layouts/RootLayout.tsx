@@ -36,7 +36,7 @@ export default function RootLayout() {
                 fallback={
                     <p
                         role="status"
-                        className="mx-auto w-full p-4 text-muted-foreground lg:w-[70%] lg:px-0 lg:py-6"
+                        className="mx-auto w-full p-6 text-muted-foreground lg:w-[70%] lg:px-0 lg:py-6"
                     >
                         Loading…
                     </p>
@@ -122,7 +122,7 @@ export default function RootLayout() {
                     </p>
                 )}
             </header></>}
-            <main className={`mx-auto w-full p-4 lg:w-[70%] lg:px-0 ${isStudent ? "lg:py-8" : "lg:py-12"}`}>
+            <main className={`mx-auto w-full p-6 lg:w-[70%] lg:px-0 ${isStudent ? "lg:py-8" : "lg:py-12"}`}>
                 <Suspense
                     fallback={
                         <p role="status" className="py-12 text-muted-foreground">

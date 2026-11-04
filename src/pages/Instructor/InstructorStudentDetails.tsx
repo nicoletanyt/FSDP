@@ -9,9 +9,8 @@ import {
     ChevronDown,
     ChevronLeft,
     ChevronRight,
-    CircleHelp,
+    CreditCard,
     HeartPulse,
-    History,
     Info,
     Mail,
     MapPin,
@@ -21,6 +20,7 @@ import {
     TriangleAlert,
     Trash2,
     Undo2,
+    X,
     XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -64,7 +64,6 @@ import {
 } from "@/lib/instructor-calendar";
 import type {
     CalendarEvent,
-    InstructorProfile,
     ReportAuthor,
     Student,
 } from "@/lib/instructor-calendar";
@@ -96,6 +95,7 @@ import { cn } from "@/lib/utils";
 
 type Profile = ReturnType<typeof getStudentProfile>;
 type DetailTab = "overview" | "sessions" | "grading";
+type ReviewSaveState = "idle" | "saved" | "error";
 
 const success = "text-emerald-700 dark:text-emerald-400";
 const signedDate = new Intl.DateTimeFormat("en-GB", {
@@ -103,6 +103,47 @@ const signedDate = new Intl.DateTimeFormat("en-GB", {
     month: "short",
     year: "numeric",
 });
+
+function TechniqueProgress({
+    syllabus,
+    signOffs,
+}: {
+    syllabus: GradingSyllabus;
+    signOffs: TechniqueSignOff[];
+}) {
+    const signedIds = new Set(signOffs.map((item) => item.itemId));
+    const items = syllabus.categories.flatMap((category) => category.items);
+    const signedCount = items.filter((item) => signedIds.has(item.id)).length;
+    const percent = items.length ? Math.round((signedCount / items.length) * 100) : 0;
+    const complete = items.length > 0 && signedCount === items.length;
+
+    return (
+        <div className="space-y-2">
+            <p
+                role="status"
+                aria-atomic="true"
+                className={cn(
+                    "detail-meta flex items-center justify-between gap-3 text-sm tabular-nums",
+                    complete ? success : "text-muted-foreground",
+                )}
+            >
+                <span>{signedCount} of {items.length} techniques completed</span>
+                <span className="font-medium">{percent}%</span>
+            </p>
+            <progress
+                aria-label={`${syllabus.grade} technique completion`}
+                value={signedCount}
+                max={items.length || 1}
+                className={cn(
+                    "block h-1.5 w-full overflow-hidden rounded-full [&::-webkit-progress-bar]:rounded-full [&::-webkit-progress-bar]:bg-muted [&::-webkit-progress-value]:rounded-full",
+                    complete
+                        ? "[&::-webkit-progress-value]:bg-emerald-600 [&::-moz-progress-bar]:bg-emerald-600"
+                        : "[&::-webkit-progress-value]:bg-primary [&::-moz-progress-bar]:bg-primary",
+                )}
+            />
+        </div>
+    );
+}
 
 function TechniqueChecklist({
     syllabus,
@@ -119,20 +160,17 @@ function TechniqueChecklist({
 }) {
     const checklistId = useId();
     const signOffByItem = new Map(signOffs.map((item) => [item.itemId, item]));
-    const items = syllabus.categories.flatMap((category) => category.items);
-    const signedCount = items.filter((item) => signOffByItem.has(item.id)).length;
-    const percent = items.length
-        ? Math.round((signedCount / items.length) * 100)
-        : 0;
-    const complete = items.length > 0 && signedCount === items.length;
+    const firstIncompleteCategory = syllabus.categories.find((category) =>
+        category.items.some((item) => !signOffByItem.has(item.id)),
+    );
 
     return (
         <Card className="gap-4 rounded-none bg-transparent py-0 ring-0">
             <CardHeader className="gap-3 px-0">
-                <div className="flex items-start justify-between gap-3">
+                <div className="detail-section-header">
                     <div className="min-w-0 space-y-1">
                         <CardTitle className="text-sm font-semibold">
-                            <h2>Technique Checklist</h2>
+                            <h2>Technique checklist</h2>
                         </CardTitle>
                     </div>
                     <Popover>
@@ -140,7 +178,7 @@ function TechniqueChecklist({
                             render={
                                 <Button
                                     variant="ghost"
-                                    size="icon-sm"
+                                    size="icon-touch"
                                     aria-label="About technique sign-offs"
                                     className="-mr-1 text-muted-foreground"
                                 />
@@ -150,14 +188,14 @@ function TechniqueChecklist({
                         </PopoverTrigger>
                         <PopoverContent
                             align="end"
-                            className="w-80 gap-2 text-left text-xs leading-relaxed"
+                            className="student-detail-view w-80 gap-3 text-left"
                         >
                             <PopoverTitle>About technique sign-offs</PopoverTitle>
-                            <p>
+                            <p className="detail-body text-sm">
                                 Only techniques for {syllabus.grade} are required. Earlier
                                 grades are treated as completed history.
                             </p>
-                            <p>
+                            <p className="detail-body text-sm">
                                 {system === "children"
                                     ? "Children’s syllabus · revised October 2014."
                                     : "Adult syllabus · revised January 2021."}{" "}
@@ -165,7 +203,7 @@ function TechniqueChecklist({
                             </p>
                             {system === "adults" &&
                                 ["2-dan", "3-dan", "4-dan"].includes(targetRank ?? "") && (
-                                    <p>
+                                    <p className="detail-body text-sm">
                                         Candidates aged 50 and above (by calendar year) take 20
                                         ukemis instead of 30 from 2nd Dan.
                                     </p>
@@ -173,37 +211,11 @@ function TechniqueChecklist({
                         </PopoverContent>
                     </Popover>
                 </div>
-                <div className="space-y-2">
-                    <p
-                        role="status"
-                        aria-atomic="true"
-                        className={cn(
-                            "flex items-center justify-between gap-3 text-xs tabular-nums",
-                            complete ? `font-medium ${success}` : "text-muted-foreground",
-                        )}
-                    >
-                        <span>
-                            {signedCount} of {items.length} completed
-                        </span>{" "}
-                        <span className="font-medium">{percent}%</span>
-                    </p>
-                    <progress
-                        aria-label={`${syllabus.grade} technique completion`}
-                        value={signedCount}
-                        max={items.length || 1}
-                        className={cn(
-                            "block h-1.5 w-full overflow-hidden rounded-full [&::-webkit-progress-bar]:rounded-full [&::-webkit-progress-bar]:bg-muted [&::-webkit-progress-value]:rounded-full",
-                            complete
-                                ? "[&::-webkit-progress-value]:bg-emerald-600 [&::-moz-progress-bar]:bg-emerald-600"
-                                : "[&::-webkit-progress-value]:bg-primary [&::-moz-progress-bar]:bg-primary",
-                        )}
-                    />
-                </div>
             </CardHeader>
             <CardContent className="px-0">
                 <AccordionPrimitive.Root
                     multiple
-                    defaultValue={syllabus.categories.map((category) => category.id)}
+                    defaultValue={firstIncompleteCategory ? [firstIncompleteCategory.id] : []}
                     aria-label="Technique categories"
                     className="flex w-full flex-col"
                 >
@@ -215,19 +227,19 @@ function TechniqueChecklist({
                             <AccordionPrimitive.Item
                                 key={category.id}
                                 value={category.id}
-                                className="border-border/60 not-first:mt-6 not-first:border-t not-first:pt-4"
+                                className="border-border/60 not-first:mt-4 not-first:border-t not-first:pt-4"
                             >
-                                <AccordionPrimitive.Header className="mb-3 flex">
+                                <AccordionPrimitive.Header className="mb-2 flex">
                                     <AccordionPrimitive.Trigger
                                         data-slot="accordion-trigger"
-                                        className="group/accordion-trigger flex min-w-0 flex-1 items-center justify-between gap-3 rounded-md py-1 text-left text-sm font-semibold transition-colors outline-none hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50"
+                                        className="grading-category-heading group/accordion-trigger flex min-h-11 min-w-0 flex-1 items-center justify-between gap-3 rounded-md py-2 text-left text-base font-semibold transition-colors outline-none hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50"
                                     >
                                         <span className="min-w-0 flex-1 break-words">
                                             {category.label}
                                         </span>
                                         <span
                                             className={cn(
-                                                "shrink-0 text-xs font-normal tabular-nums",
+                                                "detail-meta shrink-0 text-sm font-normal tabular-nums",
                                                 count === category.items.length
                                                     ? success
                                                     : "text-muted-foreground",
@@ -249,23 +261,27 @@ function TechniqueChecklist({
                                             const checkboxId = `${checklistId}-${item.id}`;
                                             return (
                                                 <li key={item.id}>
-                                                    <div
+                                                    <CheckboxPrimitive.Root
+                                                        id={checkboxId}
+                                                        data-slot="checkbox"
+                                                        checked={Boolean(signOff)}
+                                                        onCheckedChange={() => {
+                                                            onToggle(item.id);
+                                                        }}
+                                                        aria-label={`${category.label}: ${item.label}${item.note ? ` · ${item.note}` : ""}`}
                                                         className={cn(
-                                                            "flex min-h-12 items-start gap-3 rounded-lg px-4 py-3 text-sm leading-6 transition-colors",
+                                                            "detail-body flex min-h-12 w-full cursor-pointer items-start gap-3 rounded-lg px-3 py-3 text-left text-sm transition-colors outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50",
                                                             signOff
                                                                 ? "bg-emerald-50/60 hover:bg-emerald-50 dark:bg-emerald-950/25 dark:hover:bg-emerald-950/40"
                                                                 : "hover:bg-muted/50",
                                                         )}
                                                     >
-                                                        <CheckboxPrimitive.Root
-                                                            id={checkboxId}
-                                                            data-slot="checkbox"
-                                                            checked={Boolean(signOff)}
-                                                            onCheckedChange={() => {
-                                                                onToggle(item.id);
-                                                            }}
-                                                            aria-label={`${category.label}: ${item.label}${item.note ? ` · ${item.note}` : ""}`}
-                                                            className="mt-1 flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-[4px] border border-input transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30 data-checked:border-emerald-600 data-checked:bg-emerald-600 data-checked:text-white dark:data-checked:bg-emerald-600"
+                                                        <span
+                                                            aria-hidden="true"
+                                                            className={cn(
+                                                                "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded border border-input",
+                                                                signOff && "border-emerald-600 bg-emerald-600 text-white",
+                                                            )}
                                                         >
                                                             <CheckboxPrimitive.Indicator className="grid place-content-center text-current">
                                                                 <Check
@@ -273,22 +289,16 @@ function TechniqueChecklist({
                                                                     className="size-3.5"
                                                                 />
                                                             </CheckboxPrimitive.Indicator>
-                                                        </CheckboxPrimitive.Root>
-                                                        <div className="min-w-0 flex-1">
-                                                            <label
-                                                                htmlFor={checkboxId}
-                                                                className="block cursor-pointer break-words"
-                                                            >
-                                                                {item.label}
-                                                                {item.note && (
-                                                                    <span className="text-muted-foreground">
-                                                                        {" "}
-                                                                        · {item.note}
-                                                                    </span>
-                                                                )}
-                                                            </label>
-                                                        </div>
-                                                    </div>
+                                                        </span>
+                                                        <span className="min-w-0 flex-1 break-words">
+                                                            {item.label}
+                                                            {item.note && (
+                                                                <span className="mt-1 block text-muted-foreground">
+                                                                    {item.note}
+                                                                </span>
+                                                            )}
+                                                        </span>
+                                                    </CheckboxPrimitive.Root>
                                                 </li>
                                             );
                                         })}
@@ -308,17 +318,20 @@ function ExaminerSignaturePad({
     system,
     targetRank,
     examiner,
+    onSaveStatusChange,
 }: {
     studentId: string;
     system: GradingSystemId;
     targetRank: RankId;
     examiner: ReportAuthor;
+    onSaveStatusChange: (saved: boolean) => void;
 }) {
     const [signature, setSignature] = useState(() =>
         getExaminerSignature(studentId, system, targetRank),
     );
     const [isDrawing, setIsDrawing] = useState(false);
     const [saveError, setSaveError] = useState(false);
+    const [padOpen, setPadOpen] = useState(false);
     const signatureRef = useRef<ExaminerSignature | null>(signature);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const activeStrokeRef = useRef<SignaturePoint[]>([]);
@@ -326,6 +339,8 @@ function ExaminerSignaturePad({
     const activePointerRef = useRef<number | null>(null);
     const headingId = useId();
     const helpId = useId();
+    const padId = useId();
+    const padTriggerRef = useRef<HTMLButtonElement>(null);
     const toast = useToast();
 
     function inkBounds(width: number, height: number, aspectRatio: number) {
@@ -411,7 +426,7 @@ function ExaminerSignaturePad({
             observer.disconnect();
             window.removeEventListener("resize", resize);
         };
-    }, []);
+    }, [padOpen]);
 
     function updateSignature(next: ExaminerSignature | null) {
         signatureRef.current = next;
@@ -420,8 +435,10 @@ function ExaminerSignaturePad({
         try {
             saveExaminerSignature(studentId, system, targetRank, next);
             setSaveError(false);
+            onSaveStatusChange(true);
         } catch {
             setSaveError(true);
+            onSaveStatusChange(false);
             toast.add({
                 title: "Could not save the examiner signature. Please retry.",
             });
@@ -528,93 +545,123 @@ function ExaminerSignaturePad({
     }
 
     return (
-        <Card className="mt-8 gap-3" role="region" aria-labelledby={headingId}>
-            <CardHeader className="gap-2">
-                <CardTitle>
-                    <h3 id={headingId} className="flex items-center gap-2">
-                        <PenLine
-                            aria-hidden="true"
-                            className="size-4 shrink-0 text-muted-foreground"
-                        />
-                        Examiner Digital Stylus Signature
-                    </h3>
-                </CardTitle>
-                <CardDescription id={helpId} className="text-xs">
-                    Sign with a finger or mouse.
-                </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-                <div className="relative isolate overflow-hidden rounded-lg border bg-white">
-                    <canvas
-                        ref={canvasRef}
-                        role="img"
-                        aria-label="Examiner signature pad"
-                        aria-describedby={helpId}
-                        className="block h-52 w-full touch-none cursor-crosshair select-none sm:h-60"
-                        onPointerDown={beginStroke}
-                        onPointerMove={continueStroke}
-                        onPointerUp={finishStroke}
-                        onPointerCancel={finishStroke}
-                        onLostPointerCapture={finishStroke}
-                    />
-                    {!signature && !isDrawing && (
-                        <span className="pointer-events-none absolute inset-0 flex items-center justify-center px-4 pb-6 text-center text-sm text-slate-400">
-                            Sign here
-                        </span>
-                    )}
-                    <span
-                        aria-hidden="true"
-                        className="pointer-events-none absolute inset-x-6 bottom-10 border-b border-dashed border-slate-300"
-                    />
-                </div>
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p
-                        role="status"
-                        className={cn(
-                            "min-w-0 text-xs leading-relaxed",
-                            saveError ? "text-destructive" : "text-muted-foreground",
-                        )}
+        <Card className="detail-card mt-8 gap-4" role="region" aria-labelledby={headingId}>
+            <CardHeader className="gap-3">
+                <div className="detail-section-header">
+                    <h2 id={headingId}>Examiner signature</h2>
+                    <Button
+                        ref={padTriggerRef}
+                        variant="outline"
+                        size="touch"
+                        aria-expanded={padOpen}
+                        aria-controls={padId}
+                        disabled={isDrawing}
+                        onClick={() => setPadOpen((open) => !open)}
                     >
-                        {isDrawing
-                            ? "Signing…"
-                            : saveError
-                                ? "Signature not saved."
-                                : signature
-                                    ? `Signature saved · ${signedDate.format(new Date(signature.signedAt))}`
-                                    : "No signature yet."}
+                        <PenLine aria-hidden="true" className="size-4" />
+                        {padOpen ? "Hide pad" : signature ? "Edit signature" : "Add signature"}
+                    </Button>
+                </div>
+                <InstructorAvatar
+                    profile={{
+                        ...(padOpen ? examiner : signature?.signedBy ?? examiner),
+                        role: "Instructor",
+                    }}
+                    interactive={false}
+                />
+                <p
+                    role="status"
+                    className={cn(
+                        "detail-meta text-sm",
+                        saveError ? "text-destructive" : signature ? success : "text-muted-foreground",
+                    )}
+                >
+                    {isDrawing
+                        ? "Signing…"
+                        : saveError
+                            ? "Signature changes could not be saved. Retry to save them."
+                            : signature
+                                ? `Signature saved · ${signedDate.format(new Date(signature.signedAt))}`
+                                : "No signature recorded."}
+                </p>
+                {saveError && !padOpen && (
+                    <Button variant="outline" size="touch" onClick={() => updateSignature(signatureRef.current)}>
+                        Retry save
+                    </Button>
+                )}
+            </CardHeader>
+            {padOpen && (
+                <CardContent id={padId} className="space-y-4">
+                    <p id={helpId} className="detail-body text-sm text-muted-foreground">
+                        Sign inside the box with a finger, stylus, or mouse. Scroll using the space outside the box.
                     </p>
-                    <div className="flex flex-wrap gap-2">
-                        {saveError && (
+                    <div className="relative isolate overflow-hidden rounded-lg border bg-white">
+                        <canvas
+                            ref={canvasRef}
+                            role="img"
+                            aria-label="Examiner signature pad"
+                            aria-describedby={helpId}
+                            className="block h-52 w-full touch-none cursor-crosshair select-none sm:h-60"
+                            onPointerDown={beginStroke}
+                            onPointerMove={continueStroke}
+                            onPointerUp={finishStroke}
+                            onPointerCancel={finishStroke}
+                            onLostPointerCapture={finishStroke}
+                        />
+                        {!signature && !isDrawing && (
+                            <span className="pointer-events-none absolute inset-0 flex items-center justify-center px-4 pb-6 text-center text-sm text-slate-400">
+                                Sign here
+                            </span>
+                        )}
+                        <span
+                            aria-hidden="true"
+                            className="pointer-events-none absolute inset-x-6 bottom-10 border-b border-dashed border-slate-300"
+                        />
+                    </div>
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex flex-wrap gap-2">
+                            {saveError && (
+                                <Button
+                                    variant="outline"
+                                    size="touch"
+                                    onClick={() => updateSignature(signatureRef.current)}
+                                    disabled={isDrawing}
+                                >
+                                    Retry save
+                                </Button>
+                            )}
                             <Button
                                 variant="outline"
-                                className="min-h-10"
-                                onClick={() => updateSignature(signatureRef.current)}
-                                disabled={isDrawing}
+                                size="touch"
+                                onClick={undoStroke}
+                                disabled={!signature || isDrawing}
                             >
-                                Retry save
+                                <Undo2 aria-hidden="true" />
+                                Undo
                             </Button>
-                        )}
+                            <Button
+                                variant="destructive"
+                                size="touch"
+                                onClick={() => updateSignature(null)}
+                                disabled={!signature || isDrawing}
+                            >
+                                <Trash2 aria-hidden="true" />
+                                Clear
+                            </Button>
+                        </div>
                         <Button
-                            variant="outline"
-                            className="min-h-10"
-                            onClick={undoStroke}
-                            disabled={!signature || isDrawing}
+                            size="touch"
+                            disabled={isDrawing || saveError}
+                            onClick={() => {
+                                setPadOpen(false);
+                                padTriggerRef.current?.focus();
+                            }}
                         >
-                            <Undo2 aria-hidden="true" />
-                            Undo
-                        </Button>
-                        <Button
-                            variant="destructive"
-                            className="min-h-10"
-                            onClick={() => updateSignature(null)}
-                            disabled={!signature || isDrawing}
-                        >
-                            <Trash2 aria-hidden="true" />
-                            Clear
+                            Done signing
                         </Button>
                     </div>
-                </div>
-            </CardContent>
+                </CardContent>
+            )}
         </Card>
     );
 }
@@ -634,12 +681,20 @@ function StudentGrading({
 }) {
     const [gradingOpen, setGradingOpen] = useState(false);
     const [confirmClose, setConfirmClose] = useState(false);
+    const [techniqueSaveState, setTechniqueSaveState] = useState<ReviewSaveState>("idle");
+    const [signatureSaveState, setSignatureSaveState] = useState<ReviewSaveState>("idle");
     const gradingTriggerRef = useRef<HTMLButtonElement>(null);
     const keepEditingRef = useRef<HTMLButtonElement>(null);
     const closeTriggerRef = useRef<HTMLElement | null>(null);
     const { profile: instructorProfile } = useAuth();
     const toast = useToast();
     const eligibility = gradingEligibility(requirements);
+    const saveError = techniqueSaveState === "error" || signatureSaveState === "error";
+    const reviewSaveMessage = saveError
+        ? "Some changes were not saved. Retry before closing."
+        : techniqueSaveState === "saved" || signatureSaveState === "saved"
+            ? "Saved in this browser."
+            : "Autosaves in this browser.";
     const examiner = instructorProfile
         ? {
             id: instructorProfile.id,
@@ -649,11 +704,6 @@ function StudentGrading({
                     .join(" ") || instructorProfile.email,
         }
         : currentInstructor;
-    const examinerProfile: InstructorProfile = {
-        ...examiner,
-        role: "Instructor",
-    };
-
     function toggleTechnique(itemId: string) {
         const next = signOffs.some((item) => item.itemId === itemId)
             ? signOffs.filter((item) => item.itemId !== itemId)
@@ -668,8 +718,10 @@ function StudentGrading({
         try {
             saveTechniqueSignOffs(profile.id, next);
             onSignOffsChange(next);
+            setTechniqueSaveState("saved");
             return true;
         } catch {
+            setTechniqueSaveState("error");
             toast.add({
                 title: "Could not save the technique sign-off. Please try again.",
             });
@@ -683,6 +735,8 @@ function StudentGrading({
                 open={gradingOpen}
                 onOpenChange={(open, details) => {
                     if (open) {
+                        setTechniqueSaveState("idle");
+                        setSignatureSaveState("idle");
                         setGradingOpen(true);
                         return;
                     }
@@ -701,62 +755,58 @@ function StudentGrading({
                     setConfirmClose(true);
                 }}
             >
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                    <h2 className="text-sm font-semibold">Grading eligibility</h2>
+                <div className="detail-section-header">
+                    <h2>Grading eligibility</h2>
                     <DialogTrigger
-                        render={<Button ref={gradingTriggerRef} disabled={!syllabus} />}
+                        render={
+                            <Button
+                                ref={gradingTriggerRef}
+                                disabled={!syllabus}
+                                className="h-11 px-4 lg:h-10"
+                            />
+                        }
                     >
                         <Plus aria-hidden="true" />
-                        New Grading
+                        Review grading
                     </DialogTrigger>
                 </div>
                 {syllabus && (
                     <DialogContent
                         finalFocus={gradingTriggerRef}
-                        className="flex max-h-[85vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl [&>[data-slot=dialog-close]]:top-4 [&>[data-slot=dialog-close]]:right-4 lg:[&>[data-slot=dialog-close]]:top-5 lg:[&>[data-slot=dialog-close]]:right-5"
+                        showCloseButton={false}
+                        className="student-detail-view grading-review-dialog flex max-h-[85dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl"
                     >
-                        <DialogHeader className="shrink-0 gap-0 border-b border-border/60 p-4 lg:px-8 lg:py-6">
-                            <DialogTitle className="pr-6 text-xl font-semibold tracking-tight">
-                                New Grading
-                            </DialogTitle>
-                            <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3 pt-4">
-                                <div className="min-w-0 space-y-2">
-                                    <DialogDescription className="break-words text-base font-medium text-foreground">
-                                        {profile.name}
-                                    </DialogDescription>
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        <GradeBadge
-                                            rank={profile.rank}
-                                            system={profile.gradingSystem}
-                                        />
-                                        {profile.nextRank && (
-                                            <>
-                                                <span
-                                                    aria-hidden="true"
-                                                    className="text-muted-foreground"
-                                                >
-                                                    →
-                                                </span>
-                                                <GradeBadge
-                                                    rank={profile.nextRank}
-                                                    system={profile.gradingSystem}
-                                                />
-                                            </>
-                                        )}
-                                    </div>
-                                </div>
-                                <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2 pt-1 sm:justify-end">
-                                    <span className="text-xs text-muted-foreground">
-                                        Instructor:
-                                    </span>
-                                    <InstructorAvatar
-                                        profile={examinerProfile}
-                                        interactive={false}
-                                    />
+                        <DialogHeader className="grading-review-header shrink-0 gap-3 border-b border-border/60 p-4 lg:px-8 lg:py-5">
+                            <div className="flex min-h-11 items-center justify-between gap-4">
+                                <DialogTitle className="text-xl font-semibold tracking-tight">
+                                    Grading review
+                                </DialogTitle>
+                                <DialogClose render={<Button variant="ghost" size="icon-touch" className="-mr-2" />}>
+                                    <X aria-hidden="true" />
+                                    <span className="sr-only">Close grading review</span>
+                                </DialogClose>
+                            </div>
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                                <DialogDescription className="detail-body min-w-0 break-words text-sm font-medium text-foreground">
+                                    {profile.name}
+                                </DialogDescription>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <span className="sr-only">Current grade:</span>
+                                    <GradeBadge rank={profile.rank} system={profile.gradingSystem} />
+                                    {profile.nextRank && (
+                                        <>
+                                            <span aria-hidden="true" className="text-muted-foreground">→</span>
+                                            <span className="sr-only">Target grade:</span>
+                                            <GradeBadge rank={profile.nextRank} system={profile.gradingSystem} />
+                                        </>
+                                    )}
                                 </div>
                             </div>
                         </DialogHeader>
-                        <div className="min-h-0 overflow-y-auto overscroll-contain p-4 lg:px-8 lg:pt-5 lg:pb-8 [scrollbar-width:thin] [scrollbar-color:var(--border)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border/70">
+                        <div className="shrink-0 border-b border-border/60 bg-background px-4 py-3 lg:px-8">
+                            <TechniqueProgress syllabus={syllabus} signOffs={signOffs} />
+                        </div>
+                        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 lg:px-8 lg:pt-5 lg:pb-8 [scrollbar-width:thin] [scrollbar-color:var(--border)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border/70">
                             <TechniqueChecklist
                                 key={`${profile.id}:${profile.gradingSystem}:${profile.nextRank}`}
                                 syllabus={syllabus}
@@ -772,12 +822,16 @@ function StudentGrading({
                                     system={profile.gradingSystem}
                                     targetRank={profile.nextRank}
                                     examiner={examiner}
+                                    onSaveStatusChange={(saved) => setSignatureSaveState(saved ? "saved" : "error")}
                                 />
                             )}
                         </div>
-                        <DialogFooter className="m-0 shrink-0 flex-row justify-end border-t border-border/60 p-4 lg:px-8 lg:py-5">
-                            <DialogClose render={<Button className="min-h-10 min-w-24" />}>
-                                Done
+                        <DialogFooter className="grading-review-footer m-0 shrink-0 flex-row items-center justify-between gap-3 border-t border-border/60 p-4 lg:px-8 lg:py-4">
+                            <p role="status" className={cn("detail-meta min-w-0 flex-1 text-sm", saveError ? "text-destructive" : "text-muted-foreground")}>
+                                {reviewSaveMessage}
+                            </p>
+                            <DialogClose render={<Button size="touch" />}>
+                                Finish review
                             </DialogClose>
                         </DialogFooter>
                         <Dialog open={confirmClose} onOpenChange={setConfirmClose}>
@@ -785,20 +839,21 @@ function StudentGrading({
                                 initialFocus={keepEditingRef}
                                 finalFocus={gradingOpen ? closeTriggerRef : gradingTriggerRef}
                                 showCloseButton={false}
+                                className="student-detail-view"
                             >
                                 <DialogHeader>
                                     <DialogTitle>Finish grading review?</DialogTitle>
                                     <DialogDescription>
-                                        Technique sign-offs and signatures are saved automatically
-                                        as you edit. Confirm to close this grading review, or keep
-                                        editing.
+                                        {saveError
+                                            ? "Some changes could not be saved. Keep reviewing to retry, or close without saving those changes."
+                                            : "Saved sign-offs and signatures remain in this browser. Finishing closes the review; it does not award a grade."}
                                     </DialogDescription>
                                 </DialogHeader>
                                 <DialogFooter>
                                     <DialogClose
                                         render={<Button ref={keepEditingRef} variant="outline" />}
                                     >
-                                        Keep editing
+                                        Keep reviewing
                                     </DialogClose>
                                     <Button
                                         onClick={() => {
@@ -806,7 +861,7 @@ function StudentGrading({
                                             setGradingOpen(false);
                                         }}
                                     >
-                                        Confirm and close
+                                        {saveError ? "Close without saving" : "Close review"}
                                     </Button>
                                 </DialogFooter>
                             </DialogContent>
@@ -814,7 +869,7 @@ function StudentGrading({
                     </DialogContent>
                 )}
             </Dialog>
-            <Card>
+            <Card className="detail-card">
                 {!syllabus && (
                     <CardHeader>
                         <CardDescription>
@@ -825,8 +880,8 @@ function StudentGrading({
                     </CardHeader>
                 )}
                 <CardContent className="space-y-4">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+                        <div className="flex min-w-0 flex-wrap items-center gap-2">
                             <GradeBadge rank={profile.rank} system={profile.gradingSystem} />
                             {profile.nextRank && (
                                 <>
@@ -844,16 +899,43 @@ function StudentGrading({
                             <span
                                 role="status"
                                 className={cn(
-                                    "rounded-md px-2 py-1 text-xs font-medium",
-                                    eligibility.label === "Eligible"
+                                    "detail-status shrink-0 whitespace-nowrap rounded-md px-2 py-1 text-xs font-medium",
+                                    eligibility.label === "Ready"
                                         ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200"
                                         : "bg-amber-50 text-amber-900 dark:bg-amber-950/50 dark:text-amber-200",
                                 )}
                             >
-                                {eligibility.metCount}/{requirements.length} requirements met
+                                {eligibility.label}
                             </span>
                         )}
                     </div>
+                    {syllabus && (
+                        <div className="space-y-2">
+                            <p
+                                role="status"
+                                aria-atomic="true"
+                                className={cn(
+                                    "detail-meta text-xs tabular-nums",
+                                    eligibility.label === "Ready"
+                                        ? `font-medium ${success}`
+                                        : "text-muted-foreground",
+                                )}
+                            >
+                                {eligibility.metCount}/{requirements.length} requirements met
+                            </p>
+                            <progress
+                                aria-label="Grading eligibility requirements met"
+                                value={eligibility.metCount}
+                                max={requirements.length}
+                                className={cn(
+                                    "block h-1.5 w-full overflow-hidden rounded-full [&::-webkit-progress-bar]:rounded-full [&::-webkit-progress-bar]:bg-muted [&::-webkit-progress-value]:rounded-full",
+                                    eligibility.label === "Ready"
+                                        ? "[&::-webkit-progress-value]:bg-emerald-600 [&::-moz-progress-bar]:bg-emerald-600"
+                                        : "[&::-webkit-progress-value]:bg-primary [&::-moz-progress-bar]:bg-primary",
+                                )}
+                            />
+                        </div>
+                    )}
                     {syllabus && (
                         <>
                             <ul className="space-y-2">
@@ -861,43 +943,61 @@ function StudentGrading({
                                     const Icon =
                                         requirement.met === true
                                             ? CheckCircle2
-                                            : requirement.met === false
-                                                ? XCircle
-                                                : CircleHelp;
+                                            : requirement.met === null
+                                                ? Info
+                                                : XCircle;
                                     const tone =
                                         requirement.met === true
                                             ? success
-                                            : requirement.met === false
-                                                ? "text-destructive"
-                                                : "text-muted-foreground";
+                                            : requirement.met === null
+                                                ? "text-muted-foreground"
+                                                : "text-destructive";
+                                    const unverified = requirement.met === null;
+                                    const missingRecord =
+                                        unverified && requirement.key !== "sessions";
                                     return (
                                         <li
                                             key={requirement.key}
-                                            className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1 rounded-lg border border-border/70 bg-background/60 px-3 py-2"
+                                            className="flex items-start justify-between gap-x-4 py-1"
                                         >
-                                            <span className="flex min-w-0 items-start gap-2 text-sm">
+                                            <span className="detail-body flex min-w-0 flex-1 items-start gap-2 text-sm">
                                                 <Icon
                                                     aria-hidden="true"
                                                     className={cn("mt-0.5 size-4 shrink-0", tone)}
                                                 />
-                                                <span className="sr-only">
-                                                    {requirement.met === true
-                                                        ? "Met: "
-                                                        : requirement.met === false
-                                                            ? "Not met: "
-                                                            : "Unverified: "}
+                                                <span className="min-w-0">
+                                                    <span className="sr-only">
+                                                        {requirement.met === true
+                                                            ? "Met: "
+                                                            : unverified
+                                                                ? "Unverified: "
+                                                                : "Not met: "}
+                                                    </span>
+                                                    {requirement.label}
+                                                    {unverified && (
+                                                        <span className="detail-meta mt-1 block text-sm text-muted-foreground">
+                                                            {missingRecord
+                                                                ? `Required: ${requirement.required}`
+                                                                : "History incomplete"}
+                                                        </span>
+                                                    )}
                                                 </span>
-                                                {requirement.label}
                                             </span>
-                                            <span className="ml-auto text-right text-xs tabular-nums">
-                                                <span className={cn("font-medium", tone)}>
-                                                    {requirement.actual}
+                                            {requirement.key !== "membership" && (
+                                                <span className="detail-meta w-[30%] shrink-0 text-right text-xs tabular-nums">
+                                                    <span className={cn("font-medium", tone)}>
+                                                        {missingRecord
+                                                            ? "Not recorded"
+                                                            : requirement.actual}
+                                                    </span>
+                                                    {!missingRecord && (
+                                                        <span className="text-muted-foreground">
+                                                            {requirement.key === "techniques" ? "/" : " / "}
+                                                            {requirement.required}
+                                                        </span>
+                                                    )}
                                                 </span>
-                                                <span className="text-muted-foreground">
-                                                    {requirement.key === "techniques" ? "/" : " / "}
-                                                    {requirement.required}
-                                                </span>
-                                            </span>
+                                            )}
                                         </li>
                                     );
                                 })}
@@ -910,9 +1010,228 @@ function StudentGrading({
     );
 }
 
+function MedicalAlertDetails({ alerts }: { alerts: string[] }) {
+    return alerts.length ? (
+        <div className="space-y-2">
+            {alerts.map((alert) => (
+                <p
+                    key={alert}
+                    className="detail-body rounded-lg bg-amber-50 p-3 text-sm text-amber-950 dark:bg-amber-950/40 dark:text-amber-200"
+                >
+                    {alert}
+                </p>
+            ))}
+        </div>
+    ) : (
+        <p className="detail-body text-sm text-muted-foreground">
+            No medical alerts noted.
+        </p>
+    );
+}
+
+function StudentContactDetails({ profile }: { profile: Profile }) {
+    return (
+        <section className="space-y-3" aria-label="Contact information">
+            <h3>Contact</h3>
+            <a
+                href={`mailto:${profile.email}`}
+                className="detail-body flex min-h-11 items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+            >
+                <Mail aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+                <span className="break-all">{profile.email}</span>
+            </a>
+            <a
+                href={`tel:${profile.phone.replaceAll(" ", "")}`}
+                className="detail-body flex min-h-11 items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+            >
+                <Phone aria-hidden="true" className="size-3.5" />
+                {profile.phone}
+            </a>
+            <div className="space-y-3 border-t pt-4" aria-label="Emergency contact">
+                <h3>Emergency contact</h3>
+                <p className="detail-body text-sm">
+                    <span className="font-medium">{profile.emergencyContact.name}</span>
+                    <span className="text-muted-foreground">
+                        {" "}
+                        · {profile.emergencyContact.relationship}
+                    </span>
+                </p>
+                <a
+                    href={`tel:${profile.emergencyContact.phone.replaceAll(" ", "")}`}
+                    className="detail-body inline-flex min-h-11 items-center text-sm text-muted-foreground hover:text-foreground hover:underline"
+                >
+                    {profile.emergencyContact.phone}
+                </a>
+            </div>
+        </section>
+    );
+}
+
+function StudentInformationDetails({ profile }: { profile: Profile }) {
+    return (
+        <>
+            <dl className="grid grid-cols-2 gap-3 border-t pt-3">
+                <div>
+                    <dt className="text-xs text-muted-foreground">Principal dojo</dt>
+                    <dd className="mt-0.5 flex items-center gap-1.5 text-xs">
+                        <MapPin
+                            aria-hidden="true"
+                            className="size-3.5 text-muted-foreground"
+                        />
+                        {profile.principalDojo}
+                    </dd>
+                </div>
+                <div>
+                    <dt className="text-xs text-muted-foreground">Membership</dt>
+                    <dd
+                        className={cn(
+                            "mt-1 inline-flex rounded-md px-2 py-0.5 text-xs font-medium",
+                            profile.membershipStatus === "Active"
+                                ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200"
+                                : "bg-muted text-muted-foreground",
+                        )}
+                    >
+                        {profile.membershipStatus}
+                    </dd>
+                </div>
+            </dl>
+            <div className="border-t pt-3">
+                <StudentContactDetails profile={profile} />
+            </div>
+        </>
+    );
+}
+
+function MobileStudentInformation({ profile }: { profile: Profile }) {
+    return (
+        <section aria-label="Student details" className="detail-section md:hidden">
+            <div className="detail-section-header">
+                <h2>Details</h2>
+            </div>
+            <Card size="sm" className="detail-card">
+                <CardContent className="space-y-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <GradeBadge
+                            rank={profile.rank}
+                            system={profile.gradingSystem}
+                            showBeltLabel
+                        />
+                        <p className="detail-body text-sm text-muted-foreground">
+                            · {gradingSystems[profile.gradingSystem].label}
+                        </p>
+                    </div>
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <p className="detail-label text-xs text-muted-foreground">
+                                Principal dojo
+                            </p>
+                            <p className="detail-body mt-1 flex items-center gap-1.5 text-sm">
+                                <MapPin
+                                    aria-hidden="true"
+                                    className="size-3.5 shrink-0 text-muted-foreground"
+                                />
+                                {profile.principalDojo}
+                            </p>
+                        </div>
+                        <span
+                            aria-label={`Membership status: ${profile.membershipStatus}`}
+                            className={cn(
+                                "detail-status inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium",
+                                profile.membershipStatus === "Active"
+                                    ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200"
+                                    : "bg-muted text-muted-foreground",
+                            )}
+                        >
+                            <CreditCard aria-hidden="true" className="size-3.5" />
+                            {profile.membershipStatus}
+                        </span>
+                    </div>
+                    <div className="flex flex-wrap gap-3">
+                        <Dialog>
+                            <DialogTrigger
+                                render={
+                                    <Button
+                                        variant="outline"
+                                        size="touch"
+                                        className="h-auto min-w-0 flex-1 basis-32 gap-2 px-3 py-2 whitespace-normal"
+                                    />
+                                }
+                            >
+                                <Phone aria-hidden="true" className="size-4" />
+                                Contact
+                            </DialogTrigger>
+                            <DialogContent
+                                showCloseButton={false}
+                                className="student-detail-view"
+                            >
+                                <DialogHeader className="flex-row items-center justify-between gap-4">
+                                    <DialogTitle>Contact details</DialogTitle>
+                                    <DialogClose
+                                        render={
+                                            <Button
+                                                variant="ghost"
+                                                size="icon-touch"
+                                                className="-my-2 -mr-2"
+                                            />
+                                        }
+                                    >
+                                        <X aria-hidden="true" />
+                                        <span className="sr-only">Close</span>
+                                    </DialogClose>
+                                </DialogHeader>
+                                <StudentContactDetails profile={profile} />
+                            </DialogContent>
+                        </Dialog>
+                        <Dialog>
+                            <DialogTrigger
+                                render={
+                                    <Button
+                                        variant="outline"
+                                        size="touch"
+                                        className="h-auto min-w-0 flex-1 basis-32 gap-2 px-3 py-2 whitespace-normal"
+                                    />
+                                }
+                            >
+                                <HeartPulse aria-hidden="true" className="size-4" />
+                                <span className="min-w-0">Medical alerts</span>
+                                {profile.medicalAlerts.length > 0 && (
+                                    <span className="detail-status shrink-0 rounded-md bg-amber-50 px-1.5 py-0.5 text-xs text-amber-950 dark:bg-amber-950/40 dark:text-amber-200">
+                                        {profile.medicalAlerts.length}
+                                    </span>
+                                )}
+                            </DialogTrigger>
+                            <DialogContent
+                                showCloseButton={false}
+                                className="student-detail-view"
+                            >
+                                <DialogHeader className="flex-row items-center justify-between gap-4">
+                                    <DialogTitle>Medical alerts</DialogTitle>
+                                    <DialogClose
+                                        render={
+                                            <Button
+                                                variant="ghost"
+                                                size="icon-touch"
+                                                className="-my-2 -mr-2"
+                                            />
+                                        }
+                                    >
+                                        <X aria-hidden="true" />
+                                        <span className="sr-only">Close</span>
+                                    </DialogClose>
+                                </DialogHeader>
+                                <MedicalAlertDetails alerts={profile.medicalAlerts} />
+                            </DialogContent>
+                        </Dialog>
+                    </div>
+                </CardContent>
+            </Card>
+        </section>
+    );
+}
+
 function StudentInformation({ profile }: { profile: Profile }) {
     return (
-        <Card size="sm" className="gap-3">
+        <Card size="sm" className="hidden gap-3 md:flex">
             <CardHeader className="gap-1.5">
                 <h2 className="text-xs font-semibold text-muted-foreground">Student</h2>
                 <CardTitle className="text-xl font-semibold group-data-[size=sm]/card:text-xl">
@@ -933,71 +1252,7 @@ function StudentInformation({ profile }: { profile: Profile }) {
                 </div>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
-                <dl className="grid grid-cols-2 gap-3 border-t pt-3">
-                    <div>
-                        <dt className="text-xs text-muted-foreground">Principal dojo</dt>
-                        <dd className="mt-0.5 flex items-center gap-1.5 text-xs">
-                            <MapPin
-                                aria-hidden="true"
-                                className="size-3.5 text-muted-foreground"
-                            />
-                            {profile.principalDojo}
-                        </dd>
-                    </div>
-                    <div>
-                        <dt className="text-xs text-muted-foreground">Membership</dt>
-                        <dd
-                            className={cn(
-                                "mt-1 inline-flex rounded-md px-2 py-0.5 text-xs font-medium",
-                                profile.membershipStatus === "Active"
-                                    ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200"
-                                    : "bg-muted text-muted-foreground",
-                            )}
-                        >
-                            {profile.membershipStatus}
-                        </dd>
-                    </div>
-                </dl>
-                <section
-                    className="space-y-1.5 border-t pt-3"
-                    aria-label="Contact information"
-                >
-                    <h2 className="text-xs font-semibold">Contact</h2>
-                    <a
-                        href={`mailto:${profile.email}`}
-                        className="flex items-start gap-2 text-xs text-muted-foreground hover:text-foreground"
-                    >
-                        <Mail aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
-                        <span className="break-all">{profile.email}</span>
-                    </a>
-                    <a
-                        href={`tel:${profile.phone.replaceAll(" ", "")}`}
-                        className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground"
-                    >
-                        <Phone aria-hidden="true" className="size-3.5" />
-                        {profile.phone}
-                    </a>
-                    <div className="space-y-1 pt-2" aria-label="Emergency contact">
-                        <h3 className="text-2xs font-medium text-muted-foreground">
-                            Emergency contact
-                        </h3>
-                        <p className="text-xs">
-                            <span className="font-medium">
-                                {profile.emergencyContact.name}
-                            </span>
-                            <span className="text-muted-foreground">
-                                {" "}
-                                · {profile.emergencyContact.relationship}
-                            </span>
-                        </p>
-                        <a
-                            href={`tel:${profile.emergencyContact.phone.replaceAll(" ", "")}`}
-                            className="inline-block text-xs text-muted-foreground hover:text-foreground hover:underline"
-                        >
-                            {profile.emergencyContact.phone}
-                        </a>
-                    </div>
-                </section>
+                <StudentInformationDetails profile={profile} />
                 <section
                     className="space-y-2 border-t pt-3"
                     aria-label="Medical alerts"
@@ -1006,20 +1261,7 @@ function StudentInformation({ profile }: { profile: Profile }) {
                         <HeartPulse aria-hidden="true" className="size-3.5" />
                         Medical alerts
                     </h2>
-                    {profile.medicalAlerts.length ? (
-                        profile.medicalAlerts.map((alert) => (
-                            <p
-                                key={alert}
-                                className="rounded-lg bg-amber-50 p-2 text-xs leading-relaxed text-amber-950 dark:bg-amber-950/40 dark:text-amber-200"
-                            >
-                                {alert}
-                            </p>
-                        ))
-                    ) : (
-                        <p className="text-xs text-muted-foreground">
-                            No medical alerts noted.
-                        </p>
-                    )}
+                    <MedicalAlertDetails alerts={profile.medicalAlerts} />
                 </section>
             </CardContent>
         </Card>
@@ -1029,21 +1271,24 @@ function StudentInformation({ profile }: { profile: Profile }) {
 function NextGradingSummary({
     profile,
     assessmentRecorded,
-    eligibility,
+    requirements,
     onViewGrading,
 }: {
     profile: Profile;
     assessmentRecorded: boolean;
-    eligibility: string;
+    requirements: GradingRequirement[];
     onViewGrading: () => void;
 }) {
+    const { metCount } = gradingEligibility(requirements);
+    const complete = requirements.length > 0 && metCount === requirements.length;
+
     return (
-        <section className="space-y-3">
-            <div className="flex min-h-7 flex-wrap items-center gap-x-3 gap-y-1">
-                <h2 className="text-sm font-semibold">Next grading</h2>
+        <section className="detail-section">
+            <div className="detail-section-header">
+                <h2>Next grading</h2>
                 <Button
                     variant="ghost"
-                    size="sm"
+                    size="touch"
                     onClick={onViewGrading}
                     className="ml-auto"
                 >
@@ -1051,45 +1296,61 @@ function NextGradingSummary({
                     <ChevronRight aria-hidden="true" />
                 </Button>
             </div>
-            <Card size="sm">
+            <Card size="sm" className="detail-card">
                 <CardContent className="space-y-3">
-                    <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
-                        <div>
-                            <dt className="text-muted-foreground">Current rank</dt>
-                            <dd className="mt-1">
-                                <GradeBadge
-                                    rank={profile.rank}
-                                    system={profile.gradingSystem}
-                                />
-                            </dd>
-                        </div>
-                        <div>
-                            <dt className="text-muted-foreground">Next rank</dt>
-                            <dd className="mt-1">
-                                {profile.nextRank ? (
-                                    <GradeBadge
-                                        rank={profile.nextRank}
-                                        system={profile.gradingSystem}
-                                    />
-                                ) : (
-                                    "Not configured"
+                    <div className="flex flex-wrap items-center gap-2">
+                        <span className="sr-only">Current grade:</span>
+                        <GradeBadge rank={profile.rank} system={profile.gradingSystem} />
+                        <span aria-hidden="true" className="text-muted-foreground">
+                            →
+                        </span>
+                        <span className="sr-only">Next grade:</span>
+                        {profile.nextRank ? (
+                            <GradeBadge
+                                rank={profile.nextRank}
+                                system={profile.gradingSystem}
+                            />
+                        ) : (
+                            <span className="detail-meta text-sm text-muted-foreground">
+                                Not configured
+                            </span>
+                        )}
+                    </div>
+                    {requirements.length > 0 && (
+                        <div className="space-y-2">
+                            <p
+                                role="status"
+                                aria-atomic="true"
+                                className={cn(
+                                    "detail-meta text-sm tabular-nums",
+                                    complete ? `font-medium ${success}` : "text-muted-foreground",
                                 )}
-                            </dd>
+                            >
+                                {metCount}/{requirements.length} requirements met
+                            </p>
+                            <progress
+                                aria-label="Grading requirements met"
+                                value={metCount}
+                                max={requirements.length}
+                                className={cn(
+                                    "block h-1.5 w-full overflow-hidden rounded-full [&::-webkit-progress-bar]:rounded-full [&::-webkit-progress-bar]:bg-muted [&::-webkit-progress-value]:rounded-full",
+                                    complete
+                                        ? "[&::-webkit-progress-value]:bg-emerald-600 [&::-moz-progress-bar]:bg-emerald-600"
+                                        : "[&::-webkit-progress-value]:bg-primary [&::-moz-progress-bar]:bg-primary",
+                                )}
+                            />
                         </div>
+                    )}
+                    <dl className="detail-body text-sm">
                         <div>
-                            <dt className="text-muted-foreground">Eligibility</dt>
-                            <dd className="mt-1 font-medium">{eligibility}</dd>
-                        </div>
-                        <div>
-                            <dt className="text-muted-foreground">Technical assessment</dt>
+                            <dt className="detail-label text-xs text-muted-foreground">
+                                Technical assessment
+                            </dt>
                             <dd className="mt-1 font-medium">
                                 {assessmentRecorded ? "Recorded" : "Not yet verified"}
                             </dd>
                         </div>
                     </dl>
-                    <p className="text-2xs text-muted-foreground">
-                        Eligibility is separate from technical assessment.
-                    </p>
                 </CardContent>
             </Card>
         </section>
@@ -1155,6 +1416,10 @@ function StudentDetailContent({
         periodEnd,
         consecutiveAbsences,
     } = studentAttendanceSummary(sessions, now);
+    const reportingPeriod =
+        periodStart && periodEnd
+            ? `${fullDate(periodStart)} – ${fullDate(periodEnd)}`
+            : "No completed sessions recorded";
     const recentFeedback = pastSessions
         .filter((item) => item.feedback.trim())
         .slice(0, 2);
@@ -1175,12 +1440,6 @@ function StudentDetailContent({
             now,
         })
         : [];
-    const eligibility = syllabus
-        ? gradingEligibility(requirements).label
-        : profile.nextRank
-            ? "Syllabus unavailable"
-            : "No further grade";
-
     function selectTab(value: DetailTab) {
         setParams(
             (current) => {
@@ -1193,21 +1452,28 @@ function StudentDetailContent({
     }
 
     return (
-        <section className="space-y-6">
+        <section className="student-detail-view space-y-2 md:space-y-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
-                <Button
-                    render={
-                        <Link
-                            to={context ? calendarHref(context) : "/instructor/students"}
-                        />
-                    }
-                    nativeButton={false}
-                    variant="ghost"
-                    className="-ml-2"
-                >
-                    <ChevronLeft aria-hidden="true" />
-                    {context ? "Back to calendar" : "Back to students"}
-                </Button>
+                <div className="flex min-w-0 max-w-full items-center justify-between gap-2 max-md:w-full">
+                    <Button
+                        render={
+                            <Link
+                                to={context ? calendarHref(context) : "/instructor/students"}
+                            />
+                        }
+                        nativeButton={false}
+                        variant="ghost"
+                        className="-ml-5 max-w-full min-w-0 max-md:h-auto max-md:min-h-11 max-md:shrink max-md:py-2"
+                    >
+                        <ChevronLeft aria-hidden="true" />
+                        <h1 className="min-w-0 text-left whitespace-normal md:hidden">
+                            {profile.name}
+                        </h1>
+                        <span className="hidden md:inline">
+                            {context ? "Back to calendar" : "Back to students"}
+                        </span>
+                    </Button>
+                </div>
                 {roster.length > 1 && (
                     <div
                         className="flex flex-wrap items-center gap-2 sm:gap-3"
@@ -1262,7 +1528,7 @@ function StudentDetailContent({
                 <aside
                     ref={sidebarRef}
                     className={cn(
-                        "order-2 min-w-0 lg:order-1",
+                        "order-2 min-w-0 max-md:hidden lg:order-1",
                         sidebarFits && "lg:sticky lg:top-4",
                     )}
                 >
@@ -1278,62 +1544,89 @@ function StudentDetailContent({
                         )
                             selectTab(value);
                     }}
-                    className="order-1 min-w-0 gap-4 lg:order-2"
+                    className="order-1 min-w-0 gap-6 md:gap-4 max-md:order-1 lg:order-2"
                 >
-                    <TabsList aria-label="Student training details" className="w-full">
+                    <TabsList
+                        aria-label="Student training details"
+                        className="w-full"
+                        touch
+                    >
                         <TabsTrigger value="overview">Overview</TabsTrigger>
                         <TabsTrigger value="sessions">Sessions</TabsTrigger>
                         <TabsTrigger value="grading">Grading</TabsTrigger>
                     </TabsList>
-
-                    <TabsContent value="overview" className="space-y-5">
-                        <section className="space-y-3">
-                            <div className="flex min-h-7 flex-wrap items-center gap-x-3 gap-y-1">
-                                <h2 className="text-sm font-semibold">Attendance</h2>
-                                <p className="ml-auto text-right text-2xs text-muted-foreground">
+                    <TabsContent value="overview" className="space-y-6">
+                        <MobileStudentInformation profile={profile} />
+                        <section className="detail-section">
+                            <div className="detail-section-header">
+                                <h2>Attendance</h2>
+                                <Popover>
+                                    <PopoverTrigger
+                                        render={
+                                            <Button
+                                                variant="ghost"
+                                                size="icon-touch"
+                                                aria-label="Attendance reporting period"
+                                                className="text-muted-foreground md:hidden"
+                                            />
+                                        }
+                                    >
+                                        <Info aria-hidden="true" className="size-4" />
+                                    </PopoverTrigger>
+                                    <PopoverContent
+                                        align="start"
+                                        className="student-detail-view gap-2"
+                                    >
+                                        <PopoverTitle>Reporting period</PopoverTitle>
+                                        <p className="detail-meta">{reportingPeriod}</p>
+                                    </PopoverContent>
+                                </Popover>
+                                <p className="ml-auto hidden text-right text-2xs text-muted-foreground md:block">
                                     {periodStart && periodEnd
-                                        ? `Reporting period: ${fullDate(periodStart)} – ${fullDate(periodEnd)}`
-                                        : "No completed sessions recorded"}
+                                        ? `Reporting period: ${reportingPeriod}`
+                                        : reportingPeriod}
                                 </p>
                             </div>
-                            <div className="grid gap-3 sm:grid-cols-2">
-                                <Card size="sm">
-                                    <CardContent>
-                                        <p className="text-xs text-muted-foreground">
-                                            Attendance rate
-                                        </p>
-                                        <p className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1 tabular-nums">
-                                            <span className="text-2xl font-semibold">
-                                                {attendanceRate === null ? "—" : `${attendanceRate}%`}
-                                            </span>
-                                            <span className="text-xs text-muted-foreground">
-                                                · {attended}/{markedSessions.length} sessions
-                                            </span>
-                                        </p>
-                                    </CardContent>
-                                </Card>
-                                <Card size="sm">
-                                    <CardContent>
-                                        <p className="text-xs text-muted-foreground">
-                                            Last attended
-                                        </p>
-                                        <p className="mt-2 text-lg font-semibold tabular-nums">
-                                            {lastAttended
-                                                ? fullDate(lastAttended.event.date)
-                                                : "Not recorded"}
-                                        </p>
-                                        <p className="mt-1 text-2xs text-muted-foreground">
-                                            {lastAttended
-                                                ? `${lastAttended.event.name} · ${lastAttended.event.dojo}`
-                                                : "No attended sessions in this history"}
-                                        </p>
-                                    </CardContent>
-                                </Card>
-                            </div>
+                            <Card size="sm" className="detail-card">
+                                <CardContent>
+                                    <dl className="grid gap-4 sm:grid-cols-2">
+                                        <div>
+                                            <dt className="detail-label text-xs text-muted-foreground">
+                                                Attendance rate
+                                            </dt>
+                                            <dd className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1 tabular-nums">
+                                                <span className="text-2xl font-semibold">
+                                                    {attendanceRate === null ? "—" : `${attendanceRate}%`}
+                                                </span>
+                                                <span className="detail-meta text-sm text-muted-foreground">
+                                                    {attended}/{markedSessions.length} sessions
+                                                </span>
+                                            </dd>
+                                        </div>
+                                        <div className="border-t pt-4 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-4">
+                                            <dt className="detail-label text-xs text-muted-foreground">
+                                                Last attended
+                                            </dt>
+                                            <dd>
+                                                <p className="mt-2 text-lg font-semibold tabular-nums">
+                                                    {lastAttended
+                                                        ? fullDate(lastAttended.event.date)
+                                                        : "Not recorded"}
+                                                </p>
+                                                <p className="detail-meta mt-1 text-sm text-muted-foreground">
+                                                    {lastAttended
+                                                        ? `${lastAttended.event.name} · ${lastAttended.event.dojo}`
+                                                        : "No attended sessions in this history"}
+                                                </p>
+                                            </dd>
+                                        </div>
+                                    </dl>
+                                </CardContent>
+                            </Card>
                             {consecutiveAbsences >= 2 && (
                                 <p
                                     role="status"
-                                    className="flex items-start gap-2 rounded-lg bg-amber-50/70 px-3 py-2 text-xs leading-relaxed text-amber-900 dark:bg-amber-950/30 dark:text-amber-200"
+                                    className="detail-body flex items-start gap-2 rounded-lg bg-amber-50/70 px-3 py-3 text-sm text-amber-900 dark:bg-amber-950/30 dark:text-amber-200"
                                 >
                                     <TriangleAlert
                                         aria-hidden="true"
@@ -1344,43 +1637,41 @@ function StudentDetailContent({
                                 </p>
                             )}
                         </section>
-                        <section className="space-y-3">
-                            <div className="flex min-h-7 flex-wrap items-center gap-x-3 gap-y-1">
-                                <h2 className="text-sm font-semibold">
-                                    Recent lesson feedback
-                                </h2>
+                        <section className="detail-section">
+                            <div className="detail-section-header">
+                                <h2>Recent feedback</h2>
                                 <Button
                                     variant="ghost"
-                                    size="sm"
+                                    size="touch"
                                     onClick={() => selectTab("sessions")}
                                     className="ml-auto"
                                 >
-                                    All sessions
+                                    View sessions
                                     <ChevronRight aria-hidden="true" />
                                 </Button>
                             </div>
-                            <Card size="sm">
+                            <Card size="sm" className="detail-card">
                                 <CardContent className="space-y-4">
                                     {recentFeedback.length ? (
                                         recentFeedback.map((session) => (
                                             <article
                                                 key={session.event.id}
-                                                className="border-l-2 pl-3"
+                                                className="space-y-2 not-first:border-t not-first:pt-4"
                                             >
-                                                <p className="text-xs font-medium">
-                                                    {session.event.name}{" "}
-                                                    <span className="font-normal text-muted-foreground">
-                                                        · {fullDate(session.event.date)} ·{" "}
-                                                        {session.reportAuthor?.name ?? session.instructor}
-                                                    </span>
+                                                <h3 className="text-base font-semibold">
+                                                    {session.event.name}
+                                                </h3>
+                                                <p className="detail-meta text-sm text-muted-foreground">
+                                                    {fullDate(session.event.date)} ·{" "}
+                                                    {session.reportAuthor?.name ?? session.instructor}
                                                 </p>
-                                                <p className="mt-1.5 whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">
+                                                <p className="detail-body whitespace-pre-wrap text-sm">
                                                     {session.feedback}
                                                 </p>
                                             </article>
                                         ))
                                     ) : (
-                                        <p className="text-xs text-muted-foreground">
+                                        <p className="detail-body text-sm text-muted-foreground">
                                             No feedback recorded yet. Add notes from the Sessions tab.
                                         </p>
                                     )}
@@ -1390,7 +1681,7 @@ function StudentDetailContent({
                         <NextGradingSummary
                             profile={profile}
                             assessmentRecorded={assessmentRecorded}
-                            eligibility={eligibility}
+                            requirements={requirements}
                             onViewGrading={() => selectTab("grading")}
                         />
                     </TabsContent>
@@ -1407,7 +1698,7 @@ function StudentDetailContent({
                         />
                     </TabsContent>
 
-                    <TabsContent value="grading" className="space-y-4">
+                    <TabsContent value="grading" className="space-y-6">
                         {context?.type === "grading" && (
                             <Card>
                                 <CardHeader>
@@ -1427,23 +1718,30 @@ function StudentDetailContent({
                                 </CardContent>
                             </Card>
                         )}
-                        <StudentGrading
-                            profile={profile}
-                            syllabus={syllabus}
-                            requirements={requirements}
-                            signOffs={signOffs}
-                            onSignOffsChange={setSignOffs}
-                        />
-                        <section aria-label="Grading history" className="space-y-3">
-                            <h2 className="flex items-center gap-2 font-semibold">
-                                <History aria-hidden="true" className="size-4 text-muted-foreground" />
-                                Grading history
-                            </h2>
-                            <Card>
-                                <CardContent className="space-y-5">
+                        <section
+                            aria-label="Grading eligibility"
+                            className="detail-section"
+                        >
+                            <StudentGrading
+                                profile={profile}
+                                syllabus={syllabus}
+                                requirements={requirements}
+                                signOffs={signOffs}
+                                onSignOffsChange={setSignOffs}
+                            />
+                        </section>
+                        <section aria-label="Grading history" className="detail-section">
+                            <div className="detail-section-header">
+                                <h2>Grading history</h2>
+                            </div>
+                            <Card size="sm" className="detail-card">
+                                <CardContent className="space-y-4">
                                     {gradingHistory.length ? (
                                         gradingHistory.map((assessment) => (
-                                            <article key={assessment.id} className="border-l-2 pl-3">
+                                            <article
+                                                key={assessment.id}
+                                                className="not-first:border-t not-first:pt-4"
+                                            >
                                                 <div className="flex flex-wrap items-start justify-between gap-2">
                                                     <div>
                                                         <div className="flex flex-wrap items-center gap-2">
@@ -1457,22 +1755,22 @@ function StudentDetailContent({
                                                                 system={student.gradingSystem}
                                                             />
                                                         </div>
-                                                        <p className="mt-1 text-2xs text-muted-foreground">
+                                                        <p className="detail-meta mt-2 text-sm text-muted-foreground">
                                                             {fullDate(assessment.date)} ·{" "}
                                                             {assessment.instructor}
                                                         </p>
                                                     </div>
-                                                    <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-2xs text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">
+                                                    <span className="detail-status rounded-md bg-emerald-50 px-2 py-0.5 text-xs text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">
                                                         {assessment.status}
                                                     </span>
                                                 </div>
-                                                <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                                                <p className="detail-body mt-3 text-sm">
                                                     {assessment.feedback}
                                                 </p>
                                             </article>
                                         ))
                                     ) : (
-                                        <p className="text-xs text-muted-foreground">
+                                        <p className="detail-body text-sm text-muted-foreground">
                                             No previous grading assessments. The first assessment will
                                             appear here.
                                         </p>

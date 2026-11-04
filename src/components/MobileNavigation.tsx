@@ -86,11 +86,18 @@ export default function MobileNavigation({
                         height={32}
                         className="size-8 shrink-0 object-contain"
                     />
-                    <span className="text-[14px] leading-tight font-semibold">
-                        <span className="text-primary">Aikido</span>{" "}
-                        <span className="whitespace-nowrap text-brand-red-ink">
-                            Shinju-Kai
+                    <span className="min-w-0 leading-tight">
+                        <span className="block text-[14px] font-semibold">
+                            <span className="text-primary">Aikido</span>{" "}
+                            <span className="whitespace-nowrap text-brand-red-ink">
+                                Shinju-Kai
+                            </span>
                         </span>
+                        {profile?.role === "instructor" && (
+                            <span className="mt-0.5 block text-3xs leading-none font-normal tracking-normal text-muted-foreground">
+                                Instructor
+                            </span>
+                        )}
                     </span>
                 </Link>
                 <Sheet open={open} onOpenChange={setOpen}>
