@@ -1,297 +1,106 @@
-import { useMemo, useState } from 'react'
-import type { ReactNode } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Download, Search } from 'lucide-react'
 import EmptyState from '@/components/admin/EmptyState'
-import EligibilityChecklist from '@/components/admin/EligibilityChecklist'
-import { ApplicationBadge } from '@/components/admin/StatusBadge'
 import { NativeSelect } from '@/components/admin/form-controls'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import {
-  Table,
-  TableBody,
-  TableCaption,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import { useAdminData } from '@/lib/admin/admin-data-context'
+import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useAdminFilters } from '@/lib/admin/admin-filters'
 import { downloadCsv } from '@/lib/admin/export'
-import { formatDate, fullName, initials } from '@/lib/admin/format'
-import { getEligibilityForStudent, studentAge } from '@/lib/admin/grading-eligibility'
-import type { GradingApplication } from '@/lib/admin/types'
+import { formatDate } from '@/lib/admin/format'
+import { supabase } from '@/lib/supabase'
+
+interface Application {
+  id: string
+  submitted_at: string
+  status: string
+  target_grade_id: string
+  students: Student | Student[]
+  gradings: { grading_date: string | null; events: Event | Event[] } | { grading_date: string | null; events: Event | Event[] }[]
+}
+
+interface Student { first_name: string; last_name: string; member_no: string; home_centre_id: string }
+interface Event { name: string; centre_id: string }
+
+function related<T>(value: T | T[] | null | undefined): T | undefined {
+  return Array.isArray(value) ? value[0] : value ?? undefined
+}
 
 export default function GradingApplications() {
-  const {
-    centres,
-    students,
-    sessions,
-    attendance,
-    opportunities,
-    applications,
-    techniqueSignOffs,
-  } = useAdminData()
   const { centreId } = useAdminFilters()
+  const [applications, setApplications] = useState<Application[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [query, setQuery] = useState('')
-  const [selected, setSelected] = useState<GradingApplication | null>(null)
 
-  const centreNames = new Map(centres.map((centre) => [centre.id, centre.name]))
+  useEffect(() => {
+    let active = true
+    void supabase.from('grading_applications')
+      .select('id,submitted_at,status,target_grade_id,students(first_name,last_name,member_no,home_centre_id),gradings(grading_date,events(name,centre_id))')
+      .order('submitted_at', { ascending: false })
+      .then(({ data, error: queryError }) => {
+        if (!active) return
+        if (queryError) setError('Unable to load grading applications.')
+        else setApplications((data ?? []) as Application[])
+        setLoading(false)
+      })
+    return () => { active = false }
+  }, [])
 
   const rows = useMemo(() => {
     const needle = query.trim().toLowerCase()
-    return applications
-      .map((application) => ({
-        application,
-        student: students.find((student) => student.id === application.studentId),
-        opportunity: opportunities.find(
-          (opportunity) => opportunity.id === application.opportunityId,
-        ),
-      }))
-      .filter((row) => Boolean(row.student && row.opportunity))
-      .map((row) => ({
-        application: row.application,
-        student: row.student!,
-        opportunity: row.opportunity!,
-      }))
-      .filter(
-        ({ student, opportunity }) =>
-          centreId === 'all' ||
-          student.homeCentreId === centreId ||
-          opportunity.centreId === centreId,
-      )
-      .filter(
-        ({ application }) =>
-          statusFilter === 'all' || application.status === statusFilter,
-      )
-      .filter(({ student, opportunity }) => {
-        if (!needle) return true
-        return [fullName(student), student.memberNo, opportunity.title].some((value) =>
-          value.toLowerCase().includes(needle),
-        )
-      })
-      .sort((left, right) => right.application.submittedAt.localeCompare(left.application.submittedAt))
-  }, [applications, students, opportunities, centreId, statusFilter, query])
-
-  const selectedStudent = selected
-    ? students.find((student) => student.id === selected.studentId)
-    : undefined
-  const selectedOpportunity = selected
-    ? opportunities.find((opportunity) => opportunity.id === selected.opportunityId)
-    : undefined
-  const selectedEligibility = selectedStudent
-    ? getEligibilityForStudent(
-        selectedStudent,
-        attendance,
-        sessions,
-        techniqueSignOffs,
-      )
-    : undefined
+    return applications.map((item) => ({
+      item, student: related(item.students), grading: related(item.gradings),
+    })).map((row) => ({ ...row, event: related(row.grading?.events) })).filter(({ item, student, event }) => {
+      return student && event && (centreId === 'all' || student.home_centre_id === centreId || event.centre_id === centreId)
+        && (statusFilter === 'all' || item.status === statusFilter)
+        && (!needle || [student.first_name, student.last_name, student.member_no, event.name]
+          .some((value) => value.toLowerCase().includes(needle)))
+    })
+  }, [applications, centreId, statusFilter, query])
 
   function exportApplications() {
-    downloadCsv(
-      'grading-applications.csv',
-      ['Student', 'Member no.', 'Centre', 'Target grade', 'Opportunity', 'Submitted', 'Status'],
-      rows.map(({ application, student, opportunity }) => [
-        fullName(student),
-        student.memberNo,
-        centreNames.get(student.homeCentreId) ?? '',
-        application.targetGrade,
-        opportunity.title,
-        application.submittedAt.slice(0, 10),
-        application.status,
-      ]),
-    )
+    downloadCsv('grading-applications.csv',
+      ['Student', 'Member number', 'Grading', 'Grading date', 'Target grade', 'Submitted', 'Status'],
+      rows.map(({ item, student, event, grading }) => [
+        `${student!.first_name} ${student!.last_name}`,
+        student!.member_no, event!.name,
+        grading?.grading_date ?? '', item.target_grade_id,
+        item.submitted_at, item.status,
+      ]))
   }
 
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-48 flex-1">
-          <Search
-            className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
-            aria-hidden="true"
-          />
-          <input
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search student or opportunity"
-            aria-label="Search grading applications"
-            className="h-8 w-full rounded-lg border border-input bg-background pr-2.5 pl-8 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
-          />
-        </div>
-        <div className="w-40">
-          <NativeSelect
-            value={statusFilter}
-            onChange={(event) => setStatusFilter(event.target.value)}
-            aria-label="Filter by application status"
-          >
-            <option value="all">All statuses</option>
-            <option value="submitted">Submitted</option>
-            <option value="under_review">Under review</option>
-            <option value="withdrawn">Withdrawn</option>
-          </NativeSelect>
-        </div>
-        <Button variant="outline" onClick={exportApplications} disabled={rows.length === 0}>
-          <Download />
-          Export CSV
-        </Button>
-      </div>
-
-      <p className="text-xs text-muted-foreground">
-        {rows.length} applications · read-only. Grading results and promotions are outside
-        this portal.
-      </p>
-
-      {rows.length === 0 ? (
-        <EmptyState
-          title="No applications match these filters"
-          description="Applications submitted through the student portal will appear here."
-        />
-      ) : (
-        <Card className="overflow-hidden py-0">
-          <CardContent className="px-0">
-            <Table>
-              <TableCaption className="sr-only">Grading applications</TableCaption>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Student</TableHead>
-                  <TableHead>Centre</TableHead>
-                  <TableHead>Target grade</TableHead>
-                  <TableHead>Opportunity</TableHead>
-                  <TableHead>Submitted</TableHead>
-                  <TableHead>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map(({ application, student, opportunity }) => (
-                  <TableRow
-                    key={application.id}
-                    className="cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50"
-                    tabIndex={0}
-                    aria-haspopup="dialog"
-                    onClick={() => setSelected(application)}
-                    onKeyDown={(event) => {
-                      if (event.key !== 'Enter' && event.key !== ' ') return
-                      event.preventDefault()
-                      setSelected(application)
-                    }}
-                  >
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <span className="flex size-8 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
-                          {initials(student.firstName, student.lastName)}
-                        </span>
-                        <div>
-                          <p className="font-medium">{fullName(student)}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {studentAge(student)} years
-                          </p>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {centreNames.get(student.homeCentreId)}
-                    </TableCell>
-                    <TableCell>{application.targetGrade}</TableCell>
-                    <TableCell>
-                      <p>{opportunity.title}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatDate(opportunity.date)}
-                      </p>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {formatDate(application.submittedAt.slice(0, 10))}
-                    </TableCell>
-                    <TableCell>
-                      <ApplicationBadge status={application.status} />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
-
-      <Dialog open={Boolean(selected)} onOpenChange={(open) => !open && setSelected(null)}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Grading application</DialogTitle>
-            <DialogDescription>
-              Read-only view of the student's submission.
-            </DialogDescription>
-          </DialogHeader>
-          {selected && selectedStudent && selectedOpportunity && (
-            <div className="space-y-4 text-sm">
-              <div className="flex items-center gap-3">
-                <span className="flex size-10 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
-                  {initials(selectedStudent.firstName, selectedStudent.lastName)}
-                </span>
-                <div>
-                  <p className="font-medium">{fullName(selectedStudent)}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {selectedStudent.memberNo} ·{' '}
-                    {centreNames.get(selectedStudent.homeCentreId)}
-                  </p>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <Info label="Target grade" value={selected.targetGrade} />
-                <Info label="Status" value={<ApplicationBadge status={selected.status} />} />
-                <Info label="Opportunity" value={selectedOpportunity.title} />
-                <Info label="Submitted" value={formatDate(selected.submittedAt.slice(0, 10))} />
-              </div>
-              {selected.notes && (
-                <div className="rounded-lg border border-border bg-muted/30 p-3">
-                  <p className="text-xs font-medium text-muted-foreground">Student note</p>
-                  <p className="mt-1">{selected.notes}</p>
-                </div>
-              )}
-              {selectedEligibility && (
-                <div>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Current eligibility
-                  </p>
-                  <EligibilityChecklist
-                    requirements={selectedEligibility.requirements}
-                    compact
-                  />
-                </div>
-              )}
-              <p className="text-xs text-muted-foreground">
-                Eligibility is shown for reference. This portal does not process grading
-                results or promotions.
-              </p>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setSelected(null)}>
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+  return <div className="space-y-4">
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div><h1 className="text-xl font-semibold">Grading applications</h1>
+        <p className="text-sm text-muted-foreground">Submitted applications from the live database. Payments are confirmed by Stripe before submission.</p></div>
+      <Button variant="outline" disabled={rows.length === 0} onClick={exportApplications}><Download /> Export CSV</Button>
     </div>
-  )
-}
-
-function Info({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div className="rounded-lg border border-border/70 px-3 py-2">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="mt-0.5 font-medium">{value}</p>
+    <div className="flex flex-wrap gap-2">
+      <div className="relative min-w-48 flex-1"><Search className="pointer-events-none absolute top-2.5 left-2.5 size-4 text-muted-foreground" />
+        <input aria-label="Search applications" type="search" value={query} onChange={(event) => setQuery(event.target.value)}
+          placeholder="Find student or grading" className="h-9 w-full rounded-md border border-input bg-background pl-8 pr-3 text-sm" /></div>
+      <NativeSelect aria-label="Filter application status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+        <option value="all">All statuses</option><option value="submitted">Submitted</option>
+        <option value="under_review">Under review</option><option value="withdrawn">Withdrawn</option>
+      </NativeSelect>
     </div>
-  )
+    {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+    {loading ? <p className="text-sm text-muted-foreground">Loading applications…</p> : error ? null : rows.length === 0 ?
+      <EmptyState title="No applications found" description="Paid applications appear here after the Stripe webhook confirms payment." /> :
+      <Card className="overflow-hidden py-0"><CardContent className="overflow-x-auto px-0"><Table>
+        <TableCaption className="sr-only">Persisted grading applications</TableCaption>
+        <TableHeader><TableRow><TableHead>Student</TableHead><TableHead>Grading</TableHead><TableHead>Target</TableHead><TableHead>Submitted</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+        <TableBody>{rows.map(({ item, student, event, grading }) => <TableRow key={item.id}>
+          <TableCell><span className="font-medium">{student!.first_name} {student!.last_name}</span>
+            <span className="block text-xs text-muted-foreground">{student!.member_no}</span></TableCell>
+          <TableCell>{event!.name}<span className="block text-xs text-muted-foreground">
+            {grading?.grading_date ? formatDate(grading.grading_date) : '—'}</span></TableCell>
+          <TableCell>{item.target_grade_id}</TableCell>
+          <TableCell>{formatDate(item.submitted_at.slice(0, 10))}</TableCell>
+          <TableCell className="capitalize">{item.status.replaceAll('_', ' ')}</TableCell>
+        </TableRow>)}</TableBody>
+      </Table></CardContent></Card>}
+  </div>
 }

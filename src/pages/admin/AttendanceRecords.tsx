@@ -192,7 +192,7 @@ export default function AttendanceRecords() {
                     <TableCell>
                       <p className="font-medium">{fullName(student)}</p>
                       <p className="text-xs text-muted-foreground">
-                        {studentAge(student)} years
+                        {studentAge(student)} years old
                       </p>
                     </TableCell>
                     <TableCell>
