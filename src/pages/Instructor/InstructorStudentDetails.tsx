@@ -1031,23 +1031,23 @@ function MedicalAlertDetails({ alerts }: { alerts: string[] }) {
 
 function StudentContactDetails({ profile }: { profile: Profile }) {
     return (
-        <section className="space-y-3" aria-label="Contact information">
+        <section className="space-y-3 lg:space-y-2" aria-label="Contact information">
             <h3>Contact</h3>
             <a
                 href={`mailto:${profile.email}`}
-                className="detail-body flex min-h-11 items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+                className="detail-body flex min-h-11 items-center gap-2 text-sm text-muted-foreground hover:text-foreground lg:min-h-0 lg:py-1"
             >
                 <Mail aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
                 <span className="break-all">{profile.email}</span>
             </a>
             <a
                 href={`tel:${profile.phone.replaceAll(" ", "")}`}
-                className="detail-body flex min-h-11 items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+                className="detail-body flex min-h-11 items-center gap-2 text-sm text-muted-foreground hover:text-foreground lg:min-h-0 lg:py-1"
             >
                 <Phone aria-hidden="true" className="size-3.5" />
                 {profile.phone}
             </a>
-            <div className="space-y-3 border-t pt-4" aria-label="Emergency contact">
+            <div className="space-y-3 border-t pt-4 lg:space-y-2 lg:pt-3" aria-label="Emergency contact">
                 <h3>Emergency contact</h3>
                 <p className="detail-body text-sm">
                     <span className="font-medium">{profile.emergencyContact.name}</span>
@@ -1058,7 +1058,7 @@ function StudentContactDetails({ profile }: { profile: Profile }) {
                 </p>
                 <a
                     href={`tel:${profile.emergencyContact.phone.replaceAll(" ", "")}`}
-                    className="detail-body inline-flex min-h-11 items-center text-sm text-muted-foreground hover:text-foreground hover:underline"
+                    className="detail-body inline-flex min-h-11 items-center text-sm text-muted-foreground hover:text-foreground hover:underline lg:min-h-0 lg:py-1"
                 >
                     {profile.emergencyContact.phone}
                 </a>
@@ -1070,10 +1070,10 @@ function StudentContactDetails({ profile }: { profile: Profile }) {
 function StudentInformationDetails({ profile }: { profile: Profile }) {
     return (
         <>
-            <dl className="grid grid-cols-2 gap-3 border-t pt-3">
+            <dl className="grid grid-cols-2 gap-3 border-t pt-4">
                 <div>
-                    <dt className="text-xs text-muted-foreground">Principal dojo</dt>
-                    <dd className="mt-0.5 flex items-center gap-1.5 text-xs">
+                    <dt className="detail-label text-xs text-muted-foreground">Principal dojo</dt>
+                    <dd className="detail-body mt-1 flex items-center gap-1.5 text-sm">
                         <MapPin
                             aria-hidden="true"
                             className="size-3.5 text-muted-foreground"
@@ -1082,10 +1082,10 @@ function StudentInformationDetails({ profile }: { profile: Profile }) {
                     </dd>
                 </div>
                 <div>
-                    <dt className="text-xs text-muted-foreground">Membership</dt>
+                    <dt className="detail-label text-xs text-muted-foreground">Membership</dt>
                     <dd
                         className={cn(
-                            "mt-1 inline-flex rounded-md px-2 py-0.5 text-xs font-medium",
+                            "detail-status mt-1 inline-flex rounded-md px-2 py-0.5 text-xs font-medium",
                             profile.membershipStatus === "Active"
                                 ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200"
                                 : "bg-muted text-muted-foreground",
@@ -1095,7 +1095,7 @@ function StudentInformationDetails({ profile }: { profile: Profile }) {
                     </dd>
                 </div>
             </dl>
-            <div className="border-t pt-3">
+            <div className="border-t pt-4">
                 <StudentContactDetails profile={profile} />
             </div>
         </>
@@ -1231,38 +1231,37 @@ function MobileStudentInformation({ profile }: { profile: Profile }) {
 
 function StudentInformation({ profile }: { profile: Profile }) {
     return (
-        <Card size="sm" className="hidden gap-3 md:flex">
-            <CardHeader className="gap-1.5">
-                <h2 className="text-xs font-semibold text-muted-foreground">Student</h2>
+        <Card size="sm" className="detail-card student-profile-card hidden gap-4 md:flex">
+            <CardHeader className="gap-2">
                 <CardTitle className="text-xl font-semibold group-data-[size=sm]/card:text-xl">
                     <h1>{profile.name}</h1>
                 </CardTitle>
-                <p className="text-xs text-muted-foreground">{profile.studentNumber}</p>
+                <p className="detail-meta text-sm text-muted-foreground">{profile.studentNumber}</p>
                 <div className="mt-2 space-y-1.5">
-                    <p className="text-2xs text-muted-foreground">Current rank</p>
+                    <p className="detail-label text-xs text-muted-foreground">Current rank</p>
                     <GradeBadge
                         rank={profile.rank}
                         system={profile.gradingSystem}
                         showBeltLabel
-                        className="px-3 py-1.5 text-base"
+                        className="px-3 py-1.5"
                     />
-                    <p className="text-2xs text-muted-foreground">
+                    <p className="detail-meta text-sm text-muted-foreground">
                         {gradingSystems[profile.gradingSystem].label}
                     </p>
                 </div>
             </CardHeader>
-            <CardContent className="space-y-3 text-sm">
-                <StudentInformationDetails profile={profile} />
+            <CardContent className="space-y-4">
                 <section
-                    className="space-y-2 border-t pt-3"
+                    className="space-y-2"
                     aria-label="Medical alerts"
                 >
-                    <h2 className="flex items-center gap-1.5 text-xs font-semibold">
+                    <h3 className="flex items-center gap-1.5">
                         <HeartPulse aria-hidden="true" className="size-3.5" />
                         Medical alerts
-                    </h2>
+                    </h3>
                     <MedicalAlertDetails alerts={profile.medicalAlerts} />
                 </section>
+                <StudentInformationDetails profile={profile} />
             </CardContent>
         </Card>
     );
@@ -1524,7 +1523,7 @@ function StudentDetailContent({
                     </div>
                 )}
             </div>
-            <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,7fr)]">
+            <div className="grid items-start gap-6 lg:grid-cols-[20rem_minmax(0,1fr)]">
                 <aside
                     ref={sidebarRef}
                     className={cn(
@@ -1665,7 +1664,7 @@ function StudentDetailContent({
                                                     {fullDate(session.event.date)} ·{" "}
                                                     {session.reportAuthor?.name ?? session.instructor}
                                                 </p>
-                                                <p className="detail-body whitespace-pre-wrap text-sm">
+                                                <p className="detail-body max-w-prose whitespace-pre-wrap text-sm">
                                                     {session.feedback}
                                                 </p>
                                             </article>
@@ -1764,7 +1763,7 @@ function StudentDetailContent({
                                                         {assessment.status}
                                                     </span>
                                                 </div>
-                                                <p className="detail-body mt-3 text-sm">
+                                                <p className="detail-body mt-3 max-w-prose text-sm">
                                                     {assessment.feedback}
                                                 </p>
                                             </article>

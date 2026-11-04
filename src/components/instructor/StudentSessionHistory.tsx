@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import {
     CalendarDays,
     Check,
@@ -115,7 +115,7 @@ function SessionReport({
             data-selected={selected || undefined}
             data-phase={phase}
             className={cn(
-                "detail-card gap-4 border border-transparent bg-card py-4",
+                "detail-card session-report gap-4 border border-transparent bg-card py-4",
                 selected && "border-primary/30 ring-0",
             )}
         >
@@ -126,39 +126,41 @@ function SessionReport({
                     </CardTitle>
                     <AttendanceBadge value={session.attendance} />
                 </div>
-                <div className="detail-meta flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
-                    <span className="inline-flex items-center gap-1.5">
-                        <CalendarDays aria-hidden="true" className="size-4 shrink-0" />
-                        {sessionDateFormat.format(session.event.date)}
-                    </span>
-                    <span className="inline-flex items-center gap-1.5">
-                        <Clock3 aria-hidden="true" className="size-4 shrink-0" />
-                        {formatTime(session.event.startTime)} –{" "}
-                        {formatTime(session.event.endTime)}
-                    </span>
-                    <span className="inline-flex items-center gap-1.5">
-                        <MapPin aria-hidden="true" className="size-4 shrink-0" />
-                        {session.event.dojo}
-                    </span>
+                <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between lg:gap-x-4 lg:gap-y-2">
+                    <div className="detail-meta flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
+                        <span className="inline-flex items-center gap-1.5">
+                            <CalendarDays aria-hidden="true" className="size-4 shrink-0" />
+                            {sessionDateFormat.format(session.event.date)}
+                        </span>
+                        <span className="inline-flex items-center gap-1.5">
+                            <Clock3 aria-hidden="true" className="size-4 shrink-0" />
+                            {formatTime(session.event.startTime)} –{" "}
+                            {formatTime(session.event.endTime)}
+                        </span>
+                        <span className="inline-flex items-center gap-1.5">
+                            <MapPin aria-hidden="true" className="size-4 shrink-0" />
+                            {session.event.dojo}
+                        </span>
+                    </div>
+                    <InstructorAvatar
+                        profile={authorProfile}
+                        showName
+                        interactive={false}
+                        avatarClassName="size-7 lg:size-6"
+                    />
                 </div>
-                <InstructorAvatar
-                    profile={authorProfile}
-                    showName
-                    interactive={false}
-                    avatarClassName="size-7"
-                />
             </CardHeader>
             <CardContent>
-                <div className="mb-4 border-t" aria-hidden="true" />
-                <div className="mb-3 flex min-h-11 flex-wrap items-center justify-between gap-3">
+                <div className="mb-4 border-t lg:mb-2" aria-hidden="true" />
+                <div className="mb-3 flex min-h-11 flex-wrap items-center justify-between gap-3 lg:mb-2 lg:min-h-8">
                     <h4 className="text-sm font-semibold text-foreground">
                         Instructor report
                     </h4>
                     {!editing && report && (
                         <Button
                             variant="ghost"
-                            size="icon-touch"
-                            className="-mr-1 md:w-auto md:px-3"
+                            size="touch"
+                            className="-mr-1 w-11 px-0 md:w-auto md:px-3"
                             aria-label="Edit report"
                             onClick={() => {
                                 setDraft(session.feedback);
@@ -217,7 +219,7 @@ function SessionReport({
                 ) : report ? (
                     <p
                         className={cn(
-                            "detail-body whitespace-pre-wrap text-sm wrap-break-word",
+                            "detail-body max-w-prose whitespace-pre-wrap text-sm wrap-break-word",
                             "text-foreground",
                         )}
                     >
@@ -239,6 +241,64 @@ function SessionReport({
                 )}
             </CardContent>
         </Card>
+    );
+}
+
+function SessionFilters({
+    attendance,
+    sort,
+    onAttendanceChange,
+    onSortChange,
+    onReset,
+    active,
+    inline = false,
+}: {
+    attendance: Attendance | "all";
+    sort: string;
+    onAttendanceChange: (value: Attendance | "all") => void;
+    onSortChange: (value: string) => void;
+    onReset: () => void;
+    active: boolean;
+    inline?: boolean;
+}) {
+    const filterId = useId();
+    const selectClassName =
+        "detail-body h-11 min-w-0 rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 lg:h-9";
+
+    return (
+        <div className={inline ? "flex flex-wrap items-end gap-3" : "grid gap-3"}>
+            <div className="flex min-w-0 flex-col gap-1.5">
+                <Label htmlFor={`${filterId}-attendance`} className="detail-label">Attendance</Label>
+                <select
+                    id={`${filterId}-attendance`}
+                    value={attendance}
+                    onChange={(event) => onAttendanceChange(event.target.value as Attendance | "all")}
+                    className={selectClassName}
+                >
+                    <option value="all">All attendance</option>
+                    <option value="present">Present</option>
+                    <option value="absent">Absent</option>
+                    <option value="unmarked">Unmarked</option>
+                </select>
+            </div>
+            <div className="flex min-w-0 flex-col gap-1.5">
+                <Label htmlFor={`${filterId}-sort`} className="detail-label">Date order</Label>
+                <select
+                    id={`${filterId}-sort`}
+                    value={sort}
+                    onChange={(event) => onSortChange(event.target.value)}
+                    className={selectClassName}
+                >
+                    <option value="newest">Newest first</option>
+                    <option value="oldest">Oldest first</option>
+                </select>
+            </div>
+            {active && (
+                <Button variant="ghost" size="touch" onClick={onReset}>
+                    Reset filters
+                </Button>
+            )}
+        </div>
     );
 }
 
@@ -268,19 +328,33 @@ export default function StudentSessionHistory({
                     a.event.startTime.localeCompare(b.event.startTime)) *
                 (sort === "oldest" ? 1 : -1),
         );
-    const selectClassName =
-        "detail-body h-11 min-w-0 rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
+    function resetFilters() {
+        setAttendance("all");
+        setSort("newest");
+    }
 
     return (
         <section aria-label="Session history" className="detail-section">
             <div className="detail-section-header">
                 <h2 className="font-semibold">Session history</h2>
+                <div className="hidden lg:block">
+                    <SessionFilters
+                        attendance={attendance}
+                        sort={sort}
+                        onAttendanceChange={setAttendance}
+                        onSortChange={setSort}
+                        onReset={resetFilters}
+                        active={activeFilterCount > 0}
+                        inline
+                    />
+                </div>
                 <Popover>
                     <PopoverTrigger
                         render={
                             <Button
                                 variant={activeFilterCount ? "secondary" : "outline"}
                                 size="touch"
+                                className="lg:hidden"
                                 aria-label={`Filter sessions${activeFilterCount ? `, ${activeFilterCount} active` : ""}`}
                             />
                         }
@@ -293,48 +367,16 @@ export default function StudentSessionHistory({
                             </span>
                         )}
                     </PopoverTrigger>
-                    <PopoverContent align="end" className="student-detail-view w-72 gap-3">
+                    <PopoverContent align="end" className="student-detail-view w-72 gap-3 lg:hidden">
                         <PopoverTitle>Filter sessions</PopoverTitle>
-                        <div className="flex flex-col gap-1.5">
-                            <Label htmlFor="attendance-filter">Attendance</Label>
-                            <select
-                                id="attendance-filter"
-                                value={attendance}
-                                onChange={(event) =>
-                                    setAttendance(event.target.value as Attendance | "all")
-                                }
-                                className={selectClassName}
-                            >
-                                <option value="all">All attendance</option>
-                                <option value="present">Present</option>
-                                <option value="absent">Absent</option>
-                                <option value="unmarked">Unmarked</option>
-                            </select>
-                        </div>
-                        <div className="flex flex-col gap-1.5">
-                            <Label htmlFor="session-sort">Date order</Label>
-                            <select
-                                id="session-sort"
-                                value={sort}
-                                onChange={(event) => setSort(event.target.value)}
-                                className={selectClassName}
-                            >
-                                <option value="newest">Newest first</option>
-                                <option value="oldest">Oldest first</option>
-                            </select>
-                        </div>
-                        {activeFilterCount > 0 && (
-                            <Button
-                                variant="ghost"
-                                size="touch"
-                                onClick={() => {
-                                    setAttendance("all");
-                                    setSort("newest");
-                                }}
-                            >
-                                Reset filters
-                            </Button>
-                        )}
+                        <SessionFilters
+                            attendance={attendance}
+                            sort={sort}
+                            onAttendanceChange={setAttendance}
+                            onSortChange={setSort}
+                            onReset={resetFilters}
+                            active={activeFilterCount > 0}
+                        />
                     </PopoverContent>
                 </Popover>
             </div>
@@ -345,7 +387,7 @@ export default function StudentSessionHistory({
                     {sort === "oldest" && " · Oldest first"}
                 </p>
             )}
-            <div className="space-y-5">
+            <div className="space-y-5 lg:space-y-3">
                 {visibleSessions.length ? (
                     visibleSessions.map((session) => (
                         <SessionReport

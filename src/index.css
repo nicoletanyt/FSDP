@@ -359,6 +359,103 @@
     }
 }
 
+@media (min-width: 48rem) {
+    /* Desktop roles are scoped to student details and their dialogs. */
+    .student-detail-view,
+    .student-detail-view .detail-body {
+        font-size: 1rem;
+        line-height: 1.5rem;
+    }
+
+    .student-detail-view h1 {
+        font-size: 1.75rem;
+        line-height: 2.25rem;
+        font-weight: 700;
+    }
+
+    .student-detail-view h2 {
+        font-size: 1.25rem;
+        line-height: 1.75rem;
+        font-weight: 600;
+    }
+
+    .student-detail-view h3,
+    .student-detail-view [data-slot="card-title"],
+    .student-detail-view .grading-category-heading {
+        font-size: 1.125rem;
+        line-height: 1.75rem;
+        font-weight: 600;
+    }
+
+    .student-detail-view h4 {
+        font-size: 1rem;
+        line-height: 1.5rem;
+        font-weight: 600;
+    }
+
+    .student-detail-view .detail-meta,
+    .student-detail-view .detail-label,
+    .student-detail-view [data-instructor-id] > span:not([data-slot="avatar"]) {
+        font-size: 0.875rem;
+        line-height: 1.25rem;
+    }
+
+    .student-detail-view .detail-label {
+        font-weight: 500;
+    }
+
+    .student-detail-view .detail-status {
+        font-size: 0.8125rem;
+        line-height: 1.25rem;
+        font-weight: 500;
+    }
+
+    .student-detail-view :is(
+        [data-slot="button"],
+        [data-slot="tabs-trigger"],
+        [data-slot="dialog-close"],
+        [data-slot="dialog-trigger"],
+        [data-slot="popover-trigger"],
+        [data-slot="grade-badge"]
+    ) {
+        font-size: 0.875rem;
+        line-height: 1.25rem;
+        font-weight: 500;
+    }
+
+    .student-detail-view [data-slot="grade-badge"] > span {
+        font-size: inherit;
+    }
+
+    .student-detail-view [data-slot="tabs-list"] {
+        min-height: 2.5rem;
+    }
+
+    .student-detail-view .detail-card {
+        --card-spacing: 1rem;
+    }
+
+    .student-detail-view .student-profile-card h3 {
+        font-size: 1rem;
+        line-height: 1.5rem;
+    }
+}
+
+@media (min-width: 64rem) {
+    .student-detail-view .session-report {
+        gap: 0.5rem;
+        padding-block: 0.75rem;
+    }
+
+    .student-detail-view .session-report [data-slot="card-header"] {
+        gap: 0.5rem;
+    }
+
+    .student-detail-view .session-report [data-slot="button"] {
+        height: 2rem;
+    }
+}
+
 body:has([data-check-in-kiosk="true"]) [data-floating-chatbot] {
   display: none;
 }
