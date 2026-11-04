@@ -4,6 +4,30 @@ import { handleRequest as checkout } from '../create-grading-checkout/handler.ts
 import { handleRequest as webhook } from '../stripe-webhook/handler.ts'
 import { cryptoProvider, getStripe } from '../_shared/stripe.ts'
 
+const invitationBody = `Dear Student,
+
+You are invited to apply for an upcoming Aikido Shinju-Kai grading.
+
+Children's grading
+Date: {{children_grading_date}}
+Applications close: {{children_application_close_date}}
+
+Adult grading
+Date: {{adult_grading_date}}
+Applications close: {{adult_application_close_date}}
+
+Venue
+Aikido Shinju-Kai Headquarters
+Thomson V One, 9 Sin Ming Road, #B1-02, Singapore 575630
+
+Apply here: https://fsdp-kappa.vercel.app/grading
+
+Please apply by the closing date shown for your grading. When you sign in, you will see only the grading opportunities available to you. Your application is submitted after payment is confirmed.
+
+We look forward to seeing you on the mat.
+
+Aikido Shinju-Kai`
+
 Deno.test('grading functions reject unauthorized requests before any external send or charge', async () => {
   const before = Deno.env.get('APP_URL')
   const originalFetch = globalThis.fetch
@@ -90,6 +114,8 @@ Deno.test('admin grading preview does not send; confirmation sends one email wit
   let savedError = ''
   let allMode = false
   let savedSubject = 'Aikido Shinju-Kai | Grading invitation'
+  let adultOpen = true
+  let previewedBody = ''
   const secondEventId = '699dbd22-d137-4be4-81bd-10b6a2ab710d'
   globalThis.fetch = async (input, init) => {
     const request = new Request(input, init)
@@ -105,9 +131,13 @@ Deno.test('admin grading preview does not send; confirmation sends one email wit
       assert.equal(payload.template_params.email_subject, 'Aikido Shinju-Kai | Grading invitation')
       assert.equal(payload.template_params.bcc_emails, allMode
         ? 'test@example.com,adult@example.com,mq07110@gmail.com' : 'test@example.com,mq07110@gmail.com')
-      assert.match(payload.template_params.email_body, /Children’s grading — 6 December 2026/)
-      assert.equal(payload.template_params.email_body.includes('Adult grading — 13 December 2026'), allMode)
-      assert.match(payload.template_params.email_body, new RegExp(`${environment.APP_URL}/grading`))
+      assert.equal(payload.template_params.email_body, previewedBody)
+      assert.match(payload.template_params.email_body, /Date: 6 December 2026/)
+      assert.match(payload.template_params.email_body, /Applications close: 22 November 2026/)
+      assert.match(payload.template_params.email_body, /Date: 13 December 2026/)
+      assert.match(payload.template_params.email_body, /Applications close: 29 November 2026/)
+      assert.equal(payload.template_params.email_body.split('https://fsdp-kappa.vercel.app/grading').length, 2)
+      assert.doesNotMatch(payload.template_params.email_body, /{{|\[insert actual link here\]|http:\/\/localhost:5173\/grading/)
       return rejected
         ? new Response(`Forbidden: origin https://client.invalid is blocked for test@example.com; accessToken: ${environment.EMAILJS_PRIVATE_KEY}`, { status: 403 })
         : new Response('OK')
@@ -118,14 +148,14 @@ Deno.test('admin grading preview does not send; confirmation sends one email wit
       event_id: eventId, track: 'children', grading_date: '2026-12-06', application_opens_on: '2026-10-25',
       application_deadline: '2026-11-22', reporting_release_on: '2026-11-29', reporting_time: null,
       events: { name: 'Children’s grading', centres: { name: 'ASK Headquarters Dojo', address: '9 Sin Ming Road' } },
-    }, {
+    }, ...(adultOpen ? [{
       event_id: secondEventId, track: 'adult', grading_date: '2026-12-13', application_opens_on: '2026-11-01',
       application_deadline: '2026-11-29', reporting_release_on: '2026-12-06', reporting_time: null,
       events: { name: 'Adult grading', centres: { name: 'ASK Headquarters Dojo', address: '9 Sin Ming Road' } },
-    }])
+    }] : [])])
     if (url.pathname === '/rest/v1/grading_invitation_settings') return Response.json({
       subject: savedSubject,
-      body: 'Dear Student,\n\n{{grading_details}}\n\nApply here: {{application_url}}',
+      body: invitationBody,
     })
     if (url.pathname === '/rest/v1/rpc/eligible_grading_students') {
       if ((await request.json()).target_event === secondEventId) return Response.json([
@@ -163,10 +193,21 @@ Deno.test('admin grading preview does not send; confirmation sends one email wit
     assert.deepEqual(contents.bcc_emails, ['test@example.com', 'mq07110@gmail.com'])
     assert.equal(contents.eligible, 1)
     assert.equal(contents.send_ready, true)
-    assert.match(contents.email_body, new RegExp(`${environment.APP_URL}/grading`))
+    assert.match(contents.email_body, /Apply here: https:\/\/fsdp-kappa\.vercel\.app\/grading/)
+    assert.equal(contents.email_body, invitationBody
+      .replace('{{children_grading_date}}', '6 December 2026')
+      .replace('{{children_application_close_date}}', '22 November 2026')
+      .replace('{{adult_grading_date}}', '13 December 2026')
+      .replace('{{adult_application_close_date}}', '29 November 2026'))
+    previewedBody = contents.email_body
     assert.equal(contents.preview_token.length, 64)
     assert.equal(sends, 0)
     assert.equal(reservations, 0)
+    adultOpen = false
+    const childrenOnly = await invitation(makeRequest(false))
+    assert.equal(childrenOnly.status, 200)
+    assert.match((await childrenOnly.json()).email_body, /Adult grading\nDate: Not currently open/)
+    adultOpen = true
     assert.equal((await invitation(makeRequest(true, 'stale'))).status, 409)
     assert.equal(reservations, 0)
     savedSubject = 'Updated grading invitation'

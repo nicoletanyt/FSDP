@@ -8,6 +8,7 @@ import { NativeSelect } from '@/components/admin/form-controls'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -56,6 +57,14 @@ interface InvitationPreview {
   send_ready: boolean
 }
 
+const datePlaceholders = [
+  '{{children_grading_date}}',
+  '{{children_application_close_date}}',
+  '{{adult_grading_date}}',
+  '{{adult_application_close_date}}',
+] as const
+const applicationUrl = 'https://fsdp-kappa.vercel.app/grading'
+
 export default function GradingEligibility() {
   const { centres, students, attendance, sessions, techniqueSignOffs } =
     useAdminData()
@@ -66,7 +75,8 @@ export default function GradingEligibility() {
   const [events, setEvents] = useState<{ id: string; name: string; track: GradeTrack }[]>([])
   const [eventId, setEventId] = useState('')
   const [preview, setPreview] = useState<InvitationPreview | null>(null)
-  const [sending, setSending] = useState(false)
+  const [notifyOpen, setNotifyOpen] = useState(false)
+  const [pendingAction, setPendingAction] = useState<'preview' | 'send' | null>(null)
   const [wording, setWording] = useState<InvitationWording | null>(null)
   const [subject, setSubject] = useState('')
   const [message, setMessage] = useState('')
@@ -126,11 +136,25 @@ export default function GradingEligibility() {
     scopedStudents.some((student) => student.id === assessment.studentId && studentTrack(student) === selectedTrack)))
   const wordingChanged = wording !== null && (subject !== wording.subject || message !== wording.body)
 
+  function changeNotifyOpen(open: boolean) {
+    if (!open) {
+      if (savingWording || pendingAction) return
+      if (wordingChanged && !window.confirm('Discard unsaved invitation wording?')) return
+      setSubject(wording?.subject ?? '')
+      setMessage(wording?.body ?? '')
+      setPreview(null)
+      setWordingError('')
+    }
+    setNotifyOpen(open)
+  }
+
   async function saveWording() {
     if (!wordingChanged) return
     if (!subject.trim() || subject.length > 150 || /[\r\n]/.test(subject) || message.length > 5000 ||
-      !message.includes('{{grading_details}}') || !message.includes('{{application_url}}')) {
-      setWordingError('Use a subject of up to 150 characters and a message of up to 5,000 characters containing {{grading_details}} and {{application_url}}.')
+      datePlaceholders.some((placeholder) => !message.includes(placeholder)) ||
+      message.split(applicationUrl).length !== 2 || message.includes('[insert actual link here]') ||
+      message.includes('{{grading_details}}') || message.includes('{{application_url}}')) {
+      setWordingError(`Use a subject of up to 150 characters and a message of up to 5,000 characters containing all four grading date placeholders and exactly one ${applicationUrl} link.`)
       return
     }
     setSavingWording(true)
@@ -153,7 +177,7 @@ export default function GradingEligibility() {
   async function notifyEligible(confirm: boolean) {
     if (!wording || wordingChanged || (confirm && !preview)) return
     if (confirm && !window.confirm(`Send ONE email to suroulomg@gmail.com, BCC ${preview?.bcc_count ?? 0} addresses for ${eventId ? 'this grading' : 'all open gradings'}? This includes mq07110@gmail.com. Continue?`)) return
-    setSending(true)
+    setPendingAction(confirm ? 'send' : 'preview')
     setNotice('')
     setNoticeError(false)
     try {
@@ -168,6 +192,7 @@ export default function GradingEligibility() {
         setNoticeError(false)
         setNotice(`EmailJS accepted one invitation send (BCC: ${data.bcc_count} addresses). This does not confirm delivery.`)
         setPreview(null)
+        setNotifyOpen(false)
       } else {
         if (!data?.preview_token || !data?.email_subject || !data?.email_body) {
           throw new Error('The editable invitation service is not deployed yet. No email was sent.')
@@ -177,12 +202,12 @@ export default function GradingEligibility() {
     } catch (failure) {
       setNoticeError(true)
       setNotice(failure instanceof Error ? failure.message : 'Invitation failed.')
-    } finally { setSending(false) }
+    } finally { setPendingAction(null) }
   }
 
   return (
     <div className="space-y-4">
-      {notice && (
+      {notice && !notifyOpen && (
         <Alert variant={noticeError ? 'destructive' : 'default'}>
           {!noticeError && <CheckCircle2 className="size-4 text-success" aria-hidden="true" />}
           <AlertDescription>{notice}</AlertDescription>
@@ -196,38 +221,63 @@ export default function GradingEligibility() {
           <option value="">All eligible students</option>
           {events.map((event) => <option key={event.id} value={event.id}>{event.name}</option>)}
         </NativeSelect>
-        <Button variant="outline" onClick={() => void notifyEligible(false)} disabled={!wording || wordingChanged || sending || savingWording}>
+        <Button variant="outline" onClick={() => { setNotice(''); setNotifyOpen(true) }} disabled={!wording || pendingAction !== null || savingWording}>
           <Bell />
-          Preview students
+          Notify Students
         </Button>
       </div>
-      <Card className="gap-4 p-5">
-        <div><h2 className="font-semibold">Invitation wording</h2>
-          <p className="text-sm text-muted-foreground">Shared by adult and children’s gradings. Save changes before previewing; saving does not send an email.</p></div>
-        {wordingError && <p role="alert" className="text-sm text-destructive">{wordingError}</p>}
-        <div className="space-y-2"><Label htmlFor="invitation-subject">Subject</Label>
-          <Input id="invitation-subject" value={subject} maxLength={150} disabled={!wording || savingWording}
-            onChange={(event) => { setSubject(event.target.value); setPreview(null); setWordingError('') }} /></div>
-        <div className="space-y-2"><Label htmlFor="invitation-message">Message</Label>
-          <Textarea id="invitation-message" value={message} rows={13} maxLength={5000} disabled={!wording || savingWording}
-            onChange={(event) => { setMessage(event.target.value); setPreview(null); setWordingError('') }} />
-          <p className="text-xs text-muted-foreground">Keep {'{{grading_details}}'} and {'{{application_url}}'} in the message. They are filled in for each send.</p></div>
-        <div className="flex items-center gap-3"><Button type="button" disabled={!wordingChanged || savingWording} onClick={() => void saveWording()}>
-          {savingWording ? 'Saving…' : 'Save'}
-        </Button>{wordingChanged && <span className="text-xs text-muted-foreground">Unsaved changes. Save before previewing.</span>}</div>
-      </Card>
-      {preview && <Card className="gap-3 p-4">
-        <h2 className="font-semibold">Email preview · {eventId ? events.find((event) => event.id === eventId)?.name : 'All open gradings'}</h2>
-        <p>Live eligible students: {preview.eligible}. One email to suroulomg@gmail.com; {preview.bcc_count} BCC addresses (including mq07110@gmail.com).</p>
-        <p className="text-xs break-all text-muted-foreground">BCC: {preview.bcc_emails.join(', ')}</p>
-        <div className="rounded-md border border-border bg-background p-4">
-          <p className="font-medium">{preview.email_subject}</p>
-          <p className="mt-3 whitespace-pre-wrap text-sm">{preview.email_body}</p>
-        </div>
-        {preview.over_limit && <p className="text-sm text-destructive">Too many BCC addresses for one send. Nothing will be sent.</p>}
-        {!preview.send_ready && <p className="text-sm text-destructive">Configure the new editable template in EmailJS before sending. Preview and Save remain available.</p>}
-        <Button disabled={sending || preview.eligible === 0 || preview.over_limit || !preview.send_ready || wordingChanged} onClick={() => void notifyEligible(true)}>Confirm one EmailJS send</Button>
-      </Card>}
+      {wordingError && !wording && <p role="alert" className="text-sm text-destructive">{wordingError}</p>}
+      <Dialog open={notifyOpen} onOpenChange={changeNotifyOpen}>
+        <DialogContent className={cn(
+          'max-h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)_auto] sm:max-w-2xl',
+          preview && 'lg:max-w-6xl',
+        )}>
+          <DialogHeader>
+            <DialogTitle>Notify Students</DialogTitle>
+            <DialogDescription>
+              {eventId ? events.find((event) => event.id === eventId)?.name : 'All open gradings'} · Shared invitation wording for adult and children’s gradings.
+            </DialogDescription>
+          </DialogHeader>
+          <div className={cn('min-h-0 overflow-y-auto', preview && 'lg:grid lg:grid-cols-2 lg:gap-6 lg:overflow-hidden')}>
+            <div className={cn('space-y-4 pr-1', preview && 'lg:min-h-0 lg:overflow-y-auto lg:pr-3')}>
+              {notice && <Alert variant={noticeError ? 'destructive' : 'default'}>
+                {!noticeError && <CheckCircle2 className="size-4 text-success" aria-hidden="true" />}
+                <AlertDescription>{notice}</AlertDescription>
+              </Alert>}
+              {wordingError && <p role="alert" className="text-sm text-destructive">{wordingError}</p>}
+              <div className="space-y-2"><Label htmlFor="invitation-subject">Subject</Label>
+                <Input id="invitation-subject" value={subject} maxLength={150} disabled={savingWording || pendingAction !== null}
+                  onChange={(event) => { setSubject(event.target.value); setPreview(null); setWordingError('') }} /></div>
+              <div className="space-y-2"><Label htmlFor="invitation-message">Message</Label>
+                <Textarea id="invitation-message" value={message} rows={11} maxLength={5000} disabled={savingWording || pendingAction !== null}
+                  onChange={(event) => { setMessage(event.target.value); setPreview(null); setWordingError('') }} />
+                <p className="text-xs text-muted-foreground">Keep all four date placeholders in the message: {datePlaceholders.join(', ')}. Keep the full application link in the message; only the dates are filled in for preview and send. Save changes before previewing; saving does not send an email.</p></div>
+              <Button type="button" variant="outline" disabled={wordingChanged || pendingAction !== null || savingWording} onClick={() => void notifyEligible(false)}>
+                {pendingAction === 'preview' ? 'Preparing preview…' : 'Preview recipients'}
+              </Button>
+            </div>
+            {preview && <section aria-label="Email preview" className="mt-5 space-y-3 border-t border-border pt-5 pr-1 lg:mt-0 lg:min-h-0 lg:overflow-y-auto lg:border-t-0 lg:border-l lg:py-0 lg:pl-6">
+              <h3 className="font-semibold">Email preview</h3>
+              <p>Live eligible students: {preview.eligible}. One email to suroulomg@gmail.com; {preview.bcc_count} BCC addresses (including mq07110@gmail.com).</p>
+              <p className="text-xs break-all text-muted-foreground">BCC: {preview.bcc_emails.join(', ')}</p>
+              <div className="rounded-md border border-border bg-background p-4">
+                <p className="font-medium">{preview.email_subject}</p>
+                <p className="mt-3 whitespace-pre-wrap text-sm">{preview.email_body}</p>
+              </div>
+              {preview.over_limit && <p className="text-sm text-destructive">Too many BCC addresses for one send. Nothing will be sent.</p>}
+              {!preview.send_ready && <p className="text-sm text-destructive">Configure the editable template in EmailJS before sending.</p>}
+            </section>}
+          </div>
+          <DialogFooter className="items-center border-t border-border bg-popover">
+            {wordingChanged && <span className="text-xs text-muted-foreground sm:mr-auto">Save changes before previewing or sending.</span>}
+            <Button type="button" variant="outline" disabled={!wordingChanged || savingWording || pendingAction !== null} onClick={() => void saveWording()}>
+              {savingWording ? 'Saving…' : 'Save'}
+            </Button>
+            <Button type="button" disabled={!preview || pendingAction !== null || savingWording || wordingChanged || preview.eligible === 0 || preview.over_limit || !preview.send_ready}
+              onClick={() => void notifyEligible(true)}>{pendingAction === 'send' ? 'Sending…' : 'Send email'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {eligible.length === 0 ? (
         <EmptyState

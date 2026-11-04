@@ -190,8 +190,12 @@ secrets **only after** configuring those fields, then deploy the updated
 secret; preview and saving defaults still work. The server sets To to
 `suroulomg@gmail.com`, BCC to deduplicated live eligible student addresses plus
 `mq07110@gmail.com` once, and the link to the existing `/grading` route. The
-admin editor stores one shared adult/children default; `{{grading_details}}`
-and `{{application_url}}` must remain in its message and are filled server-side.
+admin editor stores one shared adult/children default. Its message keeps
+`{{children_grading_date}}`, `{{children_application_close_date}}`,
+`{{adult_grading_date}}`, and `{{adult_application_close_date}}`; the server
+fills them from open grading windows. The saved default includes the literal
+`https://fsdp-kappa.vercel.app/grading` link exactly once; preview and send
+replace only the four date placeholders.
 The All selection combines current open grading recipients (maximum 50 BCC
 addresses including the dummy); it refuses, rather than truncates, larger lists.
 Only a signed-in administrator can preview and explicitly confirm a request;

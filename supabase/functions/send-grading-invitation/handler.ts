@@ -13,8 +13,6 @@ interface GradingEvent {
   grading_date: string
   application_opens_on: string
   application_deadline: string
-  reporting_release_on: string
-  reporting_time: string | null
   events: { name: string; centres: { name: string; address: string } | { name: string; address: string }[] } |
     { name: string; centres: { name: string; address: string } | { name: string; address: string }[] }[]
 }
@@ -25,16 +23,6 @@ function singaporeToday(): string {
 
 function formatDate(value: string): string {
   return new Date(`${value}T00:00:00+08:00`).toLocaleDateString('en-SG', { timeZone: 'Asia/Singapore', dateStyle: 'long' })
-}
-
-function details(event: GradingEvent, today: string): string {
-  const time = event.reporting_time && event.reporting_release_on <= today
-    ? new Date(`2026-01-01T${event.reporting_time.slice(0, 5)}:00+08:00`)
-      .toLocaleTimeString('en-SG', { timeZone: 'Asia/Singapore', timeStyle: 'short' })
-    : 'To be confirmed'
-  return `${event.track === 'adult' ? 'Adult' : 'Children’s'} grading — ${formatDate(event.grading_date)}\n` +
-    `Applications close: ${formatDate(event.application_deadline)}\n` +
-    `Reporting time: ${time} (release date: ${formatDate(event.reporting_release_on)})`
 }
 
 async function sha256(value: string): Promise<string> {
@@ -91,7 +79,7 @@ export async function handleRequest(request: Request): Promise<Response> {
     }
     const db = adminClient()
     const [{ data: schedule, error: scheduleError }, { data: wording, error: wordingError }] = await Promise.all([
-      db.from('gradings').select('event_id,track,grading_date,application_opens_on,application_deadline,reporting_release_on,reporting_time,events!inner(name,status,centres(name,address))')
+      db.from('gradings').select('event_id,track,grading_date,application_opens_on,application_deadline,events!inner(name,status,centres(name,address))')
         .eq('official_schedule', true).eq('application_status', 'open').eq('events.status', 'scheduled'),
       db.from('grading_invitation_settings').select('subject,body').eq('id', true).single(),
     ])
@@ -112,10 +100,15 @@ export async function handleRequest(request: Request): Promise<Response> {
       return Response.json({ error: 'An eligible student has no valid email address. Nothing sent.' }, { status: 400, headers })
     }
     const emails = [...new Set([...students.values()].filter((email) => email !== primaryRecipient).concat(dummyRecipient))]
-    const gradingDetails = targets.map((event) => details(event, today)).join('\n\n')
+    const byDate = [...available].sort((a, b) => a.grading_date.localeCompare(b.grading_date))
+    const children = byDate.find((event) => event.track === 'children')
+    const adult = byDate.find((event) => event.track === 'adult')
     const emailSubject = wording.subject
-    const emailBody = wording.body.replaceAll('{{grading_details}}', gradingDetails)
-      .replaceAll('{{application_url}}', `${config.appOrigin}/grading`)
+    const emailBody = wording.body
+      .replaceAll('{{children_grading_date}}', children ? formatDate(children.grading_date) : 'Not currently open')
+      .replaceAll('{{children_application_close_date}}', children ? formatDate(children.application_deadline) : 'Not currently open')
+      .replaceAll('{{adult_grading_date}}', adult ? formatDate(adult.grading_date) : 'Not currently open')
+      .replaceAll('{{adult_application_close_date}}', adult ? formatDate(adult.application_deadline) : 'Not currently open')
     const name = body.event_id === null ? 'All eligible students' : related(targets[0].events)?.name ?? 'Grading'
     const campaignKey = body.event_id === null ? await sha256(targets.map((event) => event.event_id).sort().join(',')) : null
     const previewToken = await sha256(JSON.stringify([targets.map((event) => event.event_id), emails, emailSubject, emailBody]))

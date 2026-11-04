@@ -1,8 +1,7 @@
 import { useMemo } from 'react'
 import { Download, MapPin, Search, X } from 'lucide-react'
-import { useSearchParams } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import EmptyState from '@/components/admin/EmptyState'
-import PageHeader from '@/components/admin/PageHeader'
 import StudentTable from '@/components/admin/StudentTable'
 import { CentreStatusBadge } from '@/components/admin/StatusBadge'
 import { NativeSelect } from '@/components/admin/form-controls'
@@ -14,6 +13,7 @@ import { getRiskAssessments } from '@/lib/admin/attendance-risk'
 import { downloadCsv } from '@/lib/admin/export'
 import { formatPercent, fullName, relativeDay } from '@/lib/admin/format'
 import { getEligibilityAssessments } from '@/lib/admin/grading-eligibility'
+import type { Centre } from '@/lib/admin/types'
 import { cn } from 'cn'
 
 type Tab = 'dojos' | 'students'
@@ -187,19 +187,6 @@ export default function Centres() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Centres"
-        description="Every Aikido Shinju-Kai dojo, its location and operating status, plus the student directory in one view."
-        actions={
-          tab === 'students' ? (
-            <Button variant="outline" onClick={exportStudents}>
-              <Download />
-              Export CSV
-            </Button>
-          ) : undefined
-        }
-      />
-
       <nav
         aria-label="Centre sections"
         className="flex flex-wrap gap-1 border-b border-border"
@@ -295,52 +282,7 @@ export default function Centres() {
           ) : (
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {filteredDojos.map((centre) => (
-                <div
-                  key={centre.id}
-                  className="flex flex-col gap-3 rounded-xl bg-card p-4 ring-1 ring-foreground/10"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <h3 className="text-sm font-medium">{centre.name}</h3>
-                      <p className="text-xs text-muted-foreground">
-                        {centre.shortName}
-                      </p>
-                    </div>
-                    <CentreStatusBadge status={centre.status} />
-                  </div>
-
-                  {centre.status === 'active' ? (
-                    <p className="flex items-start gap-1.5 text-sm text-muted-foreground">
-                      <MapPin
-                        className="mt-0.5 size-4 shrink-0"
-                        aria-hidden="true"
-                      />
-                      <span>{centre.address}</span>
-                    </p>
-                  ) : (
-                    <div className="space-y-1.5">
-                      <p
-                        className={cn(
-                          'text-sm font-medium',
-                          centre.status === 'closed'
-                            ? 'text-destructive'
-                            : 'text-warning-foreground dark:text-warning',
-                        )}
-                      >
-                        {centre.status === 'closed'
-                          ? 'This dojo is closed'
-                          : 'This dojo is under renovation'}
-                      </p>
-                      <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
-                        <MapPin
-                          className="mt-0.5 size-3.5 shrink-0"
-                          aria-hidden="true"
-                        />
-                        <span>{centre.address}</span>
-                      </p>
-                    </div>
-                  )}
-                </div>
+                <DojoCard key={centre.id} centre={centre} />
               ))}
             </div>
           )}
@@ -415,6 +357,10 @@ export default function Centres() {
                     <option value="pending">Pending</option>
                   </NativeSelect>
                 </div>
+                <Button variant="outline" size="sm" onClick={exportStudents} className="w-full shrink-0 lg:w-auto">
+                  <Download />
+                  Export CSV
+                </Button>
               </div>
               <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
                 <p>
@@ -455,6 +401,58 @@ export default function Centres() {
         </div>
       )}
     </div>
+  )
+}
+
+function DojoCard({ centre }: { centre: Centre }) {
+  const cardClass = cn(
+    'flex flex-col gap-3 rounded-xl bg-card p-4 ring-1 ring-foreground/10',
+    centre.status !== 'closed' &&
+      'cursor-pointer transition-colors hover:bg-accent/40 hover:ring-primary/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+  )
+  const content = (
+    <>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h3 className="text-sm font-medium">{centre.name}</h3>
+          <p className="text-xs text-muted-foreground">{centre.shortName}</p>
+        </div>
+        <CentreStatusBadge status={centre.status} />
+      </div>
+      {centre.status === 'active' ? (
+        <p className="flex items-start gap-1.5 text-sm text-muted-foreground">
+          <MapPin className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+          <span>{centre.address}</span>
+        </p>
+      ) : (
+        <div className="space-y-1.5">
+          <p className={cn(
+            'text-sm font-medium',
+            centre.status === 'closed'
+              ? 'text-destructive'
+              : 'text-warning-foreground dark:text-warning',
+          )}>
+            {centre.status === 'closed' ? 'This dojo is closed' : 'This dojo is under renovation'}
+          </p>
+          <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+            <MapPin className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+            <span>{centre.address}</span>
+          </p>
+        </div>
+      )}
+    </>
+  )
+
+  if (centre.status === 'closed') return <div className={cardClass}>{content}</div>
+
+  return (
+    <Link
+      to={`/admin/calendar?centre=${encodeURIComponent(centre.id)}`}
+      aria-label={`View ${centre.name} in calendar`}
+      className={cardClass}
+    >
+      {content}
+    </Link>
   )
 }
 
