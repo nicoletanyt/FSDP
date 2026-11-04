@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Check, ChevronDown, ChevronUp } from 'lucide-react'
+import { Check, ChevronDown, ChevronUp, UploadCloud } from 'lucide-react'
 
 const STEPS = [
   { id: 1, title: 'Personal\nInformation' },
@@ -18,16 +18,39 @@ export default function ApplyMembership() {
   const [showGuardian, setShowGuardian] = useState(false)
 
   const [formData, setFormData] = useState({
-    fullName: '', dob: '', gender: '', email: '', mobile: '', address: '',
-    principalDojo: '', membershipType: '', currentBelt: '', hasExperience: 'no', experienceDetails: '',
-    emergencyName: '', emergencyRelationship: '', emergencyPhone: '', medicalDetails: '', medicalConfirm: false,
-    guardianName: '', guardianRelationship: '', guardianPhone: '',
+    // Step 1
+    fullName: '',
+    nric: '',
+    nationality: '',
+    dob: '',
+    gender: '',
+    email: 'student@example.com', // 默认填一个，实际开发中这里应通过 useEffect 获取当前登录用户的邮箱
+    mobile: '',
+    address: '',
+    photoName: '', // 用于展示上传的文件名
+    // Step 2
+    principalDojo: '',
+    membershipType: '',
+    currentBelt: '',
+    hasExperience: 'no',
+    experienceDetails: '',
+    // Step 3
+    emergencyName: '',
+    emergencyRelationship: '',
+    emergencyPhone: '',
+    medicalDetails: '',
+    medicalConfirm: false,
+    guardianName: '',
+    guardianNric: '',
+    guardianRelationship: '',
+    guardianPhone: '',
   })
 
   const handleNext = () => {
     if (currentStep < 4) {
       setCurrentStep(currentStep + 1)
     } else {
+      // TODO: 提交给 Supabase
       navigate('/apply-membership/success') 
     }
   }
@@ -36,11 +59,16 @@ export default function ApplyMembership() {
     if (currentStep > 1) setCurrentStep(currentStep - 1)
   }
 
+  // 模拟照片上传
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      setFormData({ ...formData, photoName: file.name })
+    }
+  }
+
   return (
-    // 1. 最外层背景色深色模式适配
     <div className="min-h-[calc(100vh-80px)] bg-[#f4f5f7] dark:bg-slate-950 py-10 px-4 sm:px-8 transition-colors">
-      
-      {/* 2. 白色大卡片深色模式背景适配 */}
       <div className="max-w-5xl mx-auto bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-none p-8 sm:p-12 transition-colors">
         
         {/* 进度条 */}
@@ -69,7 +97,7 @@ export default function ApplyMembership() {
           ))}
         </div>
 
-        {/* Step 1 */}
+        {/* Step 1: Personal Information */}
         {currentStep === 1 && (
           <div className="animate-in fade-in slide-in-from-right-4 duration-300">
             <div className="mb-8">
@@ -86,6 +114,30 @@ export default function ApplyMembership() {
                   value={formData.fullName}
                   onChange={(e) => setFormData({...formData, fullName: e.target.value})}
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-base transition-colors">NRIC / FIN</Label>
+                <Input 
+                  placeholder="e.g. S1234567A" 
+                  className="h-12 bg-gray-200/60 dark:bg-slate-800 border-transparent dark:border-slate-700 focus-visible:ring-[#2c3f67] dark:focus-visible:ring-blue-500 transition-colors"
+                  value={formData.nric}
+                  onChange={(e) => setFormData({...formData, nric: e.target.value})}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-base transition-colors">Nationality</Label>
+                <select 
+                  className="w-full h-12 bg-gray-200/60 dark:bg-slate-800 rounded-md border-transparent dark:border-slate-700 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#2c3f67] dark:focus:ring-blue-500 text-gray-600 dark:text-gray-300 transition-colors"
+                  value={formData.nationality}
+                  onChange={(e) => setFormData({...formData, nationality: e.target.value})}
+                >
+                  <option value="" disabled>Select nationality</option>
+                  <option value="singaporean">Singaporean</option>
+                  <option value="pr">Singapore PR</option>
+                  <option value="foreigner">Foreigner</option>
+                </select>
               </div>
 
               <div className="space-y-2">
@@ -115,15 +167,16 @@ export default function ApplyMembership() {
                 <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-base transition-colors">Email Address</Label>
                 <Input 
                   type="email"
-                  placeholder="Enter your email address" 
-                  className="h-12 bg-gray-200/60 dark:bg-slate-800 border-transparent dark:border-slate-700 focus-visible:ring-[#2c3f67] dark:focus-visible:ring-blue-500 transition-colors"
+                  className="h-12 bg-gray-200/60 dark:bg-slate-800 border-transparent dark:border-slate-700 focus-visible:ring-[#2c3f67] dark:focus-visible:ring-blue-500 transition-colors opacity-70 cursor-not-allowed"
                   value={formData.email}
-                  onChange={(e) => setFormData({...formData, email: e.target.value})}
+                  disabled
+                  readOnly
                 />
+                <p className="text-xs text-gray-500">Linked to your login account.</p>
               </div>
 
               <div className="space-y-2">
-                <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-base transition-colors">Mobile Address</Label>
+                <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-base transition-colors">Mobile Number</Label>
                 <div className="flex gap-2">
                   <div className="w-24 h-12 bg-gray-200/60 dark:bg-slate-800 rounded-md flex items-center justify-center text-sm text-gray-600 dark:text-gray-400 border border-transparent dark:border-slate-700 transition-colors">
                     +65
@@ -141,16 +194,30 @@ export default function ApplyMembership() {
                 <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-base transition-colors">Residential Address</Label>
                 <textarea 
                   placeholder="Enter your residential address" 
-                  className="w-full min-h-[120px] bg-gray-200/60 dark:bg-slate-800 rounded-md p-3 text-sm border-transparent dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-[#2c3f67] dark:focus:ring-blue-500 resize-none transition-colors"
+                  className="w-full min-h-[100px] bg-gray-200/60 dark:bg-slate-800 rounded-md p-3 text-sm border-transparent dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-[#2c3f67] dark:focus:ring-blue-500 resize-none transition-colors"
                   value={formData.address}
                   onChange={(e) => setFormData({...formData, address: e.target.value})}
                 />
+              </div>
+
+              {/* 照片上传占位 */}
+              <div className="space-y-2 md:col-span-2">
+                <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-base transition-colors">Profile Photo (2 photos required for registration)</Label>
+                <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 dark:border-slate-700 rounded-xl cursor-pointer bg-gray-50 dark:bg-slate-800/50 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors">
+                  <div className="flex flex-col items-center justify-center pt-5 pb-6 text-gray-500 dark:text-gray-400">
+                    <UploadCloud className="w-8 h-8 mb-2" />
+                    <p className="text-sm"><span className="font-semibold text-[#2c3f67] dark:text-blue-400">Click to upload</span> or drag and drop</p>
+                    <p className="text-xs mt-1">JPG, PNG (MAX. 2MB)</p>
+                    {formData.photoName && <p className="text-xs text-green-600 dark:text-green-400 font-bold mt-2">Selected: {formData.photoName}</p>}
+                  </div>
+                  <input type="file" className="hidden" accept="image/*" onChange={handlePhotoUpload} />
+                </label>
               </div>
             </div>
           </div>
         )}
 
-        {/* Step 2 */}
+        {/* Step 2: Training Information */}
         {currentStep === 2 && (
           <div className="animate-in fade-in slide-in-from-right-4 duration-300">
             <div className="mb-8">
@@ -234,7 +301,7 @@ export default function ApplyMembership() {
               </div>
 
               <div className="space-y-2 pt-2">
-                <Label className="text-gray-700 dark:text-gray-400 text-sm font-medium transition-colors">If yes, please provide details (e.g. years, previous dojo, rank)</Label>
+                <Label className="text-gray-700 dark:text-gray-400 text-sm font-medium transition-colors">If yes, please provide details</Label>
                 <textarea 
                   placeholder="Enter details here (optional)" 
                   className="w-full min-h-[120px] bg-gray-200/60 dark:bg-slate-800 rounded-md p-3 text-sm border-transparent dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-[#2c3f67] dark:focus:ring-blue-500 resize-none disabled:opacity-50 transition-colors"
@@ -247,7 +314,7 @@ export default function ApplyMembership() {
           </div>
         )}
 
-        {/* Step 3 */}
+        {/* Step 3: Emergency Contact & Medical */}
         {currentStep === 3 && (
           <div className="animate-in fade-in slide-in-from-right-4 duration-300">
             <div className="mb-8">
@@ -308,7 +375,7 @@ export default function ApplyMembership() {
                   
                   <textarea 
                     placeholder="Enter details here (optional)" 
-                    className="w-full min-h-[120px] bg-white dark:bg-slate-900 rounded-md p-3 text-sm border-transparent dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-[#2c3f67] dark:focus:ring-blue-500 resize-none transition-colors"
+                    className="w-full min-h-[100px] bg-white dark:bg-slate-900 rounded-md p-3 text-sm border-transparent dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-[#2c3f67] dark:focus:ring-blue-500 resize-none transition-colors"
                     value={formData.medicalDetails}
                     onChange={(e) => setFormData({...formData, medicalDetails: e.target.value})}
                   />
@@ -327,7 +394,7 @@ export default function ApplyMembership() {
                 </label>
 
                 <div className="mt-auto pt-4 bg-[#e9ecef] dark:bg-slate-900 rounded-lg p-4 transition-colors">
-                  <p className="text-xs font-bold text-[#2c3f67] dark:text-gray-400 mb-2 transition-colors">Guardian information (for members under 10)</p>
+                  <p className="text-xs font-bold text-[#2c3f67] dark:text-gray-400 mb-2 transition-colors">Guardian information (for members under 18)</p>
                   
                   <button 
                     type="button"
@@ -347,6 +414,15 @@ export default function ApplyMembership() {
                           className="h-10 bg-white dark:bg-slate-800 border-transparent dark:border-slate-700 focus-visible:ring-[#2c3f67] dark:focus-visible:ring-blue-500 transition-colors"
                           value={formData.guardianName}
                           onChange={(e) => setFormData({...formData, guardianName: e.target.value})}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-gray-700 dark:text-gray-400 text-xs font-medium transition-colors">Guardian NRIC</Label>
+                        <Input 
+                          placeholder="e.g. S1234567A" 
+                          className="h-10 bg-white dark:bg-slate-800 border-transparent dark:border-slate-700 focus-visible:ring-[#2c3f67] dark:focus-visible:ring-blue-500 transition-colors"
+                          value={formData.guardianNric}
+                          onChange={(e) => setFormData({...formData, guardianNric: e.target.value})}
                         />
                       </div>
                       <div className="space-y-1">
@@ -378,7 +454,7 @@ export default function ApplyMembership() {
           </div>
         )}
 
-        {/* Step 4 */}
+        {/* Step 4: Review & Submit */}
         {currentStep === 4 && (
           <div className="animate-in fade-in slide-in-from-right-4 duration-300">
             <div className="mb-8">
@@ -387,6 +463,7 @@ export default function ApplyMembership() {
             </div>
 
             <div className="space-y-6">
+              {/* 1. Personal Information */}
               <div className="bg-[#f4f5f7] dark:bg-slate-800/50 rounded-xl p-6 relative transition-colors">
                 <div className="flex justify-between items-center mb-4 border-b border-gray-200 dark:border-slate-700 pb-3 transition-colors">
                   <h3 className="text-lg font-bold text-[#2c3f67] dark:text-blue-400 transition-colors">Personal Information</h3>
@@ -394,14 +471,18 @@ export default function ApplyMembership() {
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-8 text-sm">
                   <div><span className="text-gray-500 dark:text-gray-400 block mb-1 transition-colors">Full Name</span><span className="font-medium text-gray-900 dark:text-gray-100 transition-colors">{formData.fullName || '-'}</span></div>
+                  <div><span className="text-gray-500 dark:text-gray-400 block mb-1 transition-colors">NRIC / FIN</span><span className="font-medium text-gray-900 dark:text-gray-100 uppercase transition-colors">{formData.nric || '-'}</span></div>
+                  <div><span className="text-gray-500 dark:text-gray-400 block mb-1 transition-colors">Nationality</span><span className="font-medium text-gray-900 dark:text-gray-100 capitalize transition-colors">{formData.nationality || '-'}</span></div>
                   <div><span className="text-gray-500 dark:text-gray-400 block mb-1 transition-colors">Date of Birth</span><span className="font-medium text-gray-900 dark:text-gray-100 transition-colors">{formData.dob || '-'}</span></div>
                   <div><span className="text-gray-500 dark:text-gray-400 block mb-1 transition-colors">Gender</span><span className="font-medium text-gray-900 dark:text-gray-100 capitalize transition-colors">{formData.gender || '-'}</span></div>
                   <div><span className="text-gray-500 dark:text-gray-400 block mb-1 transition-colors">Email Address</span><span className="font-medium text-gray-900 dark:text-gray-100 transition-colors">{formData.email || '-'}</span></div>
                   <div><span className="text-gray-500 dark:text-gray-400 block mb-1 transition-colors">Mobile Number</span><span className="font-medium text-gray-900 dark:text-gray-100 transition-colors">+65 {formData.mobile || '-'}</span></div>
                   <div className="sm:col-span-2"><span className="text-gray-500 dark:text-gray-400 block mb-1 transition-colors">Residential Address</span><span className="font-medium text-gray-900 dark:text-gray-100 transition-colors">{formData.address || '-'}</span></div>
+                  <div className="sm:col-span-2"><span className="text-gray-500 dark:text-gray-400 block mb-1 transition-colors">Profile Photo</span><span className="font-medium text-gray-900 dark:text-gray-100 transition-colors">{formData.photoName || 'Not uploaded'}</span></div>
                 </div>
               </div>
 
+              {/* 2. Training Information */}
               <div className="bg-[#f4f5f7] dark:bg-slate-800/50 rounded-xl p-6 relative transition-colors">
                 <div className="flex justify-between items-center mb-4 border-b border-gray-200 dark:border-slate-700 pb-3 transition-colors">
                   <h3 className="text-lg font-bold text-[#2c3f67] dark:text-blue-400 transition-colors">Training Information</h3>
@@ -418,6 +499,7 @@ export default function ApplyMembership() {
                 </div>
               </div>
 
+              {/* 3. Emergency & Medical */}
               <div className="bg-[#f4f5f7] dark:bg-slate-800/50 rounded-xl p-6 relative transition-colors">
                 <div className="flex justify-between items-center mb-4 border-b border-gray-200 dark:border-slate-700 pb-3 transition-colors">
                   <h3 className="text-lg font-bold text-[#2c3f67] dark:text-blue-400 transition-colors">Emergency & Medical</h3>
@@ -431,7 +513,9 @@ export default function ApplyMembership() {
                   {formData.guardianName && (
                     <div className="sm:col-span-2 pt-2 mt-2 border-t border-gray-200 dark:border-slate-700 transition-colors">
                       <span className="text-gray-500 dark:text-gray-400 block mb-1 transition-colors">Guardian Information</span>
-                      <span className="font-medium text-gray-900 dark:text-gray-100 transition-colors">{formData.guardianName} ({formData.guardianRelationship}) - +65 {formData.guardianPhone}</span>
+                      <span className="font-medium text-gray-900 dark:text-gray-100 transition-colors">
+                        {formData.guardianName} (NRIC: {formData.guardianNric || '-'}) - +65 {formData.guardianPhone}
+                      </span>
                     </div>
                   )}
                 </div>
@@ -453,7 +537,7 @@ export default function ApplyMembership() {
           </div>
         )}
 
-        {/* 底部按钮 */}
+        {/* 底部操作按钮 */}
         <div className="mt-10 flex justify-between items-center border-t border-gray-100 dark:border-slate-800 pt-6 transition-colors">
           {currentStep > 1 ? (
             <Button 
