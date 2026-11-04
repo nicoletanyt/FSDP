@@ -264,7 +264,7 @@ export default function StudentDashboard() {
                       </span>
                     </span>
                   </DialogTrigger>
-                  <DialogContent className="w-[calc(100%-2rem)] max-w-lg p-6 sm:max-w-lg">
+                  <DialogContent className="w-[calc(100%-2rem)] max-w-lg p-4 sm:max-w-lg lg:p-6">
                     <div className="grid justify-items-center gap-5 py-2 text-center">
                       <div>
                         <DialogTitle className="text-xl font-semibold">
@@ -276,7 +276,7 @@ export default function StudentDashboard() {
                       </div>
                       <div
                         aria-label="QR code placeholder; no code generated"
-                        className="grid size-64 place-items-center rounded-2xl border-2 border-dashed border-primary/40 bg-muted/50 text-primary sm:size-80"
+                        className="grid aspect-square w-64 max-w-full place-items-center rounded-2xl border-2 border-dashed border-primary/40 bg-muted/50 text-primary sm:w-80"
                       >
                         <div className="grid justify-items-center gap-3">
                           <QrCode className="size-16" aria-hidden="true" />
