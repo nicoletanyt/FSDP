@@ -2,8 +2,8 @@ import { NavLink, Outlet } from 'react-router'
 import { cn } from 'cn'
 
 const tabs = [
+  { to: 'opportunities', label: 'Schedule' },
   { to: 'eligibility', label: 'Eligibility' },
-  { to: 'opportunities', label: 'Opportunities' },
   { to: 'applications', label: 'Applications' },
   { to: 'syllabus', label: 'Syllabus' },
 ]

@@ -111,7 +111,7 @@ export default function App() {
                 <Route path="monitoring" element={<AdminAttendanceMonitoring />} />
               </Route>
               <Route path="grading" element={<AdminGrading />}>
-                <Route index element={<Navigate to="eligibility" replace />} />
+                <Route index element={<Navigate to="opportunities" replace />} />
                 <Route path="eligibility" element={<AdminGradingEligibility />} />
                 <Route path="opportunities" element={<AdminGradingOpportunities />} />
                 <Route path="applications" element={<AdminGradingApplications />} />

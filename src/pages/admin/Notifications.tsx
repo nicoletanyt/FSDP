@@ -9,7 +9,8 @@ import { supabase } from '@/lib/supabase'
 
 interface GradingSend {
   id: string
-  grading_event_id: string
+  grading_event_id: string | null
+  event_name: string | null
   status: 'pending' | 'accepted' | 'failed'
   recipient_count: number
   created_at: string
@@ -22,7 +23,7 @@ export default function Notifications() {
 
   const refresh = useCallback(async () => {
     const { data, error: queryError } = await supabase.from('grading_email_sends')
-      .select('id,grading_event_id,status,recipient_count,created_at,error')
+      .select('id,grading_event_id,event_name,status,recipient_count,created_at,error')
       .order('created_at', { ascending: false })
     if (queryError) setError('Unable to load invitation history.')
     else {
@@ -62,7 +63,7 @@ export default function Notifications() {
               {history.map((send) => (
                 <TableRow key={send.id}>
                   <TableCell>{formatDate(send.created_at.slice(0, 10))}</TableCell>
-                  <TableCell className="font-mono text-xs">{send.grading_event_id}</TableCell>
+                  <TableCell>{send.event_name ?? send.grading_event_id ?? 'Former grading event'}</TableCell>
                   <TableCell>{send.recipient_count}</TableCell>
                   <TableCell>
                     <span className={send.status === 'failed' ? 'text-destructive' : send.status === 'accepted' ? 'text-success' : 'text-muted-foreground'}>
