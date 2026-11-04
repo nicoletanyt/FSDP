@@ -49,16 +49,18 @@ export function InstructorIndexRedirect() {
 
 export function GuestRoute() {
   const { session, profile, loading, error } = useAuth()
+  const location = useLocation()
   if (loading || (session && (error || !profile))) return <AuthStatus />
-  if (profile) return <Navigate to={dashboardPaths[profile.role]} replace />
+  if (profile) return <Navigate to={profile.role === 'student' && location.state?.from === '/grading' ? '/grading' : dashboardPaths[profile.role]} replace />
   return <Outlet />
 }
 
 export function ProtectedRoute({ role }: { role: UserRole }) {
   const { session, profile, loading, error } = useAuth()
+  const location = useLocation()
   if (loading) return <AuthStatus />
   if (!session) {
-    return <Navigate to={role === 'instructor' ? '/instructor/signin' : role === 'student' ? '/login' : '/staff/login'} replace />
+    return <Navigate to={role === 'instructor' ? '/instructor/signin' : role === 'student' ? '/login' : '/staff/login'} state={role === 'student' && location.pathname === '/grading' ? { from: '/grading' } : undefined} replace />
   }
   if (error || !profile) return <AuthStatus />
   if (profile.role !== role) return <Navigate to={dashboardPaths[profile.role]} replace />

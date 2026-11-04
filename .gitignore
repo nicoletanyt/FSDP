@@ -9,5 +9,5 @@ dist/
 !/.env.example
 *.local
 
-# Ignore opencode agents
 .opencode
+AGENTS.MD

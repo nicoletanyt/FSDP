@@ -11,3 +11,9 @@ verify_jwt = false
 # The handler verifies the user JWT with Auth, then checks the database role.
 [functions.create-instructor]
 verify_jwt = false
+
+[functions.send-grading-invitation]
+verify_jwt = false
+
+[functions.create-grading-checkout]
+verify_jwt = false
