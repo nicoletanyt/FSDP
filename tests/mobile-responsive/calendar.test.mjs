@@ -190,7 +190,7 @@ test('left navigation Sheet shows role links, account details, active state and 
     }
 });
 
-test('mobile main content and overlays use 16px insets, and roster identity, grade and actions share one line', async () => {
+test('mobile instructor main uses 24px padding, overlays use 16px insets, and roster identity, grade and actions share one line', async () => {
     for (const width of [320, 390, 430]) {
         const result = await inCalendar(width, '/instructor/calendar?view=day&date=2026-11-27', async (w, wait) => {
             const d = w.document;
@@ -221,7 +221,8 @@ test('mobile main content and overlays use 16px insets, and roster identity, gra
             output.dialog = inset(d.querySelector('[data-slot="dialog-content"]'));
             return output;
         });
-        for (const padding of [result.main, result.legend, result.drawerBody, result.identityPadding, result.dialog]) assert.deepEqual(padding, ['16px', '16px', '16px', '16px']);
+        assert.deepEqual(result.main, ['24px', '24px', '24px', '24px']);
+        for (const padding of [result.legend, result.drawerBody, result.identityPadding, result.dialog]) assert.deepEqual(padding, ['16px', '16px', '16px', '16px']);
         assert.equal(result.aligned, true);
         assert.equal(result.fullName, true);
         assert.equal(result.overflow, false);

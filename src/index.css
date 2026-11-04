@@ -268,6 +268,29 @@
         letter-spacing: 0.05em;
     }
 
+    /* Directory roles also cover portalled filter controls without changing other pages. */
+    .student-directory-view .directory-control,
+    .student-directory-view .directory-name,
+    .student-directory-filters .directory-control,
+    .student-directory-filters .directory-popover-title,
+    .student-directory-filter-menu [data-slot="dropdown-menu-radio-item"] {
+        font-size: 1rem;
+        line-height: 1.5rem;
+    }
+
+    .student-directory-view .directory-meta,
+    .student-directory-view .directory-copy,
+    .student-directory-filters .directory-copy {
+        font-size: 0.875rem;
+        line-height: 1.25rem;
+    }
+
+    .student-directory-view [data-slot="grade-badge"],
+    .student-directory-view .directory-filter-count {
+        font-size: 0.75rem;
+        line-height: 1rem;
+    }
+
     /* Student detail typography roles: keep content and controls consistent. */
     .student-detail-view .detail-body,
     .student-detail-view .detail-meta {

@@ -13,7 +13,6 @@ import { Button } from "@/components/ui/button";
 import {
     Sheet,
     SheetContent,
-    SheetDescription,
     SheetHeader,
     SheetTitle,
     SheetTrigger,
@@ -115,7 +114,6 @@ export default function MobileNavigation({
                     <SheetContent side="left" className="w-[calc(100%-2rem)] max-w-sm">
                         <SheetHeader>
                             <SheetTitle>Menu</SheetTitle>
-                            <SheetDescription>{role} navigation</SheetDescription>
                         </SheetHeader>
                         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain">
                             <div className="flex min-w-0 items-center gap-3 border-b pb-4">

@@ -1067,38 +1067,119 @@ function StudentContactDetails({ profile }: { profile: Profile }) {
     );
 }
 
-function StudentInformationDetails({ profile }: { profile: Profile }) {
+function StudentInformationCards({ profile }: { profile: Profile }) {
     return (
-        <>
-            <dl className="grid grid-cols-2 gap-3 border-t pt-4">
-                <div>
-                    <dt className="detail-label text-xs text-muted-foreground">Principal dojo</dt>
-                    <dd className="detail-body mt-1 flex items-center gap-1.5 text-sm">
-                        <MapPin
-                            aria-hidden="true"
-                            className="size-3.5 text-muted-foreground"
+        <div className="space-y-3" aria-label="Student information">
+            <Card size="sm" className="detail-card">
+                <CardContent className="space-y-2">
+                    <h3 className="detail-label text-xs text-muted-foreground">Grading</h3>
+                    <div className="flex items-center justify-between gap-3">
+                        <GradeBadge
+                            rank={profile.rank}
+                            system={profile.gradingSystem}
+                            showBeltLabel
+                            className="min-w-0 px-3 py-1.5"
                         />
+                        <p className="detail-meta min-w-0 text-right text-sm text-muted-foreground">
+                            {gradingSystems[profile.gradingSystem].label}
+                        </p>
+                    </div>
+                </CardContent>
+            </Card>
+            <Card size="sm" className="detail-card">
+                <CardContent className="space-y-2">
+                    <h3 className="detail-label text-xs text-muted-foreground">Principal Dojo</h3>
+                    <p className="detail-body flex items-center gap-1.5 text-sm">
+                        <MapPin aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
                         {profile.principalDojo}
-                    </dd>
-                </div>
-                <div>
-                    <dt className="detail-label text-xs text-muted-foreground">Membership</dt>
-                    <dd
+                    </p>
+                </CardContent>
+            </Card>
+            <Card size="sm" className="detail-card">
+                <CardContent className="space-y-2">
+                    <h3 className="detail-label text-xs text-muted-foreground">Membership status</h3>
+                    <p
                         className={cn(
-                            "detail-status mt-1 inline-flex rounded-md px-2 py-0.5 text-xs font-medium",
+                            "detail-status inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium",
                             profile.membershipStatus === "Active"
                                 ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200"
                                 : "bg-muted text-muted-foreground",
                         )}
                     >
+                        <CreditCard aria-hidden="true" className="size-3.5" />
                         {profile.membershipStatus}
-                    </dd>
-                </div>
-            </dl>
-            <div className="border-t pt-4">
-                <StudentContactDetails profile={profile} />
-            </div>
-        </>
+                    </p>
+                </CardContent>
+            </Card>
+        </div>
+    );
+}
+
+function StudentInformationActions({ profile }: { profile: Profile }) {
+    return (
+        <div className="grid grid-cols-2 gap-2" aria-label="Contact and medical actions">
+            <Dialog>
+                <DialogTrigger
+                    render={
+                        <Button
+                            variant="outline"
+                            size="touch"
+                            className="h-auto min-w-0 gap-2 px-3 py-2 whitespace-normal"
+                        />
+                    }
+                >
+                    <Phone aria-hidden="true" className="size-4 shrink-0" />
+                    Contact
+                </DialogTrigger>
+                <DialogContent showCloseButton={false} className="student-detail-view">
+                    <DialogHeader className="flex-row items-center justify-between gap-4">
+                        <DialogTitle>Contact details</DialogTitle>
+                        <DialogClose
+                            render={
+                                <Button variant="ghost" size="icon-touch" className="-my-2 -mr-2" />
+                            }
+                        >
+                            <X aria-hidden="true" />
+                            <span className="sr-only">Close</span>
+                        </DialogClose>
+                    </DialogHeader>
+                    <StudentContactDetails profile={profile} />
+                </DialogContent>
+            </Dialog>
+            <Dialog>
+                <DialogTrigger
+                    render={
+                        <Button
+                            variant="outline"
+                            size="touch"
+                            className="h-auto min-w-0 gap-2 px-3 py-2 whitespace-normal"
+                        />
+                    }
+                >
+                    <HeartPulse aria-hidden="true" className="size-4 shrink-0" />
+                    <span className="min-w-0">Medical alerts</span>
+                    {profile.medicalAlerts.length > 0 && (
+                        <span className="detail-status shrink-0 rounded-md bg-amber-50 px-1.5 py-0.5 text-xs text-amber-950 dark:bg-amber-950/40 dark:text-amber-200">
+                            {profile.medicalAlerts.length}
+                        </span>
+                    )}
+                </DialogTrigger>
+                <DialogContent showCloseButton={false} className="student-detail-view">
+                    <DialogHeader className="flex-row items-center justify-between gap-4">
+                        <DialogTitle>Medical alerts</DialogTitle>
+                        <DialogClose
+                            render={
+                                <Button variant="ghost" size="icon-touch" className="-my-2 -mr-2" />
+                            }
+                        >
+                            <X aria-hidden="true" />
+                            <span className="sr-only">Close</span>
+                        </DialogClose>
+                    </DialogHeader>
+                    <MedicalAlertDetails alerts={profile.medicalAlerts} />
+                </DialogContent>
+            </Dialog>
+        </div>
     );
 }
 
@@ -1108,162 +1189,22 @@ function MobileStudentInformation({ profile }: { profile: Profile }) {
             <div className="detail-section-header">
                 <h2>Details</h2>
             </div>
-            <Card size="sm" className="detail-card">
-                <CardContent className="space-y-4">
-                    <div className="flex flex-wrap items-center gap-2">
-                        <GradeBadge
-                            rank={profile.rank}
-                            system={profile.gradingSystem}
-                            showBeltLabel
-                        />
-                        <p className="detail-body text-sm text-muted-foreground">
-                            · {gradingSystems[profile.gradingSystem].label}
-                        </p>
-                    </div>
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                            <p className="detail-label text-xs text-muted-foreground">
-                                Principal dojo
-                            </p>
-                            <p className="detail-body mt-1 flex items-center gap-1.5 text-sm">
-                                <MapPin
-                                    aria-hidden="true"
-                                    className="size-3.5 shrink-0 text-muted-foreground"
-                                />
-                                {profile.principalDojo}
-                            </p>
-                        </div>
-                        <span
-                            aria-label={`Membership status: ${profile.membershipStatus}`}
-                            className={cn(
-                                "detail-status inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium",
-                                profile.membershipStatus === "Active"
-                                    ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200"
-                                    : "bg-muted text-muted-foreground",
-                            )}
-                        >
-                            <CreditCard aria-hidden="true" className="size-3.5" />
-                            {profile.membershipStatus}
-                        </span>
-                    </div>
-                    <div className="flex flex-wrap gap-3">
-                        <Dialog>
-                            <DialogTrigger
-                                render={
-                                    <Button
-                                        variant="outline"
-                                        size="touch"
-                                        className="h-auto min-w-0 flex-1 basis-32 gap-2 px-3 py-2 whitespace-normal"
-                                    />
-                                }
-                            >
-                                <Phone aria-hidden="true" className="size-4" />
-                                Contact
-                            </DialogTrigger>
-                            <DialogContent
-                                showCloseButton={false}
-                                className="student-detail-view"
-                            >
-                                <DialogHeader className="flex-row items-center justify-between gap-4">
-                                    <DialogTitle>Contact details</DialogTitle>
-                                    <DialogClose
-                                        render={
-                                            <Button
-                                                variant="ghost"
-                                                size="icon-touch"
-                                                className="-my-2 -mr-2"
-                                            />
-                                        }
-                                    >
-                                        <X aria-hidden="true" />
-                                        <span className="sr-only">Close</span>
-                                    </DialogClose>
-                                </DialogHeader>
-                                <StudentContactDetails profile={profile} />
-                            </DialogContent>
-                        </Dialog>
-                        <Dialog>
-                            <DialogTrigger
-                                render={
-                                    <Button
-                                        variant="outline"
-                                        size="touch"
-                                        className="h-auto min-w-0 flex-1 basis-32 gap-2 px-3 py-2 whitespace-normal"
-                                    />
-                                }
-                            >
-                                <HeartPulse aria-hidden="true" className="size-4" />
-                                <span className="min-w-0">Medical alerts</span>
-                                {profile.medicalAlerts.length > 0 && (
-                                    <span className="detail-status shrink-0 rounded-md bg-amber-50 px-1.5 py-0.5 text-xs text-amber-950 dark:bg-amber-950/40 dark:text-amber-200">
-                                        {profile.medicalAlerts.length}
-                                    </span>
-                                )}
-                            </DialogTrigger>
-                            <DialogContent
-                                showCloseButton={false}
-                                className="student-detail-view"
-                            >
-                                <DialogHeader className="flex-row items-center justify-between gap-4">
-                                    <DialogTitle>Medical alerts</DialogTitle>
-                                    <DialogClose
-                                        render={
-                                            <Button
-                                                variant="ghost"
-                                                size="icon-touch"
-                                                className="-my-2 -mr-2"
-                                            />
-                                        }
-                                    >
-                                        <X aria-hidden="true" />
-                                        <span className="sr-only">Close</span>
-                                    </DialogClose>
-                                </DialogHeader>
-                                <MedicalAlertDetails alerts={profile.medicalAlerts} />
-                            </DialogContent>
-                        </Dialog>
-                    </div>
-                </CardContent>
-            </Card>
+            <StudentInformationCards profile={profile} />
+            <StudentInformationActions profile={profile} />
         </section>
     );
 }
 
 function StudentInformation({ profile }: { profile: Profile }) {
     return (
-        <Card size="sm" className="detail-card student-profile-card hidden gap-4 md:flex">
-            <CardHeader className="gap-2">
-                <CardTitle className="text-xl font-semibold group-data-[size=sm]/card:text-xl">
-                    <h1>{profile.name}</h1>
-                </CardTitle>
-                <p className="detail-meta text-sm text-muted-foreground">{profile.studentNumber}</p>
-                <div className="mt-2 space-y-1.5">
-                    <p className="detail-label text-xs text-muted-foreground">Current rank</p>
-                    <GradeBadge
-                        rank={profile.rank}
-                        system={profile.gradingSystem}
-                        showBeltLabel
-                        className="px-3 py-1.5"
-                    />
-                    <p className="detail-meta text-sm text-muted-foreground">
-                        {gradingSystems[profile.gradingSystem].label}
-                    </p>
-                </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-                <section
-                    className="space-y-2"
-                    aria-label="Medical alerts"
-                >
-                    <h3 className="flex items-center gap-1.5">
-                        <HeartPulse aria-hidden="true" className="size-3.5" />
-                        Medical alerts
-                    </h3>
-                    <MedicalAlertDetails alerts={profile.medicalAlerts} />
-                </section>
-                <StudentInformationDetails profile={profile} />
-            </CardContent>
-        </Card>
+        <section aria-label="Student details" className="hidden space-y-4 md:block">
+            <div>
+                <h1 className="text-xl font-semibold">{profile.name}</h1>
+                <p className="detail-meta mt-1 text-sm text-muted-foreground">{profile.studentNumber}</p>
+            </div>
+            <StudentInformationCards profile={profile} />
+            <StudentInformationActions profile={profile} />
+        </section>
     );
 }
 

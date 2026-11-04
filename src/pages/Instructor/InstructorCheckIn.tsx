@@ -148,7 +148,7 @@ export default function InstructorCheckIn() {
             data-check-in-kiosk={isKiosk}
             aria-label="Check-in"
             className={cn(
-                "flex min-h-0 flex-1 flex-col gap-3",
+                "flex min-h-0 flex-1 flex-col gap-4",
                 isKiosk &&
                 "fixed inset-0 z-50 h-dvh gap-0 overflow-hidden bg-zinc-950 text-white",
             )}
@@ -218,7 +218,7 @@ export default function InstructorCheckIn() {
             <div
                 className={cn(
                     "grid min-h-0 flex-1",
-                    !isKiosk && "gap-3 md:grid-cols-[minmax(0,7fr)_minmax(14rem,3fr)]",
+                    !isKiosk && "gap-4 md:grid-cols-[minmax(0,7fr)_minmax(14rem,3fr)]",
                 )}
             >
                 {/* Keep one scanner mounted so changing modes preserves the camera stream. */}

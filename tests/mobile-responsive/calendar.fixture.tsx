@@ -1,10 +1,12 @@
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Route, Routes } from 'react-router'
-// Browser-only fixture: exercises the real calendar/shell with a local auth
+// Browser-only fixture: exercises the real instructor pages/shell with a local auth
 // context. This entry point is outside index.html and the production bundle.
 import { AuthContext } from '../../src/lib/auth-context'
 import InstructorLayout from '../../src/layouts/InstructorLayout'
 import InstructorDashboard from '../../src/pages/Instructor/InstructorDashboard'
+import InstructorStudents from '../../src/pages/Instructor/InstructorStudents'
+import InstructorStudentDetails from '../../src/pages/Instructor/InstructorStudentDetails'
 import RootLayout from '../../src/layouts/RootLayout'
 import type { Session } from '@supabase/supabase-js'
 import type { UserRole } from '../../src/lib/auth'
@@ -17,4 +19,4 @@ window.Date = new Proxy(NativeDate, {
 })
 const requestedRole = new URLSearchParams(location.search).get('fixtureRole')
 const role: UserRole | 'guest' = requestedRole === 'student' || requestedRole === 'administrator' || requestedRole === 'guest' ? requestedRole : 'instructor'
-createRoot(document.getElementById('root')!).render(<AuthContext.Provider value={{session:role === 'guest' ? null : { user: { id: 'audit' } } as Session,profile:role === 'guest' ? null : {id:'audit',first_name:'Test',last_name:role,email:'test@example.com',role,created_at:''},loading:false,error:null,reloadProfile:()=>{},signOut:async()=>{}}}><BrowserRouter><Routes><Route element={<InstructorLayout />}><Route path="/instructor/calendar" element={<InstructorDashboard />} /><Route path="/instructor/dashboard" element={<InstructorDashboard />} /></Route><Route element={<RootLayout />}><Route path="*" element={<p>Navigation fixture page</p>} /></Route></Routes><FloatingChatbot /></BrowserRouter></AuthContext.Provider>)
+createRoot(document.getElementById('root')!).render(<AuthContext.Provider value={{session:role === 'guest' ? null : { user: { id: 'audit' } } as Session,profile:role === 'guest' ? null : {id:'audit',first_name:'Test',last_name:role,email:'test@example.com',role,created_at:''},loading:false,error:null,reloadProfile:()=>{},signOut:async()=>{}}}><BrowserRouter><Routes><Route element={<InstructorLayout />}><Route path="/instructor/calendar" element={<InstructorDashboard />} /><Route path="/instructor/dashboard" element={<InstructorDashboard />} /><Route path="/instructor/students" element={<InstructorStudents />} /><Route path="/instructor/students/:studentId" element={<InstructorStudentDetails />} /></Route><Route element={<RootLayout />}><Route path="*" element={<p>Navigation fixture page</p>} /></Route></Routes><FloatingChatbot /></BrowserRouter></AuthContext.Provider>)
