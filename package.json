@@ -10,6 +10,7 @@
     "check:functions": "deno check --no-lock supabase/functions/create-checkout-session/index.ts supabase/functions/stripe-webhook/index.ts supabase/functions/create-instructor/index.ts supabase/functions/send-grading-invitation/index.ts supabase/functions/create-grading-checkout/index.ts",
     "test:functions": "deno test --no-lock --allow-env supabase/functions/tests/",
     "seed:admin": "node --env-file=.env scripts/seed-admin.mjs",
+    "seed:instructor-calendar": "node --env-file=.env scripts/seed-instructor-calendar.mjs",
     "test:auth-db": "node --test tests/auth-db.test.mjs",
     "test:auth-seed": "node --test tests/seed-admin.test.mjs"
   },
