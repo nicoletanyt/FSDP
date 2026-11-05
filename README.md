@@ -68,6 +68,10 @@ server secrets with `VITE_`.
   dashboard: `/admin`, including instructor account creation.
 - Instructor passwords are generated server-side and displayed to the creating
   administrator after success. Save them then; they are not saved to browser storage.
+- After the instructor-availability migration is applied, trusted instructor
+  profile creation also inserts a linked `public.instructors` row (`user_id`
+  references the account). Existing unlinked instructors can open their calendar;
+  their first successful availability save creates the missing linked row.
 - Sessions persist automatically. Roles come from `public.users`; browser clients
   cannot write profiles or assign privileged roles. Passwords stay in Supabase Auth.
 

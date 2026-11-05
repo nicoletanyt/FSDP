@@ -184,7 +184,7 @@ test('calendar projections always use Singapore, including midnight and year bou
 })
 
 // Exercise real Supabase/PostgREST serialization, not an imitation query builder.
-function httpClient(handler) {
+function httpClient(handler, { instructorRecord = instructor } = {}) {
   const requests = []
   const client = createClient('https://instructor-tests.supabase.co', 'offline-publishable-key', {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
@@ -193,7 +193,7 @@ function httpClient(handler) {
       requests.push(request)
       const url = new URL(request.url)
       if (url.pathname === '/rest/v1/users') return Response.json({ id: userId, role: 'instructor' })
-      if (url.pathname === '/rest/v1/instructors') return Response.json(instructor)
+      if (url.pathname === '/rest/v1/instructors') return Response.json(instructorRecord)
       return handler(request, url)
     } },
   })
@@ -383,4 +383,51 @@ test('requests cancel before dispatch or during fetch without becoming an empty 
     throw new DOMException('Request aborted', 'AbortError')
   })
   await assert.rejects(live.api.getStudents({ signal: during.signal }), { code: 'cancelled' })
+})
+
+test('unlinked instructor accounts receive an empty personal calendar and can read the class catalogue', async () => {
+  const { api, requests } = httpClient(async (_request, url) => {
+    assert.equal(url.pathname, '/rest/v1/class_types')
+    return responsePage([{ id: 'database-class', label: 'Published class', description: '' }])
+  }, { instructorRecord: null })
+  const calendar = await api.getCalendar({ from: '2026-11-04T00:00:00+08:00', to: '2026-11-05T00:00:00+08:00' })
+  assert.deepEqual(calendar, page([]))
+  assert.deepEqual(await api.getAvailability({ from: '2026-11-04', to: '2026-11-05' }), page([]))
+  assert.equal(await api.getEvent(eventId), null)
+  assert.equal((await api.getClassTypes())[0].label, 'Published class')
+  assert.ok(requests.every(request => request.method === 'GET'))
+  assert.ok(!requests.some(request => /\/events|\/instructor_availability/.test(new URL(request.url).pathname)))
+  await assert.rejects(api.getCurrentInstructor(), { code: 'instructor_not_found' })
+})
+
+test('availability creation sends only the authenticated-account fence and slot fields, including for unlinked accounts', async () => {
+  const input = { date: '2030-01-02', startTime: '08:30', endTime: '09:30' }
+  const { api, requests } = httpClient(async (request, url) => {
+    assert.equal(url.pathname, '/rest/v1/rpc/create_instructor_availability')
+    assert.equal(request.method, 'POST')
+    assert.deepEqual(await request.json(), { expected_user: userId, slot_date: input.date, slot_start: input.startTime, slot_end: input.endTime })
+    return Response.json({ id: eventId, instructor_id: instructorId, date: input.date, start_time: '08:30:00', end_time: '09:30:00' })
+  }, { instructorRecord: null })
+  const saved = await api.createAvailability(input)
+  assert.equal(saved.instructor_id, instructorId)
+  assert.notEqual(saved.instructor_id, userId)
+  assert.ok(!requests.some(request => new URL(request.url).pathname === '/rest/v1/instructors'))
+  const denied = createInstructorApi(fixtureClient({ profile: { id: userId, role: 'student' } }))
+  await assert.rejects(denied.createAvailability(input), { code: 'forbidden' })
+})
+
+test('availability validation and conflict failures are explicit and never return a fake saved slot', async () => {
+  const input = { date: '2030-01-02', startTime: '08:30', endTime: '09:30' }
+  for (const [code, expected] of [['PAV01', 'conflict'], ['PAV02', 'conflict'], ['PAV03', 'invalid_request'], ['PAV04', 'instructor_not_found']]) {
+    const { api } = httpClient(async () => Response.json({ code, message: 'private SQL detail' }, { status: 400 }))
+    await assert.rejects(api.createAvailability(input), error => error.code === expected && !error.message.includes('private SQL detail'))
+  }
+  const setup = httpClient(async () => assert.fail('Invalid input must not reach the server'))
+  for (const times of [{ startTime: '07:30', endTime: '08:30' }, { startTime: '09:00', endTime: '09:00' }, { startTime: '09:00', endTime: 'bad' }]) {
+    await assert.rejects(setup.api.createAvailability({ ...input, ...times }), { code: 'invalid_request' })
+  }
+  assert.equal(setup.requests.length, 0)
+  const networkFailure = httpClient(async () => { throw new Error('Network unavailable') })
+  await assert.rejects(networkFailure.api.createAvailability(input), error =>
+    error.code === 'request_failed' && error.message === 'Unable to save your availability. Please try again.')
 })

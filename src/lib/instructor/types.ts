@@ -217,6 +217,12 @@ export interface InstructorAvailabilityRow {
   end_time: TimeOnly
 }
 
+export interface AvailabilityInput {
+  date: DateOnly
+  startTime: TimeOnly
+  endTime: TimeOnly
+}
+
 // Includes the project owner's live DDL additions, documented in the schema.
 export interface GradingEmailSendRow {
   id: string

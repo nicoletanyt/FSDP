@@ -5,7 +5,7 @@ import { mockAvailability, dateInputValue } from '../../src/lib/instructor-avail
 import { toSingaporeDateTime } from '../../src/lib/instructor/adapters'
 import { InstructorDataError } from '../../src/lib/instructor/errors'
 import type { InstructorApi } from '../../src/lib/instructor/calendar-queries'
-import type { CalendarEntry, CentreRow, EventId, Page, PageOptions, RosterEntry, StudentId, InstructorId } from '../../src/lib/instructor/types'
+import type { CalendarEntry, CentreRow, EventId, Page, PageOptions, RosterEntry, StudentId, InstructorId, InstructorAvailabilityRow } from '../../src/lib/instructor/types'
 
 const uuid = (number: number) => `00000000-0000-4000-8000-${String(number).padStart(12, '0')}`
 const instructorId = uuid(1) as InstructorId
@@ -53,6 +53,8 @@ export function createCalendarFixtureApi(account = 'audit'): InstructorApi {
   const mode = new URLSearchParams(location.search).get('fixtureData')
   let calendarFailed = false
   let rosterFailed = false
+  let availabilityFailed = false
+  const savedSlots: InstructorAvailabilityRow[] = []
   const unsupported = async (): Promise<never> => { throw new Error('Unexpected fixture API operation') }
   return {
     getCurrentInstructor: unsupported, getReferenceData: unsupported, getStudents: unsupported,
@@ -67,7 +69,7 @@ export function createCalendarFixtureApi(account = 'audit'): InstructorApi {
       }
       if (mode === 'loading') await new Promise(resolve => setTimeout(resolve, 2000))
       if (mode === 'race') await new Promise(resolve => setTimeout(resolve, options.from.includes('11-27') ? 1200 : 20))
-      if (mode === 'empty') return page([], options)
+      if (mode === 'empty' || mode === 'unlinked') return page([], options)
       const from = parseCalendarDate(toSingaporeDateTime(options.from).date)!
       const to = parseCalendarDate(toSingaporeDateTime(options.to).date)!
       const entries: CalendarEntry[] = []
@@ -82,15 +84,29 @@ export function createCalendarFixtureApi(account = 'audit'): InstructorApi {
       return page(entries, options)
     },
     async getEvent(id) {
-      if (mode === 'empty' || account !== 'audit') return null
+      if (mode === 'empty' || mode === 'unlinked' || account !== 'audit') return null
       return findEvent(id)
     },
     async getAvailability(options) {
-      const slots = mode === 'empty' || account !== 'audit' ? [] : mockAvailability(today).map((slot, index) => ({
+      const initialSlots = mode === 'empty' || mode === 'unlinked' || account !== 'audit' ? [] : mockAvailability(today).map((slot, index) => ({
         id: uuid(50 + index), instructor_id: instructorId,
         date: dateInputValue(slot.date), start_time: `${slot.startTime}:00`, end_time: `${slot.endTime}:00`,
-      })).filter(slot => slot.date >= options.from && slot.date < options.to)
+      }))
+      const slots = [...initialSlots, ...savedSlots].filter(slot => slot.date >= options.from && slot.date < options.to)
       return page(slots, options)
+    },
+    async createAvailability(input) {
+      await new Promise(resolve => setTimeout(resolve, 150))
+      if (mode === 'availability-error' && !availabilityFailed) {
+        availabilityFailed = true
+        throw new InstructorDataError('request_failed', 'Availability could not be saved.')
+      }
+      const existing = savedSlots.find(slot => slot.date === input.date && slot.start_time === `${input.startTime}:00` && slot.end_time === `${input.endTime}:00`)
+      if (existing) return existing
+      const saved = { id: uuid(500 + savedSlots.length), instructor_id: instructorId, date: input.date,
+        start_time: `${input.startTime}:00`, end_time: `${input.endTime}:00` }
+      savedSlots.push(saved)
+      return saved
     },
     async getRoster(id, options = {}) {
       if (mode === 'roster-error' && !rosterFailed) {

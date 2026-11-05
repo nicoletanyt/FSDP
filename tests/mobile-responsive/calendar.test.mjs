@@ -227,7 +227,7 @@ test('mobile instructor main uses 24px padding, overlays use 16px insets, and ro
         });
         assert.deepEqual(result.main, ['24px', '24px', '24px', '24px']);
         for (const padding of [result.legend, result.drawerBody, result.identityPadding]) assert.deepEqual(padding, ['16px', '16px', '16px', '16px']);
-        assert.equal(result.addDisabled, true);
+        assert.equal(result.addDisabled, false);
         assert.equal(result.aligned, true);
         assert.equal(result.fullName, true);
         assert.equal(result.overflow, false);
@@ -330,7 +330,7 @@ test('month selection stays in month, week-strip paging and day swipes keep date
     assert.equal(result.dialog, false);
 });
 
-test('the second day opens its own UUID class and availability mutations remain disabled', async () => {
+test('the second day opens its own UUID class and saves availability on the selected day', async () => {
     const result = await inCalendar(320, '/instructor/calendar?view=week&date=2026-11-27', async (w, wait) => {
         const d = w.document;
         const second = d.querySelector('[data-mobile-timeline-day="2026-11-28"]');
@@ -341,15 +341,20 @@ test('the second day opens its own UUID class and availability mutations remain 
         const classTitle = drawer.textContent;
         drawer.querySelector('[data-slot="drawer-header"] button').click(); await wait(500);
         // Selecting the second day's class advances the shared selected date.
+        d.querySelector('[data-mobile-timeline-day="2026-11-28"] [data-mobile-free-slot]:not(:disabled)').click(); await wait();
+        const inputDate = d.getElementById('availability-date').value;
+        d.querySelector('[data-slot="dialog-content"] form').requestSubmit(); await wait(700);
         return { selectedClass, classTitle,
             uuid,
-            freeSlotsDisabled: [...d.querySelectorAll('[data-mobile-free-slot]')].every(button => button.disabled),
+            inputDate,
+            saved: !!d.querySelector('[data-mobile-timeline-day="2026-11-28"] [data-mobile-event][aria-label^="Available"]'),
             dialog: !!d.querySelector('[data-slot="dialog-content"]') };
     });
     assert.match(result.selectedClass, /date=2026-11-28/);
     assert.match(result.classTitle, /Weapons/);
     assert.match(result.uuid, /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/);
-    assert.equal(result.freeSlotsDisabled, true);
+    assert.equal(result.inputDate, '2026-11-28');
+    assert.equal(result.saved, true);
     assert.equal(result.dialog, false);
 });
 
@@ -555,6 +560,70 @@ test('account changes clear the previous calendar and selected roster before the
     assert.equal(result.hadRoster, true);
     assert.equal(result.pending.roster, 0);
     assert.equal(result.pending.stale, false);
+    assert.ok(result.events.length > 0);
+    assert.ok(result.events.every(name => name.includes('Replacement account class')));
+});
+
+test('unlinked instructors keep a navigable calendar and can save availability once', async () => {
+    for (const width of [320, 1280]) {
+        const result = await inCalendar(width, '/instructor/calendar?view=day&date=2026-11-27&fixtureData=unlinked', async (w, wait) => {
+            const d = w.document;
+            const hasCalendar = !!d.querySelector('[data-mobile-calendar], [aria-label="Daily hourly timeline"]');
+            const add = [...d.querySelectorAll('button')].find(button => button.textContent.trim() === 'Add Availability');
+            const enabled = !add.disabled;
+            add.click(); await wait();
+            const form = d.querySelector('[data-slot="dialog-content"] form');
+            const date = d.getElementById('availability-date').value;
+            form.requestSubmit(); form.requestSubmit(); await wait(50);
+            const pending = form.getAttribute('aria-busy') === 'true' && form.querySelector('button[type="submit"]').disabled;
+            await wait(700);
+            return { hasCalendar, enabled, date, pending,
+                saved: d.querySelectorAll('button[aria-label^="Available,"]').length,
+                closed: !d.querySelector('[data-slot="dialog-content"]'),
+                errors: [...d.querySelectorAll('main [role="alert"]')].map(element => element.textContent) };
+        });
+        assert.equal(result.hasCalendar, true);
+        assert.equal(result.enabled, true);
+        assert.equal(result.date, '2026-11-27');
+        assert.equal(result.pending, true);
+        assert.equal(result.saved, 1);
+        assert.equal(result.closed, true);
+        assert.deepEqual(result.errors, []);
+    }
+});
+
+test('failed availability saves keep the draft for retry and never show a locally saved slot', async () => {
+    const result = await inCalendar(390, '/instructor/calendar?view=day&date=2026-11-27&fixtureData=availability-error', async (w, wait) => {
+        const d = w.document;
+        [...d.querySelectorAll('button')].find(button => button.textContent.trim() === 'Add Availability').click(); await wait();
+        const before = [d.getElementById('availability-date').value, d.getElementById('availability-start').value, d.getElementById('availability-end').value];
+        d.querySelector('[data-slot="dialog-content"] form').requestSubmit(); await wait(400);
+        const errorMessage = d.querySelector('[data-slot="dialog-content"] [role="alert"]')?.textContent;
+        const after = [d.getElementById('availability-date').value, d.getElementById('availability-start').value, d.getElementById('availability-end').value];
+        const falselySaved = d.querySelectorAll('button[aria-label^="Available,"]').length;
+        d.querySelector('[data-slot="dialog-content"] form').requestSubmit(); await wait(700);
+        return { before, after, errorMessage, falselySaved, saved: d.querySelectorAll('button[aria-label^="Available,"]').length };
+    });
+    assert.deepEqual(result.after, result.before);
+    assert.match(result.errorMessage, /Availability could not be saved/);
+    assert.equal(result.falselySaved, 0);
+    assert.equal(result.saved, 1);
+});
+
+test('an old availability response cannot navigate or populate the replacement account', async () => {
+    const result = await inCalendar(390, '/instructor/calendar?view=day&date=2026-11-27', async (w, wait) => {
+        const d = w.document;
+        [...d.querySelectorAll('button')].find(button => button.textContent.trim() === 'Add Availability').click(); await wait();
+        d.querySelector('[data-slot="dialog-content"] form').requestSubmit();
+        w.switchInstructorFixture(); await wait(50);
+        d.querySelector('[aria-label="Next day"]').click(); await wait(1100);
+        return { date: w.location.search, slots: d.querySelectorAll('button[aria-label^="Available,"]').length,
+            dialog: !!d.querySelector('[data-slot="dialog-content"]'),
+            events: [...d.querySelectorAll('[data-mobile-event]')].map(event => event.textContent) };
+    });
+    assert.match(result.date, /date=2026-11-28/);
+    assert.equal(result.slots, 0);
+    assert.equal(result.dialog, false);
     assert.ok(result.events.length > 0);
     assert.ok(result.events.every(name => name.includes('Replacement account class')));
 });

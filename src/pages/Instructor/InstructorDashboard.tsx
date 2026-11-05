@@ -22,7 +22,7 @@ import { useInstructorQuery } from "@/hooks/use-instructor-data";
 import { useInstructorApi } from "@/lib/instructor/data-context";
 import { parseEntityId } from "@/lib/instructor/adapters";
 import { loadCalendarRange } from "@/lib/instructor/calendar-queries";
-import { calendarClassStyle, calendarEventsForDate, calendarRange, rosterSizeLabel, singaporeClock, toCalendarViewEvent } from "@/lib/instructor/calendar-view";
+import { calendarClassStyle, calendarDateValue, calendarEventsForDate, calendarRange, rosterSizeLabel, singaporeClock, toCalendarViewEvent } from "@/lib/instructor/calendar-view";
 import type { CalendarEventsForDate, CalendarViewEvent as CalendarEvent } from "@/lib/instructor/calendar-view";
 import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
 import { Drawer, DrawerBody, DrawerClose, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
@@ -50,6 +50,7 @@ import {
     TooltipTrigger,
 } from "@/components/ui/tooltip";
 import type { AvailabilityRange, AvailabilitySlot } from "@/lib/instructor-availability";
+import { availabilityError, minutesTime } from "@/lib/instructor-availability";
 import {
     addDays,
     addMonths,
@@ -506,6 +507,8 @@ function CalendarMonth({
 
 export default function InstructorDashboard() {
     const api = useInstructorApi();
+    const active = useRef(true);
+    useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
     const isDesktop = useMediaQuery("(min-width: 1024px)");
     const [searchParams, setSearchParams] = useSearchParams();
     const [weekOverview, setWeekOverview] = useState(false);
@@ -592,6 +595,39 @@ export default function InstructorDashboard() {
         updateSelection(slot.date);
         setSelectedAvailabilityId(slot.id);
         setAvailabilityDialog({ range: slot, editingId: slot.id });
+    }
+
+    function selectRange(range: AvailabilityRange) {
+        updateSelection(range.date);
+        setAvailabilityDialog({ range });
+    }
+
+    function addAvailability() {
+        const current = singaporeClock();
+        const currentDay = new Date(current.getFullYear(), current.getMonth(), current.getDate());
+        let date = selectedDate < currentDay ? currentDay : selectedDate;
+        let start = dateKey(date) === dateKey(current)
+            ? Math.max(8 * 60, (Math.floor((current.getHours() * 60 + current.getMinutes()) / 30) + 1) * 30) : 8 * 60;
+        for (let attempt = 0; attempt < 56; attempt++) {
+            if (start >= 22 * 60) { date = addDays(date, 1); start = 8 * 60; }
+            const range = { date, startTime: minutesTime(start), endTime: minutesTime(start + 30) };
+            if (!availabilityError(range, availability, undefined, current, getEvents(date).filter(event => event.status !== "cancelled"))) {
+                selectRange(range);
+                return;
+            }
+            start += 30;
+        }
+        selectRange({ date: addDays(date, 1), startTime: "08:00", endTime: "08:30" });
+    }
+
+    async function saveAvailability(range: AvailabilityRange) {
+        const saved = await api.createAvailability({ date: calendarDateValue(range.date),
+            startTime: range.startTime, endTime: range.endTime });
+        if (!active.current) return;
+        updateSelection(range.date);
+        setSelectedAvailabilityId(saved.id);
+        setAvailabilityDialog(null);
+        calendar.retry();
     }
 
     function navigateDate(direction: number) {
@@ -711,6 +747,7 @@ export default function InstructorDashboard() {
                 date={selectedDate} now={now} view={mobileList ? "list" : view === "week" ? "multi-day" : view} slots={availability} focusRequest={timelineFocusRequest}
                 getEvents={getEvents} classCatalogue={calendar.data?.classTypes ?? []} catalogueStatus={calendarStatus} content={calendarStatus ?? selectionStatus}
                 onSelectDate={selectDay} onSelectClass={calendarProps.onToggleClass} onSelectAvailability={selectAvailability}
+                onAddAvailability={addAvailability} onSelectRange={selectRange}
                 onToday={() => { const current = singaporeClock(); setNow(current); updateSelection(new Date(current.getFullYear(), current.getMonth(), current.getDate())); setTimelineFocusRequest(value => value + 1); }}
                 onChangeView={(mode: MobileCalendarView) => { setMobileList(mode === "list"); if (mode !== "list") changeView(mode === "multi-day" ? "week" : mode); }}
             /> : <>
@@ -769,7 +806,7 @@ export default function InstructorDashboard() {
                         </h2>
                     </div>
                     <div className="grid w-full grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-2 sm:flex sm:flex-wrap sm:gap-3 lg:w-auto">
-                        <Button variant="outline" disabled title="Availability is read-only during this phase" className="col-span-full h-11 w-full gap-2 px-4 sm:w-auto lg:h-10">
+                        <Button variant="outline" onClick={addAvailability} className="col-span-full h-11 w-full gap-2 px-4 sm:w-auto lg:h-10">
                             <Plus aria-hidden="true" />Add Availability
                         </Button>
                         <DropdownMenu>
@@ -876,6 +913,7 @@ export default function InstructorDashboard() {
                             selectedId={selectedAvailability?.id ?? expandedClassId}
                             onSelectClass={calendarProps.onToggleClass}
                             onSelectAvailability={selectAvailability}
+                            onSelectRange={selectRange}
                             onSelectDate={selectDay}
                             isDesktop={isDesktop}
                         />
@@ -930,8 +968,10 @@ export default function InstructorDashboard() {
                 initial={availabilityDialog.range}
                 editingId={availabilityDialog.editingId}
                 slots={availability}
+                getEvents={getEvents}
                 onClose={() => setAvailabilityDialog(null)}
-                readOnly
+                onSave={saveAvailability}
+                readOnly={Boolean(availabilityDialog.editingId)}
             />}
         </section>
     );

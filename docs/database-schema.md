@@ -59,6 +59,8 @@ Instructor record. Optionally linked to an auth user and used as the owner of cl
 | `created_at` | `timestamptz` | no       | `now()`             |
 | `updated_at` | `timestamptz` | no       | `now()`             |
 
+Provisioning: `20261104130000_instructor_availability.sql` creates a linked instructor row when a trusted `users` profile is inserted or assigned the `instructor` role. The existing administrator `create-instructor` function already uses that trusted Auth role path. Legacy unlinked accounts are linked on their first successful availability save. No row is claimed by matching an email or display name.
+
 ### `emergency_contacts`
 
 Emergency contact entries belonging to a student. One contact can be marked primary.
@@ -344,6 +346,8 @@ Instructor availability windows used for scheduling.
 | `date`          | `date` | no       | —                   |
 | `start_time`    | `time` | no       | —                   |
 | `end_time`      | `time` | no       | —                   |
+
+The `create_instructor_availability(expected_user, slot_date, slot_start, slot_end)` RPC derives ownership from the authenticated instructor account. It creates a missing linked instructor row and the availability in one transaction. `expected_user` is an account-switch check, not a caller-selected owner. Instructor writes enforce future times between 08:00 and 22:00 Singapore time, non-overlap with existing availability, and non-overlap with non-cancelled assigned events. Exact create retries return the existing slot. See `supabase/migrations/20261104130000_instructor_availability.sql`.
 
 ## Instructor read access
 

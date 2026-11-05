@@ -48,6 +48,7 @@ test('current-domain instructor reads, aggregates and report ownership (offline 
       -- Exercise the direct REST write guard under Supabase-style defaults.
       alter default privileges in schema public grant all on tables to anon, authenticated;
     `)
+
     for (const filename of [
       '20261026120000_auth_roles.sql', '20261026130000_sync_trusted_roles.sql',
       '20261030120000_copilot_records.sql', '20261030130000_gpt_names.sql',
@@ -111,6 +112,9 @@ test('current-domain instructor reads, aggregates and report ownership (offline 
           case when n<=2 then '${ids.instructorB}'::uuid else null end
         from generate_series(1,125) n;
     `)
+
+    // Seed above models accounts that predate automatic domain provisioning.
+    await db.exec(await readFile(new URL('../supabase/migrations/20261104130000_instructor_availability.sql', import.meta.url), 'utf8'))
 
     await suite.test('directory preserves authorized totals, facets, literal search and stable tie ordering', async () => {
       await asAccount(ids.userA, async () => {
@@ -268,6 +272,87 @@ test('current-domain instructor reads, aggregates and report ownership (offline 
       assert.equal(state.rows[0].relrowsecurity, true)
       await assert.rejects(asAccount(ids.userA, () => sql("insert into public.grade_requirements(grade_id,track) values ('unranked','children')")), { code: '42501' })
       await asAccount(ids.admin, () => sql("insert into public.grade_requirements(grade_id,track) values ('unranked','children')"))
+    })
+    await suite.test('trusted instructor creation and promotion provision one linked domain row atomically', async () => {
+      const newAccount = uuid(6)
+      await sql(`insert into auth.users(id,email,raw_user_meta_data,raw_app_meta_data)
+        values ($1,'new-instructor@example.test','{"first_name":"New","last_name":"Instructor"}','{"role":"instructor"}')`, [newAccount])
+      const linked = await sql('select * from public.instructors where user_id=$1', [newAccount])
+      assert.equal(linked.rows.length, 1)
+      assert.notEqual(linked.rows[0].id, newAccount)
+      assert.equal(linked.rows[0].first_name, 'New')
+      assert.equal(linked.rows[0].email, 'new-instructor@example.test')
+      await sql(`update auth.users set raw_app_meta_data='{"role":"instructor","other":"value"}' where id=$1`, [newAccount])
+      assert.equal((await sql('select * from public.instructors where user_id=$1', [newAccount])).rows.length, 1)
+
+      const signup = uuid(7)
+      await sql(`insert into auth.users(id,email,raw_user_meta_data) values ($1,'signup@example.test','{"role":"instructor"}')`, [signup])
+      assert.equal((await sql('select * from public.instructors where user_id=$1', [signup])).rows.length, 0)
+      await sql(`update auth.users set raw_app_meta_data='{"role":"instructor"}' where id=$1`, [signup])
+      assert.equal((await sql('select * from public.instructors where user_id=$1', [signup])).rows.length, 1)
+
+      const conflict = uuid(8)
+      await sql(`insert into public.instructors(first_name,last_name,email) values ('Legacy','Record','conflict@example.test')`)
+      await assert.rejects(sql(`insert into auth.users(id,email,raw_app_meta_data) values ($1,'conflict@example.test','{"role":"instructor"}')`, [conflict]), { code: '23505' })
+      assert.equal((await sql('select * from auth.users where id=$1', [conflict])).rows.length, 0)
+      assert.equal((await sql('select * from public.users where id=$1', [conflict])).rows.length, 0)
+    })
+
+    const futureDate = (await sql("select ((now() at time zone 'Asia/Singapore')::date + 10)::text as date")).rows[0].date
+    const createSlot = (account, start = '08:30', end = '09:30', date = futureDate) =>
+      rpc('create_instructor_availability', [account, date, start, end], ['uuid', 'date', 'time', 'time'])
+
+    await suite.test('first availability save links an existing account and retries return the same slot', async () => {
+      assert.equal((await sql('select * from public.instructors where user_id=$1', [ids.unlinked])).rows.length, 0)
+      await asAccount(ids.unlinked, async () => {
+        const saved = decoders.decodeAvailability(await createSlot(ids.unlinked))
+        const linked = await rpc('current_instructor_id')
+        assert.equal(saved.instructor_id, linked)
+        assert.notEqual(saved.instructor_id, ids.unlinked)
+        assert.equal((await createSlot(ids.unlinked)).id, saved.id)
+        await createSlot(ids.unlinked, '09:30', '10:00')
+        assert.equal((await sql('select * from public.instructor_availability')).rows.length, 2)
+      })
+    })
+
+    await suite.test('failed first saves roll back the link and never claim an instructor by email', async () => {
+      for (const [start, end, date] of [['07:00', '08:00', futureDate], ['09:00', '09:00', futureDate], ['21:00', '23:00', futureDate], ['08:00', '09:00', '2020-01-01']]) {
+        await assert.rejects(asAccount(ids.unlinked, () => createSlot(ids.unlinked, start, end, date)), { code: 'PAV03' })
+        assert.equal((await sql('select * from public.instructors where user_id=$1', [ids.unlinked])).rows.length, 0)
+      }
+      await sql('insert into public.instructors(first_name,last_name,email) values ($1,$2,$3)', ['Existing', 'Unlinked', `${ids.unlinked}@example.test`])
+      try {
+        await assert.rejects(asAccount(ids.unlinked, () => createSlot(ids.unlinked)), { code: 'PAV04' })
+        const legacy = await sql('select user_id from public.instructors where email=$1', [`${ids.unlinked}@example.test`])
+        assert.equal(legacy.rows[0].user_id, null)
+      } finally {
+        await sql('delete from public.instructors where email=$1', [`${ids.unlinked}@example.test`])
+      }
+    })
+
+    await suite.test('availability writes enforce account, ownership and overlap rules on RPC and direct REST paths', async () => {
+      for (const account of [ids.userStudent, ids.admin]) await assert.rejects(asAccount(account, () => createSlot(account)), { code: '42501' })
+      await assert.rejects(asAccount(null, () => createSlot(ids.unlinked), 'anon'), { code: '42501' })
+      await assert.rejects(asAccount(ids.userA, () => createSlot(ids.userB)), { code: '42501' })
+      await asAccount(ids.userA, async () => {
+        const saved = await createSlot(ids.userA)
+        assert.equal(saved.instructor_id, ids.instructorA)
+      })
+      await assert.rejects(asAccount(ids.userA, async () => {
+        await createSlot(ids.userA)
+        await createSlot(ids.userA, '09:00', '10:00')
+      }), { code: 'PAV01' })
+      await assert.rejects(asAccount(ids.userA, () => sql(`insert into public.instructor_availability(instructor_id,date,start_time,end_time) values ($1,$2,'07:00','08:00')`, [ids.instructorA, futureDate])), { code: 'PAV03' })
+      await assert.rejects(asAccount(ids.userA, () => sql(`insert into public.instructor_availability(instructor_id,date,start_time,end_time) values ($1,$2,'08:00','09:00')`, [ids.instructorB, futureDate])), { code: '42501' })
+
+      const scheduled = uuid(3001)
+      await sql(`insert into public.events(id,event_type,centre_id,instructor_id,name,starts_at,ends_at)
+        values ($1,'class',$2,$3,'Scheduled event',($4::date+time '09:30') at time zone 'Asia/Singapore',($4::date+time '10:30') at time zone 'Asia/Singapore')`,
+      [scheduled, ids.centreA, ids.instructorA, futureDate])
+      await assert.rejects(asAccount(ids.userA, () => createSlot(ids.userA, '09:00', '10:00')), { code: 'PAV02' })
+      await asAccount(ids.userA, () => createSlot(ids.userA, '08:30', '09:30'))
+      await sql("update public.events set status='cancelled' where id=$1", [scheduled])
+      await asAccount(ids.userA, () => createSlot(ids.userA, '09:00', '10:00'))
     })
   } finally {
     await db.close()

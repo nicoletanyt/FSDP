@@ -14,8 +14,10 @@ import { createInstructorApi } from '@/lib/instructor/api'
 const instructorApi = createInstructorApi(supabase)
 ```
 
-Every API operation resolves the signed-in account through `users.role` and
-`instructors.user_id`. Identity is not cached across account changes. UUID event,
+API operations verify the signed-in account through `users.role`. Member-data
+reads require a linked `instructors.user_id`; calendar/availability reads return
+empty personal results when the link is absent, and the class catalogue remains
+available. Identity is not cached across account changes. UUID event,
 student, instructor and auth IDs remain distinct types. Runtime decoders validate
 the returned rows and joins; missing records are nullable, failed queries are
 errors, and malformed responses never become successful empty lists.
@@ -27,9 +29,9 @@ errors, and malformed responses never become successful empty lists.
 | `getCurrentInstructor` | Auth user, own `users` profile, linked `instructors` record |
 | `getClassTypes` | Calendar-only class catalogue, without loading grading reference data |
 | `getReferenceData` | Centres, grades, tracks, requirements, syllabus and class types; follows all pages even when the server caps responses |
-| `getCalendar` | Assigned events overlapping `[from, to)`, subtype data, centre and roster count |
+| `getCalendar` | Assigned events overlapping `[from, to)`, subtype data, centre and roster count; empty when unlinked |
 | `getEvent` | Assigned event by its UUID; returns null if absent or not assigned |
-| `getAvailability` | Own availability dates within `[from, to)` |
+| `getAvailability` | Own availability dates within `[from, to)`; empty when unlinked |
 | `getStudents` | `instructor_student_directory` RPC; literal name/member-number search, grade/colour/centre filters, exact totals and full-scope facets |
 | `getStudentDetail` | Student, grade, home centre, primary-first emergency contacts and active medical alerts |
 | `getRoster` | Assigned event roster, paginated independently of the calendar |
@@ -122,8 +124,9 @@ retry and successful-empty states. UUID deep links are fetched independently of
 the visible date range; the legacy `class` query parameter also accepts UUIDs.
 Calendar return navigation preserves the real session/date query values.
 
-Attendance and availability mutations remain disabled until their mutation
-phases. Existing availability is viewable in its read-only dialog. Present/late
+Attendance mutations remain disabled until their mutation phase. Availability
+creation is enabled by the follow-up below; existing availability is viewable in
+its read-only dialog until editing/deletion is wired. Present/late
 roster entries use first check-in time (or recorded time when check-in is absent)
 and the five-minute grace period; a yellow Late badge represents late arrival.
 Explicit absent/excused/unmarked states are preserved. The original mock modules
@@ -142,3 +145,34 @@ assertion still expects `STU-0001 · Children`, whereas the directory currently
 renders `Children's grading`; its 1024px enlarged-text case reports horizontal
 overflow. Directory rendering and stylesheet changes belong to the directory
 phase. These failures are recorded separately from the passing calendar suite.
+
+## Calendar follow-up: unlinked accounts and availability creation
+
+Migration: `supabase/migrations/20261104130000_instructor_availability.sql`.
+
+- A signed-in instructor without a domain row still gets a navigable calendar,
+  class catalogue, and Add Availability. An empty personal calendar does not
+  broaden access to other instructors' events or rosters.
+- Trusted instructor profile creation/role assignment inserts an `instructors`
+  row with `user_id`, names and email. This runs within the database profile
+  transaction used by the existing admin account-creation flow. User-controlled
+  signup metadata cannot grant the instructor role.
+- `createAvailability` invokes `create_instructor_availability` with the slot
+  fields and an expected auth-user ID. The SQL function checks the actual auth
+  user and instructor role, and derives the domain owner itself. The expected ID
+  prevents an old form from being submitted under a replacement account.
+- A legacy unlinked account gets its domain row on the first successful save.
+  The link and availability commit together; invalid saves roll back both.
+  Conflicting legacy email records are not claimed automatically.
+- The owner row is locked to serialize availability writes. Instructor INSERT
+  and UPDATE triggers validate future Singapore times (08:00–22:00), existing
+  slots and non-cancelled assigned events, including direct REST writes. An exact
+  RPC retry returns the already-saved slot.
+- The form retains its draft and exposes save errors; pending submissions are
+  disabled. Only a successful server response closes it and refreshes calendar
+  reads. Account changes prevent an old response from navigating the new account.
+
+This pulls availability creation forward from the original mutation phase at the
+project owner's request. It adds no columns or tables. The migration must be
+applied before the new create flow is used; the existing `create-instructor` Edge
+Function does not need redeployment for the database trigger to take effect.

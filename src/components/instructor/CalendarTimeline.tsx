@@ -26,7 +26,10 @@ import {
     weekDates,
 } from "@/lib/instructor-calendar";
 import { rosterSizeLabel } from "@/lib/instructor/calendar-view";
-import type { CalendarEventsForDate, CalendarViewEvent as CalendarEvent } from "@/lib/instructor/calendar-view";
+import type {
+    CalendarEventsForDate,
+    CalendarViewEvent as CalendarEvent,
+} from "@/lib/instructor/calendar-view";
 import { cn } from "@/lib/utils";
 
 type TimelineItem = { id: string; startTime: string; endTime: string } & (
@@ -146,7 +149,13 @@ export default function CalendarTimeline({
 
     function selectRange(range: AvailabilityRange) {
         if (!onSelectRange) return;
-        const nextError = availabilityError(range, slots);
+        const nextError = availabilityError(
+            range,
+            slots,
+            undefined,
+            now,
+            getEvents(range.date).filter((event) => event.status !== "cancelled"),
+        );
         setError(nextError);
         if (!nextError) onSelectRange(range);
     }
@@ -167,14 +176,18 @@ export default function CalendarTimeline({
             aria-label={`${view === "day" ? "Daily" : "Weekly"} hourly timeline`}
             className="flex min-w-0 flex-col gap-2 lg:min-h-0 lg:flex-1"
         >
-            {!isDesktop && view === "week" && <CalendarDaySelector date={date} today={now} onSelectDate={onSelectDate} />}
+            {!isDesktop && view === "week" && (
+                <CalendarDaySelector
+                    date={date}
+                    today={now}
+                    onSelectDate={onSelectDate}
+                />
+            )}
             {error && (
                 <p role="alert" className="text-xs text-destructive">
                     {error}
                 </p>
             )}
-            {!days.some(day => getEvents(day).length || slots.some(slot => dateKey(slot.date) === dateKey(day))) &&
-                <p role="status" className="text-xs text-muted-foreground">No classes or availability scheduled.</p>}
             <div
                 ref={scrollRef}
                 className="h-[min(60dvh,36rem)] min-h-48 overflow-auto overscroll-contain rounded-xl border bg-card lg:h-auto lg:min-h-0 lg:flex-1"
@@ -297,8 +310,7 @@ export default function CalendarTimeline({
                                         )
                                             return;
                                         const minute = pointerMinute(event);
-                                        if (slotDateTime(day, minutesTime(minute)) <= new Date())
-                                            return;
+                                        if (slotDateTime(day, minutesTime(minute)) <= now) return;
                                         event.preventDefault();
                                         event.currentTarget.setPointerCapture(event.pointerId);
                                         const next = {

@@ -8,7 +8,7 @@ import {
 } from './decoders'
 import { InstructorDataError, toInstructorDataError } from './errors'
 import type {
-  AssessmentDetail, AssessmentKey, CalendarOptions, DirectoryOptions, EventId, HistoryOptions,
+  AssessmentDetail, AssessmentKey, AvailabilityInput, CalendarOptions, DirectoryOptions, EventId, HistoryOptions,
   InstructorIdentity, InstructorReferenceData, Page, PageOptions, StudentId,
 } from './types'
 
@@ -61,7 +61,7 @@ export async function requestInstructorData<T>(
 }
 
 export function createInstructorApi(client: InstructorClient) {
-  async function getCurrentInstructor(signal?: AbortSignal): Promise<InstructorIdentity> {
+  async function getInstructorAccount(signal?: AbortSignal) {
     try {
       signal?.throwIfAborted()
       const { data: { user }, error } = await client.auth.getUser()
@@ -77,7 +77,15 @@ export function createInstructorApi(client: InstructorClient) {
       if (profile?.id !== userId || profile.role !== 'instructor') {
         throw new InstructorDataError('forbidden', 'Instructor access is required.')
       }
+      return { userId }
+    } catch (error) {
+      throw toInstructorDataError(error, 'Unable to verify your instructor account. Please try again.')
+    }
+  }
 
+  async function findCurrentInstructor(signal?: AbortSignal): Promise<InstructorIdentity | null> {
+    try {
+      const { userId } = await getInstructorAccount(signal)
       const record = await requestInstructorData(
         () => cancellable(client.from('instructors')
           .select('id, user_id, first_name, last_name, email, created_at, updated_at')
@@ -85,10 +93,16 @@ export function createInstructorApi(client: InstructorClient) {
         'Unable to load your instructor record. Please try again.', signal,
       )
       // Never equate auth.users.id with instructors.id or match by email/name.
-      return resolveInstructorIdentity(userId, record === null ? null : parseInstructorRow(record))
+      return record === null ? null : resolveInstructorIdentity(userId, parseInstructorRow(record))
     } catch (error) {
       throw toInstructorDataError(error, 'Unable to load your instructor account. Please try again.')
     }
+  }
+
+  async function getCurrentInstructor(signal?: AbortSignal): Promise<InstructorIdentity> {
+    const identity = await findCurrentInstructor(signal)
+    if (!identity) throw new InstructorDataError('instructor_not_found', 'No instructor record is linked to your account.')
+    return identity
   }
 
   async function tablePage<T>(query: PromiseLike<TableResponse>, decode: (value: unknown) => T, options: PageOptions): Promise<Page<T>> {
@@ -118,10 +132,11 @@ export function createInstructorApi(client: InstructorClient) {
     return result
   }
 
-  async function rpc(name: string, parameters: Record<string, unknown>, signal?: AbortSignal) {
+  async function rpc(name: string, parameters: Record<string, unknown>, signal?: AbortSignal,
+    errorMessage = 'Unable to load instructor records. Please try again.') {
     const data = await requestInstructorData(
       () => cancellable(client.rpc(name, parameters).returns<unknown>(), signal),
-      'Unable to load instructor records. Please try again.', signal,
+      errorMessage, signal,
     )
     if (data === null) throw new InstructorDataError('invalid_data', 'The instructor data response is missing.')
     return data
@@ -169,7 +184,7 @@ export function createInstructorApi(client: InstructorClient) {
     getCurrentInstructor,
 
     async getClassTypes(signal?: AbortSignal) {
-      await getCurrentInstructor(signal)
+      await getInstructorAccount(signal)
       return allRows('class_types', ['id'], decodeClassType, signal)
     },
 
@@ -189,7 +204,8 @@ export function createInstructorApi(client: InstructorClient) {
     async getCalendar(options: CalendarOptions) {
       const page = pagination(options)
       dateRange(options.from, options.to, true)
-      const identity = await getCurrentInstructor(page.signal)
+      const identity = await findCurrentInstructor(page.signal)
+      if (!identity) return { items: [], total: 0, offset: page.offset, limit: page.limit }
       return tablePage(cancellable(client.from('events').select(calendarSelect, { count: 'exact' })
         .eq('instructor_id', identity.instructorId).lt('starts_at', options.to).gt('ends_at', options.from)
         .order('starts_at').order('id').range(page.offset, page.offset + page.limit - 1).returns<unknown[]>(), page.signal),
@@ -197,17 +213,33 @@ export function createInstructorApi(client: InstructorClient) {
     },
 
     async getEvent(id: EventId, signal?: AbortSignal) {
-      return getEventForInstructor(parseEntityId(id, 'event'), await getCurrentInstructor(signal), signal)
+      const eventId = parseEntityId(id, 'event')
+      const identity = await findCurrentInstructor(signal)
+      return identity ? getEventForInstructor(eventId, identity, signal) : null
     },
 
     async getAvailability(options: PageOptions & { from: string; to: string }) {
       const page = pagination(options)
       dateRange(options.from, options.to, false)
-      const identity = await getCurrentInstructor(page.signal)
+      const identity = await findCurrentInstructor(page.signal)
+      if (!identity) return { items: [], total: 0, offset: page.offset, limit: page.limit }
       return tablePage(cancellable(client.from('instructor_availability').select('*', { count: 'exact' })
         .eq('instructor_id', identity.instructorId).gte('date', options.from).lt('date', options.to)
         .order('date').order('start_time').order('id').range(page.offset, page.offset + page.limit - 1).returns<unknown[]>(), page.signal),
       decodeAvailability, page)
+    },
+
+    async createAvailability(input: AvailabilityInput) {
+      dateOnly(input.date)
+      const validTime = /^([01]\d|2[0-3]):[0-5]\d$/
+      if (!validTime.test(input.startTime) || !validTime.test(input.endTime)
+          || input.startTime < '08:00' || input.endTime > '22:00' || input.endTime <= input.startTime) {
+        invalidRequest('Choose a valid availability between 8 AM and 10 PM, Singapore time.')
+      }
+      const account = await getInstructorAccount()
+      return decodeAvailability(await rpc('create_instructor_availability', {
+        expected_user: account.userId, slot_date: input.date, slot_start: input.startTime, slot_end: input.endTime,
+      }, undefined, 'Unable to save your availability. Please try again.'))
     },
 
     async getStudents(options: DirectoryOptions = {}) {
