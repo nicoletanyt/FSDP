@@ -8,11 +8,11 @@ function Tabs({ className, orientation = "horizontal", ...props }: TabsPrimitive
 
 const tabsListVariants = cva(
   "group/tabs-list inline-flex w-fit items-center justify-center rounded-lg p-[3px] text-muted-foreground group-data-horizontal/tabs:h-8 group-data-vertical/tabs:h-fit group-data-vertical/tabs:flex-col data-[variant=line]:rounded-none",
-  { variants: { variant: { default: "bg-muted", line: "gap-1 bg-transparent" } }, defaultVariants: { variant: "default" } }
+  { variants: { variant: { default: "bg-muted", line: "gap-1 bg-transparent" }, touch: { true: "group-data-horizontal/tabs:h-12 lg:group-data-horizontal/tabs:h-8", false: "" } }, defaultVariants: { variant: "default", touch: false } }
 )
 
-function TabsList({ className, variant = "default", ...props }: TabsPrimitive.List.Props & VariantProps<typeof tabsListVariants>) {
-  return <TabsPrimitive.List data-slot="tabs-list" data-variant={variant} className={cn(tabsListVariants({ variant }), className)} {...props} />
+function TabsList({ className, variant = "default", touch = false, ...props }: TabsPrimitive.List.Props & VariantProps<typeof tabsListVariants>) {
+  return <TabsPrimitive.List data-slot="tabs-list" data-variant={variant} className={cn(tabsListVariants({ variant, touch }), className)} {...props} />
 }
 
 function TabsTrigger({ className, ...props }: TabsPrimitive.Tab.Props) {

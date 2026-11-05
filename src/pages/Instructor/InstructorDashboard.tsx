@@ -16,6 +16,11 @@ import ClassSessionDetails from "@/components/instructor/ClassSessionDetails";
 import DayClassDetails from "@/components/instructor/DayClassDetails";
 import SelectedClassIndicator from "@/components/instructor/SelectedClassIndicator";
 import CalendarTimeline from "@/components/instructor/CalendarTimeline";
+import CalendarDaySelector from "@/components/instructor/CalendarDaySelector";
+import { useMediaQuery } from "@/hooks/use-media-query";
+import { Drawer, DrawerBody, DrawerClose, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
+import MobileInstructorCalendar from "@/components/instructor/MobileInstructorCalendar";
+import type { MobileCalendarView } from "@/components/instructor/MobileInstructorCalendar";
 import {
     AvailabilityCard,
     AvailabilityDialog,
@@ -97,7 +102,7 @@ function EventCard({
             className={cn(
                 "gap-0 rounded-lg border py-0 shadow-none ring-0 transition-[border-color,box-shadow] duration-200 hover:border-foreground/25 has-focus-visible:ring-2 has-focus-visible:ring-ring",
                 style.card,
-                layout === "panel" && "h-full min-h-0",
+                layout === "panel" && "border-0 lg:h-full lg:min-h-0 lg:border",
                 expanded && (detailsInPanel
                     ? "relative z-10 border-primary ring-2 ring-primary ring-offset-2 ring-offset-background"
                     : "border-primary/40 ring-1 ring-primary/15"),
@@ -213,15 +218,7 @@ function CalendarDays({
     view: "day" | "week";
     expandSelectedDay: boolean;
 }) {
-    const selectedDateButton = useRef<HTMLButtonElement>(null);
-    const selectedKey = dateKey(date);
     const days = view === "day" ? [date] : weekDates(date);
-    useEffect(() => {
-        selectedDateButton.current?.scrollIntoView({
-            block: "nearest",
-            inline: "center",
-        });
-    }, [selectedKey, view]);
 
     return (
         <div
@@ -230,55 +227,14 @@ function CalendarDays({
                     ? "Daily class calendar"
                     : "Weekly class calendar"
             }
-            className="flex min-h-0 flex-1 flex-col gap-3"
+            className="flex flex-col gap-3 lg:min-h-0 lg:flex-1"
         >
             {view === "week" && (
-                <div
-                    role="group"
-                    aria-label="Select agenda day"
-                    className="flex shrink-0 gap-2 overflow-x-auto pb-1 lg:hidden"
-                >
-                    {days.map((day) => {
-                        const isSelected = dateKey(day) === selectedKey;
-                        const isToday = dateKey(day) === dateKey(today);
-                        return (
-                            <Button
-                                key={dateKey(day)}
-                                ref={
-                                    isSelected ? selectedDateButton : undefined
-                                }
-                                variant="outline"
-                                aria-pressed={isSelected}
-                                aria-current={isToday ? "date" : undefined}
-                                aria-label={`Select and expand ${day.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}`}
-                                onClick={() => onSelectDate(day)}
-                                className={cn(
-                                    "h-auto cursor-pointer flex-col gap-1 px-3 py-2 transition-colors duration-200",
-                                    isSelected && "bg-accent hover:bg-accent",
-                                )}
-                            >
-                                <span className="text-2xs font-normal">
-                                    {day.toLocaleDateString("en-GB", {
-                                        weekday: "short",
-                                    })}
-                                </span>
-                                <span
-                                    className={cn(
-                                        "rounded-full px-1.5 py-0.5 text-xs tabular-nums",
-                                        isToday &&
-                                        "bg-primary text-primary-foreground",
-                                    )}
-                                >
-                                    {fullDate(day)}
-                                </span>
-                            </Button>
-                        );
-                    })}
-                </div>
+                <CalendarDaySelector date={date} today={today} onSelectDate={onSelectDate} />
             )}
             <div
                 className={cn(
-                    "flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl lg:flex-row",
+                    "flex flex-col rounded-xl lg:min-h-0 lg:flex-1 lg:flex-row lg:overflow-hidden",
                     view === "week" && "border lg:divide-x",
                 )}
             >
@@ -353,7 +309,7 @@ function CalendarDays({
                             )}
                             <div
                                 className={cn(
-                                    "min-h-0 flex-1 overflow-y-auto",
+                                    "lg:min-h-0 lg:flex-1 lg:overflow-y-auto",
                                     view === "day"
                                         ? "grid auto-rows-max items-start gap-4 bg-muted/30 p-2 xl:grid-cols-2"
                                         : "space-y-3 p-3",
@@ -401,24 +357,47 @@ function CalendarMonth({
     selectedAvailabilityId,
     onSelectAvailability,
 }: CalendarProps) {
+    const isNarrow = useMediaQuery("(max-width: 639px)");
     const selectedDay = useRef<HTMLElement>(null);
     const selectedKey = dateKey(date);
     const days = monthDates(date);
     useEffect(() => {
+        if (isNarrow) return;
         selectedDay.current?.scrollIntoView({
             block: "nearest",
             inline: "nearest",
         });
-    }, [selectedKey]);
+    }, [selectedKey, isNarrow]);
+
+    if (isNarrow) {
+        const entries = days.filter(day => day.getMonth() === date.getMonth()).map(day => ({
+            day,
+            events: eventsForDate(day),
+            slots: availability.filter(slot => dateKey(slot.date) === dateKey(day)),
+        }));
+        const hasEntries = entries.some(group => group.events.length || group.slots.length);
+        return <section aria-label="Monthly class agenda" className="space-y-4">
+            {!hasEntries && <p className="rounded-xl border bg-card p-4 text-sm text-muted-foreground">No classes or availability this month. Select a date to view that day.</p>}
+            {entries.map(({ day, events, slots }) => <section key={dateKey(day)} className="space-y-2 rounded-xl border bg-card p-3">
+                <Button variant="ghost" onClick={() => onSelectDate(day)} aria-current={dateKey(day) === dateKey(today) ? "date" : undefined} className="min-h-11 w-full justify-start whitespace-normal text-left">
+                    {day.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}
+                </Button>
+                {[...events.map(event => ({ id: event.id, start: event.startTime, event, slot: null })), ...slots.map(slot => ({ id: slot.id, start: slot.startTime, event: null, slot }))]
+                    .sort((a, b) => a.start.localeCompare(b.start)).map(({ id, event, slot }) => event
+                        ? <EventCard key={id} event={event} detailsInPanel expanded={expandedClassId === id} onToggle={() => onToggleClass(event)} />
+                        : slot && <AvailabilityCard key={id} slot={slot} selected={selectedAvailabilityId === id} onSelect={() => onSelectAvailability(slot)} />)}
+            </section>)}
+        </section>;
+    }
 
     return (
         <div
             aria-label="Monthly class calendar"
-            className="flex min-h-0 min-w-0 flex-1 flex-col"
+            className="flex min-w-0 flex-col lg:min-h-0 lg:flex-1"
         >
             <div
                 aria-label="Month dates"
-                className="flex min-h-0 min-w-0 flex-col overflow-y-auto overscroll-contain rounded-xl border bg-card"
+                className="flex min-w-0 flex-col rounded-xl border bg-card lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain"
             >
                 <div className="sticky top-0 z-10 grid shrink-0 grid-cols-7 border-b bg-card">
                     {days.slice(0, 7).map((day) => (
@@ -459,7 +438,7 @@ function CalendarMonth({
                                         onSelectDate(day);
                                 }}
                                 className={cn(
-                                    "flex min-w-0 flex-col items-start gap-0.5 overflow-y-auto border-r border-b border-border/60 p-1 nth-[7n]:border-r-0 sm:p-1.5",
+                                    "flex min-w-0 flex-col items-start gap-0.5 border-r border-b border-border/60 p-1 nth-[7n]:border-r-0 sm:p-1.5 lg:overflow-y-auto",
                                     !isCurrentMonth &&
                                     "bg-muted/40 text-muted-foreground",
                                     isSelected &&
@@ -474,7 +453,7 @@ function CalendarMonth({
                                     aria-pressed={isSelected}
                                     onClick={() => onSelectDate(day)}
                                     className={cn(
-                                        "size-6 rounded-full text-2xs tabular-nums sm:size-7 sm:text-xs",
+                                        "size-11 rounded-full text-xs tabular-nums lg:size-7",
                                         isSelected &&
                                         "bg-primary/10 font-semibold text-primary",
                                         isToday &&
@@ -500,17 +479,17 @@ function CalendarMonth({
                                         }
                                         onClick={() => onToggleClass(event)}
                                         className={cn(
-                                            "h-auto min-h-5 w-full min-w-0 flex-col items-start gap-0 rounded border-0 px-1 py-0.5 text-left text-[11px] leading-tight xl:flex-row xl:items-center xl:gap-1",
+                                            "h-auto min-h-11 w-full min-w-0 flex-col items-start gap-0 rounded border-0 px-1 py-0.5 text-left text-xs leading-tight whitespace-normal lg:min-h-5 lg:text-[11px] xl:flex-row xl:items-center xl:gap-1",
                                             getEventStyle(event).card,
                                             expandedClassId === event.id &&
                                             "relative z-[1] pr-5 ring-2 ring-primary ring-offset-1 ring-offset-background",
                                         )}
                                     >
                                         {expandedClassId === event.id && <SelectedClassIndicator className="absolute top-0.5 right-0.5 size-3.5" />}
-                                        <span className="w-full min-w-0 truncate font-medium xl:w-auto xl:flex-1">
+                                        <span className="w-full min-w-0 break-words font-medium lg:truncate xl:w-auto xl:flex-1">
                                             {event.name}
                                         </span>
-                                        <span className="max-w-full shrink-0 truncate font-normal opacity-80">
+                                        <span className="max-w-full font-normal opacity-80 lg:shrink-0 lg:truncate">
                                             {formatTime(event.startTime)}
                                         </span>
                                     </Button>
@@ -528,11 +507,15 @@ function CalendarMonth({
 }
 
 export default function InstructorDashboard() {
+    const isDesktop = useMediaQuery("(min-width: 1024px)");
     const [searchParams, setSearchParams] = useSearchParams();
     const [weekOverview, setWeekOverview] = useState(false);
     const [displayMode, setDisplayMode] = useState<"timeline" | "list">("list");
     const [dayDisplayMode, setDayDisplayMode] = useState<"timeline" | "list">("timeline");
     const [timelineFocusRequest, setTimelineFocusRequest] = useState(0);
+    const [mobileList, setMobileList] = useState(false);
+    const classTriggerRef = useRef<HTMLElement | null>(null);
+    const lastSelectedSession = useRef<CalendarEvent | null>(null);
     const [now, setNow] = useState(() => new Date());
     useEffect(() => {
         const timer = window.setInterval(() => setNow(new Date()), 30_000);
@@ -556,6 +539,7 @@ export default function InstructorDashboard() {
         searchParams.get("session") ?? searchParams.get("class") ?? undefined,
     );
     const requestedSession = requestedEvent;
+    if (requestedSession) lastSelectedSession.current = requestedSession;
     const selectedDate =
         parseCalendarDate(searchParams.get("date")) ??
         requestedSession?.date ??
@@ -700,9 +684,11 @@ export default function InstructorDashboard() {
                 });
             } else if (nextView) {
                 event.preventDefault();
+                setMobileList(false);
                 changeView(nextView);
             } else if (key === "t" || key === "l") {
                 event.preventDefault();
+                setMobileList(key === "l");
                 if (view === "day") setDayDisplayMode(key === "t" ? "timeline" : "list");
                 else setDisplayMode(key === "t" ? "timeline" : "list");
                 if (view === "month") changeView("week");
@@ -728,11 +714,13 @@ export default function InstructorDashboard() {
         today,
         expandedClassId,
         onSelectDate: selectDay,
-        onToggleClass: (event) =>
+        onToggleClass: (event) => {
+            if (document.activeElement instanceof HTMLElement) classTriggerRef.current = document.activeElement;
             updateSelection(
                 event.date,
                 expandedClassId === event.id ? null : event.id,
-            ),
+            );
+        },
         availability,
         selectedAvailabilityId: selectedAvailability?.id ?? null,
         onSelectAvailability: selectAvailability,
@@ -743,15 +731,22 @@ export default function InstructorDashboard() {
     const showSidePanel = expandedClassId !== null;
 
     return (
-        <section className="flex min-h-0 flex-1 flex-col gap-4">
+        <section className="flex flex-col gap-4 lg:min-h-0 lg:flex-1">
+            {!isDesktop ? <MobileInstructorCalendar
+                date={selectedDate} now={now} view={mobileList ? "list" : view === "week" ? "multi-day" : view} slots={availability} focusRequest={timelineFocusRequest}
+                onSelectDate={selectDay} onSelectClass={calendarProps.onToggleClass} onSelectAvailability={selectAvailability} onSelectRange={selectRange}
+                onAddAvailability={addAvailability}
+                onToday={() => { const current = new Date(); setNow(current); updateSelection(new Date(current.getFullYear(), current.getMonth(), current.getDate())); setTimelineFocusRequest(value => value + 1); }}
+                onChangeView={(mode: MobileCalendarView) => { setMobileList(mode === "list"); if (mode !== "list") changeView(mode === "multi-day" ? "week" : mode); }}
+            /> : <>
             <header className="shrink-0">
-                <h1 className="text-3xl font-semibold tracking-tight">
+                <h1 className="text-2xl font-semibold tracking-tight lg:text-3xl">
                     Your calendar
                 </h1>
             </header>
-            <section className="flex min-h-0 flex-1 flex-col gap-4">
+            <section className="flex flex-col gap-4 lg:min-h-0 lg:flex-1">
                 <div className="flex shrink-0 flex-wrap items-center justify-between gap-4">
-                    <div className="flex min-w-0 flex-wrap items-center gap-4">
+                    <div className="flex min-w-0 w-full flex-wrap items-center gap-3 lg:w-auto lg:gap-4">
                         <div
                             role="group"
                             aria-label={`${view[0].toUpperCase()}${view.slice(1)} navigation`}
@@ -771,14 +766,14 @@ export default function InstructorDashboard() {
                                         ),
                                     );
                                 }}
-                                className="mr-1 h-10 px-4"
+                                className="mr-1 h-11 px-4 lg:h-10"
                             >
                                 Today
                             </Button>
                             <Button
                                 variant="ghost"
                                 size="icon-lg"
-                                className="size-10"
+                                className="size-11 lg:size-10"
                                 aria-label={`Previous ${view}`}
                                 onClick={() => navigateDate(-1)}
                             >
@@ -787,24 +782,24 @@ export default function InstructorDashboard() {
                             <Button
                                 variant="ghost"
                                 size="icon-lg"
-                                className="size-10"
+                                className="size-11 lg:size-10"
                                 aria-label={`Next ${view}`}
                                 onClick={() => navigateDate(1)}
                             >
                                 <ChevronRight aria-hidden="true" />
                             </Button>
                         </div>
-                        <h2 className="text-sm font-medium" aria-live="polite">
+                        <h2 className="w-full text-sm font-medium lg:w-auto" aria-live="polite">
                             {heading}
                         </h2>
                     </div>
-                    <div className="flex flex-wrap items-center gap-3">
-                        <Button variant="outline" onClick={addAvailability} className="h-10 gap-2 px-4">
+                    <div className="grid w-full grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-2 sm:flex sm:flex-wrap sm:gap-3 lg:w-auto">
+                        <Button variant="outline" onClick={addAvailability} className="col-span-full h-11 w-full gap-2 px-4 sm:w-auto lg:h-10">
                             <Plus aria-hidden="true" />Add Availability
                         </Button>
                         <DropdownMenu>
                             <DropdownMenuTrigger
-                                render={<Button variant="outline" className="h-10 min-w-28 justify-between gap-3 px-4" />}
+                                render={<Button variant="outline" className="h-11 min-w-0 justify-between gap-1 px-2 sm:min-w-28 sm:gap-3 sm:px-4 lg:h-10" />}
                                 aria-label={`Calendar date range: ${view}`}
                             >
                                 {view[0].toUpperCase()}{view.slice(1)}
@@ -829,7 +824,7 @@ export default function InstructorDashboard() {
                                 <Tooltip>
                                     <TooltipTrigger render={
                                         <DropdownMenuTrigger
-                                            render={<Button variant="outline" className="h-10 min-w-28 justify-between gap-3 px-4" />}
+                                            render={<Button variant="outline" className="h-11 min-w-0 justify-between gap-1 px-2 sm:min-w-28 sm:gap-3 sm:px-4 lg:h-10" />}
                                             aria-label={`Calendar display mode: ${activeDisplayMode}`}
                                         />
                                     }>
@@ -862,7 +857,7 @@ export default function InstructorDashboard() {
                         </TooltipProvider>}
                         <Popover>
                             <PopoverTrigger
-                                render={<Button variant="ghost" size="icon-lg" className="size-10" />}
+                                render={<Button variant="ghost" size="icon-lg" className="size-11 lg:size-10" />}
                                 aria-label="Calendar information"
                                 title="Calendar information"
                             >
@@ -873,7 +868,7 @@ export default function InstructorDashboard() {
                                 <p className="-mt-2 text-xs text-muted-foreground">Classes · 60 minutes each</p>
                                 <ul className="space-y-3 text-xs">
                                     {Object.entries(classTypes).map(([type, style]) => (
-                                        <li key={type} className="grid grid-cols-[9.5rem_minmax(0,1fr)] items-center gap-3">
+                                        <li key={type} className="grid gap-1 sm:grid-cols-[9.5rem_minmax(0,1fr)] sm:items-center sm:gap-3">
                                             <span className={cn("w-fit rounded-full border px-2 py-1 text-[10px] uppercase", style.badge)}>{style.label}</span>
                                             <span className="text-muted-foreground">{style.description}</span>
                                         </li>
@@ -887,10 +882,8 @@ export default function InstructorDashboard() {
                     </div>
                 </div>
                 <div className={cn(
-                    "flex min-h-0 flex-1 flex-col",
-                    showSidePanel && (view === "day"
-                        ? "gap-3 overflow-hidden lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:grid-rows-1"
-                        : "grid grid-cols-1 grid-rows-[repeat(2,minmax(320px,1fr))] gap-3 overflow-y-auto overscroll-contain lg:grid-cols-[minmax(0,1fr)_320px] lg:grid-rows-1 lg:overflow-hidden"),
+                    "flex flex-col lg:min-h-0 lg:flex-1",
+                    showSidePanel && "lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:grid-rows-1 lg:gap-3 lg:overflow-hidden",
                 )}>
                     {view === "month" ? (
                         <CalendarMonth {...calendarProps} onSelectDate={selectMonthDate} />
@@ -906,6 +899,7 @@ export default function InstructorDashboard() {
                             onSelectAvailability={selectAvailability}
                             onSelectRange={selectRange}
                             onSelectDate={selectDay}
+                            isDesktop={isDesktop}
                         />
                     ) : (
                         <CalendarDays
@@ -918,7 +912,7 @@ export default function InstructorDashboard() {
                             }
                         />
                     )}
-                    {showSidePanel && requestedSession && (view === "day" ? (
+                    {isDesktop && showSidePanel && requestedSession && (view === "day" ? (
                         <DayClassDetails onClose={() => updateSelection(selectedDate)}>
                             <EventCard
                                 key={requestedSession.id}
@@ -941,6 +935,18 @@ export default function InstructorDashboard() {
                     ))}
                 </div>
             </section>
+            </>}
+            {!isDesktop && <Drawer open={Boolean(expandedClassId)} onOpenChange={(open) => { if (!open) updateSelection(selectedDate); }}>
+                <DrawerContent finalFocus={() => classTriggerRef.current?.isConnected ? classTriggerRef.current : document.querySelector<HTMLElement>('[data-mobile-calendar] button')}>
+                    <DrawerHeader>
+                        <div className="min-w-0"><DrawerTitle className="text-[18px] font-semibold">Class details</DrawerTitle><DrawerDescription className="text-[13px] text-muted-foreground">{lastSelectedSession.current?.date.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</DrawerDescription></div>
+                        <DrawerClose render={<Button variant="ghost" className="h-11 rounded-full px-3 text-[15px] text-primary" />}>Done</DrawerClose>
+                    </DrawerHeader>
+                    <DrawerBody className="pb-[max(1rem,env(safe-area-inset-bottom))]">
+                        {lastSelectedSession.current && <EventCard key={lastSelectedSession.current.id} event={lastSelectedSession.current} layout="panel" expanded onToggle={() => updateSelection(selectedDate)} />}
+                    </DrawerBody>
+                </DrawerContent>
+            </Drawer>}
             {availabilityDialog && <AvailabilityDialog
                 key={`${availabilityDialog.editingId ?? "new"}-${dateKey(availabilityDialog.range.date)}-${availabilityDialog.range.startTime}`}
                 initial={availabilityDialog.range}

@@ -14,15 +14,15 @@ function TooltipTrigger(props: TooltipPrimitive.Trigger.Props) {
 }
 
 function TooltipContent({ className, sideOffset = 6, children, ...props }: TooltipPrimitive.Popup.Props & { sideOffset?: number }) {
-  return (
-    <TooltipPrimitive.Portal>
-      <TooltipPrimitive.Positioner sideOffset={sideOffset} className="z-50">
-        <TooltipPrimitive.Popup data-slot="tooltip-content" className={cn("rounded-md bg-foreground px-3 py-1.5 text-xs text-background shadow-md", className)} {...props}>
-          {children}
-        </TooltipPrimitive.Popup>
-      </TooltipPrimitive.Positioner>
-    </TooltipPrimitive.Portal>
-  );
+    return (
+        <TooltipPrimitive.Portal>
+            <TooltipPrimitive.Positioner sideOffset={sideOffset} className="z-50">
+                <TooltipPrimitive.Popup data-slot="tooltip-content" className={cn("max-w-[calc(100vw-2rem)] rounded-md bg-foreground px-3 py-1.5 text-xs break-words [overflow-wrap:anywhere] text-background shadow-md", className)} {...props}>
+                    {children}
+                </TooltipPrimitive.Popup>
+            </TooltipPrimitive.Positioner>
+        </TooltipPrimitive.Portal>
+    );
 }
 
 export { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent };

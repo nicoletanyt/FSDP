@@ -23,13 +23,13 @@ export function PasswordInput({
         id={inputId}
         type={visible ? 'text' : 'password'}
         disabled={disabled}
-        className={cn('pr-24', className)}
+        className={cn('pr-28 lg:pr-24', className)}
       />
       <Button
         type="button"
         variant="ghost"
         size="xs"
-        className="absolute inset-y-0 right-1 my-auto"
+        className="absolute inset-y-0 right-1 my-auto min-h-11 px-2 lg:min-h-0"
         disabled={disabled}
         aria-label={visible ? 'Hide password' : 'Show password'}
         aria-controls={inputId}

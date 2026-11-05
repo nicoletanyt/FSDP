@@ -1,8 +1,9 @@
 import { Link, useLocation } from "react-router";
-import { CalendarDays, ScanLine, Users } from "lucide-react";
+import { CalendarDays, ScanLine, UserCircle, Users } from "lucide-react";
 import logo from "@/assets/logo.png";
 import ThemeToggle from "@/components/theme-toggle";
 import { InstructorAvatar } from "@/components/ui/avatar";
+import MobileNavigation from "@/components/MobileNavigation";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 
@@ -14,7 +15,7 @@ const navigation = [
 
 export default function InstructorNavigation({
     calendarTo,
-    contentWidthClassName = "w-[80%]",
+    contentWidthClassName = "w-[calc(100%-2rem)] lg:w-[80%]",
 }: {
     calendarTo: string;
     contentWidthClassName?: string;
@@ -30,26 +31,32 @@ export default function InstructorNavigation({
         pathname.startsWith("/instructor/reports/");
 
     return (
-        <header className="shrink-0 border-b bg-background">
+        <>
+        <MobileNavigation homeTo={calendarTo} links={[
+            ...navigation.map(({ label, to, icon }) => ({ label, to: label === "Calendar" ? calendarTo : to, icon,
+                active: pathname === to || pathname.startsWith(`${to}/`) || (label === "Calendar" && isCalendarRelated) })),
+            { label: "Profile", to: "/instructor/profile", icon: UserCircle, active: pathname === "/instructor/profile" },
+        ]} />
+        <header className="hidden shrink-0 border-b bg-background lg:block">
             <div
                 className={cn(
-                    "mx-auto flex flex-wrap items-center justify-between gap-x-6 gap-y-3 px-6 py-5",
+                    "mx-auto flex flex-wrap items-center gap-y-2 py-3 lg:justify-between lg:gap-x-6 lg:gap-y-3 lg:px-6 lg:py-5",
                     contentWidthClassName,
                 )}
             >
                 <Link
                     to={calendarTo}
-                    className="flex items-center rounded-sm font-semibold tracking-tight focus-visible:outline-2 focus-visible:outline-ring"
+                    className="mr-auto flex min-h-11 min-w-0 items-center rounded-sm font-semibold tracking-tight focus-visible:outline-2 focus-visible:outline-ring lg:mr-0 lg:min-h-0"
                 >
                     <img
                         src={logo}
                         alt="Aikido Shinju-Kai logo"
-                        className="size-10 shrink-0 object-contain"
+                        className="size-8 shrink-0 object-contain lg:size-10"
                         width={40}
                         height={40}
                     />
                     <div className="relative ml-2 leading-tight">
-                        <p className="whitespace-nowrap text-base">
+                        <p className="whitespace-nowrap text-xs lg:text-base">
                             <span className="text-primary">Aikido</span>{" "}
                             <span className="text-brand-red-ink">Shinju-Kai</span>
                         </p>
@@ -58,10 +65,10 @@ export default function InstructorNavigation({
                         </p>
                     </div>
                 </Link>
-                <div className="flex min-w-0 flex-wrap items-center justify-between gap-1">
+                <div className="contents lg:flex lg:min-w-0 lg:flex-wrap lg:items-center lg:justify-between lg:gap-1">
                     <nav
                         aria-label="Instructor navigation"
-                        className="order-3 flex w-full flex-wrap items-center gap-1 lg:order-0 lg:w-auto"
+                        className="hidden items-center gap-1 lg:flex"
                     >
                         {navigation.map(({ label, to, icon: Icon }) => {
                             const active =
@@ -74,7 +81,7 @@ export default function InstructorNavigation({
                                     to={label === "Calendar" ? calendarTo : to}
                                     aria-current={active ? "page" : undefined}
                                     className={cn(
-                                        "flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring sm:px-3 sm:text-sm lg:flex-none",
+                                        "flex min-h-11 min-w-0 flex-1 items-center justify-center gap-1 rounded-lg px-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring sm:gap-2 sm:px-3 sm:text-sm lg:min-h-10 lg:flex-none lg:px-3",
                                         active && "bg-accent text-accent-foreground",
                                     )}
                                 >
@@ -92,7 +99,7 @@ export default function InstructorNavigation({
                             pathname === "/instructor/profile" ? "page" : undefined
                         }
                         className={cn(
-                            "flex size-10 items-center justify-center rounded-lg transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring",
+                            "hidden size-10 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring lg:flex",
                             pathname === "/instructor/profile" && "bg-accent",
                         )}
                     >
@@ -107,5 +114,6 @@ export default function InstructorNavigation({
                 </div>
             </div>
         </header>
+        </>
     );
 }

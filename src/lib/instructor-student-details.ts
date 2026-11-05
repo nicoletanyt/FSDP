@@ -211,11 +211,11 @@ export function getGradingRequirements({ syllabus, membershipStatus, rankAwarded
         && session.event.date >= rankAwardedOn && sessionPhase(session.event, now) === "past").length;
     const requirements: GradingRequirement[] = [
         { key: "membership", label: "Active membership", actual: membershipStatus, required: "Active", met: membershipStatus === "Active" },
-        { key: "membership-length", label: "Time as a member", actual: "Not recorded", required: "3 months", met: null },
+        { key: "membership-length", label: "Time as a member", actual: "0", required: "3 months", met: null },
     ];
     // Missing joining dates, dates of birth and fee records remain unverified.
     if (syllabus.minAge !== undefined) requirements.push({
-        key: "age", label: "Minimum age (by calendar year)", actual: "Not recorded", required: `${syllabus.minAge} years`, met: null,
+        key: "age", label: "Minimum age (by calendar year)", actual: "0", required: `${syllabus.minAge} years`, met: null,
     });
     if (syllabus.minMonths > 0) requirements.push({
         key: "time", label: "Time in current grade", actual: `${months} ${months === 1 ? "month" : "months"}`,
@@ -229,7 +229,7 @@ export function getGradingRequirements({ syllabus, membershipStatus, rankAwarded
     });
     requirements.push(
         { key: "techniques", label: "Target-grade techniques signed off", actual: `${signedCount}`, required: `${items.length}`, met: signedCount === items.length },
-        { key: "fees", label: "Fees up to date", actual: "Not recorded", required: "Clear", met: null },
+        { key: "fees", label: "Fees up to date", actual: "0", required: "Clear", met: null },
     );
     return requirements;
 }
@@ -238,7 +238,9 @@ export function gradingEligibility(requirements: GradingRequirement[]) {
     const metCount = requirements.filter((item) => item.met === true).length;
     return {
         metCount,
-        label: requirements.some((item) => item.met === false) ? "Not yet eligible"
-            : requirements.some((item) => item.met === null) ? "Not yet verified" : "Eligible",
+        label:
+            requirements.length > 0 && requirements.every((item) => item.met === true)
+                ? "Ready"
+                : "In progress",
     };
 }

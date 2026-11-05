@@ -1,8 +1,9 @@
-import { Link, NavLink } from 'react-router'
-import { CalendarDays, ClipboardCheck, LayoutDashboard, Presentation, UserCheck } from 'lucide-react'
+import { Link, NavLink, useLocation } from 'react-router'
+import { CalendarDays, ClipboardCheck, LayoutDashboard, Presentation, UserCheck, UserCircle } from 'lucide-react'
 import logo from '@/assets/logo.png'
 import ThemeToggle from '@/components/theme-toggle'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import MobileNavigation from '@/components/MobileNavigation'
 import { useAuth } from '@/hooks/use-auth'
 import { cn } from '@/lib/utils'
 
@@ -16,27 +17,33 @@ const routes = [
 
 export default function StudentNavigation() {
   const { profile } = useAuth()
+  const { pathname } = useLocation()
   const name = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || 'Student'
   const initials = [profile?.first_name, profile?.last_name]
     .map(name => name?.trim()[0] ?? '')
     .join('')
     .toUpperCase() || 'S'
 
-  return <header className="shrink-0 border-b bg-background">
-    <div className="mx-auto flex w-[80%] flex-wrap items-center justify-between gap-x-6 gap-y-3 px-6 py-5">
+  return <>
+    <MobileNavigation homeTo="/dashboard" links={[
+      ...routes.map(({ label, to, icon }) => ({ label, to, icon, active: pathname === to })),
+      { label: 'Profile', to: '/profile', icon: UserCircle, active: pathname === '/profile' },
+    ]} />
+    <header className="hidden shrink-0 border-b bg-background lg:block">
+    <div className="mx-auto flex w-[calc(100%-2rem)] flex-wrap items-center gap-y-2 py-3 lg:w-[80%] lg:justify-between lg:gap-x-6 lg:gap-y-3 lg:px-6 lg:py-5">
       <Link
         to="/dashboard"
-        className="flex items-center rounded-sm font-semibold tracking-tight focus-visible:outline-2 focus-visible:outline-ring"
+        className="mr-auto flex min-h-11 items-center rounded-sm font-semibold tracking-tight focus-visible:outline-2 focus-visible:outline-ring lg:mr-0 lg:min-h-0"
       >
         <img
           src={logo}
           alt="Aikido Shinju-Kai logo"
-          className="size-10 shrink-0 object-contain"
+          className="size-8 shrink-0 object-contain lg:size-10"
           width={40}
           height={40}
         />
         <div className="relative ml-2 leading-tight">
-          <p className="whitespace-nowrap text-base">
+          <p className="whitespace-nowrap text-xs lg:text-base">
             <span className="text-primary">Aikido</span>{' '}
             <span className="text-brand-red-ink">Shinju-Kai</span>
           </p>
@@ -45,17 +52,17 @@ export default function StudentNavigation() {
           </p>
         </div>
       </Link>
-      <div className="flex min-w-0 flex-wrap items-center justify-between gap-1">
+      <div className="contents lg:flex lg:min-w-0 lg:flex-wrap lg:items-center lg:justify-between lg:gap-1">
         <nav
           aria-label="Student navigation"
-          className="order-3 flex w-full flex-wrap items-center gap-1 lg:order-0 lg:w-auto"
+          className="hidden flex-wrap items-center gap-1 lg:flex"
         >
           {routes.map(({ label, to, icon: Icon }) => <NavLink
             key={to}
             to={to}
             end
             className={({ isActive }) => cn(
-              'flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring sm:px-3 sm:text-sm lg:flex-none',
+              'flex min-h-11 flex-1 items-center justify-center gap-1 rounded-lg px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring sm:gap-2 sm:px-3 sm:text-sm lg:min-h-10 lg:flex-none',
               isActive && 'bg-accent text-accent-foreground',
             )}
           >
@@ -69,7 +76,7 @@ export default function StudentNavigation() {
           aria-label={`View profile for ${name}`}
           title="Membership Profile"
           className={({ isActive }) => cn(
-            'flex size-10 items-center justify-center rounded-lg transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring',
+            'hidden size-10 items-center justify-center rounded-lg transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring lg:flex',
             isActive && 'bg-accent',
           )}
         >
@@ -79,5 +86,5 @@ export default function StudentNavigation() {
         </NavLink>
       </div>
     </div>
-  </header>
+  </header></>
 }
