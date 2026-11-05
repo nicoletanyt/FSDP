@@ -1,25 +1,26 @@
 import { useEffect, useRef, useState } from "react";
 import { availabilityError, layoutTimelineItems, minutesTime, slotDateTime, timeMinutes } from "@/lib/instructor-availability";
 import type { AvailabilityRange, AvailabilitySlot } from "@/lib/instructor-availability";
-import { addDays, dateKey, eventsForDate, formatTime, fullDate, getEventStyle } from "@/lib/instructor-calendar";
-import type { CalendarEvent } from "@/lib/instructor-calendar";
+import { addDays, dateKey, formatTime, fullDate, getEventStyle } from "@/lib/instructor-calendar";
+import type { CalendarEventsForDate, CalendarViewEvent as CalendarEvent } from "@/lib/instructor/calendar-view";
 import { cn } from "@/lib/utils";
 import { availabilityStyle } from "./CalendarAvailability";
 
 // Selected-day or two-day timeline in document flow. All geometry uses the same
 // minutes-to-pixels scale, including overlaps, free-time targets and the clock.
-export default function MobileCalendarTimeline({ date, now, slots, focusRequest, dayCount = 1, onSelectClass, onSelectAvailability, onSelectRange }: {
+export default function MobileCalendarTimeline({ getEvents, date, now, slots, focusRequest, dayCount = 1, onSelectClass, onSelectAvailability, onSelectRange }: {
+    getEvents: CalendarEventsForDate;
     date: Date; now: Date; slots: AvailabilitySlot[]; focusRequest: number;
     dayCount?: 1 | 2;
     onSelectClass: (event: CalendarEvent) => void;
     onSelectAvailability: (slot: AvailabilitySlot) => void;
-    onSelectRange: (range: AvailabilityRange) => void;
+    onSelectRange?: (range: AvailabilityRange) => void;
 }) {
     const key = dateKey(date);
     const days = Array.from({ length: dayCount }, (_, index) => {
         const day = addDays(date, index);
         return { day, items: [
-            ...eventsForDate(day).map(event => ({ ...event, event, slot: null })),
+            ...getEvents(day).map(event => ({ ...event, event, slot: null })),
             ...slots.filter(slot => dateKey(slot.date) === dateKey(day)).map(slot => ({ ...slot, event: null, slot })),
         ] };
     });
@@ -62,10 +63,10 @@ export default function MobileCalendarTimeline({ date, now, slots, focusRequest,
             {days.map(({ day, items: dayItems }) => <div key={dateKey(day)} data-mobile-timeline-day={dateKey(day)} className={cn("relative min-w-0", dayCount === 2 && "border-l border-border/50")} style={{ height }}>
                 {Array.from({ length: (end - start) / 30 }, (_, i) => start + i * 30).map(minute => {
                     const range = { date: day, startTime: minutesTime(minute), endTime: minutesTime(minute + 30) };
-                    const disabled = minute < 8 * 60 || minute >= 22 * 60 || slotDateTime(day, range.startTime) <= now || dayItems.some(item => minute < timeMinutes(item.endTime) && minute + 30 > timeMinutes(item.startTime));
+                    const disabled = !onSelectRange || minute < 8 * 60 || minute >= 22 * 60 || slotDateTime(day, range.startTime) <= now || dayItems.some(item => minute < timeMinutes(item.endTime) && minute + 30 > timeMinutes(item.startTime));
                     return <button key={minute} type="button" data-mobile-free-slot disabled={disabled}
                         aria-label={`Add availability on ${fullDate(day)}, ${formatTime(range.startTime)} to ${formatTime(range.endTime)}`}
-                        onClick={() => { const message = availabilityError(range, slots); setError(message); if (!message) onSelectRange(range); }}
+                        onClick={() => { const message = availabilityError(range, slots); setError(message); if (!message) onSelectRange?.(range); }}
                         className={cn("absolute inset-x-0 border-t border-border/60 text-left outline-none focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring enabled:hover:bg-emerald-500/5", minute % 60 !== 0 && "border-border/25")}
                         style={{ top: (minute - start) * scale, height: 30 * scale }} />;
                 })}

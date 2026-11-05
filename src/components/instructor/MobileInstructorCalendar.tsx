@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { PointerEvent } from "react";
+import type { PointerEvent, ReactNode } from "react";
 import {
     Calendar,
     CalendarDays,
@@ -22,16 +22,16 @@ import {
     addDays,
     addMonths,
     dateKey,
-    classTypes,
     eventStyles,
-    eventsForDate,
     formatTime,
     fullDate,
     getEventStyle,
     monthDates,
     weekDates,
 } from "@/lib/instructor-calendar";
-import type { CalendarEvent } from "@/lib/instructor-calendar";
+import { calendarClassStyle } from "@/lib/instructor/calendar-view";
+import type { CalendarEventsForDate, CalendarViewEvent as CalendarEvent } from "@/lib/instructor/calendar-view";
+import type { ClassTypeRow } from "@/lib/instructor/types";
 import type {
     AvailabilityRange,
     AvailabilitySlot,
@@ -51,9 +51,9 @@ type Entry = { id: string; startTime: string; endTime: string } & (
     | { slot: AvailabilitySlot; event?: never }
 );
 
-function entriesForDate(date: Date, slots: AvailabilitySlot[]): Entry[] {
+function entriesForDate(date: Date, slots: AvailabilitySlot[], getEvents: CalendarEventsForDate): Entry[] {
     return [
-        ...eventsForDate(date).map((event) => ({ ...event, event })),
+        ...getEvents(date).map((event) => ({ ...event, event })),
         ...slots
             .filter((slot) => dateKey(slot.date) === dateKey(date))
             .map((slot) => ({ ...slot, slot })),
@@ -61,17 +61,19 @@ function entriesForDate(date: Date, slots: AvailabilitySlot[]): Entry[] {
 }
 
 function Agenda({
+    getEvents,
     date,
     slots,
     onSelectClass,
     onSelectAvailability,
 }: {
+    getEvents: CalendarEventsForDate;
     date: Date;
     slots: AvailabilitySlot[];
     onSelectClass: (event: CalendarEvent) => void;
     onSelectAvailability: (slot: AvailabilitySlot) => void;
 }) {
-    const entries = entriesForDate(date, slots);
+    const entries = entriesForDate(date, slots, getEvents);
     return (
         <ul
             aria-label={`Schedule for ${fullDate(date)}`}
@@ -110,7 +112,7 @@ function Agenda({
                                 </span>
                                 <span className="block text-[13px] leading-5 text-muted-foreground [overflow-wrap:anywhere]">
                                     {entry.event
-                                        ? `${entry.event.dojo} · ${entry.event.studentIds.length} students`
+                                        ? `${entry.event.dojo} · ${entry.event.rosterCount} students`
                                         : "Instructor availability"}
                                 </span>
                             </span>
@@ -221,11 +223,13 @@ function WeekStrip({
 }
 
 function MonthGrid({
+    getEvents,
     date,
     today,
     slots,
     onSelectDate,
 }: {
+    getEvents: CalendarEventsForDate;
     date: Date;
     today: Date;
     slots: AvailabilitySlot[];
@@ -248,7 +252,7 @@ function MonthGrid({
                 </span>
             ))}
             {monthDates(date).map((day) => {
-                const events = eventsForDate(day);
+                const events = getEvents(day);
                 const indicators = [
                     ...new Map(
                         events.map((event) => [
@@ -302,6 +306,10 @@ function MonthGrid({
 }
 
 export default function MobileInstructorCalendar({
+    getEvents,
+    classCatalogue,
+    catalogueStatus,
+    content,
     date,
     now,
     view,
@@ -315,6 +323,10 @@ export default function MobileInstructorCalendar({
     onToday,
     onAddAvailability,
 }: {
+    getEvents: CalendarEventsForDate;
+    classCatalogue: ClassTypeRow[];
+    catalogueStatus?: ReactNode;
+    content?: ReactNode;
     date: Date;
     now: Date;
     view: MobileCalendarView;
@@ -324,9 +336,9 @@ export default function MobileInstructorCalendar({
     onSelectDate: (date: Date) => void;
     onSelectClass: (event: CalendarEvent) => void;
     onSelectAvailability: (slot: AvailabilitySlot) => void;
-    onSelectRange: (range: AvailabilityRange) => void;
+    onSelectRange?: (range: AvailabilityRange) => void;
     onToday: () => void;
-    onAddAvailability: () => void;
+    onAddAvailability?: () => void;
 }) {
     const [viewPickerOpen, setViewPickerOpen] = useState(false);
     const ActiveViewIcon = viewIcons[view];
@@ -462,6 +474,7 @@ export default function MobileInstructorCalendar({
                         <Button
                             variant="ghost"
                             onClick={onAddAvailability}
+                            disabled={!onAddAvailability}
                             className="h-11 gap-1.5 rounded-full px-3 text-[14px] font-medium text-primary"
                         >
                             <Plus aria-hidden="true" className="size-4" />
@@ -478,20 +491,22 @@ export default function MobileInstructorCalendar({
                                 />
                             </PopoverTrigger>
                             <PopoverContent className="gap-2 text-[14px]">
-                                <PopoverTitle>Calendar colours</PopoverTitle>
+                                 <PopoverTitle>Calendar colours</PopoverTitle>
+                                 {catalogueStatus}
+                                 {!catalogueStatus && !classCatalogue.length && <p className="text-muted-foreground">No class types recorded.</p>}
                                 <ul className="space-y-2">
-                                    {Object.entries(classTypes).map(([type, style]) => (
-                                        <li key={type} className="space-y-0.5">
+                                    {classCatalogue.map(type => (
+                                        <li key={type.id} className="space-y-0.5">
                                             <span
                                                 className={cn(
                                                     "inline-block rounded-md border px-2 py-1 text-[13px]",
-                                                    style.badge,
+                                                    calendarClassStyle(type.id).badge,
                                                 )}
                                             >
-                                                {style.label}
+                                                {type.label}
                                             </span>
                                             <p className="text-[12px] text-muted-foreground">
-                                                {style.description}
+                                                {type.description}
                                             </p>
                                         </li>
                                     ))}
@@ -513,16 +528,16 @@ export default function MobileInstructorCalendar({
                                     Availability
                                 </p>
                                 <p className="text-muted-foreground">
-                                    Tap an event for details. Tap a free time or use Add
-                                    Availability to set your hours.
+                                    Tap an event for details. Times are shown in Singapore time.
                                 </p>
                             </PopoverContent>
                         </Popover>
                     </div>
                 </div>
             </header>
-            {view === "month" ? (
+            {view === "month" && !content ? (
                 <MonthGrid
+                    getEvents={getEvents}
                     date={date}
                     today={now}
                     slots={slots}
@@ -575,8 +590,9 @@ export default function MobileInstructorCalendar({
                 }}
             >
                 <div className="animate-in fade-in-0 duration-150 motion-reduce:animate-none">
-                    {view === "day" || view === "multi-day" ? (
+                    {content ?? (view === "day" || view === "multi-day" ? (
                         <MobileCalendarTimeline
+                            getEvents={getEvents}
                             date={date}
                             now={now}
                             slots={slots}
@@ -588,6 +604,7 @@ export default function MobileInstructorCalendar({
                         />
                     ) : view === "month" ? (
                         <Agenda
+                            getEvents={getEvents}
                             date={date}
                             slots={slots}
                             onSelectClass={onSelectClass}
@@ -607,6 +624,7 @@ export default function MobileInstructorCalendar({
                                         })}
                                     </h3>
                                     <Agenda
+                                        getEvents={getEvents}
                                         date={day}
                                         slots={slots}
                                         onSelectClass={onSelectClass}
@@ -615,7 +633,7 @@ export default function MobileInstructorCalendar({
                                 </section>
                             ))}
                         </div>
-                    )}
+                    ))}
                 </div>
             </div>
         </section>

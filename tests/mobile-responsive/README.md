@@ -5,6 +5,10 @@ real calendar, student directory/details and instructor layout through a separat
 no Supabase account or backend writes are needed. The fixture is not part of the
 production Vite entry point.
 
+The calendar fixture injects the read API from `instructor-api.fixture.ts` through
+the production data context. Its clock represents 09:00 Singapore time. Other
+pages retain their existing fixtures until their own wiring phases.
+
 Start the following in separate terminals:
 
 ```sh
@@ -27,11 +31,18 @@ The suite checks 320–430px views, role-based left Sheet navigation, the calend
 24px instructor main padding, 16px overlay padding, single-line roster alignment, measured touch-target sizes and spacing,
 sticky-header clearance in short landscapes, single-day/two-day timeline positioning,
 second-day class/availability actions, the simplified List header, week paging, synthetic
-day-swipe handlers, Today, drawer/history/focus, attendance and read-only rules,
-availability validation/editing, resizing, and short-landscape bounds. Iframes
+day-swipe handlers, Today, UUID drawer/history/focus, recorded attendance and read-only controls,
+read-only availability, resizing, and short-landscape bounds. Header controls retain
+44px targets; the existing seven-column day grids are checked against their
+viewport-relative geometry, including Firefox's reserved scrollbar on narrow frames. Iframes
 provide exact CSS widths below Firefox's minimum headless window size. These
 checks do not replace physical iPhone/Android testing for native scrolling,
 gestures, the virtual keyboard, or date/time pickers.
+
+Data-flow checks cover loading, empty results, calendar/roster failure and retry,
+205-student roster pagination, the yellow Late badge, stale responses after date
+navigation, and account changes while a selection is open. Mutations are disabled
+during this read-wiring phase; no local demo save is treated as a backend save.
 
 The directory suite checks:
 

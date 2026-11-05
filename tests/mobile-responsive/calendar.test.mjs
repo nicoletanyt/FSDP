@@ -143,7 +143,6 @@ test('left navigation Sheet shows role links, account details, active state and 
     const cases = [
         ['/instructor/calendar?date=2026-11-4', 'Instructor', ['Calendar', 'Students', 'Check-in', 'Profile']],
         ['/dashboard?fixtureRole=student', 'Student', ['Dashboard', 'Timetable', 'Attendance', 'Classes', 'Grading', 'Profile']],
-        ['/admin?fixtureRole=administrator', 'Administrator', ['Dashboard']],
         ['/login?fixtureRole=guest', 'Guest', ['Sign in', 'Sign up']],
     ];
     for (const [route, role, labels] of cases) {
@@ -156,7 +155,7 @@ test('left navigation Sheet shows role links, account details, active state and 
             const links = [...sheet.querySelectorAll('nav a')];
             const output = { left: rect.left, right: rect.right, width: w.innerWidth,
                 labels: links.map(link => link.textContent.trim()), active: links.filter(link => link.getAttribute('aria-current') === 'page').length,
-                description: sheet.querySelector('[data-slot="sheet-description"]').textContent,
+                description: sheet.querySelector('nav').getAttribute('aria-label'),
                 account: sheet.textContent.includes('test@example.com'),
                 padding: w.getComputedStyle(sheet).padding,
             };
@@ -188,6 +187,12 @@ test('left navigation Sheet shows role links, account details, active state and 
         assert.equal(result.closedOnDesktop, true);
         assert.equal(result.desktopNavigationVisible, true);
     }
+    // AdminLayout owns its separate navbar; RootLayout intentionally does not
+    // mount the public/instructor navigation for this fixture's /admin route.
+    const admin = await inCalendar(320, '/admin?fixtureRole=administrator', async w => ({
+        sharedNavigation: !!w.document.querySelector('[data-mobile-site-nav]'),
+    }));
+    assert.equal(admin.sharedNavigation, false);
 });
 
 test('mobile instructor main uses 24px padding, overlays use 16px insets, and roster identity, grade and actions share one line', async () => {
@@ -217,12 +222,12 @@ test('mobile instructor main uses 24px padding, overlays use 16px insets, and ro
             name.click(); await wait();
             const output = { main, legend, drawerBody: inset(body), aligned, actions, fullName, identityPadding, overflow: d.documentElement.scrollWidth > d.documentElement.clientWidth };
             drawer.querySelector('[data-slot="drawer-header"] button').click(); await wait(400);
-            [...d.querySelectorAll('button')].find(button => button.textContent.includes('Add Availability')).click(); await wait();
-            output.dialog = inset(d.querySelector('[data-slot="dialog-content"]'));
+            output.addDisabled = [...d.querySelectorAll('button')].find(button => button.textContent.includes('Add Availability')).disabled;
             return output;
         });
         assert.deepEqual(result.main, ['24px', '24px', '24px', '24px']);
-        for (const padding of [result.legend, result.drawerBody, result.identityPadding, result.dialog]) assert.deepEqual(padding, ['16px', '16px', '16px', '16px']);
+        for (const padding of [result.legend, result.drawerBody, result.identityPadding]) assert.deepEqual(padding, ['16px', '16px', '16px', '16px']);
+        assert.equal(result.addDisabled, true);
         assert.equal(result.aligned, true);
         assert.equal(result.fullName, true);
         assert.equal(result.overflow, false);
@@ -252,13 +257,18 @@ test('mobile spacing keeps generous targets, separates controls and gives agenda
             const agenda = d.querySelector('[aria-label="Chronological agenda"]');
             const row = agenda.querySelector('li button');
             const rowStyle = w.getComputedStyle(row);
-            return { headerTargets, headerHeight, stripTargets, monthTargets,
+            return { headerTargets, headerHeight, stripTargets, monthTargets, viewportWidth: d.documentElement.clientWidth,
                 navGaps: [nav[1].left - nav[0].right, nav[2].left - nav[1].right],
                 rowHeight: row.getBoundingClientRect().height, rowPadding: [rowStyle.paddingTop, rowStyle.paddingBottom],
                 sectionGap: agenda.children[1].getBoundingClientRect().top - agenda.children[0].getBoundingClientRect().bottom,
             };
         });
-        for (const target of [result.headerTargets, result.stripTargets, result.monthTargets]) assert.ok(target[0] >= 43.9 && target[1] >= 44, JSON.stringify(result));
+        assert.ok(result.headerTargets[0] >= 43.9 && result.headerTargets[1] >= 44, JSON.stringify(result));
+        // Preserve the existing seven-column geometry: 24px main insets and
+        // 16px negative grid margins. Desktop Firefox reserves a scrollbar,
+        // making the narrowest fixture's day cells smaller than 44px.
+        const dayWidth = Math.min(44, (result.viewportWidth - 16) / 7);
+        for (const target of [result.stripTargets, result.monthTargets]) assert.ok(target[0] >= dayWidth - 0.1 && target[1] >= 44, JSON.stringify(result));
         assert.ok(result.headerHeight < 96, JSON.stringify(result));
         assert.ok(result.navGaps.every(gap => gap >= 1.9), JSON.stringify(result));
         assert.ok(result.rowHeight >= 72);
@@ -320,26 +330,27 @@ test('month selection stays in month, week-strip paging and day swipes keep date
     assert.equal(result.dialog, false);
 });
 
-test('the second day opens its own class and creates availability on the correct date', async () => {
+test('the second day opens its own UUID class and availability mutations remain disabled', async () => {
     const result = await inCalendar(320, '/instructor/calendar?view=week&date=2026-11-27', async (w, wait) => {
         const d = w.document;
         const second = d.querySelector('[data-mobile-timeline-day="2026-11-28"]');
         second.querySelector('[data-mobile-event]').click(); await wait();
         const selectedClass = w.location.search;
+        const uuid = new URLSearchParams(w.location.search).get('session');
         const drawer = d.querySelector('[data-slot="drawer-content"]');
         const classTitle = drawer.textContent;
         drawer.querySelector('[data-slot="drawer-header"] button').click(); await wait(500);
         // Selecting the second day's class advances the shared selected date.
-        d.querySelector('[data-mobile-timeline-day="2026-11-28"] [data-mobile-free-slot]:not(:disabled)').click(); await wait();
-        const inputDate = d.getElementById('availability-date').value;
-        d.querySelector('[data-slot="dialog-content"] form').requestSubmit(); await wait();
-        return { selectedClass, classTitle, inputDate,
-            available: !!d.querySelector('[data-mobile-timeline-day="2026-11-28"] [data-mobile-event][aria-label^="Available"]') };
+        return { selectedClass, classTitle,
+            uuid,
+            freeSlotsDisabled: [...d.querySelectorAll('[data-mobile-free-slot]')].every(button => button.disabled),
+            dialog: !!d.querySelector('[data-slot="dialog-content"]') };
     });
     assert.match(result.selectedClass, /date=2026-11-28/);
     assert.match(result.classTitle, /Weapons/);
-    assert.equal(result.inputDate, '2026-11-28');
-    assert.equal(result.available, true);
+    assert.match(result.uuid, /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/);
+    assert.equal(result.freeSlotsDisabled, true);
+    assert.equal(result.dialog, false);
 });
 
 test('Today returns to the current date and refocuses the document timeline', async () => {
@@ -359,7 +370,7 @@ test('Today returns to the current date and refocuses the document timeline', as
     }
 });
 
-test('drawer attendance persists across resize, closes with date/view intact and restores focus', async () => {
+test('recorded attendance survives resize without local mutation and drawer restores focus', async () => {
     const result = await inCalendar(320, '/instructor/calendar?view=week&date=2026-11-27', async (w, wait, f) => {
         const d = w.document;
         const trigger = d.querySelector('[data-mobile-event]');
@@ -368,15 +379,13 @@ test('drawer attendance persists across resize, closes with date/view intact and
         const rect = drawer.getBoundingClientRect();
         const present = drawer.querySelector('button[aria-label^="Mark "][aria-label*=" present"]');
         const student = present.getAttribute('aria-label').split(' present')[0];
+        const before = present.getAttribute('aria-pressed');
         present.click(); await wait();
-        present.click(); await wait();
-        const cleared = present.getAttribute('aria-pressed');
-        [...drawer.querySelectorAll('button')].find(e => e.textContent.includes('Mark All Present')).click(); await wait();
-        const allPresent = [...drawer.querySelectorAll('button[aria-label^="Mark "][aria-label*=" present"]')].every(e => e.getAttribute('aria-pressed') === 'true');
-        [...drawer.querySelectorAll('button')].find(e => e.textContent.includes('Mark All Absent')).click(); await wait();
-        const allAbsent = [...drawer.querySelectorAll('button[aria-label^="Mark "][aria-label*=" absent"]')].every(e => e.getAttribute('aria-pressed') === 'true');
-        present.click(); await wait();
+        const readOnly = [...drawer.querySelectorAll('button[aria-label^="Mark "]')].every(button => button.disabled);
+        const bulkDisabled = [...drawer.querySelectorAll('button')].filter(e => e.textContent.includes('Mark All')).every(button => button.disabled);
         const marked = present.getAttribute('aria-pressed');
+        const lateBadge = drawer.querySelector('[aria-label$=": Late"]');
+        const late = { text: lateBadge?.textContent, colour: w.getComputedStyle(lateBadge).backgroundColor };
         const session = w.location.search;
         const note = drawer.querySelector('a[href*="/instructor/students/"]')?.getAttribute('href');
         f.style.width = '1280px'; await wait(500);
@@ -385,13 +394,15 @@ test('drawer attendance persists across resize, closes with date/view intact and
         const reopened = d.querySelector('[data-slot="drawer-content"]');
         const rosters = d.querySelectorAll('[aria-label="Student roster"]').length;
         reopened.querySelector('[data-slot="drawer-header"] button').click(); await wait(500);
-        return { top: rect.top, right: rect.right, width: w.innerWidth, marked, cleared, allPresent, allAbsent, session, note, desktop, rosters, closed: !d.querySelector('[data-slot="drawer-content"]'), after: w.location.search, focused: Boolean(d.activeElement?.closest('[data-mobile-calendar]')) };
+        return { top: rect.top, right: rect.right, width: w.innerWidth, marked, before, readOnly, bulkDisabled, late, session, note, desktop, rosters, closed: !d.querySelector('[data-slot="drawer-content"]'), after: w.location.search, focused: Boolean(d.activeElement?.closest('[data-mobile-calendar]')) };
     });
     assert.ok(result.top >= 0 && result.right <= result.width + 1);
     assert.equal(result.marked, 'true');
-    assert.equal(result.cleared, 'false');
-    assert.equal(result.allPresent, true);
-    assert.equal(result.allAbsent, true);
+    assert.equal(result.marked, result.before);
+    assert.equal(result.readOnly, true);
+    assert.equal(result.bulkDisabled, true);
+    assert.equal(result.late.text, 'Late');
+    assert.notEqual(result.late.colour, 'rgba(0, 0, 0, 0)');
     assert.equal(result.desktop.drawer, false);
     assert.equal(result.desktop.marked, 'true');
     assert.equal(result.desktop.session, result.session);
@@ -423,38 +434,32 @@ test('past classes remain read-only and retain student/session note links', asyn
     assert.deepEqual(result.duplicateIds, []);
 });
 
-test('availability can be created, edited, validated and deleted by tapping', async () => {
-    const result = await inCalendar(390, '/instructor/calendar?view=day&date=2026-11-27', async (w, wait) => {
+test('recorded availability opens in the same dialog with mutations disabled', async () => {
+    const result = await inCalendar(390, '/instructor/calendar?view=day&date=2026-11-4', async (w, wait) => {
         const d = w.document;
-        const click = text => [...d.querySelectorAll('button')].find(e => e.textContent.trim() === text).click();
-        const set = (id, value) => { const input = d.getElementById(id); Object.getOwnPropertyDescriptor(w.HTMLInputElement.prototype, 'value').set.call(input, value); input.dispatchEvent(new w.Event('input', { bubbles: true })); input.dispatchEvent(new w.Event('change', { bubbles: true })); };
-        d.querySelector('[data-mobile-free-slot]:not(:disabled)').click(); await wait();
-        const start = d.getElementById('availability-start').value;
-        d.querySelector('[data-slot="dialog-content"] form').requestSubmit(); await wait();
-        let available = d.querySelector('[data-mobile-event][aria-label^="Available"]');
-        const created = !!available;
-        available.click(); await wait();
-        set('availability-end', '09:30'); await wait();
-        d.querySelector('[data-slot="dialog-content"] form').requestSubmit(); await wait();
-        available = d.querySelector('[data-mobile-event][aria-label^="Available"]');
-        const edited = available.getAttribute('aria-label');
-        available.click(); await wait();
-        set('availability-start', '18:00'); set('availability-end', '18:30'); await wait();
-        d.querySelector('[data-slot="dialog-content"] form').requestSubmit(); await wait();
-        const validationError = d.querySelector('[role="alert"]')?.textContent;
-        click('Delete'); await wait();
-        return { start, created, edited, validationError, deleted: !d.querySelector('[data-mobile-event][aria-label^="Available"]') };
+        d.querySelector('[data-mobile-event][aria-label^="Available"]').click(); await wait();
+        const dialog = d.querySelector('[data-slot="dialog-content"]');
+        const style = w.getComputedStyle(dialog);
+        const result = { date: d.getElementById('availability-date').value, start: d.getElementById('availability-start').value,
+            end: d.getElementById('availability-end').value, fieldsDisabled: [...dialog.querySelectorAll('input')].every(input => input.disabled),
+            buttonsDisabled: [...dialog.querySelectorAll('button')].filter(button => /Save changes|Delete/.test(button.textContent)).every(button => button.disabled),
+            padding: [style.paddingTop, style.paddingRight, style.paddingBottom, style.paddingLeft] };
+        dialog.querySelector('form').requestSubmit(); await wait();
+        return { ...result, stillOpen: !!d.querySelector('[data-slot="dialog-content"]'), changed: d.getElementById('availability-start').value !== result.start };
     });
-    assert.equal(result.start, '08:00');
-    assert.equal(result.created, true);
-    assert.match(result.edited, /9:30 AM/);
-    assert.ok(result.validationError);
-    assert.equal(result.deleted, true);
+    assert.equal(result.date, '2026-11-04');
+    assert.equal(result.start, '09:00');
+    assert.equal(result.end, '11:00');
+    assert.equal(result.fieldsDisabled, true);
+    assert.equal(result.buttonsDisabled, true);
+    assert.equal(result.stillOpen, true);
+    assert.equal(result.changed, false);
+    assert.deepEqual(result.padding, ['16px', '16px', '16px', '16px']);
 });
 
 test('legacy selection, browser history and short landscapes retain a reachable drawer and one roster', async () => {
     for (const [width, height] of [[320, 568], [568, 320], [844, 390]]) {
-        const result = await inCalendar(width, '/instructor/dashboard?view=month&date=2026-11-27&class=mixed-family-fri-2026-11-27', async (w, wait) => {
+        const result = await inCalendar(width, '/instructor/dashboard?view=month&date=2026-11-27&class=00000000-0000-4000-8000-202611270006', async (w, wait) => {
             const d = w.document;
             const drawer = d.querySelector('[data-slot="drawer-content"]');
             const bounds = drawer.getBoundingClientRect();
@@ -473,4 +478,83 @@ test('legacy selection, browser history and short landscapes retain a reachable 
         assert.equal(result.rosters, 1);
         assert.equal(result.overflow, false);
     }
+});
+
+test('calendar loading, empty and error/retry states never substitute fixture events', async () => {
+    const loading = await inCalendar(390, '/instructor/calendar?view=day&date=2026-11-27&fixtureData=loading', async (w, wait) => {
+        const d = w.document;
+        const pending = { text: d.querySelector('main [role="status"]')?.textContent, events: d.querySelectorAll('[data-mobile-event]').length };
+        await wait(1800);
+        return { pending, loaded: d.querySelectorAll('[data-mobile-event]').length };
+    });
+    assert.match(loading.pending.text, /Loading/);
+    assert.equal(loading.pending.events, 0);
+    assert.ok(loading.loaded > 0);
+    for (const width of [390, 1280]) for (const view of ['day', 'month']) {
+        const empty = await inCalendar(width, `/instructor/calendar?view=${view}&date=2026-11-27&fixtureData=empty`, async w => ({
+            text: w.document.querySelector('main').textContent,
+            rosters: w.document.querySelectorAll('[aria-label="Student roster"]').length,
+        }));
+        assert.match(empty.text, /No classes or availability/);
+        assert.equal(empty.rosters, 0);
+    }
+    const retry = await inCalendar(390, '/instructor/calendar?view=day&date=2026-11-27&fixtureData=calendar-error', async (w, wait) => {
+        const d = w.document;
+        const errorMessage = d.querySelector('main [role="alert"]')?.textContent;
+        const initialEvents = d.querySelectorAll('[data-mobile-event]').length;
+        [...d.querySelectorAll('button')].find(button => button.textContent === 'Try again').click(); await wait(500);
+        return { errorMessage, initialEvents, events: d.querySelectorAll('[data-mobile-event]').length };
+    });
+    assert.match(retry.errorMessage, /Calendar could not be loaded/);
+    assert.equal(retry.initialEvents, 0);
+    assert.ok(retry.events > 0);
+});
+
+test('roster reads expose empty/error states and load every page beyond 100 students', async () => {
+    for (const mode of ['empty-roster', 'roster-error', 'large-roster']) {
+        const result = await inCalendar(390, `/instructor/calendar?view=day&date=2026-11-27&fixtureData=${mode}`, async (w, wait) => {
+            const d = w.document;
+            d.querySelector('[data-mobile-event]').click(); await wait(500);
+            const initial = d.querySelector('[data-slot="drawer-content"]').textContent;
+            const retry = [...d.querySelectorAll('button')].find(button => button.textContent === 'Try again');
+            if (retry) { retry.click(); await wait(500); }
+            return { initial, rows: d.querySelectorAll('[aria-label="Student roster"] li').length, overflow: d.documentElement.scrollWidth > d.documentElement.clientWidth };
+        });
+        if (mode === 'empty-roster') { assert.match(result.initial, /No students are registered/); assert.equal(result.rows, 0); }
+        if (mode === 'roster-error') { assert.match(result.initial, /Roster could not be loaded/); assert.ok(result.rows > 0); }
+        if (mode === 'large-roster') assert.equal(result.rows, 205);
+        assert.equal(result.overflow, false);
+    }
+});
+
+test('slow previous-date responses cannot overwrite a newer calendar selection', async () => {
+    const result = await inCalendar(390, '/instructor/calendar?view=day&date=2026-11-27&fixtureData=race', async (w, wait) => {
+        const d = w.document;
+        d.querySelector('[aria-label="Next day"]').click(); await wait(300);
+        const before = [...d.querySelectorAll('[data-mobile-event]')].map(event => event.getAttribute('aria-label'));
+        await wait(1300);
+        return { date: w.location.search, before, after: [...d.querySelectorAll('[data-mobile-event]')].map(event => event.getAttribute('aria-label')) };
+    });
+    assert.match(result.date, /date=2026-11-28/);
+    assert.ok(result.before.length > 0);
+    assert.deepEqual(result.after, result.before);
+});
+
+test('account changes clear the previous calendar and selected roster before the replacement request resolves', async () => {
+    const result = await inCalendar(390, '/instructor/calendar?view=day&date=2026-11-27', async (w, wait) => {
+        const d = w.document;
+        d.querySelector('[data-mobile-event]').click(); await wait();
+        const hadRoster = d.querySelectorAll('[aria-label="Student roster"] li').length > 0;
+        w.switchInstructorFixture(); await wait(100);
+        const pending = { roster: d.querySelectorAll('[aria-label="Student roster"] li').length,
+            stale: d.querySelector('main').textContent.includes('Mixed/Family') };
+        // Close the old account's now-unavailable selection using date navigation.
+        d.querySelector('[aria-label="Next day"]').click(); await wait(1100);
+        return { hadRoster, pending, events: [...d.querySelectorAll('[data-mobile-event]')].map(event => event.textContent) };
+    });
+    assert.equal(result.hadRoster, true);
+    assert.equal(result.pending.roster, 0);
+    assert.equal(result.pending.stale, false);
+    assert.ok(result.events.length > 0);
+    assert.ok(result.events.every(name => name.includes('Replacement account class')));
 });

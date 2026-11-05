@@ -20,14 +20,13 @@ import type {
 } from "@/lib/instructor-availability";
 import {
     dateKey,
-    dojoCapacities,
     getEventStyle,
-    eventsForDate,
     formatTime,
     fullDate,
     weekDates,
 } from "@/lib/instructor-calendar";
-import type { CalendarEvent } from "@/lib/instructor-calendar";
+import { rosterSizeLabel } from "@/lib/instructor/calendar-view";
+import type { CalendarEventsForDate, CalendarViewEvent as CalendarEvent } from "@/lib/instructor/calendar-view";
 import { cn } from "@/lib/utils";
 
 type TimelineItem = { id: string; startTime: string; endTime: string } & (
@@ -37,6 +36,7 @@ type TimelineItem = { id: string; startTime: string; endTime: string } & (
 type DragRange = { day: Date; anchor: number; end: number; pointerId: number };
 
 export default function CalendarTimeline({
+    getEvents,
     date,
     now,
     view,
@@ -49,6 +49,7 @@ export default function CalendarTimeline({
     onSelectDate,
     isDesktop,
 }: {
+    getEvents: CalendarEventsForDate;
     date: Date;
     now: Date;
     view: "day" | "week";
@@ -57,7 +58,7 @@ export default function CalendarTimeline({
     selectedId: string | null;
     onSelectClass: (event: CalendarEvent) => void;
     onSelectAvailability: (slot: AvailabilitySlot) => void;
-    onSelectRange: (range: AvailabilityRange) => void;
+    onSelectRange?: (range: AvailabilityRange) => void;
     onSelectDate: (day: Date) => void;
     isDesktop: boolean;
 }) {
@@ -144,6 +145,7 @@ export default function CalendarTimeline({
     }, [rangeKey, focusRequest, timelineStart, timelineEnd, pixelsPerMinute]);
 
     function selectRange(range: AvailabilityRange) {
+        if (!onSelectRange) return;
         const nextError = availabilityError(range, slots);
         setError(nextError);
         if (!nextError) onSelectRange(range);
@@ -171,6 +173,8 @@ export default function CalendarTimeline({
                     {error}
                 </p>
             )}
+            {!days.some(day => getEvents(day).length || slots.some(slot => dateKey(slot.date) === dateKey(day))) &&
+                <p role="status" className="text-xs text-muted-foreground">No classes or availability scheduled.</p>}
             <div
                 ref={scrollRef}
                 className="h-[min(60dvh,36rem)] min-h-48 overflow-auto overscroll-contain rounded-xl border bg-card lg:h-auto lg:min-h-0 lg:flex-1"
@@ -249,7 +253,7 @@ export default function CalendarTimeline({
                         const isToday = key === dateKey(now);
                         const daySlots = slots.filter((slot) => dateKey(slot.date) === key);
                         const items: TimelineItem[] = [
-                            ...eventsForDate(day).map(
+                            ...getEvents(day).map(
                                 (event): TimelineItem => ({ ...event, kind: "class", event }),
                             ),
                             ...daySlots.map(
@@ -281,6 +285,7 @@ export default function CalendarTimeline({
                                     style={{ height }}
                                     onPointerDown={(event) => {
                                         if (
+                                            !onSelectRange ||
                                             event.button !== 0 ||
                                             event.pointerType === "touch" ||
                                             !(event.target instanceof HTMLElement) ||
@@ -342,6 +347,7 @@ export default function CalendarTimeline({
                                         const startTime = minutesTime(minute);
                                         const endTime = minutesTime(minute + 30);
                                         const disabled =
+                                            !onSelectRange ||
                                             (isDay &&
                                                 (minute < TIMELINE_START ||
                                                     minute + 30 > TIMELINE_END)) ||
@@ -468,8 +474,7 @@ export default function CalendarTimeline({
                                                             {item.event.dojo}
                                                         </span>
                                                         <span className="shrink-0">
-                                                            {item.event.studentIds.length}/
-                                                            {dojoCapacities[item.event.dojo]} students
+                                                            {rosterSizeLabel(item.event)}
                                                         </span>
                                                     </span>
                                                 )}

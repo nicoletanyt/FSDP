@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
 import {
     Check,
@@ -10,26 +10,20 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@/components/ui/popover";
-import GradeBadge from "@/components/GradeBadge";
+import GradeBadge from "@/components/instructor/DatabaseGradeBadge";
+import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import {
-    loadSession,
-    saveSession,
-    studentDetailsHref,
-    students,
-} from "@/lib/instructor-calendar";
-import type {
-    Attendance,
-    CalendarEvent,
-    SessionRecord,
-    Student,
-    StudentSession,
-} from "@/lib/instructor-calendar";
+import { studentDetailsHref } from "@/lib/instructor-calendar";
+import { useInstructorQuery } from "@/hooks/use-instructor-data";
+import { useInstructorApi } from "@/lib/instructor/data-context";
+import { parseEntityId, timestampMilliseconds } from "@/lib/instructor/adapters";
+import { collectCalendarPages } from "@/lib/instructor/calendar-queries";
+import { rosterAttendance } from "@/lib/instructor/calendar-view";
+import type { CalendarViewEvent as CalendarEvent } from "@/lib/instructor/calendar-view";
+import type { AttendanceState as Attendance, GradeRow } from "@/lib/instructor/types";
 import { cn } from "@/lib/utils";
-import {
-    sessionPhase,
-    studentSessionHistory,
-} from "@/lib/instructor-student-details";
+
+type Student = { id: string; name: string; grade: GradeRow | null };
 
 function AttendanceControls({
     student,
@@ -39,13 +33,15 @@ function AttendanceControls({
 }: {
     student: Student;
     value: Attendance;
-    onChange: (value: Attendance) => void;
+    onChange?: (value: Attendance) => void;
     readOnly?: boolean;
 }) {
-    if (readOnly) {
+    if (readOnly || value === "late" || value === "excused") {
         const label =
             value === "present"
                 ? "Present"
+                : value === "late" ? "Late"
+                : value === "excused" ? "Excused"
                 : value === "absent"
                     ? "Absent"
                     : "Unmarked";
@@ -57,14 +53,16 @@ function AttendanceControls({
                     title={label}
                     className={cn(
                         "flex size-7 shrink-0 items-center justify-center rounded-full",
+                        value === "late" && "w-auto rounded-md px-1.5 text-xs font-medium",
                         value === "present"
                             ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+                            : value === "late" ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200"
                             : value === "absent"
                                 ? "bg-red-100 text-red-600 dark:bg-red-950 dark:text-red-400"
                                 : "bg-muted text-muted-foreground",
                     )}
                 >
-                    {value === "present" ? (
+                    {value === "late" ? "Late" : value === "present" ? (
                         <CircleCheck aria-hidden="true" className="size-4" />
                     ) : value === "absent" ? (
                         <CircleX aria-hidden="true" className="size-4" />
@@ -88,8 +86,9 @@ function AttendanceControls({
                         variant="ghost"
                         size="icon-sm"
                         aria-pressed={value === "present"}
-                        aria-label={`Mark ${student.name} present${value === "present" ? " · selected, click again to clear" : ""}`}
-                        onClick={() => onChange(value === "present" ? "unmarked" : "present")}
+                        disabled={!onChange}
+                        aria-label={`Mark ${student.name} present${value === "present" ? onChange ? " · selected, click again to clear" : " · recorded" : ""}`}
+                        onClick={() => onChange?.(value === "present" ? "unmarked" : "present")}
                         className={cn(
                             "size-11 rounded-md px-0 text-xs text-foreground/70 transition-colors hover:bg-emerald-100 hover:text-emerald-800 lg:size-7 dark:hover:bg-emerald-950 dark:hover:text-emerald-300",
                             value === "present" &&
@@ -99,7 +98,7 @@ function AttendanceControls({
                 }>
                     <CircleCheck aria-hidden="true" className="size-4" />
                 </TooltipTrigger>
-                <TooltipContent>{value === "present" ? "Present · click to clear" : "Present"}</TooltipContent>
+                <TooltipContent>{value === "present" && onChange ? "Present · click to clear" : "Present"}</TooltipContent>
             </Tooltip>
             <Tooltip>
                 <TooltipTrigger render={
@@ -107,8 +106,9 @@ function AttendanceControls({
                         variant="ghost"
                         size="icon-sm"
                         aria-pressed={value === "absent"}
-                        aria-label={`Mark ${student.name} absent${value === "absent" ? " · selected, click again to clear" : ""}`}
-                        onClick={() => onChange(value === "absent" ? "unmarked" : "absent")}
+                        disabled={!onChange}
+                        aria-label={`Mark ${student.name} absent${value === "absent" ? onChange ? " · selected, click again to clear" : " · recorded" : ""}`}
+                        onClick={() => onChange?.(value === "absent" ? "unmarked" : "absent")}
                         className={cn(
                             "size-11 rounded-md px-0 text-xs text-foreground/70 transition-colors hover:bg-rose-100 hover:text-rose-800 lg:size-7 dark:hover:bg-rose-950 dark:hover:text-rose-300",
                             value === "absent" &&
@@ -118,7 +118,7 @@ function AttendanceControls({
                 }>
                     <CircleX aria-hidden="true" className="size-4" />
                 </TooltipTrigger>
-                <TooltipContent>{value === "absent" ? "Absent · click to clear" : "Absent"}</TooltipContent>
+                <TooltipContent>{value === "absent" && onChange ? "Absent · click to clear" : "Absent"}</TooltipContent>
             </Tooltip>
         </div>
     );
@@ -139,35 +139,28 @@ export default function ClassSessionDetails({
     fillHeight?: boolean;
     onToggle?: () => void;
 }) {
-    const [record, setRecord] = useState(() => {
-        const initial = loadSession(event);
-        const currentTime = new Date();
-        if (sessionPhase(event, currentTime) === "past") {
-            // Match student history, including any explicitly saved attendance.
-            for (const student of students.filter((item) =>
-                event.studentIds.includes(item.id),
-            )) {
-                const history = studentSessionHistory(
-                    student,
-                    currentTime,
-                    event,
-                ).find((item) => item.event.id === event.id);
-                if (history)
-                    initial[student.id].attendance = history.attendance;
-            }
-        }
-        return initial;
-    });
+    const api = useInstructorApi();
+    const loadRoster = useCallback((signal: AbortSignal) => collectCalendarPages(
+        options => api.getRoster(parseEntityId(event.id, "event"), options),
+        entry => entry.record.student_id, signal,
+    ), [api, event.id]);
+    const query = useInstructorQuery(`roster:${event.id}`, loadRoster, expanded);
+    const entries = query.data ?? [];
+    const roster: Student[] = entries.map(({ student }) => ({
+        id: student.student.id,
+        name: [student.student.first_name, student.student.last_name].filter(Boolean).join(" ") || student.student.email,
+        grade: student.grade,
+    }));
+    const record = Object.fromEntries(entries.map(entry => [entry.record.student_id, {
+        attendance: rosterAttendance(entry.record, event.startsAt), comment: entry.record.report ?? "",
+    }]));
     const [now, setNow] = useState(() => new Date());
     useEffect(() => {
         const timer = window.setInterval(() => setNow(new Date()), 60_000);
         return () => window.clearInterval(timer);
     }, []);
-    const isPast = sessionPhase(event, now) === "past";
+    const isPast = timestampMilliseconds(event.endsAt) <= now.getTime();
     const isGrading = event.type === "grading";
-    const roster = students.filter((student) =>
-        event.studentIds.includes(student.id),
-    );
     const marked = roster.filter(
         (student) => record[student.id].attendance !== "unmarked",
     ).length;
@@ -175,33 +168,9 @@ export default function ClassSessionDetails({
         roster.length > 0 &&
         roster.every((student) => record[student.id].attendance === "present");
 
-    function persistRecord(next: SessionRecord) {
-        if (sessionPhase(event, new Date()) === "past") return;
-        saveSession(event.id, next);
-        setRecord(next);
-    }
-
-    function updateStudent(id: string, changes: Partial<StudentSession>) {
-        persistRecord({
-            ...record,
-            [id]: { ...record[id], ...changes },
-        });
-    }
-
-    function toggleAllAttendance() {
-        const attendance = allPresent ? "absent" : "present";
-        persistRecord(
-            Object.fromEntries(
-                Object.entries(record).map(([id, value]) => [
-                    id,
-                    { ...value, attendance },
-                ]),
-            ),
-        );
-    }
-
     return (
         <div
+            aria-busy={query.status === "loading"}
             className={cn(
                 "bg-background text-foreground",
                 fillHeight && "lg:flex lg:min-h-0 lg:flex-1 lg:flex-col",
@@ -241,11 +210,13 @@ export default function ClassSessionDetails({
                                 aria-live="polite"
                                 className="text-muted-foreground"
                             >
-                                {marked}/{roster.length} marked
+                                {query.status === "success" ? `${marked}/${roster.length} marked` : "…"}
                             </span>
                         </div>
                     </div>
                 )}
+                {query.status !== "success" ? <InstructorDataStatus loading={query.status === "loading"} error={query.error} onRetry={query.retry} /> : <>
+                {!roster.length && <p role="status" className="p-4 text-sm text-muted-foreground">No students are registered for this session.</p>}
                 <TooltipProvider>
                     <ul
                         aria-label="Student roster"
@@ -265,7 +236,7 @@ export default function ClassSessionDetails({
                                             </PopoverTrigger>
                                             <PopoverContent align="start" className="gap-2">
                                                 <PopoverTitle>{student.name}</PopoverTitle>
-                                                <GradeBadge rank={student.rank} system={student.gradingSystem} showBeltLabel />
+                                                <GradeBadge grade={student.grade} showBeltLabel />
                                             </PopoverContent>
                                         </Popover>
                                         <span title={student.name} className="hidden min-w-0 truncate text-2xs font-medium lg:block">{student.name}</span>
@@ -275,7 +246,6 @@ export default function ClassSessionDetails({
                                             student={student}
                                             value={value.attendance}
                                             readOnly={isPast}
-                                            onChange={(attendance) => updateStudent(student.id, { attendance })}
                                         />
                                         <Tooltip>
                                             <TooltipTrigger render={
@@ -302,8 +272,7 @@ export default function ClassSessionDetails({
                                     </div>
                                     <div className="col-start-2 row-start-1 flex min-w-0 items-center lg:col-start-1 lg:row-start-2">
                                         <GradeBadge
-                                            rank={student.rank}
-                                            system={student.gradingSystem}
+                                            grade={student.grade}
                                             className="h-auto max-w-16 flex-nowrap rounded-none border-0 bg-transparent p-0 text-[11px] text-muted-foreground lg:h-4 lg:max-w-full lg:leading-4 [&>span:first-child]:min-w-0 [&>span:first-child]:truncate [&>span:first-child]:font-normal [&>[aria-hidden]]:h-1.5 [&>[aria-hidden]]:w-2 lg:[&>[aria-hidden]]:w-3"
                                         />
                                     </div>
@@ -312,13 +281,15 @@ export default function ClassSessionDetails({
                         })}
                     </ul>
                 </TooltipProvider>
+                </>}
                 {!isPast && (
                     <div className="shrink-0 border-t border-border/50 px-3 py-2">
                         <div className="flex items-center justify-between gap-2">
                             <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={toggleAllAttendance}
+                                disabled
+                                title="Attendance is read-only during this phase"
                                 className="h-auto min-h-11 min-w-0 shrink px-3 py-1.5 text-xs whitespace-normal lg:min-h-8"
                             >
                                 {allPresent ? (

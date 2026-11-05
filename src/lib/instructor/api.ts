@@ -1,0 +1,307 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
+import { parseEntityId, parseInstructorRow, resolveInstructorIdentity, timestampMilliseconds } from './adapters'
+import {
+  assertAssessment, dateOnly, decodeApplication, decodeAvailability, decodeCalendarEntry,
+  decodeCentre, decodeClassType, decodeDirectory, decodeGrade, decodeGradeRequirement, decodeGradeTrack,
+  decodeHistoryEntry, decodePage, decodeRosterEntry, decodeSessionReport, decodeStudentDetail,
+  decodeSummary, decodeSyllabusItem, decodeTechniqueSignOff,
+} from './decoders'
+import { InstructorDataError, toInstructorDataError } from './errors'
+import type {
+  AssessmentDetail, AssessmentKey, CalendarOptions, DirectoryOptions, EventId, HistoryOptions,
+  InstructorIdentity, InstructorReferenceData, Page, PageOptions, StudentId,
+} from './types'
+
+// Inject the existing shared Supabase client at the provider boundary. This does
+// not create another auth session or require browser env configuration in tests.
+type InstructorClient = Pick<SupabaseClient, 'auth' | 'from' | 'rpc'>
+
+type TableResponse = { data: unknown[] | null; error: unknown; count: number | null }
+
+const calendarSelect = '*, centre:centres(*), class:classes(*, class_type:class_types(*)), grading:gradings(*, target_grades:grading_target_grades(grade:grades(*))), seminar:seminars(*), workshop:workshops(*), participants:event_students(count)'
+const studentSelect = '*, grade:grades(*), centre:centres(*)'
+const rosterSelect = `*, student:students(${studentSelect})`
+
+function invalidRequest(message: string): never {
+  throw new InstructorDataError('invalid_request', message)
+}
+
+function pagination(options: PageOptions = {}) {
+  const { limit = 50, offset = 0, signal } = options
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100 || !Number.isSafeInteger(offset) || offset < 0
+      || offset > 2_147_483_647 - limit) invalidRequest('Use a page size of 1–100 and a valid non-negative offset.')
+  return { limit, offset, signal }
+}
+
+function cancellable<Query extends { abortSignal(signal: AbortSignal): unknown }>(query: Query, signal?: AbortSignal): Query {
+  if (signal) query.abortSignal(signal)
+  return query
+}
+
+function dateRange(from: string, to: string, timestamp: boolean) {
+  const start = timestamp ? timestampMilliseconds(from) : Date.parse(`${dateOnly(from)}T00:00:00Z`)
+  const end = timestamp ? timestampMilliseconds(to) : Date.parse(`${dateOnly(to)}T00:00:00Z`)
+  if (end <= start || end - start > 62 * 86_400_000) invalidRequest('Choose a date range greater than zero and no longer than 62 days.')
+}
+
+export async function requestInstructorData<T>(
+  operation: () => PromiseLike<{ data: T | null; error: unknown }>,
+  errorMessage: string,
+  signal?: AbortSignal,
+): Promise<T | null> {
+  try {
+    signal?.throwIfAborted()
+    const { data, error } = await operation()
+    signal?.throwIfAborted()
+    if (error) throw error
+    return data
+  } catch (error) {
+    throw toInstructorDataError(error, errorMessage)
+  }
+}
+
+export function createInstructorApi(client: InstructorClient) {
+  async function getCurrentInstructor(signal?: AbortSignal): Promise<InstructorIdentity> {
+    try {
+      signal?.throwIfAborted()
+      const { data: { user }, error } = await client.auth.getUser()
+      if (error) throw error
+      if (!user) throw new InstructorDataError('unauthenticated', 'Sign in to access instructor records.')
+
+      const userId = parseEntityId(user.id, 'auth-user')
+      const profile = await requestInstructorData(
+        () => cancellable(client.from('users').select('id, role').eq('id', userId), signal)
+          .maybeSingle<{ id: string; role: string }>(),
+        'Unable to verify instructor permissions. Please try again.', signal,
+      )
+      if (profile?.id !== userId || profile.role !== 'instructor') {
+        throw new InstructorDataError('forbidden', 'Instructor access is required.')
+      }
+
+      const record = await requestInstructorData(
+        () => cancellable(client.from('instructors')
+          .select('id, user_id, first_name, last_name, email, created_at, updated_at')
+          .eq('user_id', userId), signal).maybeSingle<unknown>(),
+        'Unable to load your instructor record. Please try again.', signal,
+      )
+      // Never equate auth.users.id with instructors.id or match by email/name.
+      return resolveInstructorIdentity(userId, record === null ? null : parseInstructorRow(record))
+    } catch (error) {
+      throw toInstructorDataError(error, 'Unable to load your instructor account. Please try again.')
+    }
+  }
+
+  async function tablePage<T>(query: PromiseLike<TableResponse>, decode: (value: unknown) => T, options: PageOptions): Promise<Page<T>> {
+    const page = pagination(options)
+    const response = await requestInstructorData(
+      () => query.then(result => ({ data: { items: result.data, total: result.count, offset: page.offset, limit: page.limit }, error: result.error })),
+      'Unable to load instructor records. Please try again.', page.signal,
+    )
+    return decodePage(response, decode)
+  }
+
+  async function allRows<T>(table: string, order: string[], decode: (value: unknown) => T, signal?: AbortSignal, select = '*', filters: Record<string, string> = {}): Promise<T[]> {
+    const result: T[] = []
+    let total: number
+    do {
+      const query = client.from(table).select(select, { count: 'exact' })
+      for (const [column, value] of Object.entries(filters)) query.eq(column, value)
+      for (const column of order) query.order(column)
+      const page = await tablePage(cancellable(query.range(result.length, result.length + 99).returns<unknown[]>(), signal), decode,
+        { limit: 100, offset: result.length, signal })
+      total = page.total
+      if (!page.items.length && result.length < total) {
+        throw new InstructorDataError('invalid_data', 'The instructor records changed while loading. Please retry.')
+      }
+      result.push(...page.items)
+    } while (result.length < total)
+    return result
+  }
+
+  async function rpc(name: string, parameters: Record<string, unknown>, signal?: AbortSignal) {
+    const data = await requestInstructorData(
+      () => cancellable(client.rpc(name, parameters).returns<unknown>(), signal),
+      'Unable to load instructor records. Please try again.', signal,
+    )
+    if (data === null) throw new InstructorDataError('invalid_data', 'The instructor data response is missing.')
+    return data
+  }
+
+  async function getEventForInstructor(id: EventId, identity: InstructorIdentity, signal?: AbortSignal) {
+    const data = await requestInstructorData(
+      () => cancellable(client.from('events').select(calendarSelect).eq('id', id)
+        .eq('instructor_id', identity.instructorId), signal).maybeSingle<unknown>(),
+      'Unable to load the class session. Please try again.', signal,
+    )
+    if (data === null) return null
+    const session = decodeCalendarEntry(data)
+    if (session.event.id !== id || session.event.instructor_id !== identity.instructorId) {
+      throw new InstructorDataError('invalid_data', 'The session does not match the current instructor.')
+    }
+    return session
+  }
+
+  async function getStudentHistory(id: StudentId, options: HistoryOptions = {}) {
+    const studentId = parseEntityId(id, 'student')
+    const page = pagination(options)
+    if (options.eventType !== undefined && !['class', 'seminar', 'workshop', 'grading'].includes(options.eventType)) invalidRequest('Choose a valid event type.')
+    if (options.attendance !== undefined && !['present', 'late', 'absent', 'excused', 'unmarked'].includes(options.attendance)) invalidRequest('Choose a valid attendance filter.')
+    for (const value of [options.oldestFirst, options.recordedAssessmentsOnly, options.reportsOnly]) {
+      if (value !== undefined && typeof value !== 'boolean') invalidRequest('Choose valid history filters.')
+    }
+    await getCurrentInstructor(page.signal)
+    const data = await rpc('instructor_student_history', {
+      target_student: studentId, page_size: page.limit, page_offset: page.offset,
+      filter_type: options.eventType ?? null,
+      filter_attendance: options.attendance === 'unmarked' ? null : options.attendance ?? null,
+      unmarked_only: options.attendance === 'unmarked', oldest_first: options.oldestFirst ?? false,
+      recorded_assessments_only: options.recordedAssessmentsOnly ?? false, reports_only: options.reportsOnly ?? false,
+    }, page.signal)
+    const result = decodePage(data, decodeHistoryEntry)
+    if (result.items.some(item => item.record.student_id !== studentId
+        || (options.recordedAssessmentsOnly && (item.event.event_type !== 'grading' || item.record.assessment_status === null)))) {
+      throw new InstructorDataError('invalid_data', 'The session history does not match the student.')
+    }
+    return result
+  }
+
+  return {
+    getCurrentInstructor,
+
+    async getClassTypes(signal?: AbortSignal) {
+      await getCurrentInstructor(signal)
+      return allRows('class_types', ['id'], decodeClassType, signal)
+    },
+
+    async getReferenceData(signal?: AbortSignal): Promise<InstructorReferenceData> {
+      await getCurrentInstructor(signal)
+      const [centres, grades, gradeTracks, gradeRequirements, syllabusItems, classTypes] = await Promise.all([
+        allRows('centres', ['name', 'id'], decodeCentre, signal),
+        allRows('grades', ['sort_order', 'id'], decodeGrade, signal),
+        allRows('grade_tracks', ['grade_id', 'track'], decodeGradeTrack, signal),
+        allRows('grade_requirements', ['grade_id', 'track'], decodeGradeRequirement, signal),
+        allRows('syllabus_items', ['grade_id', 'track', 'category', 'sort_order', 'id'], decodeSyllabusItem, signal),
+        allRows('class_types', ['id'], decodeClassType, signal),
+      ])
+      return { centres, grades, gradeTracks, gradeRequirements, syllabusItems, classTypes }
+    },
+
+    async getCalendar(options: CalendarOptions) {
+      const page = pagination(options)
+      dateRange(options.from, options.to, true)
+      const identity = await getCurrentInstructor(page.signal)
+      return tablePage(cancellable(client.from('events').select(calendarSelect, { count: 'exact' })
+        .eq('instructor_id', identity.instructorId).lt('starts_at', options.to).gt('ends_at', options.from)
+        .order('starts_at').order('id').range(page.offset, page.offset + page.limit - 1).returns<unknown[]>(), page.signal),
+      decodeCalendarEntry, page)
+    },
+
+    async getEvent(id: EventId, signal?: AbortSignal) {
+      return getEventForInstructor(parseEntityId(id, 'event'), await getCurrentInstructor(signal), signal)
+    },
+
+    async getAvailability(options: PageOptions & { from: string; to: string }) {
+      const page = pagination(options)
+      dateRange(options.from, options.to, false)
+      const identity = await getCurrentInstructor(page.signal)
+      return tablePage(cancellable(client.from('instructor_availability').select('*', { count: 'exact' })
+        .eq('instructor_id', identity.instructorId).gte('date', options.from).lt('date', options.to)
+        .order('date').order('start_time').order('id').range(page.offset, page.offset + page.limit - 1).returns<unknown[]>(), page.signal),
+      decodeAvailability, page)
+    },
+
+    async getStudents(options: DirectoryOptions = {}) {
+      const page = pagination(options)
+      const search = options.search ?? ''
+      if (typeof search !== 'string' || search.length > 200) invalidRequest('Use a student search of at most 200 characters.')
+      if (options.gradeId !== undefined && typeof options.gradeId !== 'string') invalidRequest('Choose a valid grade.')
+      if (options.colour !== undefined && typeof options.colour !== 'string') invalidRequest('Choose a valid belt colour.')
+      const centre = options.centreId === undefined ? null : parseEntityId(options.centreId, 'centre')
+      await getCurrentInstructor(page.signal)
+      return decodeDirectory(await rpc('instructor_student_directory', {
+        search_text: search, filter_grade: options.gradeId ?? null, filter_colour: options.colour ?? null,
+        filter_centre: centre, page_size: page.limit, page_offset: page.offset,
+      }, page.signal))
+    },
+
+    async getStudentDetail(id: StudentId, signal?: AbortSignal) {
+      const studentId = parseEntityId(id, 'student')
+      await getCurrentInstructor(signal)
+      const data = await requestInstructorData(
+        () => cancellable(client.from('students').select(`${studentSelect}, emergency_contacts(*), medical_alerts:student_medical_alerts(*)`)
+          .eq('id', studentId), signal).maybeSingle<unknown>(),
+        'Unable to load the student profile. Please try again.', signal,
+      )
+      const detail = data === null ? null : decodeStudentDetail(data)
+      if (detail && detail.student.id !== studentId) throw new InstructorDataError('invalid_data', 'The student profile does not match.')
+      return detail
+    },
+
+    async getRoster(id: EventId, options: PageOptions = {}) {
+      const eventId = parseEntityId(id, 'event')
+      const page = pagination(options)
+      const session = await getEventForInstructor(eventId, await getCurrentInstructor(page.signal), page.signal)
+      if (!session) return null
+      return tablePage(cancellable(client.from('event_students').select(rosterSelect, { count: 'exact' })
+        .eq('event_id', eventId).order('student_id').range(page.offset, page.offset + page.limit - 1).returns<unknown[]>(), page.signal),
+      value => {
+        const entry = decodeRosterEntry(value)
+        if (entry.record.event_id !== eventId) throw new InstructorDataError('invalid_data', 'The roster does not match the session.')
+        return entry
+      }, page)
+    },
+
+    getStudentHistory,
+
+    getRecordedAssessments(id: StudentId, options: PageOptions = {}) {
+      return getStudentHistory(id, { ...options, eventType: 'grading', recordedAssessmentsOnly: true })
+    },
+
+    async getStudentSummary(id: StudentId, signal?: AbortSignal) {
+      const studentId = parseEntityId(id, 'student')
+      await getCurrentInstructor(signal)
+      return decodeSummary(await rpc('instructor_student_summary', { target_student: studentId }, signal))
+    },
+
+    async getSessionReports(id: EventId, options: PageOptions = {}) {
+      const eventId = parseEntityId(id, 'event')
+      const page = pagination(options)
+      await getCurrentInstructor(page.signal)
+      const result = decodePage(await rpc('instructor_event_reports', {
+        target_event: eventId, page_size: page.limit, page_offset: page.offset,
+      }, page.signal), decodeSessionReport)
+      if (result.items.some(item => item.record.event_id !== eventId)) throw new InstructorDataError('invalid_data', 'The reports do not match the session.')
+      return result
+    },
+
+    async getTechniqueSignOffs(id: StudentId, signal?: AbortSignal) {
+      const studentId = parseEntityId(id, 'student')
+      await getCurrentInstructor(signal)
+      const rows = await allRows('technique_sign_offs', ['signed_off_at', 'id'], decodeTechniqueSignOff, signal,
+        '*, instructor:instructors(*)', { student_id: studentId })
+      if (rows.some(item => item.signOff.student_id !== studentId)) throw new InstructorDataError('invalid_data', 'The technique sign-offs do not match the student.')
+      return rows
+    },
+
+    async getAssessment(key: AssessmentKey, signal?: AbortSignal): Promise<AssessmentDetail | null> {
+      const eventId = parseEntityId(key.eventId, 'event')
+      const studentId = parseEntityId(key.studentId, 'student')
+      const session = await getEventForInstructor(eventId, await getCurrentInstructor(signal), signal)
+      if (!session || session.event.event_type !== 'grading') return null
+      const value = await requestInstructorData(
+        () => cancellable(client.from('event_students').select(rosterSelect).eq('event_id', eventId)
+          .eq('student_id', studentId), signal).maybeSingle<unknown>(),
+        'Unable to load the assessment. Please try again.', signal,
+      )
+      if (value === null) return null
+      const roster = decodeRosterEntry(value)
+      if (roster.record.student_id !== studentId) throw new InstructorDataError('invalid_data', 'The assessment does not match the student.')
+      const application = await requestInstructorData(
+        () => cancellable(client.from('grading_applications').select('*').eq('grading_event_id', eventId)
+          .eq('student_id', studentId), signal).maybeSingle<unknown>(),
+        'Unable to load the assessment target grade. Please try again.', signal,
+      )
+      return assertAssessment({ ...roster, session, application: application === null ? null : decodeApplication(application) })
+    },
+  }
+}

@@ -1,6 +1,6 @@
 import type { StudentRank } from "./student-grades";
 
-export type EventType = "training" | "grading";
+export type EventType = "training" | "grading" | "seminar" | "workshop";
 export type ClassType = keyof typeof classTypes;
 export type CalendarEvent = {
     id: string;
@@ -243,6 +243,9 @@ export const eventStyles = {
 };
 
 export function getEventStyle(event: Pick<CalendarEvent, "type" | "classType">) {
+    if (event.type === "seminar" || event.type === "workshop") {
+        return { ...eventStyles.training, label: event.type === "seminar" ? "Seminar" : "Workshop" };
+    }
     return event.type === "training" && event.classType
         ? { ...classTypes[event.classType], label: eventStyles.training.label }
         : eventStyles[event.type];
@@ -289,7 +292,8 @@ export function eventsForDate(date: Date): CalendarEvent[] {
 }
 
 export function formatTime(time: string) {
-    const [hours, minutes] = time.split(":").map(Number);
+    const [rawHours, minutes] = time.split(":").map(Number);
+    const hours = rawHours % 24;
     return `${hours % 12 || 12}:${String(minutes).padStart(2, "0")} ${hours >= 12 ? "PM" : "AM"}`;
 }
 
@@ -318,12 +322,12 @@ export function findCalendarEvent(id: string | undefined) {
     return date ? eventsForDate(date).find((event) => event.id === id) : undefined;
 }
 
-export function calendarHref(event: CalendarEvent) {
+export function calendarHref(event: Pick<CalendarEvent, "id" | "date">) {
     const params = new URLSearchParams({ date: dateKey(event.date), session: event.id });
     return `/instructor/calendar?${params}`;
 }
 
-export function studentDetailsHref(studentId: string, event?: CalendarEvent, tab?: "overview" | "sessions" | "grading") {
+export function studentDetailsHref(studentId: string, event?: Pick<CalendarEvent, "id" | "date">, tab?: "overview" | "sessions" | "grading") {
     const params = new URLSearchParams();
     if (event) {
         params.set("date", dateKey(event.date));
