@@ -158,9 +158,7 @@ test('directory shares student-detail page gutters, card insets and section spac
                 const fieldGap = parseFloat(w.getComputedStyle(popup.querySelector('label').parentElement).rowGap);
                 ui.button('Done', popup).click(); await wait();
                 const destination = row.getAttribute('href');
-                // Profile wiring is Phase 6. Measure the existing detail fixture
-                // explicitly rather than passing a real UUID into mock records.
-                w.history.pushState(null, '', '/instructor/students/student-1');
+                w.history.pushState(null, '', destination);
                 w.dispatchEvent(new w.PopStateEvent('popstate')); await wait(700);
                 const detail = frame();
                 const detailSection = d.querySelector('.detail-section');

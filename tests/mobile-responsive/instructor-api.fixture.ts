@@ -7,6 +7,7 @@ import { InstructorDataError } from '../../src/lib/instructor/errors'
 import type { InstructorApi } from '../../src/lib/instructor/calendar-queries'
 import type { CalendarEntry, CentreRow, EventId, Page, PageOptions, RosterEntry, StudentId, InstructorId, InstructorAvailabilityRow } from '../../src/lib/instructor/types'
 import { createDirectoryFixtureReader } from './instructor-directory.fixture'
+import { createDetailFixtureReads } from './instructor-detail.fixture'
 
 const uuid = (number: number) => `00000000-0000-4000-8000-${String(number).padStart(12, '0')}`
 const instructorId = uuid(1) as InstructorId
@@ -59,8 +60,8 @@ export function createCalendarFixtureApi(account = 'audit'): InstructorApi {
   const unsupported = async (): Promise<never> => { throw new Error('Unexpected fixture API operation') }
   return {
     getCurrentInstructor: unsupported, getReferenceData: unsupported, getStudents: createDirectoryFixtureReader(account, mode),
-    getStudentDetail: unsupported, getStudentHistory: unsupported, getRecordedAssessments: unsupported,
-    getStudentSummary: unsupported, getSessionReports: unsupported, getTechniqueSignOffs: unsupported, getAssessment: unsupported,
+    ...createDetailFixtureReads(account, mode), getRecordedAssessments: unsupported,
+    getSessionReports: unsupported, getTechniqueSignOffs: unsupported, getAssessment: unsupported,
     getClassTypes: async () => mode === 'empty' ? [] : catalogue,
     async getCalendar(options) {
       if (account !== 'audit') await new Promise(resolve => setTimeout(resolve, 800))

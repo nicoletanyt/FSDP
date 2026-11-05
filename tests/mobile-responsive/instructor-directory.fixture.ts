@@ -19,7 +19,7 @@ const centres: CentreRow[] = ['Central Dojo', 'Northside Dojo'].map((name, index
 }))
 const ranks = [...new Set(students.map(student => student.rank))].sort(compareRanks)
 
-function directoryEntries(): StudentEntry[] {
+export function directoryEntries(): StudentEntry[] {
   return students.map((student, index) => {
     const rank = getGrade(student.gradingSystem, student.rank)!
     const grade: GradeRow = { id: student.rank, label: formatRank(student.rank),

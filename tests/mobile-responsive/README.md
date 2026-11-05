@@ -8,8 +8,9 @@ production Vite entry point.
 The fixture injects the API from `instructor-api.fixture.ts` through the production
 data context. Its clock represents 09:00 Singapore time. Directory responses come
 from `instructor-directory.fixture.ts` and use database-shaped rows and UUIDs.
-Student details retain their old fixture until Phase 6; geometry tests navigate
-to it explicitly instead of manufacturing profile data for a real UUID.
+Student profiles/history/attendance use database-shaped records from
+`instructor-detail.fixture.ts`; directory/detail geometry checks follow real UUID
+links through the same production API context.
 
 Start the following in separate terminals:
 
@@ -23,6 +24,7 @@ Then run:
 ```sh
 node --test tests/mobile-responsive/calendar.test.mjs
 node --test tests/mobile-responsive/students.test.mjs
+node --test tests/mobile-responsive/student-details.test.mjs
 ```
 
 Use `FSDP_BASE_URL` and `WEBDRIVER_URL` if those services run elsewhere. The
@@ -97,6 +99,14 @@ The directory suite checks:
 
 Long-content stress checks replace rendered text only; they do not alter
 production records or backend behavior.
+
+The student-detail suite checks responsive profiles and dialogs at 320–1440px,
+stored contacts and active medical alerts, missing optional records, real UUID
+deep links and calendar/roster context navigation, 205-session history pagination,
+global attendance filters/date ordering, separate teacher/report-author identities,
+unknown authors, independent complete attendance aggregates, loading/error/retry
+and successful-empty states, unlinked/expired-student access, disabled report
+writes, account isolation and late responses after switching students.
 
 Known data-only-phase limitation: at 1024px and 200% root text, the existing
 student-page navbar's `calc(92% + 3rem)` width exceeds the usable viewport. The

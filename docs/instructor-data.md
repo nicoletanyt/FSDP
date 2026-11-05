@@ -1,5 +1,85 @@
 # Instructor data contracts
 
+## Implementation status and remaining roadmap
+
+**Current checkpoint: Phase 6 is implemented and awaiting approval. Four main
+implementation phases remain.** Each phase, including each mutation checkpoint,
+requires the project owner's approval before the next one starts. The statuses
+below describe code implementation; cloud migration deployment is verified
+separately against the target project's migration history.
+
+### Completed work
+
+| Phase | Completed scope |
+| --- | --- |
+| 0–1 | Repository/schema audit and phased implementation plan. |
+| 2 | Instructor types, response adapters, distinct auth/domain identities and API foundation. |
+| 3 | Read APIs, pagination/aggregate contracts, database authorization and report-author protection. |
+| 4 | Live calendar, availability reads and class rosters; Singapore-time projections, UUID selection and loading/error/empty states. |
+| 5 | Live all-student directory, URL-backed filters, local pagination and an account-scoped in-memory snapshot. Search/filter/page changes make no further directory API requests after the initial load. |
+| 6 | Live UUID student profiles, home centres, contact/emergency records, active medical alerts, cross-instructor/dojo session history, real report authors and complete attendance summaries. |
+| Approved follow-ups | Calendar access for unlinked accounts, availability creation with transactional first-save linking, and linked instructor-row provisioning during trusted account creation. Availability creation was pulled forward from the mutation phase. |
+
+The calendar seed script and its Supabase test records are testing support, not
+another implementation phase. See [calendar test records](../README.md#instructor-calendar-test-records).
+
+### Remaining phases
+
+The phase numbers retain the original plan. Phase 9 is deferred, so the four
+remaining main phases are **7, 8, 10 and 11**.
+
+| Phase | Goal and principal files | Verification / completion checkpoint |
+| --- | --- | --- |
+| **7 — Grading reads and readiness** | Wire the grading sections in `InstructorStudentDetails.tsx` to database grades, requirements, syllabus, sign-offs and recorded assessments. Resolve date-only grading compatibility in the instructor event model/calendar projection using the fetched grading date/reporting fields. | “Ready” means ready to start assessment and excludes technique completion. Technique items are assessed during assessment. Show recorded status/notes without inferring passed promotions or historical from-grades; never invent a reporting timestamp. |
+| **8 — Reports and assessment-page reads** | Wire `src/pages/Instructor/InstructorStudentReports.tsx` and `src/pages/Instructor/InstructorGradingAssessment.tsx` to stored event/student records, actual previous feedback and application target grades where recorded. | Event/student composite keys, correct candidate/event association, actual authors, missing/unknown target handling, permission failures and loading/error/empty states. |
+| **10 — Persisted save actions** | Connect the verified read views to real attendance, author-owned report, assessment, technique-sign-off and availability edit/delete operations. Availability creation is already implemented. | Ship the separate checkpoints below with server-enforced permissions, pending/error/retry states, preservation of unrelated fields, concurrency/idempotency checks where relevant and persistence after reload. |
+| **11 — Mock cleanup and final verification** | Remove replaced production instructor fixtures, generated histories and local demo save helpers only after their replacements are verified. Preserve shared dependencies required by the out-of-scope student portal and intentional test fixtures. | Confirm instructor production imports use real data, verify complete read/write flows, and run the affected build, database/API and browser suites. Keep test fixtures explicitly scoped to tests. |
+
+### Phase 10 mutation checkpoints
+
+Each checkpoint is independently verified and approved before the next begins:
+
+1. **10A — Attendance:** individual marking/clearing and transactional bulk
+   marking, with approved time/ownership rules and complete roster handling.
+2. **10B — Reports and assessments:** persist report text and assessment
+   status/notes. An instructor edits only their own report; derive author identity
+   from the linked instructor record rather than the auth-user ID.
+3. **10C — Availability editing/deletion:** add the remaining mutations with
+   ownership checks and authoritative Singapore-time conflict validation. Existing
+   creation, first-save linking and retry behavior are retained.
+4. **10D — Technique sign-offs:** persist assessment checklist marks and permitted
+   undo actions using actual syllabus IDs and server-enforced signer identity.
+
+### Decisions, scope and known follow-ups
+
+- **Open before assessment-checklist mutations:** the current sign-off table is
+  unique per student/syllabus item and has no assessment-event reference. Confirm
+  whether marks persist across attempts or each assessment needs its own
+  checklist before proposing any schema change.
+- Photos and examiner signatures remain **browser-local**, as requested.
+- **Phase 9 / QR-check-in work is deferred** and is not counted in the five
+  remaining phases. The chatbot and student-portal implementation are excluded.
+- Grading-result processing, belt promotions and application approvals remain
+  outside scope; recorded assessments are not treated as promotion history.
+- The pre-existing 1024px enlarged-text navbar overflow is documented below.
+  Fixing that styling issue requires a separate UI-scope decision and is not
+  hidden by weakening the browser assertion.
+- Preserve the existing visual design. Add required asynchronous states, verify
+  each phase, list schema/plan deviations and wait for approval at the checkpoint.
+
+### Verification and rollback rules for remaining phases
+
+Run `npm run build`, relevant Node/database/API tests and affected browser checks.
+Backend changes also require `npm run check:functions` and
+`npm run test:functions`. Lint is unavailable unless a lint script is explicitly
+introduced; do not report a lint pass. Record any known failures separately.
+
+Read-wiring rollback reverts that frontend phase. Mutation rollback disables or
+reverts the newly introduced write path while preserving saved records. Database
+changes use additive/follow-up migrations; retain the approved authorization
+protections. Keep mocks until their replacement is verified, and add new
+endpoints/fields only when grounded in the schema or separately approved.
+
 ## Phase 3: read access
 
 Implementation: `src/lib/instructor/api.ts`, `decoders.ts`, and `types.ts`.
@@ -134,7 +214,7 @@ roster entries use first check-in time (or recorded time when check-in is absent
 and the five-minute grace period; a yellow Late badge represents late arrival.
 Explicit absent/excused/unmarked states are preserved. The original mock modules
 remain available to pages awaiting their own wiring; this calendar has no mock
-fallback. Student-detail destinations are wired in the later student-detail phase.
+fallback. Student-detail destinations are now wired by Phase 6 below.
 
 Tests inject a deterministic API through the same context, exclusively from
 `tests/mobile-responsive/instructor-api.fixture.ts`. Browser checks cover the
@@ -217,9 +297,8 @@ with dates evaluated in Singapore time; a future birth date is unverified.
   distinct states. Failed reads cannot become a successful zero count. Retry,
   clear/reset actions, browser Back, focus return and open popovers are preserved.
 - An unlinked instructor has the same all-student read access as a linked one.
-  Student-detail links carry real UUIDs; profile/history wiring
-  remains the next phase. Tests measure the old detail fixture explicitly rather
-  than feeding a real UUID into fake profile/history generation.
+   Student-detail links carry real UUIDs; Phase 6 now wires the destination to
+   real profiles/history and the geometry checks follow those same UUID links.
 
 ### Schema reconciliation
 
@@ -300,3 +379,73 @@ visible pagination leave that request count at three. Unit/browser tests also
 verify partial-page failure and retry, immutable filtering, literal search,
 complete facets and account isolation. This is a frontend data/state change;
 the existing API and database migration contracts are retained.
+
+## Phase 6: student details and session history
+
+`InstructorStudentDetails.tsx` uses `getStudentDetail` through the instructor API
+context. Names, member numbers, grades, home centres, membership status, email,
+phone, primary-first emergency contacts and active medical alerts come from stored
+records. Missing optional joins, phone numbers, contacts and alerts have explicit
+states. A missing student is distinct from a failed read or malformed UUID.
+
+The existing sidebar/mobile cards, contact/medical dialogs, tabs, page gutters and
+card insets are retained. `session` and legacy `class` context values accept UUIDs.
+Context loads the assigned event and its complete roster, independently of the
+calendar's visible range; previous/next student links retain the selected session
+and tab. Calendar return links use the actual UUID and Singapore date. Unavailable
+or failed context reads do not prevent access to the student's profile/history.
+
+`StudentSessionHistory.tsx` reads class history across all instructors and dojos,
+in pages of 20. Attendance filters (present, late, absent, excused and unmarked)
+and date ordering apply to the entire server-side history, reset pagination, and
+retain the active controls during loading/error/retry. Each page exposes its full
+filtered total. Cancelled sessions remain visible and labelled in history.
+Singapore date/time formatting includes the end date for cross-midnight sessions.
+The class instructor and actual report author are separate identities; an absent
+report author is explicitly unknown and is never replaced with the class teacher
+or signed-in account. Report text has no generated fallback.
+
+Overview attendance comes directly from `getStudentSummary`, independently of
+history filters/pages. It shows all six training totals, complete reporting dates,
+last attended class/centre, absence streaks and current-cycle attendance. Present
+and late count as attended; the rate denominator is present + late + absent.
+Excused and unmarked counts are shown separately and excluded from the rate.
+Recent feedback is a separate newest-first, reports-only class-history query;
+reports outside the first visible history page remain discoverable.
+
+Every request uses the existing account/resource-scoped hook, with cancellation,
+loading, errors/retry and successful-empty states. Account/student changes hide
+old profiles, feedback and history immediately, even when obsolete transports
+resolve late. Student reads continue to support verified unlinked instructors
+and students without enrolment or active membership.
+
+### Checkpoint boundary and schema/plan deviations
+
+No schema, API endpoint, backend function or write-permission changes are needed.
+Report add/edit controls are disabled until Phase 10B and cannot emit a demo save.
+The old grading sections depended on generated profiles, inferred promotion
+history and browser-local technique saves. Their section headings/cards remain,
+with an explicit unavailable message and disabled review control pending Phase 7;
+no synthetic eligibility, assessment or next-grade result is displayed for a real
+UUID. The legacy mock/helper modules remain for later cleanup and other consumers,
+including browser-local signature helpers. Phase 7 must restore grading review
+using real reference/sign-off data and retain the approved browser-local signature
+behavior. No Phase 7 reads or Phase 10 mutations are implemented here.
+
+### Verification and rollback
+
+- `npm run build` passes (existing bundle-size advisory remains).
+- `node --test tests/instructor-student-detail.test.mjs tests/instructor-data.test.mjs tests/instructor-db.test.mjs tests/instructor-directory.test.mjs`: 50 passing tests.
+- Student-detail browser checks pass, covering 320–1440px geometry, stored
+  contacts/medical records, 205-session pagination and independent totals, filters,
+  actual/unknown authors, UUID context, empty/error/retry states, unlinked reads,
+  account changes and late responses after student changes.
+- Calendar browser suite: 21 passing tests.
+- Directory browser suite: 45 passing, 2 failed including the parent test. The
+  failure is the already documented 1024px/200%-text navbar overflow; all six
+  directory/detail geometry comparisons pass using real UUID destinations.
+
+Browser checks use test-only API records from `instructor-detail.fixture.ts` and
+run sequentially as described in the browser README. Cloud deployment is not
+performed by these checks. Rollback reverts the Phase 6 frontend wiring while
+retaining all approved database authorization migrations and stored records.
