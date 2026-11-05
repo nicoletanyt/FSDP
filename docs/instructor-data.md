@@ -2,7 +2,7 @@
 
 ## Implementation status and remaining roadmap
 
-**Current checkpoint: Phase 6 is implemented and awaiting approval. Four main
+**Current checkpoint: Phase 7 is implemented and awaiting approval. Three main
 implementation phases remain.** Each phase, including each mutation checkpoint,
 requires the project owner's approval before the next one starts. The statuses
 below describe code implementation; cloud migration deployment is verified
@@ -18,6 +18,7 @@ separately against the target project's migration history.
 | 4 | Live calendar, availability reads and class rosters; Singapore-time projections, UUID selection and loading/error/empty states. |
 | 5 | Live all-student directory, URL-backed filters, local pagination and an account-scoped in-memory snapshot. Search/filter/page changes make no further directory API requests after the initial load. |
 | 6 | Live UUID student profiles, home centres, contact/emergency records, active medical alerts, cross-instructor/dojo session history, real report authors and complete attendance summaries. |
+| 7 | Database-backed grading requirements/readiness, syllabus and recorded sign-offs, complete recorded assessment history, and date-only grading calendar/history compatibility. Existing UI structure and styling are preserved. |
 | Approved follow-ups | Calendar access for unlinked accounts, availability creation with transactional first-save linking, and linked instructor-row provisioning during trusted account creation. Availability creation was pulled forward from the mutation phase. |
 
 The calendar seed script and its Supabase test records are testing support, not
@@ -25,12 +26,11 @@ another implementation phase. See [calendar test records](../README.md#instructo
 
 ### Remaining phases
 
-The phase numbers retain the original plan. Phase 9 is deferred, so the four
-remaining main phases are **7, 8, 10 and 11**.
+The phase numbers retain the original plan. Phase 9 is deferred, so the three
+remaining main phases are **8, 10 and 11**.
 
 | Phase | Goal and principal files | Verification / completion checkpoint |
 | --- | --- | --- |
-| **7 — Grading reads and readiness** | Wire the grading sections in `InstructorStudentDetails.tsx` to database grades, requirements, syllabus, sign-offs and recorded assessments. Resolve date-only grading compatibility in the instructor event model/calendar projection using the fetched grading date/reporting fields. | “Ready” means ready to start assessment and excludes technique completion. Technique items are assessed during assessment. Show recorded status/notes without inferring passed promotions or historical from-grades; never invent a reporting timestamp. |
 | **8 — Reports and assessment-page reads** | Wire `src/pages/Instructor/InstructorStudentReports.tsx` and `src/pages/Instructor/InstructorGradingAssessment.tsx` to stored event/student records, actual previous feedback and application target grades where recorded. | Event/student composite keys, correct candidate/event association, actual authors, missing/unknown target handling, permission failures and loading/error/empty states. |
 | **10 — Persisted save actions** | Connect the verified read views to real attendance, author-owned report, assessment, technique-sign-off and availability edit/delete operations. Availability creation is already implemented. | Ship the separate checkpoints below with server-enforced permissions, pending/error/retry states, preservation of unrelated fields, concurrency/idempotency checks where relevant and persistence after reload. |
 | **11 — Mock cleanup and final verification** | Remove replaced production instructor fixtures, generated histories and local demo save helpers only after their replacements are verified. Preserve shared dependencies required by the out-of-scope student portal and intentional test fixtures. | Confirm instructor production imports use real data, verify complete read/write flows, and run the affected build, database/API and browser suites. Keep test fixtures explicitly scoped to tests. |
@@ -57,7 +57,7 @@ Each checkpoint is independently verified and approved before the next begins:
   whether marks persist across attempts or each assessment needs its own
   checklist before proposing any schema change.
 - Photos and examiner signatures remain **browser-local**, as requested.
-- **Phase 9 / QR-check-in work is deferred** and is not counted in the five
+- **Phase 9 / QR-check-in work is deferred** and is not counted in the three
   remaining phases. The chatbot and student-portal implementation are excluded.
 - Grading-result processing, belt promotions and application approvals remain
   outside scope; recorded assessments are not treated as promotion history.
@@ -109,13 +109,13 @@ errors, and malformed responses never become successful empty lists.
 | `getCurrentInstructor` | Auth user, own `users` profile, linked `instructors` record |
 | `getClassTypes` | Calendar-only class catalogue, without loading grading reference data |
 | `getReferenceData` | Centres, grades, tracks, requirements, syllabus and class types; follows all pages even when the server caps responses |
-| `getCalendar` | Assigned events overlapping `[from, to)`, subtype data, centre and roster count; empty when unlinked |
+| `getCalendar` | `instructor_calendar` RPC; assigned timed events overlapping `[from, to)` and date-only gradings whose Singapore day overlaps it, subtype data, centre and roster count; empty when unlinked |
 | `getEvent` | Assigned event by its UUID; returns null if absent or not assigned |
 | `getAvailability` | Own availability dates within `[from, to)`; empty when unlinked |
 | `getStudents` | `instructor_student_directory` RPC; literal name/member-number search, grade/colour/centre filters, exact totals and full-scope facets |
 | `getStudentDetail` | Student, grade, home centre, primary-first emergency contacts and active medical alerts |
 | `getRoster` | Assigned event roster, paginated independently of the calendar |
-| `getStudentHistory` | `instructor_student_history` RPC; history across instructors/dojos, including event/instructor/report-author identities |
+| `getStudentHistory` | `instructor_student_history` RPC; history across instructors/dojos, including event/instructor/report-author identities and grading date/reporting metadata |
 | `getRecordedAssessments` | Grading history where `assessment_status` is non-null; pending is recorded, null is unrecorded |
 | `getStudentSummary` | `instructor_student_summary` RPC; complete past training totals and cycle attendance |
 | `getSessionReports` | `instructor_event_reports` RPC; assigned class roster and up to two actual earlier class reports per student |
@@ -157,8 +157,8 @@ present and late attendance.
 Cycle attendance includes present/late classes from `last_graded_at`, falling
 back to `joined_at`, with event dates evaluated in Singapore time. These are
 readiness facts, not assessment results. Technique completion is not a readiness
-prerequisite. Readiness evaluation and assessment checklist wiring follow in
-the grading phase. The current schema cannot scope technique sign-offs to
+prerequisite. Readiness evaluation is wired in Phase 7; checklist mutations remain
+a later checkpoint. The current schema cannot scope technique sign-offs to
 individual assessment attempts; that decision remains open.
 
 ### Deployment and rollback
@@ -428,9 +428,11 @@ history and browser-local technique saves. Their section headings/cards remain,
 with an explicit unavailable message and disabled review control pending Phase 7;
 no synthetic eligibility, assessment or next-grade result is displayed for a real
 UUID. The legacy mock/helper modules remain for later cleanup and other consumers,
-including browser-local signature helpers. Phase 7 must restore grading review
-using real reference/sign-off data and retain the approved browser-local signature
-behavior. No Phase 7 reads or Phase 10 mutations are implemented here.
+including browser-local signature helpers. Phase 7 now adapts the original
+structured grading cards and review dialog to real reference/sign-off data.
+Review shows recorded technique marks read-only. Browser-local signature helpers
+and the approved local-only signature policy are retained. No Phase 10 mutations
+are implemented here.
 
 ### Verification and rollback
 
@@ -449,3 +451,124 @@ Browser checks use test-only API records from `instructor-detail.fixture.ts` and
 run sequentially as described in the browser README. Cloud deployment is not
 performed by these checks. Rollback reverts the Phase 6 frontend wiring while
 retaining all approved database authorization migrations and stored records.
+
+## Phase 7: grading reads and readiness
+
+Implementation: `src/lib/instructor/grading.ts`,
+`src/components/instructor/StudentGradingRead.tsx`, the existing student-detail
+page, instructor event decoders/types/adapters and calendar projection.
+Migration: `supabase/migrations/20261105140000_instructor_grading_reads.sql`.
+
+### Read contracts
+
+`loadStudentGrading` uses the existing `getReferenceData`, `getStudentSummary`,
+`getTechniqueSignOffs` and `getRecordedAssessments` operations. It follows every
+recorded assessment page, including server-capped pages beyond 100 rows. A failed
+read or inconsistent page does not produce a partial successful grading view.
+Requests retain the existing account/student keys, cancellation, loading modal
+and retry behavior; old-account and late old-student responses remain hidden.
+
+Next grades are selected from database `grades.sort_order` and `grade_tracks`,
+using the existing Singapore calendar-year age rule (adult in the year of turning
+13). No mock rank slug, hard-coded belt ladder or label is used to identify a
+grade. Requirements come from the selected target's grade/track row. Missing
+reference data and terminal ladders remain explicit and cannot produce Ready.
+
+Ready means **ready to start assessment**. It checks active membership, the
+existing three-month membership rule, published calendar-year age and minimum
+time/session requirements, and recorded outstanding fees. Unranked practice time
+starts at joining; ranked time requirements need the actual last-grading date.
+Future/unknown required dates are unverified. Published maximum month ranges are
+descriptive, not expiry dates. Session requirements use complete `cycleAttended`
+aggregates with matching `cycleStart`, independently of history pages and filters.
+
+Syllabus items use real IDs, categories, labels and notes. Matching stored
+sign-offs retain their actual date, nullable signer identity and notes. Earlier
+grade and other-student marks do not count toward the displayed target syllabus.
+**Technique completion is excluded from readiness**, including when no syllabus
+items have been recorded. Technique assessment/checklist writes remain Phase 10D.
+
+Grading history includes every returned recorded pending/completed assessment,
+actual notes, instructor/centre and the application's target grade where recorded.
+It never derives a historical from-grade, passed result, promotion or missing
+target from the student's current/next grade.
+
+### Date-only compatibility
+
+The event model accepts paired null timestamps only for grading events and
+decodes the fetched `grading_date`, `application_opens_on`,
+`reporting_release_on`, `reporting_time` and `official_schedule` fields. A dated
+calendar grading with no timestamps must have a recorded grading date. Unknown
+end times stay unknown; arrival-based lateness is not inferred without a stored
+event start.
+
+The additive migration introduces the security-invoker `instructor_calendar`
+read RPC. It applies role checks, personal instructor ownership, bounded ranges,
+stable pagination and all existing RLS. It includes date-only gradings by their
+Singapore calendar day alongside overlapping timed events. Sorting/filtering
+uses day boundaries only as comparison coordinates; returned event timestamps
+remain null. Unlinked instructors get an empty personal calendar. This does not
+make unassigned official schedules part of another instructor's calendar.
+
+The existing history RPC signature/ACL is retained. It now returns nullable
+grading metadata and includes past/current-date gradings with null timestamps,
+using a stable date/UUID order. Date-only future gradings are excluded from past
+history. The complete attendance-summary RPC is unchanged and still counts only
+ended, non-cancelled class events.
+
+Calendar month/list cards and existing selection panels show the stored grading
+date. They show an actual reporting time only on/after its recorded release date;
+otherwise the label is Time not published. No reporting timestamp, midnight start,
+end time or duration is invented. Date-only events do not become hourly timeline
+blocks, even when a reporting time is published without a duration.
+
+### UI boundary and schema/plan deviations
+
+Following the owner's clarification, live data adapts the original structured
+grading design rather than flattening its contents into paragraphs. Eligibility
+has current/next database grade badges, a readiness badge, requirements-met
+progress and icon-led requirement rows with actual/required values. The overview
+summary has a View grading action. Assessment history uses separate entries with
+actual target badges, status, date/instructor/centre and stored notes; it has no
+inferred historical from-grade transition.
+
+Review grading opens the existing-style responsive review dialog and category
+accordion, with technique progress and stored sign-off dates, signer identities
+and notes. Checkboxes are disabled until persisted mutations are implemented.
+Technique progress remains separate from readiness. No local/demo save path is
+re-enabled. The page shell, contact cards, badge/track positioning, attendance
+popover, loading modal and typography/spacing patterns are retained. An all-day
+timeline region remains deferred. Existing browser-local signature/photo helpers
+and stored values are untouched.
+
+No table, column, enum, seed, write endpoint, mutation policy or Edge Function is
+changed. The migration adds only a schema-grounded calendar read RPC and replaces
+the existing history read function to include date-only records/metadata. Apply
+this migration to the target Supabase project **before deploying the frontend**;
+no Edge Function redeployment is required. Cloud deployment is separate from the
+offline verification below.
+
+### Verification and rollback
+
+- `npm run build`: passes; the existing bundle-size advisory remains.
+- Relevant Node suites (grading, API, offline database, calendar projections,
+  directory, student details, calendar helpers and calendar seed support): 79
+  passing tests, including 205 date-only events and recorded-history pagination.
+- `npm run check:functions`: passes.
+- `npm run test:functions`: 5 top-level tests and 16 steps pass.
+- Student-detail browser suite: 23 passing tests, including structured requirement
+  rows/progress and bounded review dialogs at 320/390/768/1440px, read-only
+  checkboxes, real syllabus/sign-off/assessment data, readiness without techniques,
+  empty/missing records, failure/retry and account isolation.
+- Calendar browser suite: 22 passing tests, including date-only unpublished and
+  released reporting times, existing cards/drawers, no fabricated timeline blocks,
+  and the existing responsive/availability flows.
+- Targeted directory/detail geometry comparison: 7 passing tests (parent plus six
+  widths, 320–1440px). The previously documented 1024px enlarged-text navbar
+  overflow remains a separate known UI issue; its assertion is not weakened.
+
+Rollback reverts the Phase 7 frontend/read-model wiring. Keep the additive read
+migration and all existing authorization/report-author protections; it does not
+alter stored records. If disabling the new calendar RPC is necessary, revoke its
+authenticated EXECUTE privilege in a follow-up migration. No Phase 8 read views or
+Phase 10 save actions are implemented by this checkpoint.

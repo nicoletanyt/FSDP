@@ -8,6 +8,7 @@ import type { InstructorApi } from '../../src/lib/instructor/calendar-queries'
 import type { CalendarEntry, CentreRow, EventId, Page, PageOptions, RosterEntry, StudentId, InstructorId, InstructorAvailabilityRow } from '../../src/lib/instructor/types'
 import { createDirectoryFixtureReader } from './instructor-directory.fixture'
 import { createDetailFixtureReads } from './instructor-detail.fixture'
+import { createGradingFixtureReads } from './instructor-grading.fixture'
 
 const uuid = (number: number) => `00000000-0000-4000-8000-${String(number).padStart(12, '0')}`
 const instructorId = uuid(1) as InstructorId
@@ -34,7 +35,8 @@ function entry(templateId: string, date: Date): CalendarEntry | null {
       centre_id: dojo.id, instructor_id: instructorId, starts_at: `${dateInputValue(date)}T${source.startTime}:00+08:00`,
       ends_at: `${dateInputValue(date)}T${source.endTime}:00+08:00`, status: 'scheduled', ...metadata },
     centre: dojo, classType: catalogue.find(type => type.id === source.classType) ?? null,
-    grading: source.type === 'grading' ? { event_id: id, track: null, application_deadline: null, application_status: 'closed' } : null,
+    grading: source.type === 'grading' ? { event_id: id, track: null, application_deadline: null, application_status: 'closed',
+      grading_date: null, application_opens_on: null, reporting_release_on: null, reporting_time: null, official_schedule: false } : null,
     targetGrades: [], seminar: null, workshop: null, rosterCount: source.studentIds.length,
   }
 }
@@ -45,6 +47,16 @@ function findEvent(id: string) {
   const date = parseCalendarDate(`${match[1]}-${match[2]}-${match[3]}`)
   const template = classTemplates[Number(match[4]) - 1]
   return date && template ? entry(template.id, date) : null
+}
+
+function dateOnlyGrading(released: boolean): CalendarEntry {
+  const id = uuid(8800) as EventId
+  const dojo = centre('Central Dojo')
+  return { event: { id, name: 'Official date-only grading', event_type: 'grading', centre_id: dojo.id, instructor_id: instructorId,
+    starts_at: null, ends_at: null, status: 'scheduled', ...metadata }, centre: dojo, classType: null,
+    grading: { event_id: id, track: 'adult', application_deadline: '2026-10-20', application_status: 'closed',
+      grading_date: '2026-11-03', application_opens_on: '2026-10-01', reporting_release_on: released ? '2026-11-02' : '2026-11-04', reporting_time: '10:30:00', official_schedule: true },
+    targetGrades: [], seminar: null, workshop: null, rosterCount: 0 }
 }
 
 function page<T>(items: T[], { offset = 0, limit = 50 }: PageOptions = {}): Page<T> {
@@ -59,9 +71,9 @@ export function createCalendarFixtureApi(account = 'audit'): InstructorApi {
   const savedSlots: InstructorAvailabilityRow[] = []
   const unsupported = async (): Promise<never> => { throw new Error('Unexpected fixture API operation') }
   return {
-    getCurrentInstructor: unsupported, getReferenceData: unsupported, getStudents: createDirectoryFixtureReader(account, mode),
-    ...createDetailFixtureReads(account, mode), getRecordedAssessments: unsupported,
-    getSessionReports: unsupported, getTechniqueSignOffs: unsupported, getAssessment: unsupported,
+    getCurrentInstructor: unsupported, getStudents: createDirectoryFixtureReader(account, mode),
+    ...createDetailFixtureReads(account, mode), ...createGradingFixtureReads(account, mode),
+    getSessionReports: unsupported, getAssessment: unsupported,
     getClassTypes: async () => mode === 'empty' ? [] : catalogue,
     async getCalendar(options) {
       if (account !== 'audit') await new Promise(resolve => setTimeout(resolve, 800))
@@ -72,6 +84,10 @@ export function createCalendarFixtureApi(account = 'audit'): InstructorApi {
       if (mode === 'loading') await new Promise(resolve => setTimeout(resolve, 2000))
       if (mode === 'race') await new Promise(resolve => setTimeout(resolve, options.from.includes('11-27') ? 1200 : 20))
       if (mode === 'empty' || mode === 'unlinked') return page([], options)
+      if (mode === 'date-only-grading' || mode === 'date-only-released') {
+        const item = dateOnlyGrading(mode === 'date-only-released')
+        return page(item.grading!.grading_date! >= toSingaporeDateTime(options.from).date && item.grading!.grading_date! < toSingaporeDateTime(options.to).date ? [item] : [], options)
+      }
       const from = parseCalendarDate(toSingaporeDateTime(options.from).date)!
       const to = parseCalendarDate(toSingaporeDateTime(options.to).date)!
       const entries: CalendarEntry[] = []
@@ -87,6 +103,7 @@ export function createCalendarFixtureApi(account = 'audit'): InstructorApi {
     },
     async getEvent(id) {
       if (mode === 'empty' || mode === 'unlinked' || account !== 'audit') return null
+      if (id === uuid(8800)) return dateOnlyGrading(mode === 'date-only-released')
       return findEvent(id)
     },
     async getAvailability(options) {
@@ -111,6 +128,7 @@ export function createCalendarFixtureApi(account = 'audit'): InstructorApi {
       return saved
     },
     async getRoster(id, options = {}) {
+      if (id === uuid(8800)) return page([], options)
       if (mode === 'roster-error' && !rosterFailed) {
         rosterFailed = true
         throw new InstructorDataError('request_failed', 'Roster could not be loaded.')

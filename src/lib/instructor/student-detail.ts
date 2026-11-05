@@ -7,11 +7,12 @@ const dateFormat = new Intl.DateTimeFormat('en-GB', {
   timeZone: 'Asia/Singapore', day: 'numeric', month: 'short', year: 'numeric',
 })
 
-export function historyDate(timestamp: string) {
-  return dateFormat.format(new Date(timestamp))
+export function historyDate(timestamp: string | null) {
+  return timestamp ? dateFormat.format(new Date(timestamp)) : 'Date not recorded'
 }
 
-export function historyTimeRange(startsAt: string, endsAt: string) {
+export function historyTimeRange(startsAt: string | null, endsAt: string | null) {
+  if (!startsAt || !endsAt) return 'Time not published'
   const start = toSingaporeDateTime(startsAt)
   const end = toSingaporeDateTime(endsAt)
   return `${start.time} – ${end.time}${start.date === end.date ? '' : ` (${historyDate(endsAt)})`}`

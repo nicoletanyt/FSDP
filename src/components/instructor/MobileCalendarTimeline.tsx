@@ -53,7 +53,7 @@ export default function MobileCalendarTimeline({
         return {
             day,
             items: [
-                ...getEvents(day).map((event) => ({ ...event, event, slot: null })),
+                ...getEvents(day).filter(event => !event.dateOnly).map((event) => ({ ...event, event, slot: null })),
                 ...slots
                     .filter((slot) => dateKey(slot.date) === dateKey(day))
                     .map((slot) => ({ ...slot, event: null, slot })),

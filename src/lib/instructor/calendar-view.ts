@@ -1,6 +1,6 @@
-import { addDays, classTypes, getEventStyle, monthDates, parseCalendarDate, weekDates } from '../instructor-calendar'
+import { addDays, classTypes, formatTime, getEventStyle, monthDates, parseCalendarDate, weekDates } from '../instructor-calendar'
 import type { ClassType, EventType } from '../instructor-calendar'
-import { attendanceFromArrival, toAttendanceState, toSingaporeDateTime, timestampMilliseconds } from './adapters'
+import { attendanceFromArrival, gradingEventDate, publishedReportingTime, toAttendanceState, toSingaporeDateTime, timestampMilliseconds } from './adapters'
 import { InstructorDataError } from './errors'
 import type { AvailabilitySlot } from '../instructor-availability'
 import type { CalendarEntry, EventStudentRow, InstructorAvailabilityRow } from './types'
@@ -17,8 +17,11 @@ export interface CalendarViewEvent {
   instructorId: string | null
   rosterCount: number
   capacity: number | null
-  startsAt: string
-  endsAt: string
+  startsAt: string | null
+  endsAt: string | null
+  dateOnly: boolean
+  reportingTime: string | null
+  reportingReleaseOn: string | null
   status: CalendarEntry['event']['status']
 }
 
@@ -43,28 +46,41 @@ export function singaporeClock(instant = new Date()): Date {
 }
 
 export function toCalendarViewEvent(entry: CalendarEntry): CalendarViewEvent {
-  const start = toSingaporeDateTime(entry.event.starts_at)
-  const end = toSingaporeDateTime(entry.event.ends_at)
+  const dateOnly = entry.event.starts_at === null
+  const date = gradingEventDate(entry.event, entry.grading)
+  if (dateOnly && (entry.event.event_type !== 'grading' || !date)) {
+    throw new InstructorDataError('invalid_data', 'The grading date has not been recorded.')
+  }
+  const start = entry.event.starts_at ? toSingaporeDateTime(entry.event.starts_at) : { date: date!, time: '' }
+  const end = entry.event.ends_at ? toSingaporeDateTime(entry.event.ends_at) : null
+  const reportingTime = publishedReportingTime(entry.grading, toSingaporeDateTime(new Date().toISOString()).date)
   const classType = entry.classType && Object.hasOwn(classTypes, entry.classType.id)
     ? entry.classType.id as ClassType : undefined
   return {
     id: entry.event.id, date: parseCalendarDate(start.date)!, name: entry.event.name,
     type: entry.event.event_type === 'class' ? 'training' : entry.event.event_type,
-    classType, startTime: start.time, endTime: start.date === end.date ? end.time : '24:00',
+    classType, startTime: dateOnly ? reportingTime ? `Report at ${formatTime(reportingTime)}` : 'Time not published' : start.time,
+    endTime: end ? start.date === end.date ? end.time : '24:00' : '',
     dojo: entry.centre?.name ?? 'Centre not recorded', instructorId: entry.event.instructor_id,
     rosterCount: entry.rosterCount, capacity: entry.centre?.capacity ?? null,
     startsAt: entry.event.starts_at, endsAt: entry.event.ends_at, status: entry.event.status,
+    dateOnly, reportingTime, reportingReleaseOn: entry.grading?.reporting_release_on ?? null,
   }
 }
 
 export function calendarEventsForDate(events: CalendarViewEvent[], day: Date): CalendarViewEvent[] {
   const start = timestampMilliseconds(`${calendarDateValue(day)}T00:00:00+08:00`)
   const end = timestampMilliseconds(`${calendarDateValue(addDays(day, 1))}T00:00:00+08:00`)
-  return events.filter(event => timestampMilliseconds(event.startsAt) < end && timestampMilliseconds(event.endsAt) > start)
-    .map(event => ({ ...event, date: day,
-      startTime: timestampMilliseconds(event.startsAt) < start ? '00:00' : toSingaporeDateTime(event.startsAt).time,
-      endTime: timestampMilliseconds(event.endsAt) >= end ? '24:00' : toSingaporeDateTime(event.endsAt).time,
-    })).sort((a, b) => a.startTime.localeCompare(b.startTime) || a.id.localeCompare(b.id))
+  return events.filter(event => event.dateOnly ? calendarDateValue(event.date) === calendarDateValue(day)
+    : timestampMilliseconds(event.startsAt) < end && timestampMilliseconds(event.endsAt) > start)
+    .map(event => event.dateOnly ? event : ({ ...event, date: day,
+      startTime: timestampMilliseconds(event.startsAt) < start ? '00:00' : toSingaporeDateTime(event.startsAt!).time,
+      endTime: timestampMilliseconds(event.endsAt) >= end ? '24:00' : toSingaporeDateTime(event.endsAt!).time,
+    })).sort((a, b) => Number(b.dateOnly) - Number(a.dateOnly) || a.startTime.localeCompare(b.startTime) || a.id.localeCompare(b.id))
+}
+
+export function calendarTimeLabel(event: CalendarViewEvent, separator = ' – ') {
+  return event.dateOnly ? event.startTime : `${formatTime(event.startTime)}${separator}${formatTime(event.endTime)}`
 }
 
 export function toCalendarAvailability(slot: InstructorAvailabilityRow): AvailabilitySlot {
@@ -84,9 +100,9 @@ export function rosterSizeLabel(event: CalendarViewEvent) {
   return `${event.rosterCount}${event.capacity === null ? '' : `/${event.capacity}`} students`
 }
 
-export function rosterAttendance(record: EventStudentRow, startsAt: string) {
+export function rosterAttendance(record: EventStudentRow, startsAt: string | null) {
   // Absence/excusal and unmarked records are explicit states. Re-editing an
   // attendance row must not replace its first actual check-in time.
   if (record.attendance_status !== 'present' && record.attendance_status !== 'late') return toAttendanceState(record.attendance_status)
-  return attendanceFromArrival(startsAt, record.checked_in_at ?? record.recorded_at) ?? record.attendance_status
+  return startsAt ? attendanceFromArrival(startsAt, record.checked_in_at ?? record.recorded_at) ?? record.attendance_status : record.attendance_status
 }

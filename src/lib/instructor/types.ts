@@ -143,8 +143,8 @@ export interface EventRow {
   centre_id: CentreId
   instructor_id: InstructorId | null
   name: string
-  starts_at: Timestamp
-  ends_at: Timestamp
+  starts_at: Timestamp | null
+  ends_at: Timestamp | null
   status: EventStatus
   created_at: Timestamp
   updated_at: Timestamp
@@ -170,6 +170,11 @@ export interface GradingRow {
   track: GradeTrack | null
   application_deadline: DateOnly | null
   application_status: GradingWindowStatus
+  grading_date: DateOnly | null
+  application_opens_on: DateOnly | null
+  reporting_release_on: DateOnly | null
+  reporting_time: TimeOnly | null
+  official_schedule: boolean
 }
 
 export interface GradingTargetGradeRow {
@@ -352,6 +357,7 @@ export interface StudentHistoryEntry {
   instructor: InstructorRow | null
   reportAuthor: InstructorRow | null
   targetGrade: GradeRow | null
+  grading: GradingRow | null
 }
 
 export interface HistoryOptions extends PageOptions {

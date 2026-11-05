@@ -30,7 +30,7 @@ export function createDetailFixtureReads(account: string, mode: string | null): 
         event: { id: eventId, name: `Stored class ${index + 1}`, event_type: 'class', centre_id: centre.id, instructor_id: teacher.id,
           starts_at: new Date(starts).toISOString(), ends_at: new Date(starts + 3_600_000).toISOString(), status: 'completed', ...metadata },
         centre: index % 2 ? { ...centre, id: uuid(12) as CentreRow['id'], name: 'Other Dojo' } : centre,
-        instructor: teacher, reportAuthor: report && index !== 3 ? author : null, targetGrade: null,
+        instructor: teacher, reportAuthor: report && index !== 3 ? author : null, targetGrade: null, grading: null,
       }
     })
   }
@@ -45,6 +45,7 @@ export function createDetailFixtureReads(account: string, mode: string | null): 
       }
       if (!entry) return null
       const missing = mode === 'detail-optional'
+      if (mode === 'grading-ready') entry = { ...entry, student: { ...entry.student, last_graded_at: '2026-01-01' } }
       return { ...entry, grade: missing ? null : entry.grade, centre: missing ? null : entry.centre,
         student: account === 'audit' ? entry.student : { ...entry.student, first_name: 'Replacement', last_name: 'Account', member_no: 'NEW-ACCOUNT' },
         emergencyContacts: missing ? [] : [

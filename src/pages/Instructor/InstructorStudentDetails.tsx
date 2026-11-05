@@ -33,10 +33,12 @@ import GradeBadge from "@/components/instructor/DatabaseGradeBadge";
 import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
 import InstructorLoadingBoundary from "@/components/instructor/InstructorLoadingBoundary";
 import StudentSessionHistory from "@/components/instructor/StudentSessionHistory";
+import StudentGradingRead from "@/components/instructor/StudentGradingRead";
 import { useAuth } from "@/hooks/use-auth";
 import { useInstructorQuery } from "@/hooks/use-instructor-data";
 import { useInstructorApi } from "@/lib/instructor/data-context";
-import { parseEntityId, toSingaporeDateTime } from "@/lib/instructor/adapters";
+import { gradingEventDate, parseEntityId } from "@/lib/instructor/adapters";
+import { loadStudentGrading } from "@/lib/instructor/grading";
 import { directoryStudent, singaporeToday } from "@/lib/instructor/directory";
 import {
     attendanceTotals,
@@ -428,28 +430,6 @@ function RecentFeedback({
     );
 }
 
-function GradingReadPlaceholder({ title }: { title: string }) {
-    return (
-        <section className="detail-section">
-            <div className="detail-section-header">
-                <h2>{title}</h2>
-                {title === "Grading eligibility" && (
-                    <Button size="touch" disabled>
-                        Review grading
-                    </Button>
-                )}
-            </div>
-            <Card size="sm" className="detail-card">
-                <CardContent>
-                    <p className="detail-body text-sm text-muted-foreground">
-                        Grading records and readiness are not connected yet.
-                    </p>
-                </CardContent>
-            </Card>
-        </section>
-    );
-}
-
 function StudentDetailContent({ detail }: { detail: StudentDetail }) {
     const api = useInstructorApi();
     const [params, setParams] = useSearchParams();
@@ -479,6 +459,11 @@ function StudentDetailContent({ detail }: { detail: StudentDetail }) {
     const tab = params.get("tab");
     const activeTab: DetailTab =
         tab === "sessions" || tab === "grading" ? tab : "overview";
+    const loadGrading = useCallback(
+        (signal: AbortSignal) => loadStudentGrading(api, detail.student.id, signal),
+        [api, detail.student.id],
+    );
+    const grading = useInstructorQuery(`student-grading:${detail.student.id}`, loadGrading, activeTab !== "sessions");
     const sidebarRef = useRef<HTMLElement>(null);
     const [sidebarFits, setSidebarFits] = useState(false);
     useEffect(() => {
@@ -513,7 +498,7 @@ function StudentDetailContent({ detail }: { detail: StudentDetail }) {
         return `/instructor/students/${id}?${nextParams}`;
     };
     const backHref = linkedContext
-        ? `/instructor/calendar?session=${linkedContext.session.event.id}&date=${toSingaporeDateTime(linkedContext.session.event.starts_at).date}`
+        ? `/instructor/calendar?session=${linkedContext.session.event.id}${gradingEventDate(linkedContext.session.event, linkedContext.session.grading) ? `&date=${gradingEventDate(linkedContext.session.event, linkedContext.session.grading)}` : ""}`
         : "/instructor/students";
     return (
         <section className="student-detail-view space-y-2 md:space-y-6">
@@ -652,7 +637,7 @@ function StudentDetailContent({ detail }: { detail: StudentDetail }) {
                             studentId={detail.student.id}
                             onViewSessions={() => selectTab("sessions")}
                         />
-                        <GradingReadPlaceholder title="Next grading" />
+                        <StudentGradingRead title="Next grading" detail={detail} reads={grading} onRetry={grading.retry} onViewGrading={() => selectTab("grading")} />
                     </TabsContent>
                     <TabsContent value="sessions">
                         <StudentSessionHistory
@@ -661,8 +646,8 @@ function StudentDetailContent({ detail }: { detail: StudentDetail }) {
                         />
                     </TabsContent>
                     <TabsContent value="grading" className="space-y-6">
-                        <GradingReadPlaceholder title="Grading eligibility" />
-                        <GradingReadPlaceholder title="Grading history" />
+                        <StudentGradingRead title="Grading eligibility" detail={detail} reads={grading} onRetry={grading.retry} />
+                        <StudentGradingRead title="Grading history" detail={detail} reads={grading} onRetry={grading.retry} />
                     </TabsContent>
                 </Tabs>
             </div>

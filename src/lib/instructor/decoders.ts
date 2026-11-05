@@ -99,11 +99,18 @@ export const decodeSyllabusItem = row<SyllabusItemRow>({
   id: text, grade_id: text, track, category: text, sort_order: integer, label: text, note: nullable(text),
 })
 export const decodeClassType = row<ClassTypeRow>({ id: text, label: text, description: text })
-export const decodeEvent = row<EventRow>({
+const eventRow = row<EventRow>({
   id: eventId, event_type: enumeration('class', 'seminar', 'workshop', 'grading'), centre_id: centreId,
-  instructor_id: nullable(instructorId), name: text, starts_at: timestamp, ends_at: timestamp,
+  instructor_id: nullable(instructorId), name: text, starts_at: nullable(timestamp), ends_at: nullable(timestamp),
   status: enumeration('scheduled', 'completed', 'cancelled'), created_at: timestamp, updated_at: timestamp,
 })
+export function decodeEvent(value: unknown): EventRow {
+  const event = eventRow(value)
+  if ((event.starts_at === null) !== (event.ends_at === null)
+      || (event.starts_at === null && event.event_type !== 'grading')
+      || (event.starts_at && event.ends_at && timestampMilliseconds(event.ends_at) <= timestampMilliseconds(event.starts_at))) return invalid()
+  return event
+}
 export const decodeEventStudent = row<EventStudentRow>({
   event_id: eventId, student_id: studentId, attendance_status: nullable(attendance), recorded_at: nullable(timestamp),
   report: nullable(text), report_author_id: nullable(instructorId), assessment_status: nullable(assessment),
@@ -112,6 +119,8 @@ export const decodeEventStudent = row<EventStudentRow>({
 export const decodeGrading = row<GradingRow>({
   event_id: eventId, track: nullable(track), application_deadline: nullable(dateOnly),
   application_status: enumeration('draft', 'open', 'closed'),
+  grading_date: nullable(dateOnly), application_opens_on: nullable(dateOnly),
+  reporting_release_on: nullable(dateOnly), reporting_time: nullable(time), official_schedule: boolean,
 })
 export const decodeApplication = row<GradingApplicationRow>({
   id: uuid, student_id: studentId, grading_event_id: eventId, target_grade_id: text, submitted_at: timestamp,
@@ -171,6 +180,7 @@ export function decodeCalendarEntry(value: unknown): CalendarEntry {
   const centre = nullable(decodeCentre)(source.centre)
   const classRow = source.class === null ? null : object(source.class)
   const grading = nullable(decodeGrading)(source.grading)
+  if (event.starts_at === null && !grading?.grading_date) return invalid()
   const seminar = source.seminar === null ? null : row({ event_id: eventId, external_location: nullable(text) })(source.seminar)
   const workshop = source.workshop === null ? null : row({ event_id: eventId, description: nullable(text) })(source.workshop)
   const participants = array(source.participants, item => count(object(item).count))
@@ -201,7 +211,9 @@ export function decodeHistoryEntry(value: unknown): StudentHistoryEntry {
   const reportAuthor = nullable(parseInstructorRow)(source.reportAuthor)
   if (record.event_id !== event.id || (centre && centre.id !== event.centre_id)
       || (instructor && instructor.id !== event.instructor_id) || (reportAuthor && reportAuthor.id !== record.report_author_id)) return invalid()
-  return { record, event, centre, instructor, reportAuthor, targetGrade: nullable(decodeGrade)(source.targetGrade) }
+  const grading = nullable(decodeGrading)(source.grading ?? null)
+  if (grading && (grading.event_id !== event.id || event.event_type !== 'grading')) return invalid()
+  return { record, event, centre, instructor, reportAuthor, grading, targetGrade: nullable(decodeGrade)(source.targetGrade) }
 }
 
 export function decodeSummary(value: unknown): StudentAttendanceSummary {

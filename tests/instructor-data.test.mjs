@@ -260,14 +260,12 @@ test('reference data follows every server-capped page instead of silently trunca
 })
 
 test('calendar and availability queries are instructor-scoped, bounded and deterministically ordered', async () => {
-  const { api } = httpClient(async (_request, url) => {
-    assert.equal(url.searchParams.get('instructor_id'), `eq.${instructorId}`)
-    if (url.pathname === '/rest/v1/events') {
-      assert.equal(url.searchParams.get('starts_at'), 'lt.2026-11-06T00:00:00+08:00')
-      assert.equal(url.searchParams.get('ends_at'), 'gt.2026-11-04T00:00:00+08:00')
-      assert.equal(url.searchParams.get('order'), 'starts_at.asc,id.asc')
-      return responsePage([calendarEntry])
+  const { api } = httpClient(async (request, url) => {
+    if (url.pathname === '/rest/v1/rpc/instructor_calendar') {
+      assert.deepEqual(await request.json(), { range_from: '2026-11-04T00:00:00+08:00', range_to: '2026-11-06T00:00:00+08:00', page_size: 50, page_offset: 0 })
+      return Response.json(page([calendarEntry]))
     }
+    assert.equal(url.searchParams.get('instructor_id'), `eq.${instructorId}`)
     assert.equal(url.pathname, '/rest/v1/instructor_availability')
     assert.deepEqual(url.searchParams.getAll('date'), ['gte.2026-11-04', 'lt.2026-11-06'])
     return responsePage([])
@@ -294,6 +292,23 @@ test('detail reads select primary contacts and active alerts without manufacturi
   assert.equal(await httpClient(async () => Response.json(null)).api.getStudentDetail(studentId), null)
 })
 
+test('calendar RPC decodes date-only grading metadata and rejects wrong-account or mismatched pages', async () => {
+  const schedule = { event_id: eventId, track: 'adult', application_deadline: '2026-11-01', application_status: 'closed',
+    grading_date: '2026-11-05', application_opens_on: '2026-10-01', reporting_release_on: '2026-11-04', reporting_time: null, official_schedule: true, target_grades: [] }
+  const dateOnlyEntry = { ...calendarEntry, event_type: 'grading', starts_at: null, ends_at: null, grading: schedule }
+  const options = { from: '2026-11-04T00:00:00+08:00', to: '2026-11-06T00:00:00+08:00', offset: 3, limit: 1 }
+  const response = await httpClient(async (_request, url) => {
+    assert.equal(url.pathname, '/rest/v1/rpc/instructor_calendar')
+    return Response.json(page([dateOnlyEntry], 4, 3, 1))
+  }).api.getCalendar(options)
+  assert.equal(response.items[0].event.starts_at, null)
+  assert.equal(response.items[0].grading.grading_date, '2026-11-05')
+  assert.equal(response.items[0].grading.reporting_time, null)
+  for (const invalid of [page([dateOnlyEntry], 4, 0, 1), page([{ ...dateOnlyEntry, instructor_id: otherUserId }], 4, 3, 1)]) {
+    await assert.rejects(httpClient(async () => Response.json(invalid)).api.getCalendar(options), { code: 'invalid_data' })
+  }
+})
+
 test('history distinguishes recorded pending assessments from unrecorded rows and retains unknown target grades', async () => {
   const entry = { record: { ...record, assessment_status: 'pending' }, event: { ...event, event_type: 'grading' },
     centre, instructor, reportAuthor: null, targetGrade: null }
@@ -315,7 +330,8 @@ test('history distinguishes recorded pending assessments from unrecorded rows an
 test('assessments use event/student keys and leave a missing application target unknown', async () => {
   const { api } = httpClient(async (_request, url) => {
     if (url.pathname === '/rest/v1/events') return Response.json({ ...calendarEntry, event_type: 'grading',
-      grading: { event_id: eventId, track: null, application_deadline: null, application_status: 'closed', target_grades: [] } })
+      grading: { event_id: eventId, track: null, application_deadline: null, application_status: 'closed', target_grades: [],
+        grading_date: null, application_opens_on: null, reporting_release_on: null, reporting_time: null, official_schedule: false } })
     if (url.pathname === '/rest/v1/event_students') return Response.json({ ...record, student })
     assert.equal(url.pathname, '/rest/v1/grading_applications')
     assert.equal(url.searchParams.get('grading_event_id'), `eq.${eventId}`)

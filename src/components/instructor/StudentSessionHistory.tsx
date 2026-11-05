@@ -46,7 +46,7 @@ function SessionReport({
     const report = session.record.report?.trim();
     const author = session.reportAuthor;
     const phase =
-        Date.now() < Date.parse(session.event.starts_at)
+        !session.event.starts_at || !session.event.ends_at ? "unknown" : Date.now() < Date.parse(session.event.starts_at)
             ? "upcoming"
             : Date.now() < Date.parse(session.event.ends_at)
                 ? "in-progress"

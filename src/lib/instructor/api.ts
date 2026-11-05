@@ -206,10 +206,14 @@ export function createInstructorApi(client: InstructorClient) {
       dateRange(options.from, options.to, true)
       const identity = await findCurrentInstructor(page.signal)
       if (!identity) return { items: [], total: 0, offset: page.offset, limit: page.limit }
-      return tablePage(cancellable(client.from('events').select(calendarSelect, { count: 'exact' })
-        .eq('instructor_id', identity.instructorId).lt('starts_at', options.to).gt('ends_at', options.from)
-        .order('starts_at').order('id').range(page.offset, page.offset + page.limit - 1).returns<unknown[]>(), page.signal),
-      decodeCalendarEntry, page)
+      const result = decodePage(await rpc('instructor_calendar', {
+        range_from: options.from, range_to: options.to, page_size: page.limit, page_offset: page.offset,
+      }, page.signal), decodeCalendarEntry)
+      if (result.offset !== page.offset || result.limit !== page.limit
+          || result.items.some(item => item.event.instructor_id !== identity.instructorId)) {
+        throw new InstructorDataError('invalid_data', 'The calendar response does not match the instructor or requested page.')
+      }
+      return result
     },
 
     async getEvent(id: EventId, signal?: AbortSignal) {

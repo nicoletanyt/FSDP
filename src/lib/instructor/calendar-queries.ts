@@ -30,6 +30,7 @@ export async function collectCalendarPages<T>(
       items.push(item)
     }
   } while (items.length < total)
+  if (items.length !== total) throw new InstructorDataError('request_failed', 'The calendar records changed while loading. Please retry.')
   return items
 }
 

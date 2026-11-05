@@ -292,6 +292,7 @@ export function eventsForDate(date: Date): CalendarEvent[] {
 }
 
 export function formatTime(time: string) {
+    if (!/^\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/.test(time)) return time;
     const [rawHours, minutes] = time.split(":").map(Number);
     const hours = rawHours % 24;
     return `${hours % 12 || 12}:${String(minutes).padStart(2, "0")} ${hours >= 12 ? "PM" : "AM"}`;

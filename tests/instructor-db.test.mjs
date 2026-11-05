@@ -132,6 +132,7 @@ test('current-domain instructor reads, aggregates and report ownership (offline 
     await db.exec(await readFile(new URL('../supabase/migrations/20261104130000_instructor_availability.sql', import.meta.url), 'utf8'))
     await db.exec(await readFile(new URL('../supabase/migrations/20261105120000_instructor_reference_policies.sql', import.meta.url), 'utf8'))
     await db.exec(await readFile(new URL('../supabase/migrations/20261105130000_instructor_all_students.sql', import.meta.url), 'utf8'))
+    await db.exec(await readFile(new URL('../supabase/migrations/20261105140000_instructor_grading_reads.sql', import.meta.url), 'utf8'))
     // Existing installations may already have the policies from manual SQL.
     await db.exec(await readFile(new URL('../supabase/migrations/20261105120000_instructor_reference_policies.sql', import.meta.url), 'utf8'))
 
@@ -446,6 +447,52 @@ test('current-domain instructor reads, aggregates and report ownership (offline 
       await asAccount(ids.userA, () => createSlot(ids.userA, '08:30', '09:30'))
       await sql("update public.events set status='cancelled' where id=$1", [scheduled])
       await asAccount(ids.userA, () => createSlot(ids.userA, '09:00', '10:00'))
+    })
+    await suite.test('date-only calendar/history reads retain stored grading metadata and complete pages without widening instructor ownership', async () => {
+      const firstId = uuid(7000)
+      const date = (await sql("select ((now() at time zone 'Asia/Singapore')::date - 10)::text as value")).rows[0].value
+      await sql(`insert into public.events(id,event_type,centre_id,instructor_id,name,starts_at,ends_at)
+        select ('00000000-0000-4000-8000-'||lpad((7000+n)::text,12,'0'))::uuid,'grading',$1,$2,'Date-only grading '||n,null,null
+        from generate_series(0,205) n`, [ids.centreA, ids.instructorA])
+      await sql(`update public.events set instructor_id=$1 where id=$2`, [ids.instructorB, uuid(7205)])
+      await sql(`insert into public.gradings(event_id,grading_date,reporting_release_on,reporting_time)
+        select id,$1::date,$1::date-7,'10:30' from public.events where name like 'Date-only grading %'`, [date])
+      await sql(`insert into public.event_students(event_id,student_id,assessment_status,assessment_notes)
+        select id,$1,case when id=$2 then 'pending' else 'completed' end::public.assessment_status,'Stored date-only notes'
+        from public.events where name like 'Date-only grading %'`, [ids.student, firstId])
+      const from = `${date}T00:00:00+08:00`
+      const to = (await sql("select (($1::date + 1)::text || 'T00:00:00+08:00') as value", [date])).rows[0].value
+      const casts = ['timestamptz', 'timestamptz', 'int', 'int']
+      await asAccount(ids.userA, async () => {
+        const all = []
+        for (const offset of [0, 100, 200]) {
+          const page = decoders.decodePage(await rpc('instructor_calendar', [from, to, 100, offset], casts), decoders.decodeCalendarEntry)
+          assert.equal(page.total, 205)
+          all.push(...page.items)
+        }
+        assert.equal(new Set(all.map(item => item.event.id)).size, 205)
+        assert.ok(all.every(item => item.event.instructor_id === ids.instructorA && item.event.starts_at === null && item.event.ends_at === null))
+        assert.equal(all[0].grading.grading_date, date)
+        assert.equal(all[0].grading.reporting_time, '10:30:00')
+        const history = decoders.decodePage(await rpc('instructor_student_history', [ids.student, 100, 0, 'grading', null, false, false, true]), decoders.decodeHistoryEntry)
+        assert.equal(history.total, 207)
+        assert.ok(history.items.some(item => item.event.starts_at === null && item.grading.grading_date === date))
+        const pending = decoders.decodePage(await rpc('instructor_student_history', [ids.student, 100, 100, 'grading', null, false, false, true]), decoders.decodeHistoryEntry)
+        assert.ok(pending.items.every(item => item.targetGrade === null))
+      })
+      await asAccount(ids.unlinked, async () => {
+        assert.equal((await rpc('instructor_calendar', [from, to, 100, 0], casts)).total, 0)
+        assert.equal((await rpc('instructor_student_history', [ids.student, 100, 0, 'grading', null, false, false, true])).total, 207)
+      })
+      await asAccount(ids.userB, async () => {
+        const calendar = decoders.decodePage(await rpc('instructor_calendar', [from, to, 100, 0], casts), decoders.decodeCalendarEntry)
+        assert.equal(calendar.total, 2) // The stored class and the one date-only grading.
+        assert.ok(calendar.items.every(item => item.event.instructor_id === ids.instructorB))
+        assert.equal(calendar.items.filter(item => item.event.starts_at === null).length, 1)
+      })
+      await assert.rejects(asAccount(ids.userStudent, () => rpc('instructor_calendar', [from, to, 100, 0], casts)), { code: '42501' })
+      await assert.rejects(asAccount(null, () => rpc('instructor_calendar', [from, to, 100, 0], casts), 'anon'), { code: '42501' })
+      await assert.rejects(asAccount(ids.userA, () => rpc('instructor_calendar', [from, to, 101, 0], casts)), { code: '22023' })
     })
   } finally {
     await db.close()

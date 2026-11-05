@@ -266,7 +266,7 @@ export default function CalendarTimeline({
                         const isToday = key === dateKey(now);
                         const daySlots = slots.filter((slot) => dateKey(slot.date) === key);
                         const items: TimelineItem[] = [
-                            ...getEvents(day).map(
+                            ...getEvents(day).filter(event => !event.dateOnly).map(
                                 (event): TimelineItem => ({ ...event, kind: "class", event }),
                             ),
                             ...daySlots.map(

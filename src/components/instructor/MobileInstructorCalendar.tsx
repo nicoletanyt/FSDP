@@ -29,7 +29,7 @@ import {
     monthDates,
     weekDates,
 } from "@/lib/instructor-calendar";
-import { calendarClassStyle } from "@/lib/instructor/calendar-view";
+import { calendarClassStyle, calendarTimeLabel } from "@/lib/instructor/calendar-view";
 import type { CalendarEventsForDate, CalendarViewEvent as CalendarEvent } from "@/lib/instructor/calendar-view";
 import type { ClassTypeRow } from "@/lib/instructor/types";
 import type {
@@ -89,7 +89,7 @@ function Agenda({
                                     ? onSelectClass(entry.event)
                                     : onSelectAvailability(entry.slot)
                             }
-                            aria-label={`${entry.event?.name ?? "Available"}, ${fullDate(date)}, ${formatTime(entry.startTime)} to ${formatTime(entry.endTime)}. View details`}
+                            aria-label={`${entry.event?.name ?? "Available"}, ${fullDate(date)}, ${entry.event ? calendarTimeLabel(entry.event, " to ") : `${formatTime(entry.startTime)} to ${formatTime(entry.endTime)}`}. View details`}
                             className="flex min-h-18 w-full items-stretch gap-3 rounded-md py-4 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
                             <span className="w-18 shrink-0 text-[13px] leading-5 tabular-nums text-muted-foreground">

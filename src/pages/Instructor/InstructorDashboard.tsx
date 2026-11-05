@@ -22,7 +22,7 @@ import { useInstructorQuery } from "@/hooks/use-instructor-data";
 import { useInstructorApi } from "@/lib/instructor/data-context";
 import { parseEntityId } from "@/lib/instructor/adapters";
 import { loadCalendarRange } from "@/lib/instructor/calendar-queries";
-import { calendarClassStyle, calendarDateValue, calendarEventsForDate, calendarRange, rosterSizeLabel, singaporeClock, toCalendarViewEvent } from "@/lib/instructor/calendar-view";
+import { calendarClassStyle, calendarDateValue, calendarEventsForDate, calendarRange, calendarTimeLabel, rosterSizeLabel, singaporeClock, toCalendarViewEvent } from "@/lib/instructor/calendar-view";
 import type { CalendarEventsForDate, CalendarViewEvent as CalendarEvent } from "@/lib/instructor/calendar-view";
 import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
 import { Drawer, DrawerBody, DrawerClose, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
@@ -111,7 +111,7 @@ function EventCard({
                 aria-expanded={expanded}
                 aria-pressed={detailsInPanel ? expanded : undefined}
                 aria-controls={detailsInPanel && !expanded ? undefined : `${showSummary || detailsInPanel ? "attendance" : "details"}-${event.id}`}
-                aria-label={`${event.name}, ${fullDate(event.date)}, ${formatTime(event.startTime)} to ${formatTime(event.endTime)}, ${event.dojo}, ${rosterSizeLabel(event)}. ${expanded ? "Collapse" : "Expand"} class details`}
+                aria-label={`${event.name}, ${fullDate(event.date)}, ${calendarTimeLabel(event, " to ")}, ${event.dojo}, ${rosterSizeLabel(event)}. ${expanded ? "Collapse" : "Expand"} class details`}
                 className={cn(
                     "h-auto w-full flex-col items-stretch gap-3 rounded-lg p-3 text-left whitespace-normal text-inherit hover:bg-foreground/5 hover:text-inherit aria-expanded:text-inherit focus-visible:-outline-offset-2",
                     showSummary && "p-4",
@@ -151,8 +151,7 @@ function EventCard({
                             className="mt-0.5 size-3 shrink-0"
                         />
                         <span className="min-w-0 wrap-break-word">
-                            {formatTime(event.startTime)} –{" "}
-                            {formatTime(event.endTime)}
+                            {calendarTimeLabel(event)}
                         </span>
                     </span>
                     <span className="flex items-center gap-1.5 text-2xs font-normal text-current opacity-80">
@@ -466,7 +465,7 @@ function CalendarMonth({
                                         key={event.id}
                                         variant="ghost"
                                         title={`${event.name} · ${formatTime(event.startTime)} · ${rosterSizeLabel(event)}`}
-                                        aria-label={`${event.name}, ${fullDate(day)}, ${formatTime(event.startTime)} to ${formatTime(event.endTime)}. ${expandedClassId === event.id ? "Collapse" : "Expand"} class details`}
+                                        aria-label={`${event.name}, ${fullDate(day)}, ${calendarTimeLabel(event, " to ")}. ${expandedClassId === event.id ? "Collapse" : "Expand"} class details`}
                                         aria-expanded={
                                             expandedClassId === event.id
                                         }

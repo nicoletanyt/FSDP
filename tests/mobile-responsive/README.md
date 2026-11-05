@@ -108,6 +108,24 @@ unknown authors, independent complete attendance aggregates, loading/error/retry
 and successful-empty states, unlinked/expired-student access, disabled report
 writes, account isolation and late responses after switching students.
 
+Phase 7 grading records are injected from `instructor-grading.fixture.ts` through
+the same production API context. Checks cover database grade/rule/syllabus IDs,
+readiness with zero technique sign-offs, actual/unknown signers, pending/completed
+recorded assessments and notes, 205-assessment pagination, missing rules/terminal
+grades, retry/loading-modal behavior and account isolation. Grading adapts the
+original structured cards: grade/status badges, readiness progress, requirement
+rows with actual/required values, separate assessment entries and the responsive
+review dialog with category accordions and read-only technique checkboxes. Tests
+check row containment, dialog bounds and completion/close behavior at 320–1440px.
+The profile loading/empty-period assertions use the current loading modal and
+reporting-period popover.
+
+Calendar fixtures also provide date-only grading modes with released/unreleased
+reporting times. Existing month cards and selection drawers must show their date
+and honest time label, retain null event timestamps and avoid invalid geometry or
+fabricated hourly blocks. The calendar suite continues to cover all prior timed
+event and availability behaviors.
+
 Known data-only-phase limitation: at 1024px and 200% root text, the existing
 student-page navbar's `calc(92% + 3rem)` width exceeds the usable viewport. The
 directory row contents remain contained; the suite reports the page overflow

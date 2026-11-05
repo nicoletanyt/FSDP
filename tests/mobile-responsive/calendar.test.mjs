@@ -18,6 +18,32 @@ before(async () => {
 });
 after(async () => { if (session) await request(`/session/${session}`, undefined, 'DELETE'); });
 
+test('date-only gradings use existing list/month cards and drawers without an invented timestamp or timeline block', async () => {
+    for (const width of [390, 1280]) for (const mode of ['date-only-grading', 'date-only-released']) {
+        const result = await inCalendar(width, `/instructor/calendar?view=month&date=2026-11-3&fixtureData=${mode}&session=00000000-0000-4000-8000-000000008800`, async (w, wait) => {
+            const d = w.document;
+            await wait();
+            const text = d.body.textContent;
+            const roster = d.querySelector('[aria-label="Student roster"]');
+            const before = { text, roster: !!roster, fits: d.documentElement.scrollWidth <= d.documentElement.clientWidth };
+            const close = d.querySelector('[aria-label="Close drawer"]');
+            if (close) { close.click(); await wait(); }
+            if (d.querySelector('[aria-label="Change calendar view"]')) {
+                d.querySelector('[aria-label="Change calendar view"]').click(); await wait();
+                d.querySelector('[data-calendar-view="day"]').click(); await wait();
+            }
+            return { ...before, noInvalidGeometry: ![...d.querySelectorAll('[data-mobile-event]')].some(e => /NaN/.test(e.getAttribute('style'))) };
+        });
+        assert.match(result.text, /Official date-only grading/);
+        assert.match(result.text, mode === 'date-only-released' ? /Report at 10:30 AM/ : /Time not published/);
+        if (mode === 'date-only-grading') assert.doesNotMatch(result.text, /10:30 AM|12:00 AM/);
+        assert.doesNotMatch(result.text, /NaN|Invalid Date/);
+        assert.equal(result.roster, true);
+        assert.equal(result.fits, true);
+        assert.equal(result.noInvalidGeometry, true);
+    }
+});
+
 async function inCalendar(width, route, inspect, height = 700) {
     const value = await request(`/session/${session}/execute/async`, { args: [], script: `
         const done = arguments[arguments.length - 1];

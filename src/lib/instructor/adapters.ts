@@ -5,8 +5,10 @@ import type {
   AuthUserId,
   CentreRow,
   EntityId,
+  EventRow,
   GradeRow,
   GradeSummary,
+  GradingRow,
   InstructorIdentity,
   InstructorRow,
   StudentRow,
@@ -133,4 +135,12 @@ export function toSingaporeDateTime(timestamp: Timestamp): { date: string; time:
     date: `${parts.get('year')}-${parts.get('month')}-${parts.get('day')}`,
     time: `${parts.get('hour')}:${parts.get('minute')}`,
   }
+}
+
+export function gradingEventDate(event: EventRow, grading: GradingRow | null) {
+  return grading?.grading_date ?? (event.starts_at ? toSingaporeDateTime(event.starts_at).date : null)
+}
+
+export function publishedReportingTime(grading: GradingRow | null, today: string) {
+  return grading?.reporting_release_on && grading.reporting_release_on <= today ? grading.reporting_time : null
 }
