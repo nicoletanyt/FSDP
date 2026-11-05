@@ -74,7 +74,7 @@ export default function Login({ staff = false }: { staff?: boolean }) {
             
             <div className="space-y-2">
               <Label htmlFor="email" className="text-gray-800 font-semibold text-sm">
-                Email or Student ID
+                {staff ? 'Staff Email' : 'Email or Student ID'}
               </Label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -87,8 +87,9 @@ export default function Login({ staff = false }: { staff?: boolean }) {
                   autoComplete="off" 
                   required 
                   maxLength={254} 
-                  className="pl-10 h-12 rounded-md border-gray-300 focus-visible:ring-[#2c3f67] w-full" 
-                  placeholder="Enter your email or student ID"
+                  // 👇 加上 text-black dark:text-white
+                  className="pl-10 h-12 rounded-md border-gray-300 focus-visible:ring-[#2c3f67] w-full text-black dark:text-white" 
+                  placeholder={staff ? "Enter your staff email" : "Enter your email or student ID"}
                 />
               </div>
             </div>
@@ -107,7 +108,8 @@ export default function Login({ staff = false }: { staff?: boolean }) {
                   onChange={(event) => setPassword(event.target.value)}
                   autoComplete="new-password"
                   required
-                  className="pl-10 h-12 rounded-md border-gray-300 focus-visible:ring-[#2c3f67] w-full"
+                  // 👇 加上 text-black dark:text-white
+                  className="pl-10 h-12 rounded-md border-gray-300 focus-visible:ring-[#2c3f67] w-full text-black dark:text-white"
                   placeholder="Enter your password"
                 />
               </div>
@@ -148,8 +150,8 @@ export default function Login({ staff = false }: { staff?: boolean }) {
                 </Link>
               </p>
             )}
-            <Link to={staff ? '/login' : '/staff/login'} className="hidden text-gray-400 hover:underline">
-              {staff ? 'Back to Student sign in' : 'Administrator?'}
+            <Link to={staff ? '/login' : '/staff/login'} className="text-gray-500 hover:underline">
+              {staff ? 'Back to Student sign in' : 'Administrator or instructor?'}
             </Link>
           </div>
 
