@@ -8,7 +8,7 @@ const uuid = number => `00000000-0000-4000-8000-${String(number).padStart(12, '0
 const ids = {
   admin: uuid(1), userA: uuid(2), userB: uuid(3), userStudent: uuid(4), unlinked: uuid(5),
   instructorA: uuid(11), instructorB: uuid(12), centreA: uuid(21), centreB: uuid(22),
-  student: uuid(31), peer: uuid(32), unrelated: uuid(33),
+  student: uuid(31), peer: uuid(32), unrelated: uuid(33), unassigned: uuid(34),
   ownPast: uuid(1000), ownFuture: uuid(1001), cancelled: uuid(1002), inProgress: uuid(1003),
   cycleEdge: uuid(1004), seminar: uuid(1005), grading: uuid(1006), unrecordedGrading: uuid(1007), unrelatedEvent: uuid(1008),
 }
@@ -56,6 +56,19 @@ test('current-domain instructor reads, aggregates and report ownership (offline 
       '20261104120000_instructor_reads.sql',
     ]) await db.exec(await readFile(new URL(`../supabase/migrations/${filename}`, import.meta.url), 'utf8'))
 
+    // The fetched schedule migration expects the real deployment's venue to
+    // exist. Supply that prerequisite only in this offline database, then apply
+    // the cloud-only migration SQL unchanged before testing our instructor APIs.
+    await sql(`insert into public.centres(name,short_name,address) values
+      ('ASK Headquarters Dojo','official-test','Thomson V One, 9 Sin Ming Road, #B1-02, Singapore 575630')`)
+    for (const filename of [
+      '20261104055444_official_grading_schedule.sql',
+      '20261104094458_grading_invitation_wording.sql',
+      '20261104115311_grading_invitation_track_dates.sql',
+      '20261104153308_grading_invitation_link_position.sql',
+      '20261104153902_grading_invitation_literal_link.sql',
+    ]) await db.exec(await readFile(new URL(`../supabase/migrations/${filename}`, import.meta.url), 'utf8'))
+
     for (const [id, role] of [[ids.admin, 'administrator'], [ids.userA, 'instructor'], [ids.userB, 'instructor'],
       [ids.userStudent, 'student'], [ids.unlinked, 'instructor']]) {
       await sql('insert into auth.users (id,email,raw_app_meta_data) values ($1,$2,$3)',
@@ -74,7 +87,9 @@ test('current-domain instructor reads, aggregates and report ownership (offline 
       insert into public.students (id,user_id,member_no,first_name,last_name,email,home_centre_id,date_of_birth,current_grade_id,joined_at,last_graded_at) values
         ('${ids.student}','${ids.userStudent}','MEM-001','Alex','Same','one@example.test','${ids.centreA}','2000-01-01','published-blue','2020-01-01',(now() at time zone 'Asia/Singapore')::date - 60),
         ('${ids.peer}',null,'MEM%_002','Alex','Same','two@example.test','${ids.centreB}','2000-01-01','unranked','2020-01-01',null),
-        ('${ids.unrelated}',null,'HIDDEN','Hidden','Student','hidden@example.test','${ids.centreB}','2000-01-01','unranked','2020-01-01',null);
+        ('${ids.unrelated}',null,'HIDDEN','Hidden','Student','hidden@example.test','${ids.centreB}','2000-01-01','unranked','2020-01-01',null),
+        ('${ids.unassigned}',null,'NO-ENROLMENT','New','Visitor','visitor@example.test','${ids.centreB}','2000-01-01','unranked','2020-01-01',null);
+      update public.students set membership_status='expired',outstanding_fees=true where id='${ids.unassigned}';
       insert into public.events (id,event_type,centre_id,instructor_id,name,starts_at,ends_at) values
         ('${ids.ownPast}','class','${ids.centreA}','${ids.instructorA}','First class',now()-interval '300 days',now()-interval '300 days'+interval '1 hour'),
         ('${ids.ownFuture}','class','${ids.centreA}','${ids.instructorA}','Next class',now()+interval '2 days',now()+interval '2 days 1 hour'),
@@ -115,14 +130,18 @@ test('current-domain instructor reads, aggregates and report ownership (offline 
 
     // Seed above models accounts that predate automatic domain provisioning.
     await db.exec(await readFile(new URL('../supabase/migrations/20261104130000_instructor_availability.sql', import.meta.url), 'utf8'))
+    await db.exec(await readFile(new URL('../supabase/migrations/20261105120000_instructor_reference_policies.sql', import.meta.url), 'utf8'))
+    await db.exec(await readFile(new URL('../supabase/migrations/20261105130000_instructor_all_students.sql', import.meta.url), 'utf8'))
+    // Existing installations may already have the policies from manual SQL.
+    await db.exec(await readFile(new URL('../supabase/migrations/20261105120000_instructor_reference_policies.sql', import.meta.url), 'utf8'))
 
     await suite.test('directory preserves authorized totals, facets, literal search and stable tie ordering', async () => {
       await asAccount(ids.userA, async () => {
         const first = await rpc('instructor_student_directory', ['', null, null, null, 1, 0], ['text', 'text', 'text', 'uuid', 'int', 'int'])
         assert.equal(decoders.decodeDirectory(first).items[0].student.id, ids.student)
         const second = await rpc('instructor_student_directory', ['', null, null, null, 1, 1], ['text', 'text', 'text', 'uuid', 'int', 'int'])
-        assert.equal(first.total, 2)
-        assert.equal(first.scopeTotal, 2)
+        assert.equal(first.total, 4)
+        assert.equal(first.scopeTotal, 4)
         assert.deepEqual([first.items[0].id, second.items[0].id], [ids.student, ids.peer])
         assert.equal(first.facets.grades.length, 2)
         assert.equal(first.facets.centres.length, 2)
@@ -131,12 +150,16 @@ test('current-domain instructor reads, aggregates and report ownership (offline 
         assert.deepEqual(literal.items.map(item => item.id), [ids.peer])
         const filtered = await rpc('instructor_student_directory', ['', 'published-blue', 'Blue', ids.centreA])
         assert.equal(filtered.total, 1)
-        assert.equal(filtered.scopeTotal, 2)
+        assert.equal(filtered.scopeTotal, 4)
         assert.equal(filtered.facets.grades.length, 2)
         const beyond = await rpc('instructor_student_directory', ['', null, null, null, 10, 100], ['text', 'text', 'text', 'uuid', 'int', 'int'])
-        assert.equal(beyond.total, 2)
+        assert.equal(beyond.total, 4)
         assert.deepEqual(beyond.items, [])
-        assert.equal((await rpc('instructor_student_directory', ['HIDDEN'])).total, 0)
+        assert.equal((await rpc('instructor_student_directory', ['HIDDEN'])).total, 1)
+        const unassigned = (await rpc('instructor_student_directory', ['NO-ENROLMENT'])).items[0]
+        assert.equal(unassigned.id, ids.unassigned)
+        assert.equal(unassigned.membership_status, 'expired')
+        assert.equal(unassigned.outstanding_fees, true)
       })
     })
 
@@ -153,10 +176,12 @@ test('current-domain instructor reads, aggregates and report ownership (offline 
         assert.ok(combined.some(item => item.instructor.id === ids.instructorB && item.centre.id === ids.centreB))
         const visible = await sql('select * from public.event_students where student_id=$1', [ids.student])
         assert.ok(visible.rows.length > 125)
-        const hidden = await sql('select * from public.event_students where student_id=$1', [ids.unrelated])
-        assert.equal(hidden.rows.length, 0)
+        const otherHistory = await sql('select * from public.event_students where student_id=$1', [ids.unrelated])
+        assert.equal(otherHistory.rows.length, 1)
       })
-      await assert.rejects(asAccount(ids.userA, () => rpc('instructor_student_history', [ids.unrelated])), { code: '42501' })
+      assert.equal((await asAccount(ids.userA, () => rpc('instructor_student_history', [ids.unrelated]))).total, 1)
+      assert.equal((await asAccount(ids.userA, () => rpc('instructor_student_history', [ids.unassigned]))).total, 0)
+      await assert.rejects(asAccount(ids.userA, () => rpc('instructor_student_history', [uuid(9999)])), { code: '42501' })
     })
 
     await suite.test('history filters preserve null attendance and only return recorded assessments', async () => {
@@ -232,18 +257,26 @@ test('current-domain instructor reads, aggregates and report ownership (offline 
       await asAccount(ids.admin, () => sql("update public.event_students set report='Admin correction' where event_id=$1 and student_id=$2", [ids.ownFuture, ids.student]))
     })
 
-    await suite.test('anonymous, student and unlinked accounts cannot call instructor read RPCs', async () => {
+    await suite.test('instructor reads depend on role rather than domain linkage; students and anonymous callers stay restricted', async () => {
       for (const [name, parameters] of [
         ['instructor_student_directory', []], ['instructor_student_history', [ids.student]],
         ['instructor_student_summary', [ids.student]], ['instructor_event_reports', [ids.ownFuture]],
       ]) {
-        for (const account of [ids.userStudent, ids.unlinked, ids.admin]) {
+        for (const account of [ids.userStudent, ids.admin]) {
           await assert.rejects(asAccount(account, () => rpc(name, parameters)), { code: '42501' })
         }
         await assert.rejects(asAccount(null, () => rpc(name, parameters), 'anon'), { code: '42501' })
       }
       const own = await asAccount(ids.userStudent, () => sql('select distinct student_id from public.event_students'))
       assert.deepEqual(own.rows.map(row => row.student_id), [ids.student])
+      await asAccount(ids.unlinked, async () => {
+        assert.equal(await rpc('current_instructor_id'), null)
+        assert.equal((await rpc('instructor_student_directory')).total, 4)
+        assert.equal((await rpc('instructor_student_history', [ids.unrelated])).total, 1)
+        assert.equal((await rpc('instructor_student_summary', [ids.unassigned])).pastSessions, 0)
+        assert.equal((await sql('select * from public.students')).rows.length, 4)
+      })
+      await assert.rejects(asAccount(ids.unlinked, () => rpc('instructor_event_reports', [ids.ownFuture])), { code: '42501' })
       await assert.rejects(asAccount(null, () => sql('select * from public.students'), 'anon'), { code: '42501' })
     })
 
@@ -270,9 +303,69 @@ test('current-domain instructor reads, aggregates and report ownership (offline 
       ]) await assert.rejects(asAccount(ids.userA, () => rpc(name, values, casts)), { code: '22023' })
       const state = await sql("select relrowsecurity from pg_class where oid='public.grade_requirements'::regclass")
       assert.equal(state.rows[0].relrowsecurity, true)
+      const readable = await asAccount(ids.userA, () => sql('select * from public.grade_requirements'))
+      assert.equal(readable.rows.length, 1)
+      assert.equal(readable.rows[0].grade_id, 'published-blue')
       await assert.rejects(asAccount(ids.userA, () => sql("insert into public.grade_requirements(grade_id,track) values ('unranked','children')")), { code: '42501' })
       await asAccount(ids.admin, () => sql("insert into public.grade_requirements(grade_id,track) values ('unranked','children')"))
     })
+    await suite.test('directory pagination covers more than 100 rows and facets cover the full authorized scope', async () => {
+      await db.exec('begin')
+      try {
+        await sql(`insert into public.students(id,member_no,first_name,last_name,email,home_centre_id,date_of_birth,joined_at)
+          select ('00000000-0000-4000-8000-'||lpad((5000+n)::text,12,'0'))::uuid,
+            'PAGE-'||n,'Paging','Student','paging-'||n||'@example.test',$1,'2000-01-01','2020-01-01'
+          from generate_series(1,120) n`, [ids.centreA])
+        await sql(`insert into public.event_students(event_id,student_id)
+          select $1,('00000000-0000-4000-8000-'||lpad((5000+n)::text,12,'0'))::uuid from generate_series(1,120) n`, [ids.ownPast])
+        await db.exec('set local role authenticated')
+        await sql("select set_config('request.jwt.claim.sub', $1, true)", [ids.userA])
+        const first = await rpc('instructor_student_directory', ['', null, null, null, 100, 0], ['text', 'text', 'text', 'uuid', 'int', 'int'])
+        const last = await rpc('instructor_student_directory', ['', null, null, null, 100, 100], ['text', 'text', 'text', 'uuid', 'int', 'int'])
+        assert.equal(first.total, 124)
+        assert.equal(first.scopeTotal, 124)
+        assert.equal(first.items.length, 100)
+        assert.equal(last.items.length, 24)
+        assert.equal(new Set([...first.items, ...last.items].map(item => item.id)).size, 124)
+        assert.deepEqual(last.facets, first.facets)
+        assert.equal(first.facets.grades.length, 2)
+        const filtered = await rpc('instructor_student_directory', ['', 'unranked'])
+        assert.equal(filtered.total, 123)
+        assert.equal(filtered.scopeTotal, 124)
+        assert.equal(filtered.facets.grades.length, 2)
+        assert.ok((await sql("select id from public.events where event_type='grading' and starts_at is null")).rows.length > 0)
+        decoders.decodeDirectory(last)
+      } finally {
+        await db.exec('rollback')
+      }
+    })
+
+    await suite.test('all-student SELECT access covers related data without expanding write permissions', async () => {
+      const syllabus = 'fixture/unranked/item'
+      await sql("insert into public.syllabus_items(id,grade_id,track,category,sort_order,label) values ($1,'unranked','adult','Basics',1,'Fixture item')", [syllabus])
+      await sql("insert into public.emergency_contacts(student_id,name,relationship,phone) values ($1,'Contact','Parent','123')", [ids.unrelated])
+      await sql("insert into public.student_medical_alerts(student_id,description) values ($1,'Fixture medical alert')", [ids.unrelated])
+      await sql('insert into public.technique_sign_offs(student_id,syllabus_item_id,signed_off_by) values ($1,$2,$3)', [ids.unrelated, syllabus, ids.instructorB])
+      await sql("insert into public.grading_applications(student_id,grading_event_id,target_grade_id) values ($1,$2,'published-blue')", [ids.unrelated, ids.grading])
+      for (const account of [ids.userA, ids.unlinked]) {
+        await asAccount(account, async () => {
+          for (const table of ['emergency_contacts', 'student_medical_alerts', 'technique_sign_offs', 'grading_applications']) {
+            assert.equal((await sql(`select * from public.${table} where student_id=$1`, [ids.unrelated])).rows.length, 1)
+          }
+          assert.equal((await sql("update public.students set phone='changed' where id=$1 returning id", [ids.unrelated])).rows.length, 0)
+          assert.equal((await sql("update public.event_students set attendance_status='late' where student_id=$1 returning event_id", [ids.unrelated])).rows.length, 0)
+          assert.equal((await sql('delete from public.technique_sign_offs where student_id=$1 returning id', [ids.unrelated])).rows.length, 0)
+          assert.equal((await sql("update public.grading_applications set notes='changed' where student_id=$1 returning id", [ids.unrelated])).rows.length, 0)
+        })
+      }
+      await assert.rejects(asAccount(ids.userA, () => sql('insert into public.technique_sign_offs(student_id,syllabus_item_id,signed_off_by) values ($1,$2,$3)',
+        [ids.unassigned, syllabus, ids.instructorA])), { code: '42501' })
+      await asAccount(ids.userStudent, async () => {
+        assert.deepEqual((await sql('select id from public.students')).rows.map(row => row.id), [ids.student])
+        assert.equal((await sql('select * from public.student_medical_alerts where student_id=$1', [ids.unrelated])).rows.length, 0)
+      })
+    })
+
     await suite.test('trusted instructor creation and promotion provision one linked domain row atomically', async () => {
       const newAccount = uuid(6)
       await sql(`insert into auth.users(id,email,raw_user_meta_data,raw_app_meta_data)

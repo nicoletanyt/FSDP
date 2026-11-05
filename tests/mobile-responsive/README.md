@@ -5,9 +5,11 @@ real calendar, student directory/details and instructor layout through a separat
 no Supabase account or backend writes are needed. The fixture is not part of the
 production Vite entry point.
 
-The calendar fixture injects the read API from `instructor-api.fixture.ts` through
-the production data context. Its clock represents 09:00 Singapore time. Other
-pages retain their existing fixtures until their own wiring phases.
+The fixture injects the API from `instructor-api.fixture.ts` through the production
+data context. Its clock represents 09:00 Singapore time. Directory responses come
+from `instructor-directory.fixture.ts` and use database-shaped rows and UUIDs.
+Student details retain their old fixture until Phase 6; geometry tests navigate
+to it explicitly instead of manufacturing profile data for a real UUID.
 
 Start the following in separate terminals:
 
@@ -73,6 +75,17 @@ The directory suite checks:
   state, including URL cleanup, restored search focus and result counts.
 - Deep-linked filters, a single popup/control set across resizing, student-detail
   navigation and browser Back.
+- Complete-snapshot totals and full-scope facets, 50-row local pagination over
+  205 entries, page recovery, real UUID links, Unranked, loading/empty/error/retry,
+  local search and account changes. Request logging verifies that search, all
+  filters and visible pagination do not call the API after initial loading.
+  URL filters use grade IDs, raw colour values
+  and centre UUIDs while retaining human-readable option labels.
+- Initial loading follows unfiltered backend pages; a failed later page never
+  appears as a partially cached directory. Retry starts a new complete load and
+  retains the selected URL criteria.
+- All-student reads include another dojo and a student without enrolment and with
+  expired membership. Unlinked instructor accounts see the same global directory.
 - Popover and all three nested menu bounds at 320×568, 568×320 and 844×390,
   long-label wrapping, last-option scrolling and a footer reachable by scrolling
   the popover on short landscapes.
@@ -84,3 +97,8 @@ The directory suite checks:
 
 Long-content stress checks replace rendered text only; they do not alter
 production records or backend behavior.
+
+Known data-only-phase limitation: at 1024px and 200% root text, the existing
+student-page navbar's `calc(92% + 3rem)` width exceeds the usable viewport. The
+directory row contents remain contained; the suite reports the page overflow
+rather than weakening that assertion or changing application styling.

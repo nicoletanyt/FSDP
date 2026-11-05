@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAuth } from './use-auth'
 import { toInstructorDataError } from '@/lib/instructor/errors'
 
-type QueryState<T> =
+export type QueryState<T> =
   | { status: 'loading'; data: null; error: null }
   | { status: 'success'; data: T; error: null }
   | { status: 'error'; data: null; error: string }

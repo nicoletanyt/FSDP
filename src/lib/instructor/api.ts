@@ -164,7 +164,7 @@ export function createInstructorApi(client: InstructorClient) {
     for (const value of [options.oldestFirst, options.recordedAssessmentsOnly, options.reportsOnly]) {
       if (value !== undefined && typeof value !== 'boolean') invalidRequest('Choose valid history filters.')
     }
-    await getCurrentInstructor(page.signal)
+    await getInstructorAccount(page.signal)
     const data = await rpc('instructor_student_history', {
       target_student: studentId, page_size: page.limit, page_offset: page.offset,
       filter_type: options.eventType ?? null,
@@ -189,7 +189,7 @@ export function createInstructorApi(client: InstructorClient) {
     },
 
     async getReferenceData(signal?: AbortSignal): Promise<InstructorReferenceData> {
-      await getCurrentInstructor(signal)
+      await getInstructorAccount(signal)
       const [centres, grades, gradeTracks, gradeRequirements, syllabusItems, classTypes] = await Promise.all([
         allRows('centres', ['name', 'id'], decodeCentre, signal),
         allRows('grades', ['sort_order', 'id'], decodeGrade, signal),
@@ -249,16 +249,20 @@ export function createInstructorApi(client: InstructorClient) {
       if (options.gradeId !== undefined && typeof options.gradeId !== 'string') invalidRequest('Choose a valid grade.')
       if (options.colour !== undefined && typeof options.colour !== 'string') invalidRequest('Choose a valid belt colour.')
       const centre = options.centreId === undefined ? null : parseEntityId(options.centreId, 'centre')
-      await getCurrentInstructor(page.signal)
-      return decodeDirectory(await rpc('instructor_student_directory', {
+      await getInstructorAccount(page.signal)
+      const directory = decodeDirectory(await rpc('instructor_student_directory', {
         search_text: search, filter_grade: options.gradeId ?? null, filter_colour: options.colour ?? null,
         filter_centre: centre, page_size: page.limit, page_offset: page.offset,
       }, page.signal))
+      if (directory.offset !== page.offset || directory.limit !== page.limit) {
+        throw new InstructorDataError('invalid_data', 'The directory response does not match the requested page.')
+      }
+      return directory
     },
 
     async getStudentDetail(id: StudentId, signal?: AbortSignal) {
       const studentId = parseEntityId(id, 'student')
-      await getCurrentInstructor(signal)
+      await getInstructorAccount(signal)
       const data = await requestInstructorData(
         () => cancellable(client.from('students').select(`${studentSelect}, emergency_contacts(*), medical_alerts:student_medical_alerts(*)`)
           .eq('id', studentId), signal).maybeSingle<unknown>(),
@@ -291,7 +295,7 @@ export function createInstructorApi(client: InstructorClient) {
 
     async getStudentSummary(id: StudentId, signal?: AbortSignal) {
       const studentId = parseEntityId(id, 'student')
-      await getCurrentInstructor(signal)
+      await getInstructorAccount(signal)
       return decodeSummary(await rpc('instructor_student_summary', { target_student: studentId }, signal))
     },
 
@@ -308,7 +312,7 @@ export function createInstructorApi(client: InstructorClient) {
 
     async getTechniqueSignOffs(id: StudentId, signal?: AbortSignal) {
       const studentId = parseEntityId(id, 'student')
-      await getCurrentInstructor(signal)
+      await getInstructorAccount(signal)
       const rows = await allRows('technique_sign_offs', ['signed_off_at', 'id'], decodeTechniqueSignOff, signal,
         '*, instructor:instructors(*)', { student_id: studentId })
       if (rows.some(item => item.signOff.student_id !== studentId)) throw new InstructorDataError('invalid_data', 'The technique sign-offs do not match the student.')

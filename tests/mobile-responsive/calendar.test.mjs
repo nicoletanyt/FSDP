@@ -499,8 +499,14 @@ test('calendar loading, empty and error/retry states never substitute fixture ev
         const empty = await inCalendar(width, `/instructor/calendar?view=${view}&date=2026-11-27&fixtureData=empty`, async w => ({
             text: w.document.querySelector('main').textContent,
             rosters: w.document.querySelectorAll('[aria-label="Student roster"]').length,
+            timeline: !!w.document.querySelector('[aria-label="Selected day hourly timeline"], [aria-label="Daily hourly timeline"]'),
+            events: w.document.querySelectorAll('[data-mobile-event], button[aria-label$="View details"]').length,
         }));
-        assert.match(empty.text, /No classes or availability/);
+        // The current day-view design expresses empty data with a usable blank
+        // timeline. Month views also have an explicit empty-state message.
+        if (view === 'month') assert.match(empty.text, /No classes or availability/);
+        else assert.equal(empty.timeline, true);
+        assert.equal(empty.events, 0);
         assert.equal(empty.rosters, 0);
     }
     const retry = await inCalendar(390, '/instructor/calendar?view=day&date=2026-11-27&fixtureData=calendar-error', async (w, wait) => {

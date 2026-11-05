@@ -431,3 +431,37 @@ test('availability validation and conflict failures are explicit and never retur
   await assert.rejects(networkFailure.api.createAvailability(input), error =>
     error.code === 'request_failed' && error.message === 'Unable to save your availability. Please try again.')
 })
+
+test('directory pages reject server responses with mismatched pagination metadata', async () => {
+  const { api } = httpClient(async () => Response.json({ ...page([], 0, 0, 50), scopeTotal: 0,
+    facets: { grades: [], colours: [], centres: [] } }))
+  await assert.rejects(api.getStudents({ offset: 50 }), { code: 'invalid_data' })
+})
+
+test('all student reads work for verified instructors without a domain link', async () => {
+  const { api, requests } = httpClient(async (_request, url) => {
+    switch (url.pathname) {
+      case '/rest/v1/rpc/instructor_student_directory': return Response.json({ ...page([student]), scopeTotal: 1,
+        facets: { grades: [grade], colours: [], centres: [centre] } })
+      case '/rest/v1/students': return Response.json({ ...student, emergency_contacts: [], medical_alerts: [] })
+      case '/rest/v1/rpc/instructor_student_history': return Response.json(page([]))
+      case '/rest/v1/rpc/instructor_student_summary': return Response.json({
+        pastSessions: 0, present: 0, late: 0, absent: 0, excused: 0, unmarked: 0, periodStart: null, periodEnd: null,
+        cycleStart: '2020-01-01', cycleAttended: 0, consecutiveAbsences: 0, lastAttended: null,
+      })
+      case '/rest/v1/technique_sign_offs': return responsePage([])
+      default: assert.fail(`Unexpected read ${url.pathname}`)
+    }
+  }, { instructorRecord: null })
+  assert.equal((await api.getStudents()).items[0].student.id, studentId)
+  assert.equal((await api.getStudentDetail(studentId)).student.id, studentId)
+  assert.equal((await api.getStudentHistory(studentId)).total, 0)
+  assert.equal((await api.getStudentSummary(studentId)).pastSessions, 0)
+  assert.deepEqual(await api.getTechniqueSignOffs(studentId), [])
+  assert.ok(!requests.some(request => new URL(request.url).pathname === '/rest/v1/instructors'))
+  const denied = createInstructorApi(fixtureClient({ profile: { id: userId, role: 'student' } }))
+  for (const read of [() => denied.getStudents(), () => denied.getStudentDetail(studentId),
+    () => denied.getStudentHistory(studentId), () => denied.getStudentSummary(studentId), () => denied.getTechniqueSignOffs(studentId)]) {
+    await assert.rejects(read(), { code: 'forbidden' })
+  }
+})

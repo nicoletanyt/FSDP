@@ -175,11 +175,13 @@ Shared header for everything on the calendar. The subtype tables (`classes`, `se
 | `centre_id`     | `uuid`         | no       | —                   |
 | `instructor_id` | `uuid`         | yes      | —                   |
 | `name`          | `text`         | no       | —                   |
-| `starts_at`     | `timestamptz`  | no       | —                   |
-| `ends_at`       | `timestamptz`  | no       | —                   |
+| `starts_at`     | `timestamptz`  | yes      | —                   |
+| `ends_at`       | `timestamptz`  | yes      | —                   |
 | `status`        | `event_status` | no       | `'scheduled'`       |
 | `created_at`    | `timestamptz`  | no       | `now()`             |
 | `updated_at`    | `timestamptz`  | no       | `now()`             |
+
+The fetched `20261104055444_official_grading_schedule.sql` migration permits date-only grading events. `starts_at` and `ends_at` must both be present or both be null; non-grading events still require both timestamps. A null grading time is unpublished, not midnight.
 
 ### `classes`
 
@@ -218,6 +220,13 @@ Grading-window fields for an event: track, application deadline and window statu
 | `track`                | `grade_track`           | yes      | —         |
 | `application_deadline` | `date`                  | yes      | —         |
 | `application_status`   | `grading_window_status` | no       | `'draft'` |
+| `grading_date`         | `date`                  | yes      | —         |
+| `application_opens_on` | `date`                  | yes      | —         |
+| `reporting_release_on` | `date`                  | yes      | —         |
+| `reporting_time`       | `time`                  | yes      | —         |
+| `official_schedule`    | `boolean`               | no       | `false`   |
+
+For official schedules, grading/open/close/reporting-release dates are required, opening must not follow closing, closing precedes grading, and reporting release must not follow grading. Source: `20261104055444_official_grading_schedule.sql:10–22`.
 
 ### `grading_target_grades`
 
@@ -300,7 +309,20 @@ Constraints and relationships from the supplied DDL:
 - `grading_email_one_accepted_or_pending` allows only one pending/accepted send per non-null `grading_event_id`.
 - `grading_email_one_all_campaign` allows only one pending/accepted send per non-null `campaign_key`.
 
-**Repository discrepancy:** `supabase/migrations/20261103185301_grading_checkout.sql` (lines 60–73) still declares `grading_event_id NOT NULL`, has no `ON DELETE SET NULL`, and omits `event_name`, `campaign_key`, and the campaign index. The supplied live definition above takes precedence for this table. Its live RLS policies and grants were not included in the supplied DDL.
+Migration history: `20261103185301_grading_checkout.sql:60–73` defines the initial table. The fetched `20261104055444_official_grading_schedule.sql:24–31` adds `event_name`, makes the event reference nullable, and sets `ON DELETE SET NULL`. `20261104094458_grading_invitation_wording.sql:43–47` adds `campaign_key` and its index. Together these match the project owner's supplied DDL above.
+
+### `grading_invitation_settings`
+
+Administrator-managed invitation subject and body. The boolean primary key/check permits a single settings row with `id = true`.
+
+| Column       | Type          | Nullable | Default |
+| ------------ | ------------- | -------- | ------- |
+| `id`         | `boolean`     | no       | `true`  |
+| `subject`    | `text`        | no       | —       |
+| `body`       | `text`        | no       | —       |
+| `updated_at` | `timestamptz` | no       | `now()` |
+
+Defined by `20261104094458_grading_invitation_wording.sql`. The fetched track-date/link migrations update the body constraints: required child/adult grading and application-close placeholders, no obsolete generic placeholders, and one literal application link. See `20261104115311_grading_invitation_track_dates.sql:25–34` and `20261104153902_grading_invitation_literal_link.sql:20–24`.
 
 ### `notifications`
 
@@ -353,13 +375,17 @@ The `create_instructor_availability(expected_user, slot_date, slot_start, slot_e
 
 `supabase/migrations/20261104120000_instructor_reads.sql` adds instructor read contracts without changing the tables or enums above:
 
-- Full event/student history across instructors and dojos for students already visible through a teaching relationship.
+- The original migration provides cross-instructor/dojo history through teaching relationships. `20261105130000_instructor_all_students.sql` supersedes that read scope with all-student access based on `users.role = 'instructor'`, including accounts without an instructor-domain link.
 - Role-aware instructor identity and a report-author ownership trigger for instructor writes.
 - RLS enabled on `grade_requirements`, completing its previously defined policies.
 - Explicit authenticated SELECT grants for the instructor data tables, still subject to their RLS policies.
 - Read RPCs: `instructor_student_directory`, `instructor_student_history`, `instructor_student_summary`, and `instructor_event_reports`.
 
 See [Instructor data contracts](instructor-data.md) for pagination, aggregate definitions, authorization, verification, and deployment details. The migration must be applied to the target database for these contracts to be available.
+
+The fetched reset migration does not contain `grade_requirements` policies. `20261105120000_instructor_reference_policies.sql` explicitly adds authenticated SELECT and administrator-only management policies where absent. This completes the RLS protection enabled by the instructor read migration without changing table columns or inserting reference data.
+
+`20261105130000_instructor_all_students.sql` adds instructor SELECT policies for `students`, `emergency_contacts`, `student_medical_alerts`, `event_students`, `grading_applications` and `technique_sign_offs`, and updates directory/history/summary RPC role checks. Its read helpers do not require teaching assignments or `instructors.user_id` linkage. Existing write policies and report-author ownership remain separate; no table columns are changed.
 
 ## Enums referenced above
 

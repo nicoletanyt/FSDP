@@ -14,10 +14,10 @@ import { createInstructorApi } from '@/lib/instructor/api'
 const instructorApi = createInstructorApi(supabase)
 ```
 
-API operations verify the signed-in account through `users.role`. Member-data
-reads require a linked `instructors.user_id`; calendar/availability reads return
-empty personal results when the link is absent, and the class catalogue remains
-available. Identity is not cached across account changes. UUID event,
+API operations verify the signed-in account through `users.role`. Instructors
+can read all student records and related student data without a domain link or
+teaching assignment. Calendar/availability reads remain personal and return empty
+results when the link is absent. Identity is not cached across account changes. UUID event,
 student, instructor and auth IDs remain distinct types. Runtime decoders validate
 the returned rows and joins; missing records are nullable, failed queries are
 errors, and malformed responses never become successful empty lists.
@@ -52,11 +52,14 @@ has its own error code and is not an empty result.
 
 ### Visibility and report authorship
 
-- Existing teaching relationships determine which students are visible. A visible
-  student's full history spans all instructors and dojos; unrelated students and
-  their roster rows remain inaccessible.
+- Instructor student reads cover every dojo, including students taught only by
+  other instructors, students with no event enrolment, and expired/pending members.
+  This is enforced by role-based SELECT policies and the directory/history/summary
+  RPCs, including for accounts without an `instructors` link.
 - A domain link alone does not confer instructor permissions after role demotion.
-- Broader history SELECT access does not broaden event/attendance write access.
+- Broader SELECT access does not broaden event/attendance, student-profile,
+  application or technique-sign-off write access. The old assignment helper is
+  deliberately retained for existing mutation policies.
 - A database trigger protects report text and author fields from another
   instructor's direct REST updates, author reassignment, row deletion, or spoofed
   insertion. Reports with unknown authors cannot be claimed by an instructor.
@@ -146,6 +149,12 @@ renders `Children's grading`; its 1024px enlarged-text case reports horizontal
 overflow. Directory rendering and stylesheet changes belong to the directory
 phase. These failures are recorded separately from the passing calendar suite.
 
+Phase 5 replaces the stale metadata assertions with the database-backed directory
+contract. The remaining enlarged-text overflow is isolated to the existing navbar
+width at `InstructorLayout.tsx` (`lg:w-[calc(92%+3rem)]`): at the 1024px test frame,
+the usable viewport is 1012px while the enlarged navbar is about 1027px wide. The
+directory rows and text fit. That styling issue is outside the data-only change.
+
 ## Calendar follow-up: unlinked accounts and availability creation
 
 Migration: `supabase/migrations/20261104130000_instructor_availability.sql`.
@@ -176,3 +185,118 @@ This pulls availability creation forward from the original mutation phase at the
 project owner's request. It adds no columns or tables. The migration must be
 applied before the new create flow is used; the existing `create-instructor` Edge
 Function does not need redeployment for the database trigger to take effect.
+
+## Phase 5: instructor student directory
+
+`InstructorStudents.tsx` reads `getStudents` through the existing instructor API
+context. It loads all unfiltered pages into a page-local, account-scoped memory
+snapshot, then filters and paginates that snapshot locally. The directory has no
+production mock fallback. Student/centre UUIDs,
+member numbers, grade labels and colours come from the database. Unranked is a
+recorded grade rather than a missing-grade placeholder. Home-centre/grade join
+absence remains explicit. Grading-track metadata is derived from date of birth
+using the existing calendar-year age boundary (adult in the year of turning 13),
+with dates evaluated in Singapore time; a future birth date is unverified.
+
+### URL and request state
+
+- `q`: literal, case-insensitive name/member-number search, up to 200 characters.
+  The input, URL and local results update immediately; no debounce or search API
+  request is needed after the initial snapshot load.
+- `rank`: database `grades.id`; `belt`: stored `grades.colour`; `dojo`: centre UUID.
+  Labels are read from full authorized-scope facets. Old mock dojo names are not
+  treated as database identities.
+- `page`: positive one-based page number, 50 rows per page. Invalid numeric pages
+  use page 1; pages beyond the available result set recover to the last real
+  page. Search/filter changes reset pagination and preserve unrelated URL keys.
+- Result counts come from the complete cached dataset and its filtered subset,
+  not the number of rows on the displayed page. Filter options cover the whole
+  dataset. Only same-account facet metadata is retained during snapshot reloads;
+  old rows and counts are hidden until the complete reload succeeds.
+- Loading, failed reads, an empty student database, and no matching students have
+  distinct states. Failed reads cannot become a successful zero count. Retry,
+  clear/reset actions, browser Back, focus return and open popovers are preserved.
+- An unlinked instructor has the same all-student read access as a linked one.
+  Student-detail links carry real UUIDs; profile/history wiring
+  remains the next phase. Tests measure the old detail fixture explicitly rather
+  than feeding a real UUID into fake profile/history generation.
+
+### Schema reconciliation
+
+The offline database suite now also applies the five fetched cloud migrations,
+using only a test-local official-venue prerequisite. Those migrations did not
+change the directory's student/grade/centre fields. They did reveal that the
+fetched reset SQL lacks `grade_requirements` policies, so the additive
+`20261105120000_instructor_reference_policies.sql` migration restores intended
+authenticated reads and administrator-only management. It is safe to apply when
+those named policies already exist; no existing migration file is rewritten.
+
+The schema reference now records the fetched grading date/reporting fields,
+nullable grading timestamps and invitation settings. The instructor timed-event
+model/calendar projection still needs a separate date-only grading compatibility
+update; Phase 5 does not interpret null grading timestamps or invent a time.
+
+### Verification and rollback
+
+Run `tests/instructor-directory.test.mjs`, `tests/instructor-data.test.mjs` and
+`tests/instructor-db.test.mjs` plus the directory/calendar browser suites. Cases
+include server pagination over 100 directory rows, a 205-student browser directory,
+global facets/totals, Unranked, local filtering without additional requests,
+account isolation, failed partial snapshot loads,
+invalid filters, page recovery, keyboard behavior and existing layout geometry.
+
+Roll back directory wiring by reverting this frontend phase; keep the reference
+RLS policy correction. Apply that new migration to Supabase separately from
+frontend deployment. No new table, column, enum or write endpoint is introduced.
+
+## Phase 5 correction: all students
+
+`supabase/migrations/20261105130000_instructor_all_students.sql` supersedes the
+original teaching-relationship read scope. All authenticated accounts with
+`public.users.role = 'instructor'` can read every student row, emergency contact,
+medical alert, event/student history row, grading application and technique sign-off.
+There is no membership-status, centre, enrolment, or domain-link prerequisite.
+Search and selected filters still narrow the displayed results, and pagination
+still applies to the global student set.
+
+The migration adds SELECT policies rather than modifying the assignment helper,
+which also participates in existing write policies. Report-author protection and
+other write rules remain independently enforced. Student accounts keep their
+existing self-access, and anonymous access is not expanded. Directory, individual
+student, history, summary, reference and sign-off API reads verify the role rather
+than requiring an instructor-domain record. Calendar/roster ownership and
+availability writes continue to use linked instructor identity.
+
+Verification includes another instructor's student, a student with no enrolment
+and expired membership/outstanding fees, unlinked instructor access, global totals
+and facets, contacts/medical/history/application/sign-off reads, role demotion,
+student/anonymous denial, and denial of newly attempted writes to unrelated
+student data. Apply this additive migration to Supabase for the new read scope.
+
+## Phase 5 follow-up: in-memory directory filtering
+
+`loadDirectorySnapshot` in `src/lib/instructor/directory.ts` loads the complete
+authorized directory using the existing `getStudents` API in unfiltered chunks
+of up to 100 rows. It follows actual returned page lengths, rejects duplicate or
+inconsistent pages, and exposes no partial cache if a later page fails.
+
+`InstructorStudents.tsx` keys its data request only by the account and snapshot
+reload revision. Its `useMemo` calls `filterDirectorySnapshot`, which uses
+`Array.filter()` for name/member-number, grade, colour and dojo matching, then
+`Array.slice()` for the existing 50-row visible pages. URL-backed state, global
+filter metadata and page recovery are preserved. Typing, changing filters and
+switching visible pages make no further directory API requests.
+
+The snapshot lives only while the directory page is mounted. Reopening or
+refreshing the page loads current data; existing Retry and empty-directory
+Refresh actions reload the snapshot. Changes made elsewhere are not synchronized
+automatically while the snapshot is open. No student data is written to browser
+storage, and logout/account changes discard the old page state and abort pending
+loads. The initial download is larger than the previous one-page read.
+
+The browser fixture records directory request arguments: with 205 students, the
+initial load requests offsets 0, 100 and 200. Search, rank/belt/dojo changes and
+visible pagination leave that request count at three. Unit/browser tests also
+verify partial-page failure and retry, immutable filtering, literal search,
+complete facets and account isolation. This is a frontend data/state change;
+the existing API and database migration contracts are retained.
