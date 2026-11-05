@@ -41,6 +41,7 @@ const StudentAttendance = lazy(() => import('./pages/StudentAttendance'))
 const StudentProfile = lazy(() => import('./pages/Student/StudentProfile'))
 const StudentPayments = lazy(() => import('./pages/Student/StudentPayments'))
 const StudentGrading = lazy(() => import('./pages/Student/StudentGrading'))
+const GradingRequirements = lazy(() => import('./pages/Student/GradingRequirements'))
 
 const InstructorDashboard = lazy(() => import('./pages/Instructor/InstructorDashboard'))
 const InstructorStudents = lazy(() => import('./pages/Instructor/InstructorStudents'))
@@ -75,6 +76,7 @@ export default function App() {
               <Route path="profile" element={<StudentProfile />} />
               <Route path="payments" element={<StudentPayments />} />
               <Route path="grading" element={<StudentGrading />} />
+              <Route path="grading/requirements" element={<GradingRequirements />} />
             </Route>
           </Route>
           <Route path="instructor">

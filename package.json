@@ -11,7 +11,8 @@
     "test:functions": "deno test --no-lock --allow-env supabase/functions/tests/",
     "seed:admin": "node --env-file=.env scripts/seed-admin.mjs",
     "test:auth-db": "node --test tests/auth-db.test.mjs",
-    "test:auth-seed": "node --test tests/seed-admin.test.mjs"
+    "test:auth-seed": "node --test tests/seed-admin.test.mjs",
+    "test:membership-db": "node --test tests/membership-checkout.test.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",

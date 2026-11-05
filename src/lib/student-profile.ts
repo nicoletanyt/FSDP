@@ -1,48 +1,48 @@
 export type Payment = {
   id: string;
-  date: string; // ISO date
+  date: string; // ISO timestamp
   item: string; // the class or package this payment belongs to
-  description: string; // e.g. "Term 4 fee"
-  method: "Stripe" | "PayNow";
-  amount: number; // SGD
+  description: string;
+  method: string;
+  amount: number; // SGD, in dollars
   status: "Paid" | "Pending" | "Refunded";
 };
 
+/** "None" means the account has no students row yet (never applied). */
+export type Standing = "Active" | "Pending" | "Expired" | "None";
+
 export type Profile = {
-  memberId: string;
+  memberId: string | null;
   fullName: string;
   photoUrl: string | null;
-  belt: { name: string; colour: string; hex: string };
-  homeDojo: string;
-  memberSince: string; // ISO date
-  membership: {
-    standing: "Active" | "Expired" | "Pending";
-    plan: string;
-    expiresOn: string; // ISO date
-  };
+  belt: { name: string; colour: string | null };
+  homeDojo: string | null;
+  memberSince: string | null; // ISO date the application was made
+  standing: Standing;
   payments: Payment[];
 };
 
-// TODO: replace with Supabase queries (users + payments tables).
-export const mockProfile: Profile = {
-  memberId: "ASK-2025-0142",
-  fullName: "Jess Tan",
-  photoUrl: null,
-  belt: { name: "5th Kyu", colour: "Yellow", hex: "#e8b923" },
-  homeDojo: "Bishan Dojo",
-  memberSince: "2025-03-10",
-  membership: {
-    standing: "Active",
-    plan: "Annual membership",
-    expiresOn: "2026-12-14",
-  },
-  payments: [
-    { id: "pay_01", date: "2026-09-02", item: "Adult Beginners Aikido", description: "Term 4 fee", method: "Stripe", amount: 180, status: "Paid" },
-    { id: "pay_02", date: "2026-06-03", item: "Adult Beginners Aikido", description: "Term 3 fee", method: "PayNow", amount: 180, status: "Paid" },
-    { id: "pay_03", date: "2026-03-11", item: "Adult Beginners Aikido", description: "Term 2 fee", method: "Stripe", amount: 180, status: "Paid" },
-    { id: "pay_04", date: "2025-12-02", item: "Adult Beginners Aikido", description: "Term 1 fee", method: "Stripe", amount: 180, status: "Paid" },
-    { id: "pay_05", date: "2026-03-10", item: "Annual membership", description: "Renewal 2026", method: "Stripe", amount: 60, status: "Paid" },
-    { id: "pay_06", date: "2025-03-10", item: "Annual membership", description: "Joining fee", method: "PayNow", amount: 60, status: "Paid" },
-    { id: "pay_07", date: "2026-03-04", item: "Weapons Workshop", description: "Deposit", method: "Stripe", amount: 25, status: "Refunded" },
-  ],
+const beltHex: Record<string, string> = {
+  red: "#d62828",
+  gold: "#d4a017",
+  yellow: "#e8b923",
+  orange: "#f08c00",
+  green: "#2b9348",
+  purple: "#7b2cbf",
+  blue: "#1d4ed8",
+  silver: "#c0c0c0",
+  brown: "#7f4f24",
+  black: "#111111",
 };
+
+/** CSS background for a belt colour such as "Blue" or two-tone "Blue-Gold". */
+export function beltBackground(colour: string | null) {
+  const tones = (colour ?? "")
+    .toLowerCase()
+    .split("-")
+    .map((tone) => beltHex[tone])
+    .filter(Boolean);
+  if (tones.length === 0) return "#e5e7eb"; // unranked: plain white belt
+  if (tones.length === 1) return tones[0];
+  return `linear-gradient(90deg, ${tones[0]} 0 70%, ${tones[1]} 70% 100%)`;
+}

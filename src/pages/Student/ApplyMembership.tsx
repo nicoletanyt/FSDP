@@ -1,9 +1,13 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router' 
+import { useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Check, ChevronDown, ChevronUp } from 'lucide-react'
+import { startMembershipCheckout } from '@/lib/stripe'
+import { supabase } from '@/lib/supabase'
+
+type Centre = { id: string; name: string }
 
 const STEPS = [
   { id: 1, title: 'Personal\nInformation' },
@@ -13,8 +17,15 @@ const STEPS = [
 ]
 
 export default function ApplyMembership() {
-  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const cancelled = searchParams.get('checkout') === 'cancel'
   const [currentStep, setCurrentStep] = useState(1)
+  const [centres, setCentres] = useState<Centre[]>([])
+  const [declared, setDeclared] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  // Same key for retries of an unchanged submission; Stripe then returns the same session.
+  const retryKey = useRef(crypto.randomUUID())
   const [showGuardian, setShowGuardian] = useState(false)
 
   const [formData, setFormData] = useState({
@@ -24,11 +35,66 @@ export default function ApplyMembership() {
     guardianName: '', guardianRelationship: '', guardianPhone: '',
   })
 
+  useEffect(() => {
+    supabase
+      .from('centres')
+      .select('id, name')
+      .eq('status', 'active')
+      .order('name')
+      .then(({ data }) => setCentres(data ?? []))
+  }, [])
+
+  const centreName = centres.find((c) => c.id === formData.principalDojo)?.name
+
+  function missingFields() {
+    const [firstName, ...rest] = formData.fullName.trim().split(/\s+/)
+    const missing: string[] = []
+    if (!firstName || rest.length === 0) missing.push('full name (first and last)')
+    if (!formData.dob) missing.push('date of birth')
+    if (!formData.principalDojo) missing.push('principal dojo')
+    if (!formData.emergencyName.trim() || !formData.emergencyRelationship || !formData.emergencyPhone.trim()) {
+      missing.push('emergency contact')
+    }
+    if (!formData.medicalConfirm) missing.push('medical declaration confirmation')
+    if (!declared) missing.push('final declaration')
+    return missing
+  }
+
+  async function submit() {
+    const missing = missingFields()
+    if (missing.length) {
+      setSubmitError(`Please complete: ${missing.join(', ')}.`)
+      return
+    }
+    const [firstName, ...rest] = formData.fullName.trim().split(/\s+/)
+    setSubmitting(true)
+    setSubmitError(null)
+    try {
+      await startMembershipCheckout({
+        first_name: firstName,
+        last_name: rest.join(' '),
+        phone: formData.mobile.trim() ? `+65 ${formData.mobile.trim()}` : '',
+        date_of_birth: formData.dob,
+        home_centre_id: formData.principalDojo,
+        emergency_contact: {
+          name: formData.emergencyName.trim(),
+          relationship: formData.emergencyRelationship,
+          phone: `+65 ${formData.emergencyPhone.trim()}`,
+        },
+        medical_details: formData.medicalDetails.trim(),
+      }, retryKey.current)
+      // The browser is now leaving for Stripe Checkout.
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : 'Unable to start checkout. Please try again.')
+      setSubmitting(false)
+    }
+  }
+
   const handleNext = () => {
     if (currentStep < 4) {
       setCurrentStep(currentStep + 1)
     } else {
-      navigate('/apply-membership/success') 
+      void submit()
     }
   }
 
@@ -43,6 +109,13 @@ export default function ApplyMembership() {
       {/* 2. 白色大卡片深色模式背景适配 */}
       <div className="max-w-5xl mx-auto bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-none p-8 sm:p-12 transition-colors">
         
+        {cancelled && (
+          <p role="status" className="mb-8 rounded-lg bg-muted p-4 text-sm text-muted-foreground">
+            Payment was cancelled, so your membership isn't active yet. Submit the form again
+            whenever you're ready to pay.
+          </p>
+        )}
+
         {/* 进度条 */}
         <div className="mb-12 flex items-start justify-between relative max-w-3xl mx-auto">
           <div className="absolute top-5 left-0 w-full h-[2px] bg-gray-200 dark:bg-slate-700 -z-10" />
@@ -167,9 +240,9 @@ export default function ApplyMembership() {
                   onChange={(e) => setFormData({...formData, principalDojo: e.target.value})}
                 >
                   <option value="" disabled>Select your principal dojo</option>
-                  <option value="central">Central Dojo</option>
-                  <option value="east">East Dojo</option>
-                  <option value="west">West Dojo</option>
+                  {centres.map((centre) => (
+                    <option key={centre.id} value={centre.id}>{centre.name}</option>
+                  ))}
                 </select>
               </div>
 
@@ -408,7 +481,7 @@ export default function ApplyMembership() {
                   <button onClick={() => setCurrentStep(2)} className="text-sm text-[#e62128] dark:text-red-400 font-semibold hover:underline transition-colors">Edit</button>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-8 text-sm">
-                  <div><span className="text-gray-500 dark:text-gray-400 block mb-1 transition-colors">Principal Dojo</span><span className="font-medium text-gray-900 dark:text-gray-100 capitalize transition-colors">{formData.principalDojo || '-'}</span></div>
+                  <div><span className="text-gray-500 dark:text-gray-400 block mb-1 transition-colors">Principal Dojo</span><span className="font-medium text-gray-900 dark:text-gray-100 transition-colors">{centreName || '-'}</span></div>
                   <div><span className="text-gray-500 dark:text-gray-400 block mb-1 transition-colors">Membership Type</span><span className="font-medium text-gray-900 dark:text-gray-100 capitalize transition-colors">{formData.membershipType || '-'}</span></div>
                   <div><span className="text-gray-500 dark:text-gray-400 block mb-1 transition-colors">Current Belt Rank</span><span className="font-medium text-gray-900 dark:text-gray-100 capitalize transition-colors">{formData.currentBelt || '-'}</span></div>
                   <div><span className="text-gray-500 dark:text-gray-400 block mb-1 transition-colors">Previous Experience</span><span className="font-medium text-gray-900 dark:text-gray-100 capitalize transition-colors">{formData.hasExperience}</span></div>
@@ -440,9 +513,11 @@ export default function ApplyMembership() {
 
             <div className="mt-8 p-4 bg-blue-50/50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900 rounded-lg transition-colors">
               <label className="flex items-start gap-3 cursor-pointer">
-                <input 
-                  type="checkbox" 
+                <input
+                  type="checkbox"
                   required
+                  checked={declared}
+                  onChange={(e) => setDeclared(e.target.checked)}
                   className="mt-1 w-5 h-5 rounded border-gray-300 dark:border-slate-600 text-[#2c3f67] dark:text-blue-600 focus:ring-[#2c3f67] dark:focus:ring-blue-600 dark:bg-slate-900 transition-colors"
                 />
                 <span className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed transition-colors">
@@ -451,6 +526,12 @@ export default function ApplyMembership() {
               </label>
             </div>
           </div>
+        )}
+
+        {submitError && (
+          <p role="alert" className="mt-8 rounded-lg bg-brand-red/10 p-4 text-sm font-medium text-brand-red-ink">
+            {submitError}
+          </p>
         )}
 
         {/* 底部按钮 */}
@@ -466,11 +547,12 @@ export default function ApplyMembership() {
             <div />
           )}
           
-          <Button 
+          <Button
             onClick={handleNext}
+            disabled={submitting}
             className="bg-[#2c3f67] dark:bg-blue-600 hover:bg-[#1f2d4a] dark:hover:bg-blue-700 text-white px-10 h-12 rounded-md text-base transition-colors"
           >
-            {currentStep === 4 ? 'Submit Application' : 'Next'}
+            {currentStep < 4 ? 'Next' : submitting ? 'Redirecting to payment…' : 'Submit & Pay'}
           </Button>
         </div>
 

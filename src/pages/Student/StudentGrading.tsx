@@ -68,7 +68,10 @@ export default function StudentGrading() {
   }
 
   return <main className="mx-auto w-full max-w-2xl space-y-5">
-    <h1 className="text-3xl font-bold">Grading applications</h1>
+    <div className="flex flex-wrap items-end justify-between gap-3">
+      <h1 className="text-3xl font-bold">Grading applications</h1>
+      <Link to="/grading/requirements" className="text-sm font-medium text-primary underline-offset-4 hover:underline">View grading requirements</Link>
+    </div>
     {params.get('checkout') === 'success' && <Alert><AlertDescription>Payment is being verified. Your application will appear after confirmation. Refresh this page shortly.</AlertDescription></Alert>}
     {params.get('checkout') === 'cancel' && <Alert><AlertDescription>Checkout was canceled. No application was submitted.</AlertDescription></Alert>}
     {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}

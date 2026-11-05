@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link } from "react-router";
+import { useEffect, useState } from "react";
+import { Link, useSearchParams } from "react-router";
 import {
   CalendarDays,
   ClipboardCheck,
@@ -7,10 +7,10 @@ import {
   QrCode,
   Presentation,
   UserCheck,
-  type LucideIcon,
 } from "lucide-react";
 
 import { buttonVariants } from "@/components/student/button";
+import { Tile, type TileProps } from "@/components/student/DashboardTile";
 import { Card } from "@/components/ui/card";
 import {
   Dialog,
@@ -19,16 +19,13 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { formatDateTime } from "@/lib/format";
+import { useAuth } from "@/hooks/use-auth";
+import { useMembershipStatus } from "@/hooks/use-membership-status";
+import { formatDateTime, greetingFor } from "@/lib/format";
 import { mockStudent, type Student } from "@/lib/student-dashboard";
+import NonMemberDashboard from "./NonMemberDashboard";
 
 /* ---------- Helpers ---------- */
-function greetingFor(hour: number) {
-  if (hour < 12) return "Good morning";
-  if (hour < 18) return "Good afternoon";
-  return "Good evening";
-}
-
 function isClassDay(iso: string) {
   const classDate = new Date(iso);
   return !Number.isNaN(classDate.getTime()) && classDate.toDateString() === new Date().toDateString();
@@ -66,42 +63,72 @@ function Requirement({ label, value, done }: { label: string; value: string; don
   );
 }
 
-type TileProps = {
-  title: string;
-  status: string;
-  to: string;
-  icon: LucideIcon;
-  badge?: number;
-};
+/* ---------- Page ---------- */
+const CONFIRM_ATTEMPTS = 10; // every 2s → about 20s
+const CONFIRM_INTERVAL_MS = 2000;
 
-function Tile({ title, status, to, icon: Icon, badge }: TileProps) {
-  return (
-    <Link
-      to={to}
-      className="relative flex min-w-0 flex-col items-center justify-center gap-3 rounded-xl bg-card p-5 text-center text-sm text-card-foreground ring-1 ring-foreground/10 transition-colors hover:bg-accent hover:ring-primary/50 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-    >
-      {!!badge && (
-        <span
-          className="absolute right-3 top-3 grid min-h-7 min-w-7 place-items-center rounded-full bg-destructive px-2 py-0.5 text-xs font-bold text-destructive-foreground"
-          aria-label={`${badge} pending`}
-        >
-          {badge}
-        </span>
-      )}
-      <span className="grid size-14 place-items-center rounded-2xl bg-primary/10 text-primary">
-        <Icon className="size-7" strokeWidth={1.8} aria-hidden="true" />
-      </span>
-      <span className="font-semibold">{title}</span>
-      <span className="text-muted-foreground">{status}</span>
-    </Link>
-  );
+// /dashboard: paid (active) members get the full dashboard; everyone else
+// gets the non-member one. Paying via Stripe flips the DB status to active
+// (through the webhook), so returning from checkout or refreshing shows the
+// member page.
+export default function StudentDashboard() {
+  const { profile } = useAuth();
+  const { status, loading, error, reload } = useMembershipStatus();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [confirmChecks, setConfirmChecks] = useState(0);
+  const firstName = profile?.first_name ?? "";
+  const returnedFromCheckout = searchParams.get("checkout") === "success";
+
+  // The webhook can land a few seconds after Stripe redirects back, so re-check briefly.
+  useEffect(() => {
+    if (!returnedFromCheckout || !status) return;
+    if (status === "active") {
+      setSearchParams({}, { replace: true });
+      return;
+    }
+    if (confirmChecks >= CONFIRM_ATTEMPTS) return;
+    const timer = setTimeout(() => {
+      setConfirmChecks((n) => n + 1);
+      reload();
+    }, CONFIRM_INTERVAL_MS);
+    return () => clearTimeout(timer);
+  }, [returnedFromCheckout, status, confirmChecks, reload, setSearchParams]);
+
+  if (loading) {
+    return <p className="text-sm text-muted-foreground">Loading your dashboard…</p>;
+  }
+  if (error || !status) {
+    return (
+      <p role="alert" className="text-sm text-brand-red-ink">
+        We couldn't load your dashboard. Please refresh the page.
+      </p>
+    );
+  }
+  if (status !== "active") {
+    return (
+      <>
+        {returnedFromCheckout && (
+          <p role="status" className="mb-6 rounded-lg bg-primary/10 p-4 text-sm font-medium text-primary">
+            {confirmChecks < CONFIRM_ATTEMPTS
+              ? "Thanks! Confirming your payment…"
+              : "We've received your payment, but confirmation is taking longer than usual. Refresh this page in a minute."}
+          </p>
+        )}
+        <NonMemberDashboard firstName={firstName} status={status} />
+      </>
+    );
+  }
+  return <MemberDashboard firstName={firstName} />;
 }
 
-/* ---------- Page ---------- */
-export default function StudentDashboard() {
-  // TODO: swap for a Supabase-backed hook, e.g. useStudentDashboard()
+function MemberDashboard({ firstName }: { firstName: string }) {
   const [attendanceQrOpen, setAttendanceQrOpen] = useState(false);
-  const student = mockStudent;
+  // TODO: belt, classes and attendance stay mock until those tables exist.
+  const student: Student = {
+    ...mockStudent,
+    firstName: firstName || mockStudent.firstName,
+    membershipStatus: "Active",
+  };
   const { belt, nextBelt, requirements: r, counts, nextClass } = student;
   const attendanceQrAvailable = nextClass ? isClassDay(nextClass.startsAt) : false;
 
@@ -128,7 +155,7 @@ export default function StudentDashboard() {
 
   return (
       <main className="w-full">
-                <header className="flex flex-wrap items-end justify-between gap-3">
+        <header className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold">
               {greetingFor(new Date().getHours())}, {student.firstName}
@@ -137,18 +164,10 @@ export default function StudentDashboard() {
               Your training progress, upcoming classes and student services.
             </p>
           </div>
-          
-          <div className="flex items-center gap-3">
-            <p className="inline-flex rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
-              Membership {student.membershipStatus.toLowerCase()}
-            </p>
-            <Link 
-              to="/apply-membership" 
-              className={buttonVariants({ className: "px-4 py-2" })}
-            >
-              Apply for Membership
-            </Link>
-          </div>
+          {/* Members are already members; the apply button lives on NonMemberDashboard. */}
+          <p className="inline-flex rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
+            Membership {student.membershipStatus.toLowerCase()}
+          </p>
         </header>
 
         {/* Overview */}
@@ -202,7 +221,11 @@ export default function StudentDashboard() {
               <Requirement label="Grading fee" value={r.feePaid ? "Paid" : "Unpaid"} done={r.feePaid} />
             </ul>
 
-            <Link to="/grading" className={buttonVariants({ className: "mt-auto w-full self-start whitespace-normal sm:w-auto" })}>
+            {/* Applying (and paying) lives on /grading; requirements are read-only on their own page. */}
+            <Link
+              to={ctaLabel === "View grading requirements" ? "/grading/requirements" : "/grading"}
+              className={buttonVariants({ className: "mt-auto w-full self-start whitespace-normal sm:w-auto" })}
+            >
               {ctaLabel}
             </Link>
           </Card>

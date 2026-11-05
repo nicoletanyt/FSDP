@@ -58,6 +58,24 @@ export async function handleRequest(request: Request): Promise<Response> {
           if (error) throw error
           return Response.json({ received: true })
         }
+        if (session.metadata?.membership_student_id) {
+          // Re-read the session and price from Stripe rather than trusting the event body.
+          const verified = await stripe.checkout.sessions.retrieve(session.id)
+          const price = await stripe.prices.retrieve(requireEnv('STRIPE_MEMBERSHIP_PRICE_ID'))
+          const studentId = verified.metadata?.membership_student_id
+          if (verified.payment_status !== 'paid' || verified.currency !== 'sgd' ||
+            verified.amount_total !== price.unit_amount || !studentId ||
+            studentId !== session.metadata.membership_student_id ||
+            verified.client_reference_id !== studentId) {
+            return new Response('Membership payment mismatch.', { status: 400 })
+          }
+          const { error } = await adminClient().rpc('finalize_membership_checkout', {
+            student: studentId, stripe_session: session.id,
+            paid_amount: verified.amount_total, paid_currency: verified.currency,
+          })
+          if (error) throw error
+          return Response.json({ received: true })
+        }
         // A fixed assignment stays idempotent even after Stripe's key expires.
         // Both event types use the same key, including concurrent deliveries.
         await stripe.checkout.sessions.update(session.id, {
