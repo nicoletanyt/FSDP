@@ -407,7 +407,7 @@ export default function Centres() {
 function DojoCard({ centre }: { centre: Centre }) {
   const cardClass = cn(
     'flex flex-col gap-3 rounded-xl bg-card p-4 ring-1 ring-foreground/10',
-    centre.status !== 'closed' &&
+    centre.status === 'active' &&
       'cursor-pointer transition-colors hover:bg-accent/40 hover:ring-primary/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
   )
   const content = (
@@ -430,7 +430,7 @@ function DojoCard({ centre }: { centre: Centre }) {
             'text-sm font-medium',
             centre.status === 'closed'
               ? 'text-destructive'
-              : 'text-warning-foreground dark:text-warning',
+              : 'text-amber-800 dark:text-warning',
           )}>
             {centre.status === 'closed' ? 'This dojo is closed' : 'This dojo is under renovation'}
           </p>
@@ -443,7 +443,7 @@ function DojoCard({ centre }: { centre: Centre }) {
     </>
   )
 
-  if (centre.status === 'closed') return <div className={cardClass}>{content}</div>
+  if (centre.status !== 'active') return <div className={cardClass}>{content}</div>
 
   return (
     <Link
