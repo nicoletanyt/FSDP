@@ -18,6 +18,7 @@ export type ClassTemplate = Omit<CalendarEvent, "id" | "date"> & { id: string; w
 export type Student = { id: string; name: string } & StudentRank;
 export type Attendance = "unmarked" | "present" | "absent";
 export type ReportAuthor = { id: string; name: string };
+export type InstructorProfile = ReportAuthor & { role: string; avatarUrl?: string };
 export type StudentSession = {
     attendance: Attendance;
     comment: string;
@@ -33,6 +34,87 @@ export const instructors = [
     { id: "instructor-2", name: "Jamie Chen" },
 ];
 export const currentInstructor = instructors[0];
+
+// Sign-offs retain a name snapshot for older/unknown accounts, but identity and
+// live profile lookup always use the instructor ID, never a display-name match.
+export function resolveInstructorProfile(
+    instructorId: string,
+    fallbackName = "",
+    currentProfile?: InstructorProfile | null,
+): InstructorProfile {
+    if (currentProfile?.id === instructorId) return currentProfile;
+    const instructor = instructors.find(item => item.id === instructorId);
+    return {
+        id: instructorId,
+        name: (instructor?.name ?? fallbackName.trim()) || "Unknown instructor",
+        role: "Instructor",
+    };
+}
+
+const instructorPhotoPrefix = "instructor-profile-photo-v1:";
+const instructorPhotoChanged = "instructor-profile-photo-changed";
+
+export function getInstructorPhoto(instructorId: string | null | undefined): string | null {
+    if (!instructorId) return null;
+    try {
+        const photo = localStorage.getItem(`${instructorPhotoPrefix}${instructorId}`);
+        return photo && /^data:image\/(jpeg|png|webp);base64,/.test(photo) ? photo : null;
+    } catch {
+        return null;
+    }
+}
+
+export function saveInstructorPhoto(instructorId: string, photo: string | null) {
+    if (!instructorId) throw new Error("Your instructor profile is not ready yet.");
+    const key = `${instructorPhotoPrefix}${instructorId}`;
+    if (photo) localStorage.setItem(key, photo);
+    else localStorage.removeItem(key);
+    // Native storage events notify other tabs; this notifies this tab's avatars.
+    window.dispatchEvent(new Event(instructorPhotoChanged));
+}
+
+export function subscribeInstructorPhotos(listener: () => void) {
+    const onStorage = (event: StorageEvent) => {
+        if (event.key === null || event.key.startsWith(instructorPhotoPrefix)) listener();
+    };
+    window.addEventListener(instructorPhotoChanged, listener);
+    window.addEventListener("storage", onStorage);
+    return () => {
+        window.removeEventListener(instructorPhotoChanged, listener);
+        window.removeEventListener("storage", onStorage);
+    };
+}
+
+export async function prepareInstructorPhoto(file: File): Promise<string> {
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+        throw new Error("Choose a JPG, PNG or WebP image.");
+    }
+    if (file.size > 5 * 1024 * 1024) throw new Error("Choose an image of 5 MB or smaller.");
+    const objectUrl = URL.createObjectURL(file);
+    try {
+        const image = new Image();
+        image.src = objectUrl;
+        try {
+            await image.decode();
+        } catch {
+            throw new Error("This image could not be opened. Please choose another photo.");
+        }
+        if (!image.naturalWidth || !image.naturalHeight) throw new Error("Choose a valid profile photo.");
+        const canvas = document.createElement("canvas");
+        canvas.width = 512;
+        canvas.height = 512;
+        const context = canvas.getContext("2d");
+        if (!context) throw new Error("Your browser could not prepare this photo. Please try again.");
+        const side = Math.min(image.naturalWidth, image.naturalHeight);
+        context.fillStyle = "#ffffff";
+        context.fillRect(0, 0, 512, 512);
+        context.drawImage(image, (image.naturalWidth - side) / 2, (image.naturalHeight - side) / 2, side, side, 0, 0, 512, 512);
+        return canvas.toDataURL("image/jpeg", 0.85);
+    } finally {
+        URL.revokeObjectURL(objectUrl);
+    }
+}
+
 export const dojoCapacities: Record<string, number> = {
     "Central Dojo": 24,
     "Northside Dojo": 18,

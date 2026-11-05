@@ -1,6 +1,13 @@
-import { useId, useRef } from "react";
+import { useId, useRef, useState } from "react";
 import { useSearchParams, Link } from "react-router";
-import { ChevronDown, ChevronRight, Search, Users } from "lucide-react";
+import {
+    ChevronDown,
+    ChevronRight,
+    MapPin,
+    Search,
+    SlidersHorizontal,
+    Users,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -13,11 +20,21 @@ import {
 import { Input } from "@/components/ui/input";
 import GradeBadge from "@/components/GradeBadge";
 import { Label } from "@/components/ui/label";
-import { studentDetailsHref, students } from "@/lib/instructor-calendar";
 import {
-    getStudentProfile,
-} from "@/lib/instructor-student-details";
-import { belts, compareRanks, formatRank, getGrade, gradingSystems } from "@/lib/student-grades";
+    Popover,
+    PopoverContent,
+    PopoverTitle,
+    PopoverTrigger,
+} from "@/components/ui/popover";
+import { studentDetailsHref, students } from "@/lib/instructor-calendar";
+import { getStudentProfile } from "@/lib/instructor-student-details";
+import {
+    belts,
+    compareRanks,
+    formatRank,
+    getGrade,
+    gradingSystems,
+} from "@/lib/student-grades";
 
 function DirectoryFilter({
     label,
@@ -33,7 +50,7 @@ function DirectoryFilter({
     const triggerId = useId();
 
     return (
-        <div className="flex min-w-0 items-center gap-2">
+        <div className="grid min-w-0 gap-1.5">
             <Label
                 htmlFor={triggerId}
                 className="shrink-0 text-sm text-muted-foreground"
@@ -46,26 +63,47 @@ function DirectoryFilter({
                     render={
                         <Button
                             variant="outline"
-                            className="h-10 min-w-0 flex-1 justify-between gap-2 lg:min-w-24 lg:flex-none"
+                            size="touch"
+                            className="directory-control w-full min-w-0 justify-between gap-2"
                         />
                     }
                     aria-label={`${label}: ${options.find((option) => option.value === value)?.label || value || "All"}`}
                 >
-                    <span className="truncate">{options.find((option) => option.value === value)?.label || value || "All"}</span>
+                    <span className="truncate">
+                        {options.find((option) => option.value === value)?.label ||
+                            value ||
+                            "All"}
+                    </span>
                     <ChevronDown aria-hidden="true" className="size-4" />
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
+                <DropdownMenuContent
+                    align="start"
+                    className="student-directory-filter-menu"
+                >
                     <DropdownMenuRadioGroup
                         value={value}
                         onValueChange={onValueChange}
                         aria-label={`${label} filter`}
                     >
                         <DropdownMenuRadioItem value="" closeOnClick>
-                            All {label === "Rank" ? "ranks" : label === "Belt" ? "belts" : "dojos"}
+                            <span className="min-w-0 [overflow-wrap:anywhere]">
+                                All{" "}
+                                {label === "Rank"
+                                    ? "ranks"
+                                    : label === "Belt"
+                                        ? "belts"
+                                        : "dojos"}
+                            </span>
                         </DropdownMenuRadioItem>
                         {options.map((option) => (
-                            <DropdownMenuRadioItem key={option.value} value={option.value} closeOnClick>
-                                {option.label}
+                            <DropdownMenuRadioItem
+                                key={option.value}
+                                value={option.value}
+                                closeOnClick
+                            >
+                                <span className="min-w-0 [overflow-wrap:anywhere]">
+                                    {option.label}
+                                </span>
                             </DropdownMenuRadioItem>
                         ))}
                     </DropdownMenuRadioGroup>
@@ -78,6 +116,8 @@ function DirectoryFilter({
 export default function InstructorStudents() {
     const [params, setParams] = useSearchParams();
     const searchRef = useRef<HTMLInputElement>(null);
+    const filterTriggerRef = useRef<HTMLButtonElement>(null);
+    const [filtersOpen, setFiltersOpen] = useState(false);
     const query = params.get("q") ?? "";
     const belt = params.get("belt") ?? "";
     const rank = params.get("rank") ?? "";
@@ -91,15 +131,19 @@ export default function InstructorStudents() {
         };
     });
     const ranks = [...new Set(directory.map((student) => student.rank))]
-        .sort(compareRanks).map((rank) => ({ value: rank, label: formatRank(rank) }));
+        .sort(compareRanks)
+        .map((rank) => ({ value: rank, label: formatRank(rank) }));
     const beltOptions = [
         ...new Set(directory.map((student) => student.beltLabel)),
-    ].sort().map((belt) => ({ value: belt, label: belt }));
-    const dojos = [
-        ...new Set(directory.map((student) => student.principalDojo)),
-    ].sort().map((dojo) => ({ value: dojo, label: dojo }));
+    ]
+        .sort()
+        .map((belt) => ({ value: belt, label: belt }));
+    const dojos = [...new Set(directory.map((student) => student.principalDojo))]
+        .sort()
+        .map((dojo) => ({ value: dojo, label: dojo }));
     const search = query.trim().toLowerCase();
     const hasFilters = Boolean(search || rank || belt || dojo);
+    const activeFilterCount = [rank, belt, dojo].filter(Boolean).length;
     const filtered = directory.filter(
         (student) =>
             `${student.name} ${student.studentNumber}`
@@ -134,13 +178,24 @@ export default function InstructorStudents() {
         searchRef.current?.focus();
     }
 
+    function resetFilters() {
+        setParams(
+            (current) => {
+                const next = new URLSearchParams(current);
+                for (const name of ["rank", "belt", "dojo"]) next.delete(name);
+                return next;
+            },
+            { replace: true },
+        );
+    }
+
     return (
-        <section className="space-y-6">
+        <section className="student-directory-view space-y-2 md:space-y-6">
             <header>
                 <h1 className="text-3xl font-semibold tracking-tight">Students</h1>
             </header>
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-                <div className="relative w-full min-w-0 lg:flex-1">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                <div className="relative min-w-0 flex-1 basis-32">
                     <Search
                         aria-hidden="true"
                         className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
@@ -149,39 +204,109 @@ export default function InstructorStudents() {
                         type="search"
                         ref={searchRef}
                         aria-label="Search by name or student ID"
-                        placeholder="Search by name or student ID..."
+                        placeholder="Name or ID…"
                         value={query}
                         onChange={(event) => updateFilter("q", event.target.value)}
-                        className="h-10 bg-background pl-9"
+                        className="directory-control h-11 bg-background pl-9 lg:h-10"
                     />
                 </div>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 lg:flex lg:shrink-0">
-                    <DirectoryFilter
-                        label="Rank"
-                        value={rank}
-                        options={ranks}
-                        onValueChange={(value) => updateFilter("rank", value)}
-                    />
-                    <DirectoryFilter
-                        label="Belt"
-                        value={belt}
-                        options={beltOptions}
-                        onValueChange={(value) => updateFilter("belt", value)}
-                    />
-                    <DirectoryFilter
-                        label="Dojo"
-                        value={dojo}
-                        options={dojos}
-                        onValueChange={(value) => updateFilter("dojo", value)}
-                    />
-                </div>
+                <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>
+                    <PopoverTrigger
+                        ref={filterTriggerRef}
+                        render={
+                            <Button
+                                variant="outline"
+                                size="touch"
+                                className="directory-control gap-2"
+                            />
+                        }
+                        aria-label={
+                            activeFilterCount
+                                ? `Filter students, ${activeFilterCount} active filters`
+                                : "Filter students"
+                        }
+                    >
+                        <SlidersHorizontal aria-hidden="true" className="size-4" />
+                        <span>Filter</span>
+                        {activeFilterCount > 0 && (
+                            <span
+                                aria-hidden="true"
+                                className="directory-filter-count flex size-5 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground"
+                            >
+                                {activeFilterCount}
+                            </span>
+                        )}
+                    </PopoverTrigger>
+                    <PopoverContent
+                        className="student-directory-filters w-80 gap-3"
+                        finalFocus={filterTriggerRef}
+                    >
+                        <div className="space-y-1">
+                            <PopoverTitle className="directory-popover-title">
+                                Filter students
+                            </PopoverTitle>
+                        </div>
+                        <DirectoryFilter
+                            label="Rank"
+                            value={rank}
+                            options={ranks}
+                            onValueChange={(value) => updateFilter("rank", value)}
+                        />
+                        <DirectoryFilter
+                            label="Belt"
+                            value={belt}
+                            options={beltOptions}
+                            onValueChange={(value) => updateFilter("belt", value)}
+                        />
+                        <DirectoryFilter
+                            label="Dojo"
+                            value={dojo}
+                            options={dojos}
+                            onValueChange={(value) => updateFilter("dojo", value)}
+                        />
+                        <div className="flex flex-wrap justify-between gap-2 border-t pt-4">
+                            <Button
+                                variant="ghost"
+                                size="touch"
+                                className="directory-control h-auto min-h-11 max-w-full whitespace-normal py-2 lg:min-h-10"
+                                disabled={!activeFilterCount}
+                                onClick={resetFilters}
+                            >
+                                Reset filters
+                            </Button>
+                            <Button
+                                size="touch"
+                                className="directory-control h-auto min-h-11 max-w-full whitespace-normal py-2 lg:min-h-10"
+                                onClick={() => setFiltersOpen(false)}
+                            >
+                                Done
+                            </Button>
+                        </div>
+                    </PopoverContent>
+                </Popover>
             </div>
-            <div className="space-y-2">
-                <p role="status" className="text-xs text-muted-foreground">
-                    {hasFilters
-                        ? `${filtered.length} of ${students.length} students`
-                        : `${students.length} students`}
-                </p>
+            <div className="space-y-4">
+                <div className="flex min-h-11 flex-wrap items-center justify-between gap-2">
+                    <p
+                        role="status"
+                        className="directory-meta text-xs text-muted-foreground"
+                    >
+                        {hasFilters
+                            ? `${filtered.length} of ${students.length} students`
+                            : `${students.length} students`}
+                    </p>
+                    {hasFilters && (
+                        <Button
+                            variant="ghost"
+                            size="touch"
+                            className="directory-control shrink-0"
+                            aria-label="Clear all search and filters"
+                            onClick={clearFilters}
+                        >
+                            Clear all
+                        </Button>
+                    )}
+                </div>
                 <Card className="gap-0 overflow-hidden py-0">
                     <CardContent className="px-0">
                         {filtered.length ? (
@@ -190,21 +315,36 @@ export default function InstructorStudents() {
                                     <li key={student.id}>
                                         <Link
                                             to={studentDetailsHref(student.id)}
-                                            className="flex min-h-17 items-center gap-3 px-4 py-2 transition-colors hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:-outline-offset-2 focus-visible:outline-2 focus-visible:outline-ring sm:px-6"
+                                            className="flex min-h-17 items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:-outline-offset-2 focus-visible:outline-2 focus-visible:outline-ring"
                                         >
                                             <div className="min-w-0 flex-1">
-                                                <div className="flex flex-wrap items-center gap-2">
-                                                    <p className="truncate text-sm font-medium">{student.name}</p>
-                                                    <GradeBadge rank={student.rank} system={student.gradingSystem} />
+                                                <div className="flex flex-wrap items-start gap-x-2 gap-y-1">
+                                                    <p className="directory-name min-w-0 flex-1 basis-24 text-sm font-medium [overflow-wrap:anywhere]">
+                                                        {student.name}
+                                                    </p>
                                                 </div>
-                                                <p className="mt-0.5 text-xs text-muted-foreground">
-                                                    {student.studentNumber} · {gradingSystems[student.gradingSystem].label}
-                                                </p>
-                                                <p className="mt-0.5 text-xs text-muted-foreground sm:hidden">
+                                                <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 sm:mt-1">
+                                                    <GradeBadge
+                                                        rank={student.rank}
+                                                        system={student.gradingSystem}
+                                                    />
+                                                    <p className="directory-meta min-w-0 text-xs text-muted-foreground [overflow-wrap:anywhere]">
+                                                        {gradingSystems[student.gradingSystem].label}
+                                                    </p>
+                                                </div>
+                                                <p className="directory-meta mt-2 flex items-center gap-1.5 text-xs text-muted-foreground [overflow-wrap:anywhere] sm:hidden">
+                                                    <MapPin
+                                                        aria-hidden="true"
+                                                        className="size-3.5 shrink-0"
+                                                    />
                                                     {student.principalDojo}
                                                 </p>
                                             </div>
-                                            <span className="hidden text-xs text-muted-foreground sm:block">
+                                            <span className="directory-meta hidden max-w-[35%] shrink-0 items-center gap-1.5 text-left text-xs text-muted-foreground [overflow-wrap:anywhere] sm:flex">
+                                                <MapPin
+                                                    aria-hidden="true"
+                                                    className="size-3.5 shrink-0"
+                                                />
                                                 {student.principalDojo}
                                             </span>
                                             <ChevronRight
@@ -216,21 +356,22 @@ export default function InstructorStudents() {
                                 ))}
                             </ul>
                         ) : (
-                            <div className="space-y-2 px-6 py-12 text-center">
+                            <div className="space-y-2 px-4 py-8 text-center sm:py-12">
                                 <Users
                                     aria-hidden="true"
                                     className="mx-auto size-6 text-muted-foreground"
                                 />
-                                <h2 className="font-medium">No students found</h2>
-                                <p className="text-sm text-muted-foreground">
+                                <h2 className="text-sm font-semibold">No students found</h2>
+                                <p className="directory-copy text-sm text-muted-foreground">
                                     Try another name, student ID, rank, belt or dojo.
                                 </p>
                                 <Button
                                     variant="outline"
-                                    className="mt-2"
+                                    size="touch"
+                                    className="directory-control mt-2 h-auto min-h-11 max-w-full whitespace-normal px-2 py-2 lg:min-h-10"
                                     onClick={clearFilters}
                                 >
-                                    Clear filters
+                                    Clear search and filters
                                 </Button>
                             </div>
                         )}

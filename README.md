@@ -71,6 +71,43 @@ server secrets with `VITE_`.
 - Sessions persist automatically. Roles come from `public.users`; browser clients
   cannot write profiles or assign privileged roles. Passwords stay in Supabase Auth.
 
+## Administrator console
+
+Administrators sign in at `/staff/login` and land on `/admin`. The console uses a
+top navigation bar with **Monitor** and **Grading** menus, an **Instructors**
+link, and theme, notification, and profile controls. The logo returns to
+`/admin`; students and instructors keep the public home page. Sign out is on
+`/admin/profile` rather than in the shared header.
+
+| Route | Purpose |
+| --- | --- |
+| `/admin` | Overview of attendance, declining students, and the grading pipeline |
+| `/admin/centres` | Centre directory: search and filter students; open a full student profile |
+| `/admin/calendar` | View sessions, create sessions (including external sessions), and mark rosters present, late, absent, or excused |
+| `/admin/calendar/records` | Review and export attendance history |
+| `/admin/calendar/monitoring` | Flag declining attendance, notify students, and track follow-up |
+| `/admin/grading/eligibility` | Automatic eligibility checks and invitations |
+| `/admin/grading/opportunities` | Live adult and children’s grading schedule and reporting times |
+| `/admin/grading/applications` | Read-only view and CSV export of submitted applications |
+| `/admin/notifications` | Review EmailJS grading invitation requests |
+| `/admin/reports` | Consolidated centre reporting and CSV export |
+| `/admin/instructors` | Teaching team and instructor account creation |
+| `/admin/profile` | Administrator account details and sign out |
+
+The console uses deterministic mock data from `src/lib/admin/mock-data.ts`
+through an in-memory provider. Attendance, sessions, and follow-up changes
+reset on reload. The official grading schedule, reporting times, grading
+eligibility, applications, and invitation history use persisted Supabase data.
+Instructor account creation uses the `create-instructor` Edge Function.
+Grading invitation preview and confirmation
+use persisted eligibility and the `send-grading-invitation` Edge Function;
+the Notifications page shows EmailJS request status (accepted/failed, not
+individual delivery). Mock student emails in the browser do not replace the
+unique addresses in `public.students`.
+
+Grading results, belt promotions, and application approvals are intentionally
+out of scope. Applications are displayed read-only for administrators.
+
 After approving the target cloud database changes, apply the migration:
 
 ```sh
@@ -116,14 +153,22 @@ npx vercel@latest deploy --prod
 ### Edge Functions — Supabase Cloud
 
 Replace `YOUR_PROJECT_REF` with your Supabase project reference. Configure
-`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID`, `APP_URL`, and
-`AUTH_ALLOWED_ORIGINS` in **Edge Functions → Secrets**, using the root `.env` as
-the source. Supabase supplies the function's built-in `SUPABASE_*` credentials.
+`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID`,
+`STRIPE_GRADING_FEE_ID`, `APP_URL`, `AUTH_ALLOWED_ORIGINS`,
+`EMAILJS_SERVICE_ID`, `EMAILJS_PUBLIC_KEY`, and `EMAILJS_EDITABLE_TEMPLATE_ID` in
+**Edge Functions → Secrets**, using the root `.env` as the source. If EmailJS
+private-key authorization is enabled, also set `EMAILJS_PRIVATE_KEY`. Keep the
+existing `EMAILJS_TEMPLATE_ID` until the new template is ready and the updated
+function is deployed. **Configure the editable EmailJS template described below
+before deploying the updated invitation function.** Supabase supplies the
+function's built-in `SUPABASE_*` credentials.
 
 ```sh
 npx supabase@latest login
 npx supabase@latest functions deploy create-checkout-session --project-ref YOUR_PROJECT_REF --use-api
 npx supabase@latest functions deploy stripe-webhook --project-ref YOUR_PROJECT_REF --use-api
+npx supabase@latest functions deploy send-grading-invitation --project-ref YOUR_PROJECT_REF --use-api
+npx supabase@latest functions deploy create-grading-checkout --project-ref YOUR_PROJECT_REF --use-api
 ```
 
 Set `APP_URL` to the frontend origin for Checkout redirects and CORS. Configure
@@ -131,3 +176,30 @@ Stripe's test-mode webhook destination as
 `https://YOUR_PROJECT_REF.supabase.co/functions/v1/stripe-webhook` for
 `checkout.session.completed` and `checkout.session.async_payment_succeeded`.
 Store its signing secret as `STRIPE_WEBHOOK_SECRET` in Supabase.
+
+Create a **new** EmailJS template (keep the old one unchanged) with To
+`{{to_email}}`, BCC `{{bcc_emails}}`, Subject `{{email_subject}}`, and the body:
+
+```html
+<div style="white-space: pre-line; font-family: Arial, sans-serif; line-height: 1.6">{{email_body}}</div>
+```
+
+Set its template ID as `EMAILJS_EDITABLE_TEMPLATE_ID` in Supabase Edge Function
+secrets **only after** configuring those fields, then deploy the updated
+`send-grading-invitation` function. The new function fails closed without this
+secret; preview and saving defaults still work. The server sets To to
+`suroulomg@gmail.com`, BCC to deduplicated live eligible student addresses plus
+`mq07110@gmail.com` once, and the link to the existing `/grading` route. The
+admin editor stores one shared adult/children default. Its message keeps
+`{{children_grading_date}}`, `{{children_application_close_date}}`,
+`{{adult_grading_date}}`, and `{{adult_application_close_date}}`; the server
+fills them from open grading windows. The saved default includes the literal
+`https://fsdp-kappa.vercel.app/grading` link exactly once; preview and send
+replace only the four date placeholders.
+The All selection combines current open grading recipients (maximum 50 BCC
+addresses including the dummy); it refuses, rather than truncates, larger lists.
+Only a signed-in administrator can preview and explicitly confirm a request;
+saving wording or deploying never sends an invitation. An accepted request does
+not establish delivery to any recipient. `STRIPE_GRADING_FEE_ID` must be an active test-mode
+one-time price of SGD 60.00; only the verified Stripe webhook submits grading
+applications. The guest Checkout price remains separate.

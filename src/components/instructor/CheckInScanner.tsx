@@ -9,8 +9,9 @@ import {
     Settings2,
     Square,
 } from "lucide-react";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import GradeBadge from "@/components/GradeBadge";
 import type { StudentRank } from "@/lib/student-grades";
 import { useQrCamera } from "@/hooks/use-qr-camera";
@@ -34,6 +35,7 @@ export default function CheckInScanner({
 }) {
     const [enabled, setEnabled] = useState(false);
     const [cameraId, setCameraId] = useState("");
+    const [settingsOpen, setSettingsOpen] = useState(false);
     const { videoRef, status, error, cameras, activeCameraId, restart } =
         useQrCamera({
             enabled,
@@ -55,7 +57,7 @@ export default function CheckInScanner({
                 "relative isolate min-w-0 gap-0 bg-zinc-950 py-0 text-white",
                 isKiosk
                     ? "h-full min-h-0 rounded-none ring-0"
-                    : "min-h-112 md:h-full md:min-h-0",
+                    : "min-h-[min(28rem,80dvh)] md:h-full md:min-h-0",
             )}
         >
             <video
@@ -94,25 +96,11 @@ export default function CheckInScanner({
                                 : "Camera off"}
                     </span>
                 </div>
-                <details
-                    className="relative shrink-0"
-                    onKeyDown={(event) => {
-                        if (event.key === "Escape") {
-                            event.stopPropagation();
-                            event.currentTarget.open = false;
-                        }
-                    }}
-                >
-                    <summary
-                        aria-label="Camera settings"
-                        className={cn(
-                            buttonVariants({ variant: "ghost", size: "icon" }),
-                            "size-11 cursor-pointer list-none rounded-full bg-black/25 text-white hover:bg-black/45 hover:text-white [&::-webkit-details-marker]:hidden",
-                        )}
-                    >
+                <Popover open={settingsOpen} onOpenChange={setSettingsOpen}>
+                    <PopoverTrigger aria-label="Camera settings" render={<Button variant="ghost" size="icon-touch" className="size-11 rounded-full bg-black/25 text-white hover:bg-black/45 hover:text-white" />}>
                         <Settings2 aria-hidden="true" className="size-4" />
-                    </summary>
-                    <div className="absolute top-full right-0 mt-2 w-auto space-y-3 rounded-xl border bg-popover p-3 text-popover-foreground shadow-lg">
+                    </PopoverTrigger>
+                    <PopoverContent className="w-72 max-w-[calc(100vw-2rem)] gap-3 p-4 lg:p-3">
                         <label
                             htmlFor="check-in-camera"
                             className="block text-xs font-medium text-muted-foreground"
@@ -124,11 +112,10 @@ export default function CheckInScanner({
                             value={cameraId || activeCameraId}
                             onChange={(event) => {
                                 setCameraId(event.target.value);
-                                const settings = event.currentTarget.closest("details");
-                                if (settings) settings.open = false;
+                                setSettingsOpen(false);
                             }}
                             disabled={starting || cameras.length < 2}
-                            className="h-11 w-auto min-w-[180px] max-w-[320px] rounded-lg border bg-background px-3 pr-8 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+                            className="h-11 w-full min-w-0 max-w-full rounded-lg border bg-background px-3 pr-8 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
                         >
                             {!cameras.length && (
                                 <option value="">Rear camera (preferred)</option>
@@ -143,22 +130,22 @@ export default function CheckInScanner({
                             <Button
                                 variant="outline"
                                 className="min-h-11 w-full gap-2"
-                                onClick={(event) => {
+                                onClick={() => {
                                     setEnabled(false);
-                                    const settings = event.currentTarget.closest("details");
-                                    if (settings) settings.open = false;
+                                    setSettingsOpen(false);
                                 }}
                             >
                                 <Square aria-hidden="true" />
                                 Stop camera
                             </Button>
                         )}
-                    </div>
-                </details>
+                    </PopoverContent>
+                </Popover>
             </div>
 
             {!live && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-6 pt-16 pb-6 text-center text-white">
+                <div className={cn("absolute inset-0 overflow-y-auto overscroll-contain px-4 text-center text-white", isKiosk ? "pt-14 pb-3" : "pt-16 pb-4")}>
+                  <div className="flex min-h-full flex-col items-center justify-center gap-3">
                     {starting ? (
                         <LoaderCircle
                             aria-hidden="true"
@@ -168,7 +155,7 @@ export default function CheckInScanner({
                         <CameraOff aria-hidden="true" className="size-10 text-zinc-400" />
                     )}
                     <div role={error && enabled ? "alert" : "status"}>
-                        <p className="text-2xl font-semibold tracking-tight">
+                        <p className="text-xl font-semibold tracking-tight sm:text-2xl">
                             {starting
                                 ? "Connecting to your camera"
                                 : error && enabled
@@ -192,6 +179,7 @@ export default function CheckInScanner({
                             {error && enabled ? "Try again" : "Start camera"}
                         </Button>
                     )}
+                  </div>
                 </div>
             )}
 
@@ -199,7 +187,8 @@ export default function CheckInScanner({
                 <div
                     role={feedback.tone === "invalid" ? "alert" : "status"}
                     className={cn(
-                        "absolute inset-0 z-30 flex flex-col items-center justify-center gap-4 px-6 text-center",
+                        "absolute inset-0 z-30 overflow-y-auto overscroll-contain px-4 text-center",
+                        isKiosk ? "pt-14 pb-3" : "py-4",
                         feedback.tone === "success"
                             ? "bg-emerald-600/95 text-white"
                             : feedback.tone === "duplicate"
@@ -207,12 +196,13 @@ export default function CheckInScanner({
                                 : "bg-red-100/95 text-red-950",
                     )}
                 >
+                    <div className="flex min-h-full flex-col items-center justify-center gap-2 sm:gap-4">
                     {feedback.tone === "success" ? (
-                        <CircleCheck aria-hidden="true" className="size-20 sm:size-24" />
+                        <CircleCheck aria-hidden="true" className="size-12 sm:size-24" />
                     ) : (
-                        <CircleAlert aria-hidden="true" className="size-20" />
+                        <CircleAlert aria-hidden="true" className="size-12 sm:size-20" />
                     )}
-                    <p className="max-w-full text-3xl font-semibold tracking-tight wrap-break-words sm:text-4xl lg:text-5xl">
+                    <p className="max-w-full text-xl font-semibold tracking-tight wrap-break-words sm:text-4xl lg:text-5xl">
                         {feedback.title}
                     </p>
                     {feedback.grade && (
@@ -226,6 +216,7 @@ export default function CheckInScanner({
                             ? "Ready for the next student in 2 seconds"
                             : "Confirmation closes automatically"}
                     </p>
+                    </div>
                 </div>
             )}
         </Card>
