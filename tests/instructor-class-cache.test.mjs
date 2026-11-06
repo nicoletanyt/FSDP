@@ -62,7 +62,7 @@ function fixture() {
 }
 
 function roster(status) {
-  return { session: { event: { id: eventId } }, entries: [{ record: {
+  return { session: { event: { id: eventId, status: 'scheduled', starts_at: '2099-01-01T00:00:00Z', ends_at: '2099-01-01T01:00:00Z' } }, entries: [{ record: {
     event_id: eventId, student_id: studentId, attendance_status: status, recorded_at: null, checked_in_at: null,
   } }] }
 }
@@ -103,6 +103,36 @@ test('an empty roster is cached as success and a failed initial load remains an 
     await f.render({ getAttendanceRoster: async () => { throw { status: 403 } } })
     await until(() => f.current().attendance.query.status === 'error')
     assert.equal(f.current().attendance.data, null)
+  } finally { await f.cleanup() }
+})
+
+test('background roster invalidation keeps rows visible and surfaces read failures without enabling stale edits', async () => {
+  const f = fixture()
+  let fail, finishRead, reads = 0
+  const api = { getAttendanceRoster: async () => {
+    reads++
+    if (reads === 1) return roster(null)
+    if (fail) throw fail
+    return new Promise(resolve => { finishRead = resolve })
+  } }
+  try {
+    await f.render(api)
+    await until(() => f.current().attendance.query.status === 'success')
+    let refreshing
+    await act(async () => { refreshing = f.client.invalidateQueries({ queryKey: keys.roster(userId, eventId) }) })
+    await until(() => Boolean(finishRead) && f.current().attendance.refreshing)
+    assert.equal(f.current().attendance.data.entries[0].record.attendance_status, null)
+    await act(async () => { finishRead(roster('present')); await refreshing })
+    await until(() => !f.current().attendance.refreshing)
+    fail = new Error('offline')
+    await act(async () => { await f.client.invalidateQueries({ queryKey: keys.roster(userId, eventId) }) })
+    await until(() => Boolean(f.current().attendance.error))
+    assert.equal(f.current().attendance.data.entries[0].record.attendance_status, 'present')
+    assert.match(f.current().attendance.message, /Refresh failed/)
+    fail = { status: 403 }
+    await act(async () => { f.current().attendance.retry() })
+    await until(() => f.current().attendance.query.status === 'error')
+    assert.equal(f.current().attendance.data, null, 'permission loss does not retain private rows')
   } finally { await f.cleanup() }
 })
 
@@ -199,9 +229,34 @@ test('attendance acknowledged after unmount invalidates the roster before reopen
     await act(async () => { finishSave(); await Promise.resolve() })
     assert.equal(f.client.getQueryState(keys.roster(userId, eventId)).isInvalidated, true)
     await f.render(api)
-    assert.equal(f.current().attendance.data, null)
+    assert.equal(f.current().attendance.data.entries[0].record.attendance_status, 'present')
     await act(async () => { finishRead(); await Promise.resolve() })
     await until(() => f.current().attendance.data?.entries[0].record.attendance_status === 'present')
+    assert.equal(reads, 2)
+  } finally { await f.cleanup() }
+})
+
+test('unmounting the last view during reconciliation does not cancel the shared read', async () => {
+  const f = fixture()
+  let reads = 0, finishRead
+  const api = {
+    getAttendanceRoster: async (_id, signal) => {
+      if (++reads === 1) return roster(null)
+      return new Promise(resolve => { finishRead = () => { assert.equal(signal.aborted, false); resolve(roster('present')) } })
+    },
+    saveAttendance: async () => ({}),
+  }
+  try {
+    await f.render(api)
+    await until(() => f.current().attendance.query.status === 'success')
+    await act(async () => { f.current().attendance.mark('present', studentId) })
+    await until(() => Boolean(finishRead))
+    await f.unmount()
+    await act(async () => { finishRead(); await Promise.resolve() })
+    await until(() => f.client.getQueryData(keys.attendanceWrite(userId, eventId))?.pending === false)
+    await f.render(api)
+    assert.equal(f.current().attendance.error, null)
+    assert.equal(f.current().attendance.data.entries[0].record.attendance_status, 'present')
     assert.equal(reads, 2)
   } finally { await f.cleanup() }
 })
@@ -222,12 +277,12 @@ test('an acknowledged save with a failed reload never exposes the old roster as 
     assert.match(f.current().attendance.error, /saved, but the roster could not reload/)
     await f.unmount()
     await f.render(api)
-    await until(() => f.current().attendance.query.status === 'error')
+    await until(() => Boolean(f.current().attendance.error))
     assert.equal(f.current().attendance.data, null)
   } finally { await f.cleanup() }
 })
 
-test('an uncertain attendance save hides the roster and retries the same request', async () => {
+test('an uncertain attendance save restores the confirmed row and retries the same request', async () => {
   const f = fixture()
   const requests = []
   let status = null
@@ -245,7 +300,8 @@ test('an uncertain attendance save hides the roster and retries the same request
     await until(() => f.current().attendance.query.status === 'success')
     await act(async () => { f.current().attendance.mark('present', studentId) })
     await until(() => Boolean(f.current().attendance.error))
-    assert.equal(f.current().attendance.data, null)
+    assert.equal(f.current().attendance.data.entries[0].record.attendance_status, null)
+    assert.equal(f.current().attendance.rows[studentId].phase, 'failed')
     assert.equal(f.current().attendance.retryLabel, 'Retry save')
     await act(async () => { f.current().attendance.retry() })
     await until(() => f.current().attendance.data?.entries[0].record.attendance_status === 'present')
@@ -254,7 +310,7 @@ test('an uncertain attendance save hides the roster and retries the same request
   } finally { await f.cleanup() }
 })
 
-test('attendance baseline waits for one acknowledgement and one authoritative reload, blocking duplicate taps', async () => {
+test('attendance keeps the optimistic roster during acknowledgement and authoritative reload', async () => {
   const f = fixture()
   const calls = []
   let acknowledge, finishReload
@@ -276,16 +332,19 @@ test('attendance baseline waits for one acknowledgement and one authoritative re
     await until(() => f.current().attendance.query.status === 'success')
     await act(async () => {
       f.current().attendance.mark('present', studentId)
-      f.current().attendance.mark('absent', studentId)
     })
     assert.deepEqual(calls, ['read', 'write'])
+    await until(() => f.current().attendance.pending)
     assert.equal(f.current().attendance.pending, true)
-    assert.equal(f.current().attendance.data.entries[0].record.attendance_status, null)
+    assert.equal(f.current().attendance.refreshing, false)
+    assert.equal(f.current().attendance.data.entries[0].record.attendance_status, 'present')
     await act(async () => { acknowledge({}); await Promise.resolve() })
     await until(() => Boolean(finishReload))
     assert.deepEqual(calls, ['read', 'write', 'read'])
     assert.equal(f.current().attendance.pending, true)
-    assert.equal(f.current().attendance.data, null)
+    assert.equal(f.current().attendance.refreshing, true)
+    await until(() => f.current().attendance.refreshing)
+    assert.equal(f.current().attendance.data.entries[0].record.attendance_status, 'present')
     await act(async () => { finishReload(); await Promise.resolve() })
     await until(() => !f.current().attendance.pending && f.current().attendance.data?.entries[0].record.attendance_status === 'present')
     assert.deepEqual(calls, ['read', 'write', 'read'])
@@ -312,7 +371,7 @@ test('attendance conflict reloads server truth before a new request with a fresh
     await until(() => Boolean(f.current().attendance.error))
     assert.match(f.current().attendance.error, /changed/i)
     assert.equal(f.current().attendance.retryLabel, 'Reload attendance')
-    assert.equal(f.current().attendance.data, null)
+    assert.equal(f.current().attendance.data.entries[0].record.attendance_status, null)
     await act(async () => { f.current().attendance.retry() })
     await until(() => f.current().attendance.data?.entries[0].record.attendance_status === 'absent')
     assert.equal(reads, 2)

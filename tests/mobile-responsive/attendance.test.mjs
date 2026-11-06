@@ -62,7 +62,7 @@ test('individual present/absent/clear saves persist across drawer reopen and des
   assert.equal(result.fits, true)
 })
 
-test('pending attendance keeps recorded state, disables double submissions and retains mobile control geometry', async () => {
+test('pending attendance shows the optimistic row, disables its toggles and retains mobile control geometry', async () => {
   const result = await inAttendance(320, 'attendance-slow', async (w, wait) => {
     const d = w.document
     const button = () => d.querySelector('[aria-label="Student roster"] [aria-label*=" present"]')
@@ -72,14 +72,80 @@ test('pending attendance keeps recorded state, disables double submissions and r
     await wait(1700)
     return { pending, after: button().getAttribute('aria-pressed'), enabled: !button().disabled, requests: w.attendanceRequestsFixture.length }
   })
-  assert.equal(result.pending.value, 'true')
+  assert.equal(result.pending.value, 'false')
   assert.equal(result.pending.disabled, true)
   assert.equal(result.pending.requests, 1)
-  assert.match(result.pending.text, /Saving attendance/)
+  assert.doesNotMatch(result.pending.text, /Saving|Refreshing attendance|verifying|Saved/)
   assert.ok(result.pending.width >= 44 && result.pending.height >= 44)
   assert.equal(result.after, 'false')
   assert.equal(result.enabled, true)
   assert.equal(result.requests, 1)
+})
+
+test('the roster stays mounted through a save and its authoritative refresh', async () => {
+  const result = await inAttendance(390, 'attendance-refresh-slow', async (w, wait) => {
+    const d = w.document
+    const list = d.querySelector('[aria-label="Student roster"]')
+    const row = list.querySelectorAll('li')[3]
+    row.querySelector('[aria-label*=" present"]').click()
+    await wait(50)
+    const writing = { sameList: d.querySelector('[aria-label="Student roster"]') === list,
+      sameRow: d.querySelector('[aria-label="Student roster"] li:nth-child(4)') === row,
+      text: d.querySelector('[data-slot="drawer-content"]').textContent }
+    await wait(350)
+    const refreshing = { sameList: d.querySelector('[aria-label="Student roster"]') === list,
+      sameRow: d.querySelector('[aria-label="Student roster"] li:nth-child(4)') === row,
+      text: d.querySelector('[data-slot="drawer-content"]').textContent }
+    await wait(1500)
+    return { writing, refreshing, saved: row.querySelector('[aria-label*=" present"]').getAttribute('aria-pressed') }
+  })
+  assert.equal(result.writing.sameList && result.writing.sameRow, true)
+  assert.doesNotMatch(result.writing.text, /Saving|Refreshing attendance|verifying|Saved/)
+  assert.equal(result.refreshing.sameList && result.refreshing.sameRow, true)
+  assert.doesNotMatch(result.refreshing.text, /Saving|Refreshing attendance|verifying|Saved/)
+  assert.equal(result.saved, 'true')
+})
+
+test('the first roster load still displays a skeleton', async () => {
+  const result = await inAttendance(390, 'attendance-initial-slow', async (w, wait) => {
+    const d = w.document
+    const initial = { skeleton: Boolean(d.querySelector('[data-instructor-skeleton="roster"]')),
+      rows: d.querySelectorAll('[aria-label="Student roster"] li').length }
+    await wait(1500)
+    return { initial, rows: d.querySelectorAll('[aria-label="Student roster"] li').length }
+  })
+  assert.equal(result.initial.skeleton, true)
+  assert.equal(result.initial.rows, 0)
+  assert.ok(result.rows > 0)
+})
+
+test('only affected row toggles lock while other row intents are queued and saved', async () => {
+  const result = await inAttendance(320, 'attendance-slow', async (w, wait) => {
+    const d = w.document
+    const rows = d.querySelectorAll('[aria-label="Student roster"] li')
+    const first = rows[0].querySelector('[aria-label*=" absent"]')
+    const second = rows[3].querySelector('[aria-label*=" present"]')
+    first.click(); await wait(100)
+    const otherEnabled = !second.disabled
+    second.click(); await wait(100)
+    const queued = { firstDisabled: first.disabled, secondDisabled: second.disabled,
+      firstSelected: first.getAttribute('aria-pressed'), secondSelected: second.getAttribute('aria-pressed'),
+      requests: w.attendanceRequestsFixture.length, mounted: rows[0].isConnected && rows[3].isConnected }
+    for (let i = 0; i < 60 && (first.disabled || second.disabled); i++) await wait(100)
+    return { otherEnabled, queued, requests: w.attendanceRequestsFixture.length,
+      selected: [first.getAttribute('aria-pressed'), second.getAttribute('aria-pressed')],
+      hasSuccessLabel: rows[0].textContent.includes('Saved') || rows[3].textContent.includes('Saved'),
+      fits: d.documentElement.scrollWidth <= d.documentElement.clientWidth }
+  })
+  assert.equal(result.otherEnabled, true)
+  assert.equal(result.queued.firstDisabled && result.queued.secondDisabled && result.queued.mounted, true)
+  assert.equal(result.queued.requests, 1)
+  assert.equal(result.queued.firstSelected, 'true')
+  assert.equal(result.queued.secondSelected, 'true')
+  assert.equal(result.requests, 2)
+  assert.deepEqual(result.selected, ['true', 'true'])
+  assert.equal(result.hasSuccessLabel, false)
+  assert.equal(result.fits, true)
 })
 
 test('transactional bulk marking sends all 205 rows and preserves late/excused entries in both directions', async () => {
@@ -108,7 +174,7 @@ test('transactional bulk marking sends all 205 rows and preserves late/excused e
   assert.deepEqual(result.protectedAfter, [1, 1])
 })
 
-test('failed and ambiguously acknowledged saves retry the same request without optimistic or duplicate writes', async () => {
+test('failed and ambiguously acknowledged saves restore the row and retry the same request without duplicate writes', async () => {
   for (const mode of ['attendance-error', 'attendance-lost-response', 'attendance-retry-after-change']) {
     const result = await inAttendance(390, mode, async (w, wait) => {
       const d = w.document
@@ -119,7 +185,7 @@ test('failed and ambiguously acknowledged saves retry the same request without o
       return { before, after: present().getAttribute('aria-pressed'), absent: d.querySelector('[aria-label="Student roster"] [aria-label*=" absent"]').getAttribute('aria-pressed'),
         requests: w.attendanceRequestsFixture, hasError: !!d.querySelector('[role="alert"]') }
     })
-    assert.equal(result.before.hidden, true)
+    assert.equal(result.before.hidden, false)
     assert.equal(result.after, 'false')
     assert.equal(result.hasError, false)
     assert.equal(result.requests.length, 2)
@@ -141,7 +207,7 @@ test('conflicts require an authoritative reload before a new attendance intent c
     return { before, reloaded, requests: w.attendanceRequestsFixture, after: present().getAttribute('aria-pressed') }
   })
   assert.match(result.before.error, /Attendance changed/)
-  assert.equal(result.before.hidden, true)
+  assert.equal(result.before.hidden, false)
   assert.equal(result.before.count, 1)
   assert.equal(result.reloaded, 'true')
   assert.equal(result.requests.length, 2)

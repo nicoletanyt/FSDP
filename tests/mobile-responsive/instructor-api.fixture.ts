@@ -240,6 +240,10 @@ export function createCalendarFixtureApi(account = 'audit'): InstructorApi {
       return page(items.map(entry => ({ ...entry, record: sessionWrites.decorate(attendanceRows.get(`${id}:${entry.record.student_id}`) ?? entry.record) })), options)
     },
     async getAttendanceRoster(id, signal) {
+      if (mode === 'attendance-initial-slow' || (mode === 'attendance-refresh-slow' && attendanceSaved)) {
+        await new Promise(resolve => setTimeout(resolve, 1400))
+        signal.throwIfAborted()
+      }
       const session = await api.getEvent(id, signal)
       if (!session) throw new InstructorDataError('forbidden', 'This session is no longer assigned to your account.')
       const entries = await collectCalendarPages(options => api.getRoster(id, options), item => item.record.student_id, signal)

@@ -12,24 +12,29 @@ import { instructorQueryKeys as keys, instructorQueryTimes as times } from '@/li
 import type { EventId } from '@/lib/instructor/types'
 
 export function useClassQuery<T>(key: QueryKey, load: (signal: AbortSignal) => Promise<T>,
-  options: { enabled: boolean; staleTime: number; gcTime: number; retainDuringWrite?: boolean;
+  options: { enabled: boolean; staleTime: number; gcTime: number; retainDuringWrite?: boolean; retainDuringRefresh?: boolean;
     placeholderData?: UseQueryOptions<T, Error, T, QueryKey>['placeholderData'] }) {
   const client = useQueryClient()
-  const { retainDuringWrite, ...queryOptions } = options
+  const { retainDuringWrite, retainDuringRefresh, ...queryOptions } = options
   const query = useQuery({ queryKey: key, queryFn: ({ signal }) => load(signal), ...queryOptions })
-  // Observe explicit invalidation even when a query was already stale. Never
-  // show an old roster as current after a save while its reload is pending.
+  // Observe explicit invalidation even when a query was already stale. Callers
+  // retaining old data must identify it as refreshing, not as authoritative.
   const subscribe = useCallback((notify: () => void) => client.getQueryCache().subscribe(notify), [client])
   const getInvalidated = useCallback(() => client.getQueryState(key)?.isInvalidated ?? false, [client, key])
   const invalidated = useSyncExternalStore(subscribe, getInvalidated, getInvalidated)
-  const error = query.isError ? toInstructorDataError(query.error, 'Unable to load instructor data. Please try again.').message : null
+  const failure = query.isError ? toInstructorDataError(query.error, 'Unable to load instructor data. Please try again.') : null
+  const error = failure?.message ?? null
+  const retain = (retainDuringWrite || retainDuringRefresh) && !query.isPlaceholderData && query.data !== undefined
   let state: QueryState<T>
   if (!options.enabled) state = { status: 'loading', data: null, error: null }
-  else if (error && !(retainDuringWrite && !query.isPlaceholderData && query.data !== undefined)) state = { status: 'error', data: null, error }
-  else if (query.data === undefined || (invalidated && (!retainDuringWrite || query.isPlaceholderData))) state = { status: 'loading', data: null, error: null }
+  else if (error && !retain) state = { status: 'error', data: null, error }
+  else if (query.data === undefined || (invalidated && !retain)) state = { status: 'loading', data: null, error: null }
   else state = { status: 'success', data: query.data, error: null }
   return {
     ...state,
+    isFetching: query.isFetching,
+    refreshError: error,
+    failureCode: failure?.code,
     isPlaceholderData: query.isPlaceholderData,
     retry: () => { void query.refetch() },
     reload: async () => {
@@ -74,5 +79,5 @@ export function useInstructorRoster(eventId: EventId, enabled: boolean) {
   const { session, profile } = useAuth()
   const userId = profile?.role === 'instructor' ? session?.user.id : undefined
   return useClassQuery(keys.roster(userId ?? '', eventId), signal => api.getAttendanceRoster(eventId, signal),
-    { ...times.roster, enabled: Boolean(userId && enabled) })
+    { ...times.roster, enabled: Boolean(userId && enabled), retainDuringRefresh: true })
 }

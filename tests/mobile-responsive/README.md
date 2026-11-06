@@ -154,11 +154,20 @@ through the same API provider. It covers:
 
 The Phase 10A `attendance.test.mjs` suite covers individual mark/clear actions,
 bulk requests containing all 205 roster snapshots, preserved late/excused entries,
-pending state and double-submit prevention, unchanged display until authoritative
-reads succeed, frozen request IDs on network/lost-response retries, intervening
+optimistic individual rows with row-local toggle locks, retained roster nodes through
+save/refresh, initial-load skeletons, saved/failed labels and queued edits to other
+rows. Bulk saves remain non-optimistic. Recovery checks cover frozen request IDs
+on network/lost-response retries, intervening
 writes, conflicts requiring reload, post-save read failures, newly read-only
 session metadata, account changes during saves, drawer/resize behavior and full
 document reload persistence.
+
+`tests/instructor-attendance-coordination.test.mjs` additionally checks two mounted
+views sharing the QueryClient-backed overlay, per-event serialization/coalescing,
+failure barriers, explicit offline retry and generation-fenced late completions.
+`tests/instructor-class-cache.test.mjs` covers reconciliation after the last view
+unmounts and background refresh errors. Failed event queues discard unsent intents;
+the user must reapply them after retry/reload recovery, never silently replay them.
 
 The fixture auth accounts use distinct real-shaped UUIDs. Its attendance API keeps
 stored row snapshots and request receipts in the test provider. Only the explicit

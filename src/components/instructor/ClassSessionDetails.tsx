@@ -218,7 +218,7 @@ export default function ClassSessionDetails({
                     <p role="alert" className="text-sm text-destructive">{attendance.error}</p>
                     <Button variant="outline" size="sm" onClick={attendance.retry} disabled={attendance.pending}>{attendance.retryLabel}</Button>
                 </div>}
-                {attendance.pending && <p role="status" className="px-3 py-2 text-sm text-muted-foreground">Saving attendance…</p>}
+                {attendance.message && <p role="status" className="px-3 py-2 text-xs text-muted-foreground">{attendance.message}</p>}
                 {attendance.data && !roster.length && <p role="status" className="p-4 text-sm text-muted-foreground">No students are registered for this session.</p>}
                 <TooltipProvider>
                     <ul
@@ -231,7 +231,7 @@ export default function ClassSessionDetails({
                         {roster.map((student) => {
                             const value = record[student.id];
                             return (
-                                <li key={student.id} className="grid grid-cols-[minmax(0,1fr)_auto_132px] items-center gap-x-2 py-2 lg:h-14 lg:grid-cols-[minmax(0,1fr)_92px] lg:grid-rows-[28px_16px] lg:gap-y-0.5 lg:px-3 lg:py-1">
+                                <li key={student.id} className="grid grid-cols-[minmax(0,1fr)_auto_132px] items-center gap-x-2 py-2 lg:min-h-14 lg:grid-cols-[minmax(0,1fr)_92px] lg:grid-rows-[28px_16px] lg:gap-y-0.5 lg:px-3 lg:py-1">
                                     <div className="min-w-0">
                                         <Popover>
                                             <PopoverTrigger aria-label={`Student details: ${student.name}`} className="flex min-h-11 w-full min-w-0 items-center rounded-md text-left text-2xs font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring lg:hidden">
@@ -249,7 +249,7 @@ export default function ClassSessionDetails({
                                             student={student}
                                             value={value.attendance}
                                             readOnly={!canEdit}
-                                            pending={attendance.pending || Boolean(attendance.error)}
+                                            pending={attendance.bulkPending || Boolean(attendance.error) || attendance.rows[student.id]?.optimistic !== undefined}
                                             onChange={canEdit ? (status) => {
                                                 if (status === "present" || status === "absent" || status === "unmarked") attendance.mark(status, parseEntityId(student.id, "student"));
                                             } : undefined}
@@ -283,6 +283,10 @@ export default function ClassSessionDetails({
                                             className="h-auto max-w-16 flex-nowrap rounded-none border-0 bg-transparent p-0 text-[11px] text-muted-foreground lg:h-4 lg:max-w-full lg:leading-4 [&>span:first-child]:min-w-0 [&>span:first-child]:truncate [&>span:first-child]:font-normal [&>[aria-hidden]]:h-1.5 [&>[aria-hidden]]:w-2 lg:[&>[aria-hidden]]:w-3"
                                         />
                                     </div>
+                                    {attendance.rows[student.id]?.phase === 'failed' && <div className="col-span-full flex items-center gap-2 text-xs text-muted-foreground" role="status" aria-label={`Attendance save for ${student.name}`}>
+                                        {attendance.rows[student.id].retryable ? 'Failed — review the alert and retry.' : 'Not sent — reapply after recovery.'}
+                                        {attendance.rows[student.id].phase === 'failed' && attendance.rows[student.id].retryable && attendance.error && <Button variant="outline" size="sm" className="min-h-11 lg:min-h-8" disabled={attendance.pending} onClick={attendance.retry} aria-label={`${attendance.retryLabel} for ${student.name}`}>{attendance.retryLabel}</Button>}
+                                    </div>}
                                 </li>
                             );
                         })}
