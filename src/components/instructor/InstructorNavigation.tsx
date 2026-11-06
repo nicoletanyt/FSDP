@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router";
-import { CalendarDays, ScanLine, UserCircle, Users } from "lucide-react";
+import { CalendarDays, Nfc, ScanLine, UserCircle, Users } from "lucide-react";
 import logo from "@/assets/logo.png";
 import ThemeToggle from "@/components/theme-toggle";
 import { InstructorAvatar } from "@/components/ui/avatar";
@@ -10,7 +10,8 @@ import { cn } from "@/lib/utils";
 const navigation = [
     { label: "Calendar", to: "/instructor/calendar", icon: CalendarDays },
     { label: "Students", to: "/instructor/students", icon: Users },
-    { label: "Check-in", to: "/instructor/check-in", icon: ScanLine },
+    { label: "QR Check-in", to: "/instructor/check-in", icon: ScanLine },
+    { label: "NFC Check-in", to: "/instructor/nfc_checkin", icon: Nfc },
 ];
 
 export default function InstructorNavigation({

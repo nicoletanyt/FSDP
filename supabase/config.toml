@@ -17,3 +17,7 @@ verify_jwt = false
 
 [functions.create-grading-checkout]
 verify_jwt = false
+
+# The handler authenticates the bearer JWT and checks the instructor role.
+[functions.nfc-check-in]
+verify_jwt = false
