@@ -34,3 +34,4 @@ set role = case account.raw_app_meta_data ->> 'role'
 end
 from auth.users as account
 where profile.id = account.id;
+;

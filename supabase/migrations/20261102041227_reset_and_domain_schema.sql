@@ -245,7 +245,6 @@ create table public.syllabus_items (
   category text not null,
   sort_order smallint not null,
   label text not null,
-  note text,
   unique (grade_id, track, category, sort_order)
 );
 
@@ -325,9 +324,6 @@ create table public.student_medical_alerts (
   recorded_at timestamptz not null default now()
 );
 
-create index student_medical_alerts_student_idx
-on public.student_medical_alerts (student_id);
-
 -- ---------------------------------------------------------------------------
 -- 6. Events
 -- ---------------------------------------------------------------------------
@@ -353,8 +349,6 @@ create table public.classes (
   event_id uuid primary key references public.events(id) on delete cascade,
   class_type_id text not null references public.class_types(id) on delete restrict
 );
-
-create index classes_class_type_idx on public.classes (class_type_id);
 
 create table public.seminars (
   event_id uuid primary key references public.events(id) on delete cascade,
@@ -393,7 +387,6 @@ create table public.event_students (
 );
 
 create index event_students_student_idx on public.event_students (student_id);
-create index event_students_report_author_idx on public.event_students (report_author_id);
 
 create function public.assert_event_subtype()
 returns trigger
@@ -447,7 +440,6 @@ create table public.grading_applications (
 
 create index grading_applications_student_idx on public.grading_applications (student_id);
 create index grading_applications_event_idx on public.grading_applications (grading_event_id);
-create index grading_applications_target_idx on public.grading_applications (target_grade_id);
 
 create table public.technique_sign_offs (
   id uuid primary key default gen_random_uuid(),
@@ -461,7 +453,6 @@ create table public.technique_sign_offs (
 
 create index technique_sign_offs_student_idx on public.technique_sign_offs (student_id);
 create index technique_sign_offs_item_idx on public.technique_sign_offs (syllabus_item_id);
-create index technique_sign_offs_instructor_idx on public.technique_sign_offs (signed_off_by);
 
 -- ---------------------------------------------------------------------------
 -- 8. Availability and email
@@ -505,8 +496,6 @@ create table public.notification_recipients (
 
 create index notification_recipients_notification_idx
 on public.notification_recipients (notification_id);
-create index notification_recipients_student_idx
-on public.notification_recipients (student_id);
 
 -- ---------------------------------------------------------------------------
 -- 9. updated_at triggers
@@ -666,12 +655,6 @@ using (public.is_administrator()) with check (public.is_administrator());
 create policy "Authenticated read grade tracks" on public.grade_tracks
 for select to authenticated using (true);
 create policy "Admins manage grade tracks" on public.grade_tracks
-for all to authenticated
-using (public.is_administrator()) with check (public.is_administrator());
-
-create policy "Authenticated read grade requirements" on public.grade_requirements
-for select to authenticated using (true);
-create policy "Admins manage grade requirements" on public.grade_requirements
 for all to authenticated
 using (public.is_administrator()) with check (public.is_administrator());
 
@@ -846,3 +829,4 @@ using (public.is_administrator()) with check (public.is_administrator());
 revoke all on all tables in schema public from anon;
 grant all on all tables in schema public to service_role;
 grant all on all sequences in schema public to service_role;
+;

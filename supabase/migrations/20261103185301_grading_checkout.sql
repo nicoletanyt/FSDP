@@ -135,3 +135,4 @@ begin
 end; $$;
 revoke all on function public.finalize_grading_checkout(uuid,text,integer,text) from public, anon, authenticated;
 grant execute on function public.finalize_grading_checkout(uuid,text,integer,text) to service_role;
+;

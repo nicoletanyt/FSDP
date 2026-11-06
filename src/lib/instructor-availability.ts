@@ -35,6 +35,7 @@ export function availabilityError(
     slots: AvailabilitySlot[],
     editingId?: string,
     now = new Date(),
+    scheduledEvents: readonly { startTime: string; endTime: string }[] = eventsForDate(range.date),
 ) {
     const start = timeMinutes(range.startTime);
     const end = timeMinutes(range.endTime);
@@ -50,7 +51,7 @@ export function availabilityError(
         start < timeMinutes(item.endTime) && end > timeMinutes(item.startTime);
     if (slots.some((slot) => slot.id !== editingId && dateKey(slot.date) === dateKey(range.date) && overlaps(slot)))
         return "This time overlaps an existing availability slot. Choose another time.";
-    if (eventsForDate(range.date).some(overlaps))
+    if (scheduledEvents.some(overlaps))
         return "This time overlaps a scheduled class. Choose an empty time range.";
     return null;
 }

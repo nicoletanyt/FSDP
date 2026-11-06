@@ -55,6 +55,7 @@ server secrets with `VITE_`.
 | `npm run test:auth-db` | Run offline PostgreSQL role/RLS tests |
 | `npm run test:auth-seed` | Test the administrator seed without cloud access |
 | `npm run seed:admin` | Create the development administrator using root `.env` |
+| `npm run seed:instructor-calendar -- --instructor-email EMAIL` | Add marked calendar test classes and event rosters for an existing instructor, in the current Singapore week |
 | `npx shadcn@latest add <component>` | Add a shadcn/ui component |
 
 ## Authentication
@@ -68,8 +69,41 @@ server secrets with `VITE_`.
   dashboard: `/admin`, including instructor account creation.
 - Instructor passwords are generated server-side and displayed to the creating
   administrator after success. Save them then; they are not saved to browser storage.
+- After the instructor-availability migration is applied, trusted instructor
+  profile creation also inserts a linked `public.instructors` row (`user_id`
+  references the account). Existing unlinked instructors can open their calendar;
+  their first successful availability save creates the missing linked row.
 - Sessions persist automatically. Roles come from `public.users`; browser clients
   cannot write profiles or assign privileged roles. Passwords stay in Supabase Auth.
+
+## Instructor calendar test records
+
+To populate an existing instructor's calendar with marked test classes for the
+current Monday–Sunday week in Singapore time:
+
+```sh
+npm run seed:instructor-calendar -- --instructor-email INSTRUCTOR_EMAIL --dry-run
+npm run seed:instructor-calendar -- --instructor-email INSTRUCTOR_EMAIL
+```
+
+The script uses the root `.env` Supabase URL and server-only service-role key.
+It reuses existing active centres, class types and students, and inserts only
+`[Calendar Test]` events, matching `classes` rows and `event_students` rosters.
+Past sessions cover present/late/absent/excused/unmarked attendance; future
+attendance is unmarked, and Sunday has an empty roster. Times avoid the
+instructor's existing timed events and availability.
+
+Use `--week-of YYYY-MM-DD` to select a particular week. Repeating the seed for
+the same instructor/week uses the same UUIDs, preserves existing fixture rows
+and recorded attendance/notes, and fills missing subtype/roster batches. To remove
+only that instructor/week's marked fixtures (with cascading class/roster cleanup):
+
+```sh
+npm run seed:instructor-calendar -- --instructor-email INSTRUCTOR_EMAIL --week-of YYYY-MM-DD --remove
+```
+
+This is a development data script rather than a schema migration. It does not
+create students, centres, instructors, grading events or application records.
 
 ## Administrator console
 

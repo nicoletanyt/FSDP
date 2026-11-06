@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
+import { useQueryClient } from '@tanstack/react-query'
 import { AuthContext } from '@/lib/auth-context'
 import { isUserRole } from '@/lib/auth'
 import type { UserProfile } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
+import { createQueryAuthBoundary } from '@/lib/query-auth-boundary'
 
 interface ProfileState {
   userId: string | null
@@ -18,6 +20,8 @@ const emptyProfile: ProfileState = {
 }
 
 export default function AuthProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient()
+  const [queryAuth] = useState(() => createQueryAuthBoundary(queryClient))
   const [session, setSession] = useState<Session | null>(null)
   const [initialized, setInitialized] = useState(false)
   const [profileState, setProfileState] = useState<ProfileState>(emptyProfile)
@@ -31,6 +35,7 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
       // Keep this callback synchronous; profile queries run in the effect below.
       receivedEvent = true
       if (active) {
+        queryAuth.setUser(next?.user.id ?? null)
         setSession(next)
         setInitialized(true)
         if (event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
@@ -41,6 +46,7 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
 
     void supabase.auth.getSession().then(({ data, error }) => {
       if (active && !receivedEvent) {
+        queryAuth.setUser(error ? null : data.session?.user.id ?? null)
         setSession(error ? null : data.session)
         setInitialized(true)
       }
@@ -52,7 +58,7 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
       active = false
       subscription.unsubscribe()
     }
-  }, [])
+  }, [queryAuth])
 
   useEffect(() => {
     if (!userId) {
@@ -73,10 +79,12 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
           throw new Error('Account profile is unavailable.')
         }
         if (active) {
+          queryAuth.setRole(profileUserId, data.role)
           setProfileState({ userId: profileUserId, profile: data, loading: false, error: null })
         }
       } catch {
         if (active) {
+          queryAuth.setRole(profileUserId, null)
           setProfileState({
             userId: profileUserId, profile: null, loading: false,
             error: 'We could not load your account profile. Try again or contact an administrator.',
@@ -87,15 +95,16 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
 
     void loadProfile()
     return () => { active = false }
-  }, [userId, revision])
+  }, [userId, revision, queryAuth])
 
   const reloadProfile = useCallback(() => setRevision((value) => value + 1), [])
   const signOut = useCallback(async () => {
     const { error } = await supabase.auth.signOut()
     if (error) throw new Error('Unable to sign out. Please try again.')
+    queryAuth.setUser(null)
     setSession(null)
     setProfileState(emptyProfile)
-  }, [])
+  }, [queryAuth])
 
   // Never expose a previous account's profile during a session change.
   const currentProfile = userId && profileState.userId === userId ? profileState : emptyProfile
