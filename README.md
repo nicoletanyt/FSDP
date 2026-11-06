@@ -51,7 +51,7 @@ server secrets with `VITE_`.
 | `npm run build` | Type-check and build to `dist/` |
 | `npm run preview` | Preview the production build |
 | `npm run check:functions` | Type-check Edge Functions |
-| `npm run test:functions` | Run Stripe and instructor-provisioning tests |
+| `npm run test:functions` | Run Edge Function tests, including NFC authorization |
 | `npm run test:auth-db` | Run offline PostgreSQL role/RLS tests |
 | `npm run test:auth-seed` | Test the administrator seed without cloud access |
 | `npm run seed:admin` | Create the development administrator using root `.env` |
@@ -124,7 +124,6 @@ link, and theme, notification, and profile controls. The logo returns to
 | `/admin/grading/opportunities` | Live adult and children’s grading schedule and reporting times |
 | `/admin/grading/applications` | Read-only view and CSV export of submitted applications |
 | `/admin/notifications` | Review EmailJS grading invitation requests |
-| `/admin/reports` | Consolidated centre reporting and CSV export |
 | `/admin/instructors` | Teaching team and instructor account creation |
 | `/admin/profile` | Administrator account details and sign out |
 
@@ -164,6 +163,45 @@ does not reset passwords or elevate existing non-administrators. Keep seed
 credentials local; do not upload them to Vercel or function secrets.
 
 ## Deployment
+
+### NFC attendance (separate from QR check-in)
+
+The NFC URL opens `/instructor/nfc_checkin?tag=...`. This route is separate from
+`/instructor/check-in`, the existing QR scanner. Tag URLs contain random bearer
+tokens; `public.student_nfc_tags` stores only SHA-256 hashes under the composite
+`(student_id, tag_id)` key with a unique `tag_id`. Deleting a tag row immediately
+invalidates its URL. Only the server-side function can look up tags or mark
+attendance. The instructor must have a linked teaching record assigned to the
+student's booked class today (Singapore time).
+
+A scan marks attendance from 10 minutes before class start through class end.
+Outside the window it shows the next class's start time or **Absent** for the
+latest ended class without writing an absence. Existing recorded attendance
+remains marked. Green **Attendance Marked** feedback lasts two seconds, matching
+the QR scanner. The frontend is not deployed automatically with the function.
+
+The migration `supabase/migrations/20261106132832_student_nfc_attendance.sql`
+and `nfc-check-in` function are deployed to the current test project. Run
+`node --test tests/nfc-db.test.mjs` and `npm run test:functions` before subsequent
+changes. The cloud project contains migrations missing from this checkout, so
+do **not** blindly run `db push`. Keep `verify_jwt = false` as configured;
+the handler verifies the instructor's JWT and role itself.
+
+To write a tag, set `SUPABASE_SERVICE_ROLE_KEY` **only** in the local root `.env`:
+
+```sh
+node --env-file=.env scripts/nfc-tags.mjs issue SK-1006 https://your-frontend.example
+node --env-file=.env scripts/nfc-tags.mjs revoke SK-1006 TAG_TOKEN
+node --env-file=.env scripts/nfc-tags.mjs revoke-all SK-1006
+```
+
+Write the entire printed URL as an NFC URI record. The URL is a credential; do
+not share it or commit it. Issuing another tag does **not** revoke existing tags.
+Use `revoke-all` if the missing tag's token is unknown. For temporary LAN-only
+phone testing, the function also permits exactly `http://192.168.1.13:5173`;
+opt in when issuing with `FSDP_ALLOW_HTTP_NFC_TEST=1` and that origin. This is
+insecure and must be removed from the function and script after testing. If the
+computer's IP changes, use an HTTPS test origin rather than a stale URL.
 
 ### Frontend — Vercel
 

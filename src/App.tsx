@@ -1,6 +1,7 @@
 import { lazy } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router'
 import { GuestRoute, InstructorIndexRedirect, ProtectedRoute } from '@/components/auth/AuthGate'
+import NfcTagCapture from '@/components/instructor/NfcTagCapture'
 import FloatingChatbot from '@/components/FloatingChatbot'
 import AuthLayout from './layouts/AuthLayout'
 import RootLayout from './layouts/RootLayout'
@@ -29,7 +30,6 @@ const AdminGradingSyllabus = lazy(() => import('./pages/admin/Syllabus'))
 const AdminNotifications = lazy(() => import('./pages/admin/Notifications'))
 const AdminInstructors = lazy(() => import('./pages/admin/Instructors'))
 const AdminProfile = lazy(() => import('./pages/admin/Profile'))
-const AdminReports = lazy(() => import('./pages/admin/Reports'))
 
 const ForgetPassword = lazy(() => import('./pages/ForgetPassword')) 
 const ApplyMembership = lazy(() => import('./pages/Student/ApplyMembership'))
@@ -47,6 +47,7 @@ const InstructorDashboard = lazy(() => import('./pages/Instructor/InstructorDash
 const InstructorStudents = lazy(() => import('./pages/Instructor/InstructorStudents'))
 const InstructorProfile = lazy(() => import('./pages/Instructor/InstructorProfile'))
 const InstructorCheckIn = lazy(() => import('./pages/Instructor/InstructorCheckIn'))
+const NfcCheckIn = lazy(() => import('./pages/Instructor/NfcCheckIn'))
 const InstructorStudentDetails = lazy(() => import('./pages/Instructor/InstructorStudentDetails'))
 const InstructorStudentReports = lazy(() => import('./pages/Instructor/InstructorStudentReports'))
 const InstructorGradingAssessment = lazy(() => import('./pages/Instructor/InstructorGradingAssessment'))
@@ -78,7 +79,7 @@ export default function App() {
               <Route path="grading" element={<StudentGrading />} />
             </Route>
           </Route>
-          <Route path="instructor">
+          <Route path="instructor" element={<NfcTagCapture />}>
             <Route index element={<InstructorIndexRedirect />} />
             <Route element={<GuestRoute />}>
               <Route element={<AuthLayout />}>
@@ -91,6 +92,7 @@ export default function App() {
                 <Route path="calendar" element={<InstructorDashboard />} />
                 <Route path="students" element={<InstructorStudents />} />
                 <Route path="check-in" element={<InstructorCheckIn />} />
+                <Route path="nfc_checkin" element={<NfcCheckIn />} />
                 <Route path="students/:studentId" element={<InstructorStudentDetails />} />
                 <Route path="reports/:eventId" element={<InstructorStudentReports />} />
                 <Route path="assessments/:assessmentId" element={<InstructorGradingAssessment />} />
@@ -121,7 +123,6 @@ export default function App() {
               <Route path="notifications" element={<AdminNotifications />} />
               <Route path="instructors" element={<AdminInstructors />} />
               <Route path="profile" element={<AdminProfile />} />
-              <Route path="reports" element={<AdminReports />} />
             </Route>
           </Route>
           <Route path="checkout/success" element={<CheckoutSuccess />} />

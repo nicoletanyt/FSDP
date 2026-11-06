@@ -7,37 +7,24 @@ import {
 } from 'lucide-react'
 import { Link } from 'react-router'
 import AttendanceTrend from '@/components/admin/AttendanceTrend'
-import CentreComparison from '@/components/admin/CentreComparison'
 import PageHeader from '@/components/admin/PageHeader'
 import StatCard from '@/components/admin/StatCard'
-import {
-  RiskBadge,
-  StatusBadge,
-} from '@/components/admin/StatusBadge'
+import { RiskBadge } from '@/components/admin/StatusBadge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAdminData } from '@/lib/admin/admin-data-context'
 import { useAdminFilters } from '@/lib/admin/admin-filters'
 import {
   getDecliningAssessments,
-  getOverallAttendanceRate,
   getWeeklyAttendanceTrend,
 } from '@/lib/admin/attendance-risk'
-import { getCentreStats, getUpcomingSessions } from '@/lib/admin/analytics'
-import {
-  formatPercent,
-  formatShortDate,
-  formatSignedPercent,
-  fullName,
-  initials,
-  relativeDay,
-} from '@/lib/admin/format'
+import { fullName, initials } from '@/lib/admin/format'
 import { getEligibilityAssessments } from '@/lib/admin/grading-eligibility'
 
 export default function Overview() {
-  const { centres, instructors, students, attendance, sessions, opportunities, applications, notifications, techniqueSignOffs } =
+  const { centres, students, attendance, sessions, opportunities, applications, notifications, techniqueSignOffs } =
     useAdminData()
-  const { centreId, dateRange } = useAdminFilters()
+  const { centreId } = useAdminFilters()
 
   const scopedStudents = students.filter(
     (student) => centreId === 'all' || student.homeCentreId === centreId,
@@ -50,24 +37,7 @@ export default function Overview() {
     techniqueSignOffs,
   )
   const eligible = eligibility.filter((assessment) => assessment.status === 'eligible')
-  const attendanceRate = getOverallAttendanceRate(
-    attendance,
-    sessions,
-    centreId,
-    dateRange,
-  )
-  const trend = getWeeklyAttendanceTrend(attendance, sessions, centreId, 8)
-  const trendChange =
-    trend.length >= 2 ? trend[trend.length - 1].rate - trend[trend.length - 2].rate : 0
-  const centreStats = getCentreStats(
-    centres.filter((centre) => centre.status === 'active'),
-    students,
-    attendance,
-    sessions,
-    techniqueSignOffs,
-  ).filter((stats) => centreId === 'all' || stats.centreId === centreId)
-  const comparisonStats = centreStats.slice(0, 8)
-  const upcoming = getUpcomingSessions(sessions, centreId, 5)
+  const trend = getWeeklyAttendanceTrend(attendance, sessions, centreId, 12)
   const scopedApplications = applications.filter((application) => {
     const student = students.find((item) => item.id === application.studentId)
     return centreId === 'all' || student?.homeCentreId === centreId
@@ -88,18 +58,11 @@ export default function Overview() {
     .reduce((total, notification) => total + notification.recipientCount, 0)
 
   const centreNames = new Map(centres.map((centre) => [centre.id, centre.name]))
-  const instructorNames = new Map(
-    instructors.map((instructor) => [
-      instructor.id,
-      `${instructor.firstName} ${instructor.lastName}`,
-    ]),
-  )
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Dojo operations"
-        description="Monitor attendance, spot students who need support, and keep the grading pipeline moving across every centre."
         actions={
           <Button render={<Link to="/admin/calendar" />}>
             <CalendarCheck />
@@ -108,23 +71,16 @@ export default function Overview() {
         }
       />
 
-      <section aria-label="Key figures" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <section aria-label="Key figures" className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
         <StatCard
           label="Active students"
           value={`${scopedStudents.filter((student) => student.membershipStatus === 'active').length}`}
           detail={`of ${scopedStudents.length} students`}
           icon={Users}
+          to="/admin/centres?tab=students"
         />
         <StatCard
-          label={`${dateRange}-day attendance`}
-          value={formatPercent(attendanceRate)}
-          change={trendChange}
-          detail="vs previous week"
-          icon={CalendarCheck}
-          tone={attendanceRate >= 80 ? 'success' : attendanceRate >= 70 ? 'warning' : 'danger'}
-        />
-        <StatCard
-          label="Declining students"
+          label="Needs attention"
           value={`${declining.length}`}
           detail={`${declining.filter((item) => item.level === 'critical').length} critical`}
           icon={AlertTriangle}
@@ -136,61 +92,33 @@ export default function Overview() {
           detail={`${scopedApplications.length} applications received`}
           icon={GraduationCap}
           tone="default"
+          to="/admin/grading/eligibility"
         />
       </section>
 
-      <div className="grid gap-4 xl:grid-cols-[1.35fr_1fr]">
-        <Card>
-          <CardHeader>
-            <CardTitle>Attendance trend</CardTitle>
-            <CardDescription>Last eight weeks across the selected centres.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <AttendanceTrend data={trend} />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Centre comparison</CardTitle>
-            <CardDescription>
-              Lowest 8 active centres by 30-day attendance rate.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <CentreComparison
-              data={comparisonStats}
-              names={Object.fromEntries(centres.map((centre) => [centre.id, centre.shortName]))}
-            />
-            <div className="mt-3 space-y-1.5 text-sm">
-              {comparisonStats.map((stats) => (
-                <div key={stats.centreId} className="flex items-center justify-between gap-3">
-                  <span className="truncate text-muted-foreground">
-                    {centreNames.get(stats.centreId)}
-                  </span>
-                  <span className="shrink-0 tabular-nums">
-                    {stats.studentCount} students · {stats.decliningCount} declining
-                  </span>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Attendance trend</CardTitle>
+          <CardDescription>Weekly attendance across the selected centres.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <AttendanceTrend data={trend} />
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 xl:grid-cols-[1.35fr_1fr]">
         <Card>
-          <CardHeader className="flex-row items-start justify-between gap-3">
-            <div>
+          <CardHeader>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <CardTitle>Needs attention</CardTitle>
-              <CardDescription>
-                Students flagged for low or declining attendance.
-              </CardDescription>
+              <Button variant="ghost" size="sm" render={<Link to="/admin/calendar/monitoring" />}>
+                View all
+                <ChevronRight />
+              </Button>
             </div>
-            <Button variant="ghost" size="sm" render={<Link to="/admin/calendar/monitoring" />}>
-              View all
-              <ChevronRight />
-            </Button>
+            <CardDescription>
+              Students with no booked classes in the last 30 days or at least two consecutive missed bookings.
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
             {declining.slice(0, 5).map((assessment) => {
@@ -208,18 +136,12 @@ export default function Overview() {
                     <div className="min-w-0">
                       <p className="truncate font-medium">{fullName(student)}</p>
                       <p className="truncate text-xs text-muted-foreground">
-                        {centreNames.get(student.homeCentreId)} · {student.currentGrade} · last
-                        attended {relativeDay(assessment.lastAttended ?? '')}
+                        {centreNames.get(student.homeCentreId)} · {student.currentGrade}
                       </p>
+                      <p className="text-xs text-muted-foreground">{assessment.reasons.join(' · ')}</p>
                     </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-                    <span className="text-sm font-medium tabular-nums">
-                      {formatPercent(assessment.rate30)}
-                    </span>
-                    <span className="text-xs font-medium text-destructive tabular-nums">
-                      {formatSignedPercent(assessment.change)}
-                    </span>
                     <RiskBadge level={assessment.level} />
                     <Button
                       variant="outline"
@@ -234,100 +156,49 @@ export default function Overview() {
             })}
             {declining.length === 0 && (
               <p className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-                No declining students in this period.
+                No students need attendance follow-up right now.
               </p>
             )}
           </CardContent>
         </Card>
 
-        <div className="space-y-4">
-          <Card>
-            <CardHeader className="flex-row items-start justify-between gap-3">
-              <div>
-                <CardTitle>Upcoming sessions</CardTitle>
-                <CardDescription>Next classes across the dojos.</CardDescription>
-              </div>
-              <Button variant="ghost" size="sm" render={<Link to="/admin/calendar?view=week&display=list" />}>
-                View calendar
-                <ChevronRight />
+        <Card>
+          <CardHeader>
+            <CardTitle>Grading pipeline</CardTitle>
+            <CardDescription>
+              {scopedOpportunities.filter((opportunity) => opportunity.status === 'open').length}{' '}
+              open opportunities
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <PipelineRow
+              label="Eligible now"
+              value={eligible.length}
+              max={Math.max(eligible.length, invited, scopedApplications.length, 1)}
+              tone="bg-primary"
+            />
+            <PipelineRow
+              label="Invited"
+              value={invited}
+              max={Math.max(eligible.length, invited, scopedApplications.length, 1)}
+              tone="bg-warning"
+            />
+            <PipelineRow
+              label="Applications"
+              value={scopedApplications.length}
+              max={Math.max(eligible.length, invited, scopedApplications.length, 1)}
+              tone="bg-success"
+            />
+            <div className="flex gap-2 pt-1">
+              <Button variant="outline" size="sm" render={<Link to="/admin/grading/eligibility" />}>
+                Eligibility
               </Button>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {upcoming.map((session) => (
-                <div
-                  key={session.id}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-border/70 p-2.5"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{session.title}</p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {formatShortDate(session.date)} · {session.startTime} ·{' '}
-                      {centreNames.get(session.centreId)}
-                    </p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {instructorNames.get(session.instructorId)}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 flex-col items-end gap-1">
-                    {session.isExternal && (
-                      <StatusBadge tone="warning">External</StatusBadge>
-                    )}
-                    <Button
-                      variant="outline"
-                      size="xs"
-                      render={<Link to={`/admin/calendar?centre=${session.centreId}&date=${session.date}&session=${session.id}&view=day&display=list`} />}
-                    >
-                      Manage
-                    </Button>
-                  </div>
-                </div>
-              ))}
-              {upcoming.length === 0 && (
-                <p className="p-4 text-center text-sm text-muted-foreground">
-                  No upcoming sessions.
-                </p>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Grading pipeline</CardTitle>
-              <CardDescription>
-                {scopedOpportunities.filter((opportunity) => opportunity.status === 'open').length}{' '}
-                open opportunities
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <PipelineRow
-                label="Eligible now"
-                value={eligible.length}
-                max={Math.max(eligible.length, invited, scopedApplications.length, 1)}
-                tone="bg-primary"
-              />
-              <PipelineRow
-                label="Invited"
-                value={invited}
-                max={Math.max(eligible.length, invited, scopedApplications.length, 1)}
-                tone="bg-warning"
-              />
-              <PipelineRow
-                label="Applications"
-                value={scopedApplications.length}
-                max={Math.max(eligible.length, invited, scopedApplications.length, 1)}
-                tone="bg-success"
-              />
-              <div className="flex gap-2 pt-1">
-                <Button variant="outline" size="sm" render={<Link to="/admin/grading/eligibility" />}>
-                  Eligibility
-                </Button>
-                <Button variant="outline" size="sm" render={<Link to="/admin/grading/applications" />}>
-                  Applications
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+              <Button variant="outline" size="sm" render={<Link to="/admin/grading/applications" />}>
+                Applications
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   )

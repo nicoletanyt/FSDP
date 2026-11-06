@@ -78,10 +78,10 @@ export default function GradingApplications() {
       <Button variant="outline" disabled={rows.length === 0} onClick={exportApplications}><Download /> Export CSV</Button>
     </div>
     <div className="flex flex-wrap gap-2">
-      <div className="relative min-w-48 flex-1"><Search className="pointer-events-none absolute top-2.5 left-2.5 size-4 text-muted-foreground" />
+      <div className="relative min-w-48 flex-1"><Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
         <input aria-label="Search applications" type="search" value={query} onChange={(event) => setQuery(event.target.value)}
-          placeholder="Find student or grading" className="h-9 w-full rounded-md border border-input bg-background pl-8 pr-3 text-sm" /></div>
-      <NativeSelect aria-label="Filter application status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+          placeholder="Find student or grading" className="h-10 w-full rounded-md border border-input bg-background pl-8 pr-3 text-sm" /></div>
+      <NativeSelect className="h-10" aria-label="Filter application status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
         <option value="all">All statuses</option><option value="submitted">Submitted</option>
         <option value="under_review">Under review</option><option value="withdrawn">Withdrawn</option>
       </NativeSelect>

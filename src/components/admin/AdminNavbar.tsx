@@ -3,8 +3,6 @@ import {
   Bell,
   Building2,
   CalendarCheck,
-  FileBarChart,
-  GraduationCap,
   LayoutDashboard,
 } from 'lucide-react'
 import { Link, useLocation } from 'react-router'
@@ -57,23 +55,6 @@ const groups: { label: string; items: NavItem[] }[] = [
       },
     ],
   },
-  {
-    label: 'Grading',
-    items: [
-      {
-        to: '/admin/grading',
-        label: 'Grading',
-        description: 'Eligibility, opportunities, and applications',
-        icon: GraduationCap,
-      },
-      {
-        to: '/admin/reports',
-        label: 'Reports',
-        description: 'Centre performance and exports',
-        icon: FileBarChart,
-      },
-    ],
-  },
 ]
 
 function isActive(pathname: string, to: string, end = false): boolean {
@@ -84,6 +65,7 @@ export default function AdminNavbar() {
   const { pathname } = useLocation()
   const isCalendar = pathname === '/admin/calendar'
   const { profile } = useAuth()
+  const gradingActive = isActive(pathname, '/admin/grading')
   const instructorsActive = isActive(pathname, '/admin/instructors')
 
   return (
@@ -174,6 +156,20 @@ export default function AdminNavbar() {
                 </NavigationMenuItem>
               )
             })}
+
+            <NavigationMenuItem>
+              <NavigationMenuLink
+                render={<Link to="/admin/grading" />}
+                active={gradingActive}
+                closeOnClick
+                className={cn(
+                  navigationMenuTriggerStyle(),
+                  'data-active:bg-primary/10 data-active:text-primary data-active:hover:bg-primary/10 data-active:focus:bg-primary/10',
+                )}
+              >
+                Grading
+              </NavigationMenuLink>
+            </NavigationMenuItem>
 
             <NavigationMenuItem>
               <NavigationMenuLink

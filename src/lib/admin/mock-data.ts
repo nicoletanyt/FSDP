@@ -793,6 +793,7 @@ function attendanceStatus(
 }
 
 export const attendance: AttendanceRecord[] = []
+const recentBookingStart = daysAgoIso(29)
 const studentIndexById = new Map(students.map((student, index) => [student.id, index]))
 const instructorById = new Map(instructors.map((instructor) => [instructor.id, instructor]))
 
@@ -815,6 +816,8 @@ for (const session of sessions) {
 
   for (const student of [...roster, ...externalGuests]) {
     const profile = (studentIndexById.get(student.id) ?? 0) % 10
+    // A few demo students stopped booking classes; no attendance row means no booking.
+    if (profile === 7 && session.date >= recentBookingStart) continue
     attendance.push({
       id: `att-${session.id}-${student.id}`,
       sessionId: session.id,
