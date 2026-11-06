@@ -1,6 +1,7 @@
 import { lazy } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router'
 import { GuestRoute, InstructorIndexRedirect, ProtectedRoute } from '@/components/auth/AuthGate'
+import NfcTagCapture from '@/components/instructor/NfcTagCapture'
 import FloatingChatbot from '@/components/FloatingChatbot'
 import AuthLayout from './layouts/AuthLayout'
 import RootLayout from './layouts/RootLayout'
@@ -44,7 +45,7 @@ const StudentGrading = lazy(() => import('./pages/Student/StudentGrading'))
 const InstructorDashboard = lazy(() => import('./pages/Instructor/InstructorDashboard'))
 const InstructorStudents = lazy(() => import('./pages/Instructor/InstructorStudents'))
 const InstructorProfile = lazy(() => import('./pages/Instructor/InstructorProfile'))
-const InstructorCheckIn = lazy(() => import('./pages/Instructor/InstructorCheckIn'))
+const InstructorCheckIn = lazy(() => import('./pages/Instructor/NfcCheckIn'))
 const InstructorStudentDetails = lazy(() => import('./pages/Instructor/InstructorStudentDetails'))
 const InstructorStudentReports = lazy(() => import('./pages/Instructor/InstructorStudentReports'))
 const InstructorGradingAssessment = lazy(() => import('./pages/Instructor/InstructorGradingAssessment'))
@@ -76,7 +77,7 @@ export default function App() {
               <Route path="grading" element={<StudentGrading />} />
             </Route>
           </Route>
-          <Route path="instructor">
+          <Route path="instructor" element={<NfcTagCapture />}>
             <Route index element={<InstructorIndexRedirect />} />
             <Route element={<GuestRoute />}>
               <Route element={<AuthLayout />}>

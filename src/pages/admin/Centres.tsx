@@ -240,11 +240,12 @@ export default function Centres() {
                   onChange={(event) => updateParam('dojoQ', event.target.value)}
                   placeholder="Search by dojo or address"
                   aria-label="Search dojos"
-                  className="h-8 w-full rounded-lg border border-input bg-background pr-2.5 pl-8 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+                  className="h-10 w-full rounded-lg border border-input bg-background pr-2.5 pl-8 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
                 />
               </div>
               <div className="w-full sm:w-48">
                 <NativeSelect
+                  className="h-10"
                   value={dojoStatus}
                   onChange={(event) => updateParam('dojoStatus', event.target.value)}
                   aria-label="Filter by dojo status"
@@ -319,11 +320,12 @@ export default function Centres() {
                     onChange={(event) => updateParam('q', event.target.value)}
                     placeholder="Search by name, member number, or email"
                     aria-label="Search students"
-                    className="h-8 w-full rounded-lg border border-input bg-background pr-2.5 pl-8 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+                    className="h-10 w-full rounded-lg border border-input bg-background pr-2.5 pl-8 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                   <NativeSelect
+                    className="h-10"
                     value={riskFilter}
                     onChange={(event) => updateParam('risk', event.target.value)}
                     aria-label="Filter by attendance risk"
@@ -335,6 +337,7 @@ export default function Centres() {
                     <option value="healthy">Healthy</option>
                   </NativeSelect>
                   <NativeSelect
+                    className="h-10"
                     value={eligibilityFilter}
                     onChange={(event) =>
                       updateParam('eligibility', event.target.value)
@@ -347,6 +350,7 @@ export default function Centres() {
                     <option value="not_eligible">Not eligible</option>
                   </NativeSelect>
                   <NativeSelect
+                    className="h-10"
                     value={membershipFilter}
                     onChange={(event) =>
                       updateParam('membership', event.target.value)
