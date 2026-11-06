@@ -90,7 +90,6 @@ link, and theme, notification, and profile controls. The logo returns to
 | `/admin/grading/opportunities` | Live adult and children’s grading schedule and reporting times |
 | `/admin/grading/applications` | Read-only view and CSV export of submitted applications |
 | `/admin/notifications` | Review EmailJS grading invitation requests |
-| `/admin/reports` | Consolidated centre reporting and CSV export |
 | `/admin/instructors` | Teaching team and instructor account creation |
 | `/admin/profile` | Administrator account details and sign out |
 

@@ -1,4 +1,5 @@
 import { NavLink, Outlet } from 'react-router'
+import PageHeader from '@/components/admin/PageHeader'
 import { cn } from 'cn'
 
 const tabs = [
@@ -11,6 +12,7 @@ const tabs = [
 export default function Grading() {
   return (
     <div className="space-y-6">
+      <PageHeader title="Grading" />
       <nav aria-label="Grading sections" className="flex flex-wrap gap-1 border-b border-border">
         {tabs.map((tab) => (
           <NavLink

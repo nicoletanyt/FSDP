@@ -1,6 +1,7 @@
 import type { LucideIcon } from 'lucide-react'
 import { ArrowDownRight, ArrowUpRight } from 'lucide-react'
 import { cn } from 'cn'
+import { Link } from 'react-router'
 import { formatSignedPercent } from '@/lib/admin/format'
 
 type Tone = 'default' | 'success' | 'warning' | 'danger'
@@ -11,6 +12,12 @@ const toneClasses: Record<Tone, string> = {
   warning: 'bg-warning/15 text-warning-foreground dark:text-warning',
   danger: 'bg-destructive/10 text-destructive',
 }
+const surfaceClasses: Record<Tone, string> = {
+  default: 'bg-primary/5 ring-primary/20',
+  success: 'bg-success/5 ring-success/20',
+  warning: 'bg-warning/10 ring-warning/25',
+  danger: 'bg-destructive/5 ring-destructive/20',
+}
 
 export default function StatCard({
   label,
@@ -19,6 +26,7 @@ export default function StatCard({
   icon: Icon,
   tone = 'default',
   change,
+  to,
 }: {
   label: string
   value: string
@@ -26,16 +34,17 @@ export default function StatCard({
   icon: LucideIcon
   tone?: Tone
   change?: number
+  to?: string
 }) {
-  return (
-    <div className="rounded-xl bg-card p-4 ring-1 ring-foreground/10">
+  const content = (
+    <>
       <div className="flex items-start justify-between gap-3">
         <p className="text-sm font-medium text-muted-foreground">{label}</p>
         <span className={cn('flex size-8 items-center justify-center rounded-lg', toneClasses[tone])}>
           <Icon className="size-4" aria-hidden="true" />
         </span>
       </div>
-      <p className="mt-3 text-2xl font-semibold tracking-tight tabular-nums">{value}</p>
+      <p className="mt-3 text-3xl font-semibold tracking-tight tabular-nums">{value}</p>
       <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
         {change !== undefined && (
           <span
@@ -54,6 +63,16 @@ export default function StatCard({
         )}
         {detail && <span>{detail}</span>}
       </div>
-    </div>
+    </>
   )
+
+  const className = cn(
+    'block rounded-xl p-5 ring-1',
+    surfaceClasses[tone],
+    to && 'transition-colors hover:ring-primary/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+  )
+
+  return to
+    ? <Link to={to} className={className}>{content}</Link>
+    : <div className={className}>{content}</div>
 }

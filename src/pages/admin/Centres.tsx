@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { Download, MapPin, Search, X } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router'
 import EmptyState from '@/components/admin/EmptyState'
+import PageHeader from '@/components/admin/PageHeader'
 import StudentTable from '@/components/admin/StudentTable'
 import { CentreStatusBadge } from '@/components/admin/StatusBadge'
 import { NativeSelect } from '@/components/admin/form-controls'
@@ -187,6 +188,7 @@ export default function Centres() {
 
   return (
     <div className="space-y-6">
+      <PageHeader title="Centres" />
       <nav
         aria-label="Centre sections"
         className="flex flex-wrap gap-1 border-b border-border"

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
-import { Search } from 'lucide-react'
+import { CalendarDays, MapPin, Search } from 'lucide-react'
 import { useNavigate } from 'react-router'
 import { useAdminData } from '@/lib/admin/admin-data-context'
 import { useAdminFilters } from '@/lib/admin/admin-filters'
@@ -51,22 +51,28 @@ export default function AdminFilterBar() {
       </form>
 
       <div className="ml-auto flex flex-wrap items-center gap-2">
-        <CentreCombobox
-          centres={activeCentres}
-          value={centreId}
-          onChange={setCentreId}
-        />
+        <div className="flex items-center gap-1.5">
+          <MapPin className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <CentreCombobox
+            centres={activeCentres}
+            value={centreId}
+            onChange={setCentreId}
+          />
+        </div>
 
-        <div className="w-32">
-          <NativeSelect
-            value={dateRange}
-            onChange={(event) => setDateRange(Number(event.target.value) as AdminDateRange)}
-            aria-label="Date range"
-          >
-            <option value={30}>Last 30 days</option>
-            <option value={90}>Last 90 days</option>
-            <option value={180}>Last 180 days</option>
-          </NativeSelect>
+        <div className="flex items-center gap-1.5">
+          <CalendarDays className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <div className="w-44 shrink-0">
+            <NativeSelect
+              value={dateRange}
+              onChange={(event) => setDateRange(Number(event.target.value) as AdminDateRange)}
+              aria-label="Date range"
+            >
+              <option value={30}>Last 30 days</option>
+              <option value={90}>Last 90 days</option>
+              <option value={180}>Last 180 days</option>
+            </NativeSelect>
+          </div>
         </div>
       </div>
     </div>
