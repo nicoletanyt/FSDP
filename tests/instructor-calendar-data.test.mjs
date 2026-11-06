@@ -4,7 +4,7 @@ import { formatTime } from '../src/lib/instructor-calendar.ts'
 import { calendarView, calendarQueries } from './helpers/instructor-modules.mjs'
 
 const { calendarDateValue, calendarEventsForDate, calendarRange, rosterAttendance, rosterSizeLabel, singaporeClock, toCalendarViewEvent } = calendarView
-const { collectCalendarPages, loadCalendarRange } = calendarQueries
+const { collectCalendarPages, loadCalendarRange, needsCalendarEventLookup } = calendarQueries
 const id = '00000000-0000-4000-8000-000000000001'
 const entry = {
   event: { id, name: 'Stored session', event_type: 'class', instructor_id: null,
@@ -52,6 +52,15 @@ test('query ranges cover desktop grids, mobile two-day views and fourteen-day ag
   assert.deepEqual(calendarRange(date, 'week', false, false), { from: '2026-11-04', to: '2026-11-06' })
   assert.deepEqual(calendarRange(date, 'month', true, false), { from: '2026-10-26', to: '2026-12-07' })
   assert.deepEqual(calendarRange(date, 'week', false, true), { from: '2026-11-04', to: '2026-11-18' })
+})
+
+test('selected event lookup reuses the range and falls back for deep links, missing events or errors', () => {
+  assert.equal(needsCalendarEventLookup(null, true, 'success', false), false)
+  assert.equal(needsCalendarEventLookup(id, true, 'loading', false), false)
+  assert.equal(needsCalendarEventLookup(id, true, 'success', true), false)
+  assert.equal(needsCalendarEventLookup(id, true, 'success', false), true)
+  assert.equal(needsCalendarEventLookup(id, true, 'error', false), true)
+  assert.equal(needsCalendarEventLookup(id, false, 'loading', false), true)
 })
 
 test('calendar and roster collectors follow server caps beyond 100 rows and reject inconsistent pages', async () => {

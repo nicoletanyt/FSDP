@@ -5,6 +5,7 @@ import { mockAvailability, dateInputValue } from '../../src/lib/instructor-avail
 import { toSingaporeDateTime } from '../../src/lib/instructor/adapters'
 import { InstructorDataError } from '../../src/lib/instructor/errors'
 import type { InstructorApi } from '../../src/lib/instructor/calendar-queries'
+import { collectCalendarPages } from '../../src/lib/instructor/calendar-queries'
 import type { CalendarEntry, CentreRow, EventId, Page, PageOptions, RosterEntry, StudentId, InstructorId, InstructorAvailabilityRow } from '../../src/lib/instructor/types'
 import { createDirectoryFixtureReader } from './instructor-directory.fixture'
 import { createDetailFixtureReads } from './instructor-detail.fixture'
@@ -237,6 +238,12 @@ export function createCalendarFixtureApi(account = 'audit'): InstructorApi {
         }
       })
       return page(items.map(entry => ({ ...entry, record: sessionWrites.decorate(attendanceRows.get(`${id}:${entry.record.student_id}`) ?? entry.record) })), options)
+    },
+    async getAttendanceRoster(id, signal) {
+      const session = await api.getEvent(id, signal)
+      if (!session) throw new InstructorDataError('forbidden', 'This session is no longer assigned to your account.')
+      const entries = await collectCalendarPages(options => api.getRoster(id, options), item => item.record.student_id, signal)
+      return { session, entries }
     },
   }
   return api

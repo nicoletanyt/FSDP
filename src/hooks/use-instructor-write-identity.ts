@@ -2,6 +2,7 @@ import { useCallback } from 'react'
 import { useInstructorApi } from '@/lib/instructor/data-context'
 import { toInstructorDataError } from '@/lib/instructor/errors'
 import { useInstructorQuery } from './use-instructor-data'
+import { instructorQueryKeys, instructorQueryTimes } from '@/lib/instructor/query-keys'
 
 export function useInstructorWriteIdentity() {
   const api = useInstructorApi()
@@ -11,5 +12,5 @@ export function useInstructorWriteIdentity() {
       throw error
     }
   }, [api])
-  return useInstructorQuery('instructor-write-identity', load)
+  return useInstructorQuery(instructorQueryKeys.identity, load, instructorQueryTimes.identity)
 }

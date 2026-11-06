@@ -1,7 +1,5 @@
 import { timestampMilliseconds } from './adapters'
 import type { InstructorApi } from './calendar-queries'
-import { collectCalendarPages } from './calendar-queries'
-import { InstructorDataError } from './errors'
 import { rosterAttendance } from './calendar-view'
 import type { AttendanceSnapshot, EventId, EventRow, EventStudentRow, RosterEntry } from './types'
 
@@ -19,8 +17,5 @@ export function editableAttendanceRows(entries: RosterEntry[], startsAt: string 
 }
 
 export async function loadAttendanceRoster(api: InstructorApi, eventId: EventId, signal: AbortSignal) {
-  const session = await api.getEvent(eventId, signal)
-  if (!session) throw new InstructorDataError('forbidden', 'This session is no longer assigned to your account.')
-  const entries = await collectCalendarPages(options => api.getRoster(eventId, options), item => item.record.student_id, signal)
-  return { session, entries }
+  return api.getAttendanceRoster(eventId, signal)
 }

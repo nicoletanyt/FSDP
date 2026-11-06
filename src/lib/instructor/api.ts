@@ -8,6 +8,7 @@ import {
   decodeSessionSave, decodeReportSnapshot, decodeAssessmentSnapshot,
 } from './decoders'
 import { InstructorDataError, toInstructorDataError } from './errors'
+import { collectCalendarPages } from './page-collector'
 import type {
   AssessmentDetail, AssessmentKey, AttendanceSaveInput, AvailabilityInput, CalendarOptions, DirectoryOptions, EventId, HistoryOptions,
   InstructorIdentity, InstructorReferenceData, Page, PageOptions, StudentId, ReportDetail, ReportSaveInput, AssessmentSaveInput, SessionSaveInput,
@@ -155,6 +156,17 @@ export function createInstructorApi(client: InstructorClient) {
       throw new InstructorDataError('invalid_data', 'The session does not match the current instructor.')
     }
     return session
+  }
+
+  async function getRosterPage(eventId: EventId, options: PageOptions) {
+    const page = pagination(options)
+    return tablePage(cancellable(client.from('event_students').select(rosterSelect, { count: 'exact' })
+      .eq('event_id', eventId).order('student_id').range(page.offset, page.offset + page.limit - 1).returns<unknown[]>(), page.signal),
+    value => {
+      const entry = decodeRosterEntry(value)
+      if (entry.record.event_id !== eventId) throw new InstructorDataError('invalid_data', 'The roster does not match the session.')
+      return entry
+    }, page)
   }
 
   async function getStudentHistory(id: StudentId, options: HistoryOptions = {}) {
@@ -351,13 +363,15 @@ export function createInstructorApi(client: InstructorClient) {
       const page = pagination(options)
       const session = await getEventForInstructor(eventId, await getCurrentInstructor(page.signal), page.signal)
       if (!session) return null
-      return tablePage(cancellable(client.from('event_students').select(rosterSelect, { count: 'exact' })
-        .eq('event_id', eventId).order('student_id').range(page.offset, page.offset + page.limit - 1).returns<unknown[]>(), page.signal),
-      value => {
-        const entry = decodeRosterEntry(value)
-        if (entry.record.event_id !== eventId) throw new InstructorDataError('invalid_data', 'The roster does not match the session.')
-        return entry
-      }, page)
+      return getRosterPage(eventId, page)
+    },
+
+    async getAttendanceRoster(id: EventId, signal: AbortSignal) {
+      const eventId = parseEntityId(id, 'event')
+      const session = await getEventForInstructor(eventId, await getCurrentInstructor(signal), signal)
+      if (!session) throw new InstructorDataError('forbidden', 'This session is no longer assigned to your account.')
+      const entries = await collectCalendarPages(options => getRosterPage(eventId, options), item => item.record.student_id, signal)
+      return { session, entries }
     },
 
     getStudentHistory,

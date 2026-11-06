@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useId, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
     CalendarDays,
     Clock3,
@@ -20,6 +21,11 @@ import InstructorDataStatus from "./InstructorDataStatus";
 import ReportEditor from "./ReportEditor";
 import { useInstructorWriteIdentity } from "@/hooks/use-instructor-write-identity";
 import { useInstructorQuery } from "@/hooks/use-instructor-data";
+import { useInstructorEditProtection } from "@/hooks/use-instructor-edit-protection";
+import { useAuth } from "@/hooks/use-auth";
+import { instructorQueryKeys as queryKeys, instructorQueryTimes as queryTimes } from "@/lib/instructor/query-keys";
+import { previousHistoryPage } from "@/lib/instructor/history-placeholder";
+import { InstructorDataError } from "@/lib/instructor/errors";
 import { useInstructorApi } from "@/lib/instructor/data-context";
 import { toAttendanceState } from "@/lib/instructor/adapters";
 import {
@@ -191,35 +197,48 @@ export default function StudentSessionHistory({
     contextId?: string;
 }) {
     const api = useInstructorApi();
+    const queryClient = useQueryClient();
+    const { session, profile } = useAuth();
+    const userId = profile?.role === 'instructor' ? session?.user.id : undefined;
     const identity = useInstructorWriteIdentity();
+    const retainDuringWrite = useInstructorEditProtection(undefined, studentId);
     const [attendance, setAttendance] = useState<AttendanceState | "all">("all");
     const [sort, setSort] = useState("newest");
     const [page, setPage] = useState(0);
     const load = useCallback(
-        (signal: AbortSignal) =>
-            api.getStudentHistory(studentId, {
+        async (signal: AbortSignal) => {
+            const result = await api.getStudentHistory(studentId, {
                 eventType: "class",
                 attendance: attendance === "all" ? undefined : attendance,
                 oldestFirst: sort === "oldest",
                 offset: page * PAGE_SIZE,
                 limit: PAGE_SIZE,
                 signal,
-            }),
+            });
+            if (result.offset !== page * PAGE_SIZE || result.limit !== PAGE_SIZE) {
+                throw new InstructorDataError('invalid_data', 'The session history does not match the requested page.');
+            }
+            return result;
+        },
         [api, studentId, attendance, sort, page],
     );
     const history = useInstructorQuery(
-        JSON.stringify(["student-history", studentId, attendance, sort, page]),
+        userId => queryKeys.studentHistory(userId, studentId, { attendance, sort, page, pageSize: PAGE_SIZE }),
         load,
+        { ...queryTimes.studentHistory, retainDuringWrite,
+            placeholderData: (previous, previousQuery) => previousHistoryPage(queryClient, userId, studentId,
+                { attendance, sort, page, pageSize: PAGE_SIZE }, previous, previousQuery) },
     );
     useEffect(() => {
         if (
-            history.status === "success" &&
+            history.status === "success" && !history.isPlaceholderData &&
             page > 0 &&
             page * PAGE_SIZE >= history.data.total
         ) {
             setPage(Math.max(0, Math.ceil(history.data.total / PAGE_SIZE) - 1));
         }
-    }, [history.status, history.data, page]);
+    }, [history.status, history.data, history.isPlaceholderData, page]);
+    const displayedPage = history.status === "success" ? Math.floor(history.data.offset / PAGE_SIZE) : page;
     const activeCount = Number(attendance !== "all") + Number(sort !== "newest");
     const filters = {
         attendance,
@@ -239,7 +258,8 @@ export default function StudentSessionHistory({
         },
     };
     return (
-        <section aria-label="Session history" className="detail-section">
+        <section aria-label="Session history" aria-busy={history.isPlaceholderData} className="detail-section">
+            {history.isPlaceholderData && <p role="status" className="sr-only">Loading requested page. Showing page {displayedPage + 1}.</p>}
             <div className="detail-section-header">
                 <h2 className="font-semibold">Session history</h2>
                 <div className="hidden lg:block">
@@ -273,12 +293,13 @@ export default function StudentSessionHistory({
                     </PopoverContent>
                 </Popover>
             </div>
-            {identity.status !== "success" && <InstructorDataStatus loading={identity.status === "loading"} error={identity.error} onRetry={identity.retry} />}
+            {identity.status !== "success" && <InstructorDataStatus loading={identity.status === "loading"} error={identity.error} onRetry={identity.retry} variant="inline" />}
             {history.status !== "success" ? (
                 <InstructorDataStatus
                     loading={history.status === "loading"}
                     error={history.error}
                     onRetry={history.retry}
+                    variant="history"
                 />
             ) : (
                 <>
@@ -317,20 +338,20 @@ export default function StudentSessionHistory({
                             <Button
                                 variant="outline"
                                 size="touch"
-                                disabled={page === 0}
-                                onClick={() => setPage((value) => value - 1)}
+                                disabled={displayedPage === 0}
+                                onClick={() => setPage(displayedPage - 1)}
                             >
                                 <ChevronLeft aria-hidden="true" />
                                 Previous
                             </Button>
                             <span className="detail-meta text-sm">
-                                Page {page + 1} of {Math.ceil(history.data.total / PAGE_SIZE)}
+                                Page {displayedPage + 1} of {Math.ceil(history.data.total / PAGE_SIZE)}
                             </span>
                             <Button
                                 variant="outline"
                                 size="touch"
-                                disabled={(page + 1) * PAGE_SIZE >= history.data.total}
-                                onClick={() => setPage((value) => value + 1)}
+                                disabled={(displayedPage + 1) * PAGE_SIZE >= history.data.total}
+                                onClick={() => setPage(displayedPage + 1)}
                             >
                                 Next
                                 <ChevronRight aria-hidden="true" />

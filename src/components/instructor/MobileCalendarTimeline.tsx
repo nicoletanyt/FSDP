@@ -224,6 +224,7 @@ export default function MobileCalendarTimeline({
                                 key={item.id}
                                 type="button"
                                 data-mobile-event
+                                data-prefetch-class={item.event?.type === "training" ? item.event.id : undefined}
                                 aria-label={`${item.event?.name ?? "Available"}, ${fullDate(day)}, ${formatTime(item.startTime)} to ${formatTime(item.endTime)}. View details`}
                                 onClick={() =>
                                     item.event

@@ -23,6 +23,7 @@ import GradeBadge from "@/components/instructor/DatabaseGradeBadge";
 import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
 import { useAuth } from "@/hooks/use-auth";
 import { useInstructorQuery } from "@/hooks/use-instructor-data";
+import { instructorQueryKeys, instructorQueryTimes } from "@/lib/instructor/query-keys";
 import type { QueryState } from "@/hooks/use-instructor-data";
 import { toInstructorDataError } from "@/lib/instructor/errors";
 import { useInstructorApi } from "@/lib/instructor/data-context";
@@ -140,7 +141,7 @@ export default function InstructorStudents() {
         return () => window.clearInterval(timer);
     }, []);
     const loadDirectory = useCallback((signal: AbortSignal) => loadDirectorySnapshot(api.getStudents, signal), [api]);
-    const snapshot = useInstructorQuery("student-directory-snapshot", loadDirectory);
+    const snapshot = useInstructorQuery(instructorQueryKeys.directory, loadDirectory, instructorQueryTimes.student);
     const view = useMemo<QueryState<StudentDirectory>>(() => {
         if (snapshot.status === "loading") return { status: "loading", data: null, error: null };
         if (snapshot.status === "error") return { status: "error", data: null, error: snapshot.error };
@@ -343,7 +344,7 @@ export default function InstructorStudents() {
                 </div>
                 <Card className="gap-0 overflow-hidden py-0">
                     <CardContent className="px-0">
-                        {!ready && data.status !== "error" ? <InstructorDataStatus loading onRetry={data.retry} />
+                        {!ready && data.status !== "error" ? <InstructorDataStatus loading onRetry={data.retry} variant="directory" />
                         : data.status === "error" ? <InstructorDataStatus error={data.error} onRetry={data.retry} />
                         : directory.length ? (
                             <ul className="divide-y" aria-label="Student directory">

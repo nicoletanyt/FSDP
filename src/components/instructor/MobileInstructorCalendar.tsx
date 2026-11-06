@@ -84,6 +84,7 @@ function Agenda({
                     <li key={entry.id}>
                         <button
                             type="button"
+                            data-prefetch-class={entry.event?.type === "training" ? entry.event.id : undefined}
                             onClick={() =>
                                 entry.event
                                     ? onSelectClass(entry.event)

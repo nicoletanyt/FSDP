@@ -115,9 +115,9 @@ test('missing event/candidate, wrong event type and malformed keys never manufac
   assert.match(empty, /No students are registered for this class/)
 })
 
-test('loading modals, permission failures and retry remain distinct from empty successful results', async () => {
+test('loading skeletons, permission failures and retry remain distinct from empty successful results', async () => {
   for (const [resource, path] of [['reports', reportsPath], ['assessment', assessmentPath]]) {
-    const loading = await inPage(390, `${path}?fixtureData=${resource}-loading`, w => w.document.querySelector('[data-slot="dialog-content"]').textContent, 200)
+    const loading = await inPage(390, `${path}?fixtureData=${resource}-loading`, w => w.document.querySelector('main [data-instructor-skeleton]').textContent, 200)
     assert.match(loading, /Loading/)
     const denied = await inPage(390, `${path}?fixtureData=${resource}-forbidden`, w => w.document.querySelector('main').textContent)
     assert.match(denied, /Instructor access to this session is required/)

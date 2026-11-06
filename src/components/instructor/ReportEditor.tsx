@@ -41,12 +41,12 @@ export default function ReportEditor({ event, record, author, instructorId, comp
   return <div className="space-y-3" data-report-editor={`${record.event_id}:${record.student_id}`}>
     <div className="flex min-h-11 flex-wrap items-center justify-between gap-3 lg:min-h-8">
       <h4 className="text-sm font-semibold">Instructor report</h4>
-      {!editing && <Button variant="ghost" size="touch" disabled={!canEdit || mutation.pending || Boolean(mutation.error)}
+      {!editing && !mutation.unconfirmed && <Button variant="ghost" size="touch" disabled={!canEdit || mutation.pending || Boolean(mutation.error)}
         onClick={() => { setEditor({ key: mutation.key, draft: value.report ?? '', expected: reportSnapshot(value) }); setNotice(null) }}>
         {report ? <Pencil aria-hidden="true" /> : <Plus aria-hidden="true" />}{report ? 'Edit report' : 'Add report'}
       </Button>}
     </div>
-    {editing ? <form className="space-y-2" onSubmit={async submit => {
+    {mutation.unconfirmed ? <p role="status" className="detail-body text-sm text-muted-foreground">Reload the saved record to see the latest report.</p> : editing ? <form className="space-y-2" onSubmit={async submit => {
       submit.preventDefault()
       if (!locked && dirty) finish(await mutation.save({ kind: 'report', report: editing.draft, expected: editing.expected }))
     }}>
@@ -73,8 +73,8 @@ export default function ReportEditor({ event, record, author, instructorId, comp
         else await reload()
       }}>{mutation.pending ? 'Loading…' : mutation.retryLabel}</Button>
     </div>}
-    {message && <p role="status" className="detail-meta text-sm text-muted-foreground">{message.text}</p>}
-    {editing && message?.showLatest && <div className="space-y-1 rounded-lg bg-muted/50 p-3">
+    {!mutation.unconfirmed && message && <p role="status" className="detail-meta text-sm text-muted-foreground">{message.text}</p>}
+    {!mutation.unconfirmed && editing && message?.showLatest && <div className="space-y-1 rounded-lg bg-muted/50 p-3">
       <p className="detail-label text-xs text-muted-foreground">Latest saved report</p>
       <p className="detail-body whitespace-pre-wrap text-sm wrap-break-word">{value.report?.trim() || 'No report recorded.'}</p>
     </div>}

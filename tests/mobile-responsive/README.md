@@ -8,6 +8,8 @@ production Vite entry point.
 The fixture injects the API from `instructor-api.fixture.ts` through the production
 data context. Its clock represents 09:00 Singapore time. Directory responses come
 from `instructor-directory.fixture.ts` and use database-shaped rows and UUIDs.
+The fixture provides an in-memory QueryClient and disables speculative prefetch
+with the data-saver setting so request/failure scenarios remain deterministic.
 Student profiles/history/attendance use database-shaped records from
 `instructor-detail.fixture.ts`; directory/detail geometry checks follow real UUID
 links through the same production API context.
@@ -118,13 +120,14 @@ Phase 7 grading records are injected from `instructor-grading.fixture.ts` throug
 the same production API context. Checks cover database grade/rule/syllabus IDs,
 readiness with zero technique sign-offs, actual/unknown signers, pending/completed
 recorded assessments and notes, 205-assessment pagination, missing rules/terminal
-grades, retry/loading-modal behavior and account isolation. Grading adapts the
+grades, retry/inline-loading-skeleton behavior and account isolation. Grading adapts the
 original structured cards: grade/status badges, readiness progress, requirement
 rows with actual/required values, separate assessment entries and the responsive
 review dialog with category accordions and read-only technique checkboxes. Tests
 check row containment, dialog bounds and completion/close behavior at 320–1440px.
-The profile loading/empty-period assertions use the current loading modal and
-reporting-period popover.
+Profile loading checks cover inline skeletons and a fresh directory-backed identity
+preview without inventing emergency contacts or medical alerts; empty-period
+assertions use the reporting-period popover.
 
 Calendar fixtures also provide date-only grading modes with released/unreleased
 reporting times. Existing month cards and selection drawers must show their date
@@ -144,7 +147,7 @@ through the same API provider. It covers:
 - Recorded pending/completed/null status, actual notes and application targets.
   Phase 10B makes authorized controls editable, with pristine saves disabled and
   cancelled/unauthorized records remaining read-only; no demo-success message.
-- Date-only grading dates, loading modals, permission/error/retry states, account
+- Date-only grading dates, loading skeletons, permission/error/retry states, account
   changes and late responses after switching class/candidate.
 - The existing grading-roster action opening the matching assessment and its
   student-profile link preserving event/student/date/tab context.

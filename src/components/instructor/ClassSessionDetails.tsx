@@ -213,7 +213,7 @@ export default function ClassSessionDetails({
                         </div>
                     </div>
                 )}
-                {query.status !== "success" ? <InstructorDataStatus loading={query.status === "loading"} error={query.error} onRetry={query.retry} /> : <>
+                {query.status !== "success" ? <InstructorDataStatus loading={query.status === "loading"} error={query.error} onRetry={query.retry} variant="roster" /> : <>
                 {attendance.error && <div className="space-y-2 px-3 py-2">
                     <p role="alert" className="text-sm text-destructive">{attendance.error}</p>
                     <Button variant="outline" size="sm" onClick={attendance.retry} disabled={attendance.pending}>{attendance.retryLabel}</Button>

@@ -7,6 +7,8 @@ import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
 import InstructorLoadingBoundary from "@/components/instructor/InstructorLoadingBoundary";
 import ReportEditor from "@/components/instructor/ReportEditor";
 import { useInstructorQuery } from "@/hooks/use-instructor-data";
+import { useInstructorEditProtection } from "@/hooks/use-instructor-edit-protection";
+import { instructorQueryKeys as queryKeys, instructorQueryTimes as queryTimes } from "@/lib/instructor/query-keys";
 import { useInstructorApi } from "@/lib/instructor/data-context";
 import { parseEntityId, toAttendanceState } from "@/lib/instructor/adapters";
 import { historyDate, instructorName } from "@/lib/instructor/student-detail";
@@ -16,11 +18,14 @@ function StudentReportsPage() {
     const { eventId } = useParams();
     const api = useInstructorApi();
     const load = useCallback((signal: AbortSignal) => loadClassReports(api, parseEntityId(eventId, "event"), signal), [api, eventId]);
-    const query = useInstructorQuery(`session-reports:${eventId}`, load);
+    const normalizedEvent = eventId?.toLowerCase();
+    const retainDuringWrite = useInstructorEditProtection(normalizedEvent);
+    const query = useInstructorQuery(userId => queryKeys.reports(userId, normalizedEvent ?? ''), load,
+        { ...queryTimes.report, retainDuringWrite });
     if (query.status !== "success") {
         return <section className="space-y-4">
             <Link to="/instructor/calendar" className="text-sm underline">Back to calendar</Link>
-            <InstructorDataStatus loading={query.status === "loading"} error={query.error} onRetry={query.retry} />
+            <InstructorDataStatus loading={query.status === "loading"} error={query.error} onRetry={query.retry} variant="reports" />
         </section>;
     }
     if (!query.data) {

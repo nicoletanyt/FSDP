@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import {
     ChevronDown,
     ChevronLeft,
@@ -18,11 +19,14 @@ import SelectedClassIndicator from "@/components/instructor/SelectedClassIndicat
 import CalendarTimeline from "@/components/instructor/CalendarTimeline";
 import CalendarDaySelector from "@/components/instructor/CalendarDaySelector";
 import { useMediaQuery } from "@/hooks/use-media-query";
-import { useInstructorQuery } from "@/hooks/use-instructor-data";
+import { useInstructorCalendarRange, useInstructorSelectedEvent } from "@/hooks/use-instructor-class-queries";
+import { useInstructorPrefetch } from "@/hooks/use-instructor-prefetch";
+import { useAuth } from "@/hooks/use-auth";
 import { useInstructorApi } from "@/lib/instructor/data-context";
-import { parseEntityId } from "@/lib/instructor/adapters";
-import { loadCalendarRange } from "@/lib/instructor/calendar-queries";
-import { calendarClassStyle, calendarDateValue, calendarEventsForDate, calendarRange, calendarTimeLabel, rosterSizeLabel, singaporeClock, toCalendarViewEvent } from "@/lib/instructor/calendar-view";
+import { needsCalendarEventLookup } from "@/lib/instructor/calendar-queries";
+import { invalidateAvailability } from "@/lib/instructor/cache-invalidation";
+import { queryGeneration } from "@/lib/query-generation";
+import { calendarClassStyle, calendarDateValue, calendarEventsForDate, calendarRange, calendarTimeLabel, rosterSizeLabel, singaporeClock } from "@/lib/instructor/calendar-view";
 import type { CalendarEventsForDate, CalendarViewEvent as CalendarEvent } from "@/lib/instructor/calendar-view";
 import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
 import { Drawer, DrawerBody, DrawerClose, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
@@ -107,6 +111,7 @@ function EventCard({
         >
             <Button
                 variant="ghost"
+                data-prefetch-class={detailsInPanel && event.type === "training" ? event.id : undefined}
                 onClick={onToggle}
                 aria-expanded={expanded}
                 aria-pressed={detailsInPanel ? expanded : undefined}
@@ -464,6 +469,7 @@ function CalendarMonth({
                                     <Button
                                         key={event.id}
                                         variant="ghost"
+                                        data-prefetch-class={event.type === "training" ? event.id : undefined}
                                         title={`${event.name} · ${formatTime(event.startTime)} · ${rosterSizeLabel(event)}`}
                                         aria-label={`${event.name}, ${fullDate(day)}, ${calendarTimeLabel(event, " to ")}. ${expandedClassId === event.id ? "Collapse" : "Expand"} class details`}
                                         aria-expanded={
@@ -506,6 +512,8 @@ function CalendarMonth({
 
 export default function InstructorDashboard() {
     const api = useInstructorApi();
+    const client = useQueryClient();
+    const { session } = useAuth();
     const active = useRef(true);
     useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
     const isDesktop = useMediaQuery("(min-width: 1024px)");
@@ -534,22 +542,26 @@ export default function InstructorDashboard() {
         editingId?: string;
     } | null>(null);
     const requestedId = searchParams.get("session") ?? searchParams.get("class");
-    const loadSelection = useCallback(async (signal: AbortSignal) => {
-        const entry = await api.getEvent(parseEntityId(requestedId, 'event'), signal);
-        return entry ? toCalendarViewEvent(entry) : null;
-    }, [api, requestedId]);
-    const selection = useInstructorQuery(`calendar-event:${requestedId}`, loadSelection, Boolean(requestedId));
-    const selectedDate =
-        parseCalendarDate(searchParams.get("date")) ??
-        selection.data?.date ??
-        today;
+    const requestedDate = parseCalendarDate(searchParams.get("date"));
+    const [resolvedSelectionDate, setResolvedSelectionDate] = useState<{ id: string; date: Date } | null>(null);
+    const selectedDate = requestedDate ??
+        (resolvedSelectionDate?.id === requestedId ? resolvedSelectionDate.date : today);
     const range = calendarRange(selectedDate, view, isDesktop, mobileList);
-    const loadRange = useCallback((signal: AbortSignal) => loadCalendarRange(api, range, signal), [api, range.from, range.to]);
-    const calendar = useInstructorQuery(`calendar:${range.from}:${range.to}`, loadRange);
+    const calendar = useInstructorCalendarRange(range);
     const availability = calendar.data?.availability ?? [];
     const events = calendar.data?.events ?? [];
+    const prefetch = useInstructorPrefetch({ selectedDate, today, range, events, ready: calendar.status === 'success',
+        weekView: view === 'week', isDesktop, mobileList });
+    const rangeSession = events.find(event => event.id === requestedId);
+    const needsSelection = needsCalendarEventLookup(requestedId, Boolean(requestedDate), calendar.status, Boolean(rangeSession));
+    const selection = useInstructorSelectedEvent(requestedId, needsSelection);
+    useEffect(() => {
+        if (requestedId && !requestedDate && selection.data) {
+            setResolvedSelectionDate({ id: requestedId, date: selection.data.date });
+        }
+    }, [requestedId, requestedDate, selection.data]);
     const getEvents = (date: Date) => calendarEventsForDate(events, date);
-    const baseSession = events.find(event => event.id === requestedId) ?? selection.data;
+    const baseSession = rangeSession ?? selection.data;
     const requestedSession = baseSession ? calendarEventsForDate([baseSession], selectedDate)[0] : undefined;
     if (requestedSession) lastSelectedSession.current = requestedSession;
     const selectedDateKey = dateKey(selectedDate);
@@ -620,13 +632,19 @@ export default function InstructorDashboard() {
     }
 
     async function saveAvailability(range: AvailabilityRange) {
-        const saved = await api.createAvailability({ date: calendarDateValue(range.date),
-            startTime: range.startTime, endTime: range.endTime });
+        const userId = session?.user.id;
+        const generation = queryGeneration(client);
+        let saved;
+        try {
+            saved = await api.createAvailability({ date: calendarDateValue(range.date),
+                startTime: range.startTime, endTime: range.endTime });
+        } finally {
+            if (userId) invalidateAvailability(client, generation, userId);
+        }
         if (!active.current) return;
         updateSelection(range.date);
         setSelectedAvailabilityId(saved.id);
         setAvailabilityDialog(null);
-        calendar.retry();
     }
 
     function navigateDate(direction: number) {
@@ -733,18 +751,36 @@ export default function InstructorDashboard() {
     const isTimeline = view !== "month" && activeDisplayMode === "timeline";
     const showSidePanel = expandedClassId !== null;
     const calendarStatus = calendar.status !== 'success'
-        ? <InstructorDataStatus loading={calendar.status === 'loading'} error={calendar.error} onRetry={calendar.retry} /> : undefined;
+        ? <InstructorDataStatus loading={calendar.status === 'loading'} error={calendar.error} onRetry={calendar.retry} variant="calendar" /> : undefined;
+    const catalogueStatus = calendar.status === 'loading'
+        ? <InstructorDataStatus loading onRetry={calendar.retry} variant="inline" /> : calendarStatus;
     const selectionStatus = requestedId && !requestedSession
         ? selection.status === 'success'
             ? <div className="space-y-2 p-4"><p role="status" className="text-sm text-muted-foreground">Selected class not found for this date.</p><Button variant="outline" onClick={() => updateSelection(selectedDate)}>Back to calendar</Button></div>
-            : <InstructorDataStatus loading={selection.status === 'loading'} error={selection.error} onRetry={selection.retry} />
+            : <InstructorDataStatus loading={selection.status === 'loading'} error={selection.error} onRetry={selection.retry} variant="inline" />
         : undefined;
 
     return (
-        <section aria-busy={calendar.status === 'loading'} className="flex flex-col gap-4 lg:min-h-0 lg:flex-1">
+        <section aria-busy={calendar.status === 'loading'} className="flex flex-col gap-4 lg:min-h-0 lg:flex-1"
+            onPointerOver={(event) => {
+                if (event.pointerType !== 'mouse' || !(event.target instanceof Element)) return;
+                const row = event.target.closest<HTMLElement>('[data-prefetch-class]');
+                if (!row || !event.currentTarget.contains(row) || (event.relatedTarget instanceof Node && row.contains(event.relatedTarget))) return;
+                if (row.dataset.prefetchClass) prefetch.hoverClass(row.dataset.prefetchClass);
+            }}
+            onPointerOut={(event) => {
+                if (event.pointerType !== 'mouse' || !(event.target instanceof Element)) return;
+                const row = event.target.closest<HTMLElement>('[data-prefetch-class]');
+                if (row && !(event.relatedTarget instanceof Node && row.contains(event.relatedTarget))) prefetch.cancelHover();
+            }}
+            onTouchStart={(event) => {
+                if (!(event.target instanceof Element)) return;
+                const row = event.target.closest<HTMLElement>('[data-prefetch-class]');
+                if (row && event.currentTarget.contains(row) && row.dataset.prefetchClass) prefetch.touchClass(row.dataset.prefetchClass);
+            }}>
             {!isDesktop ? <MobileInstructorCalendar
                 date={selectedDate} now={now} view={mobileList ? "list" : view === "week" ? "multi-day" : view} slots={availability} focusRequest={timelineFocusRequest}
-                getEvents={getEvents} classCatalogue={calendar.data?.classTypes ?? []} catalogueStatus={calendarStatus} content={calendarStatus ?? selectionStatus}
+                getEvents={getEvents} classCatalogue={calendar.data?.classTypes ?? []} catalogueStatus={catalogueStatus} content={calendarStatus ?? selectionStatus}
                 onSelectDate={selectDay} onSelectClass={calendarProps.onToggleClass} onSelectAvailability={selectAvailability}
                 onAddAvailability={addAvailability} onSelectRange={selectRange}
                 onToday={() => { const current = singaporeClock(); setNow(current); updateSelection(new Date(current.getFullYear(), current.getMonth(), current.getDate())); setTimelineFocusRequest(value => value + 1); }}
@@ -877,7 +913,7 @@ export default function InstructorDashboard() {
                             <PopoverContent className="max-h-[min(36rem,calc(100dvh-3rem))] w-96 overflow-y-auto">
                                 <PopoverTitle>Calendar legend</PopoverTitle>
                                 <p className="-mt-2 text-xs text-muted-foreground">Classes · Singapore time</p>
-                                {calendarStatus}
+                                {catalogueStatus}
                                 {calendar.status === 'success' && !calendar.data.classTypes.length && <p className="text-xs text-muted-foreground">No class types recorded.</p>}
                                 <ul className="space-y-3 text-xs">
                                     {(calendar.data?.classTypes ?? []).map(type => (

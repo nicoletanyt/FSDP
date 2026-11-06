@@ -6,6 +6,8 @@ import { stripTypeScriptTypes } from 'node:module'
 const sourceDirectory = new URL('../../src/lib/instructor/', import.meta.url)
 const errorsUrl = new URL('errors.ts', sourceDirectory).href
 const moduleUrl = source => `data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(source)).toString('base64')}`
+const collectorUrl = moduleUrl((await readFile(new URL('page-collector.ts', sourceDirectory), 'utf8'))
+  .replaceAll("'./errors'", JSON.stringify(errorsUrl)))
 const adaptersUrl = moduleUrl((await readFile(new URL('adapters.ts', sourceDirectory), 'utf8'))
   .replaceAll("'./errors'", JSON.stringify(errorsUrl)))
 const decodersUrl = moduleUrl((await readFile(new URL('decoders.ts', sourceDirectory), 'utf8'))
@@ -13,6 +15,7 @@ const decodersUrl = moduleUrl((await readFile(new URL('decoders.ts', sourceDirec
   .replaceAll("'./adapters'", JSON.stringify(adaptersUrl)))
 const apiUrl = moduleUrl((await readFile(new URL('api.ts', sourceDirectory), 'utf8'))
   .replaceAll("'./errors'", JSON.stringify(errorsUrl))
+  .replaceAll("'./page-collector'", JSON.stringify(collectorUrl))
   .replaceAll("'./decoders'", JSON.stringify(decodersUrl))
   .replaceAll("'./adapters'", JSON.stringify(adaptersUrl)))
 const calendarViewUrl = moduleUrl((await readFile(new URL('calendar-view.ts', sourceDirectory), 'utf8'))
@@ -21,6 +24,7 @@ const calendarViewUrl = moduleUrl((await readFile(new URL('calendar-view.ts', so
   .replaceAll("'./adapters'", JSON.stringify(adaptersUrl)))
 const calendarQueriesUrl = moduleUrl((await readFile(new URL('calendar-queries.ts', sourceDirectory), 'utf8'))
   .replaceAll("'./errors'", JSON.stringify(errorsUrl))
+  .replaceAll("'./page-collector'", JSON.stringify(collectorUrl))
   .replaceAll("'./calendar-view'", JSON.stringify(calendarViewUrl)))
 const directoryUrl = moduleUrl((await readFile(new URL('directory.ts', sourceDirectory), 'utf8'))
   .replaceAll("'./decoders'", JSON.stringify(decodersUrl))

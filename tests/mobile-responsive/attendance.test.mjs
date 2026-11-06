@@ -86,7 +86,7 @@ test('transactional bulk marking sends all 205 rows and preserves late/excused e
   const result = await inAttendance(390, 'attendance-large', async (w, wait) => {
     const d = w.document
     const bulk = () => [...d.querySelectorAll('button')].find(e => /Mark All/.test(e.textContent))
-    const settled = async () => { for (let i = 0; i < 30; i++) { await wait(100); if (!bulk().disabled || d.querySelector('[role="alert"]')) break } }
+    const settled = async () => { for (let i = 0; i < 30; i++) { await wait(100); const button = bulk(); if ((button && !button.disabled) || d.querySelector('[role="alert"]')) break } }
     bulk().click(); await settled()
     const first = { label: bulk().textContent, count: d.querySelectorAll('[aria-label="Student roster"] li').length,
       selected: d.querySelectorAll('[aria-label*=" present"][aria-pressed="true"]').length,
@@ -114,13 +114,12 @@ test('failed and ambiguously acknowledged saves retry the same request without o
       const d = w.document
       const present = () => d.querySelector('[aria-label="Student roster"] [aria-label*=" present"]')
       present().click(); await wait()
-      const before = { error: d.querySelector('[role="alert"]').textContent, checked: present().getAttribute('aria-pressed'), disabled: present().disabled }
+      const before = { error: d.querySelector('[role="alert"]').textContent, hidden: !present() }
       ;[...d.querySelectorAll('button')].find(e => e.textContent === 'Retry save').click(); await wait()
       return { before, after: present().getAttribute('aria-pressed'), absent: d.querySelector('[aria-label="Student roster"] [aria-label*=" absent"]').getAttribute('aria-pressed'),
         requests: w.attendanceRequestsFixture, hasError: !!d.querySelector('[role="alert"]') }
     })
-    assert.equal(result.before.checked, 'true')
-    assert.equal(result.before.disabled, true)
+    assert.equal(result.before.hidden, true)
     assert.equal(result.after, 'false')
     assert.equal(result.hasError, false)
     assert.equal(result.requests.length, 2)
@@ -135,14 +134,14 @@ test('conflicts require an authoritative reload before a new attendance intent c
     const present = () => d.querySelector('[aria-label="Student roster"] [aria-label*=" present"]')
     const absent = () => d.querySelector('[aria-label="Student roster"] [aria-label*=" absent"]')
     present().click(); await wait()
-    const before = { error: d.querySelector('[role="alert"]').textContent, disabled: present().disabled, count: w.attendanceRequestsFixture.length }
+    const before = { error: d.querySelector('[role="alert"]').textContent, hidden: !present(), count: w.attendanceRequestsFixture.length }
     ;[...d.querySelectorAll('button')].find(e => e.textContent === 'Reload attendance').click(); await wait()
     const reloaded = absent().getAttribute('aria-pressed')
     present().click(); await wait()
     return { before, reloaded, requests: w.attendanceRequestsFixture, after: present().getAttribute('aria-pressed') }
   })
   assert.match(result.before.error, /Attendance changed/)
-  assert.equal(result.before.disabled, true)
+  assert.equal(result.before.hidden, true)
   assert.equal(result.before.count, 1)
   assert.equal(result.reloaded, 'true')
   assert.equal(result.requests.length, 2)

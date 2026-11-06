@@ -141,7 +141,7 @@ test('empty history and summary never manufacture training or reports', async ()
 })
 
 test('profile loading, failure/retry, missing records and invalid IDs remain distinct', async () => {
-  const loading = await inDetail(390, w => w.document.querySelector('[data-slot="dialog-content"]').textContent, { query: '?fixtureData=detail-loading', delay: 200 })
+  const loading = await inDetail(390, w => w.document.querySelector('[data-instructor-skeleton="student-detail"]').textContent, { query: '?fixtureData=detail-loading', delay: 200 })
   assert.match(loading, /Loading/)
   assert.doesNotMatch(loading, /STU-0001/)
   const failure = await inDetail(390, async (w, wait) => {
@@ -154,6 +154,34 @@ test('profile loading, failure/retry, missing records and invalid IDs remain dis
   assert.match(failure.after, /STU-0001/)
   assert.match(await inDetail(390, w => w.document.querySelector('main').textContent, { query: '?fixtureData=detail-missing' }), /Student not found/)
   assert.match(await inDetail(390, w => w.document.querySelector('main').textContent, { id: 'student-1' }), /student ID is invalid/)
+})
+
+test('a directory-backed detail preview shows known identity while sensitive sections remain placeholders', async t => {
+  for (const width of [320, 390, 1280]) await t.test(`${width}px`, async () => {
+  const result = await inDetail(width, async (w, wait) => {
+    const d = w.document
+    w.history.pushState(null, '', '/instructor/students?fixtureData=detail-loading')
+    w.dispatchEvent(new w.PopStateEvent('popstate')); await wait(500)
+    const row = d.querySelector('[aria-label="Student directory"] a[data-member-no="STU-0001"]')
+    const name = row.querySelector('.directory-name').textContent.trim()
+    const grade = row.querySelector('[data-slot="grade-badge"]').textContent.trim()
+    row.click(); await wait(150)
+    const placeholder = d.querySelector('[data-instructor-skeleton="student-detail"]')
+    const pending = { text: placeholder?.textContent, sensitive: placeholder?.querySelectorAll('[aria-label="Emergency contacts and medical alerts loading"] [data-slot="skeleton"]').length,
+      hasRealDetail: !!d.querySelector('[aria-label="Contact and medical actions"]'), fits: d.documentElement.scrollWidth <= d.documentElement.clientWidth }
+    await wait(2300)
+    return { name, grade, pending, final: d.querySelector('main').textContent }
+  }, { query: '?fixtureData=detail-loading', delay: 200 })
+  assert.ok(result.name)
+  assert.ok(result.grade)
+  assert.ok(result.pending.text.includes(result.name))
+  assert.ok(result.pending.text.includes(result.grade))
+  assert.ok(result.pending.sensitive >= 2)
+  assert.equal(result.pending.hasRealDetail, false)
+  assert.equal(result.pending.fits, true)
+  assert.doesNotMatch(result.pending.text, /No emergency contacts recorded|No active medical alerts recorded/)
+  assert.match(result.final, /STU-0001/)
+  })
 })
 
 test('summary and history failures expose retries without becoming successful empty reads', async () => {
@@ -205,7 +233,7 @@ test('UUID class context loads a full roster and preserves the calendar return d
 test('changing student/account hides previous profile and feedback immediately and ignores late responses', async () => {
   const race = await inDetail(390, async (w, wait) => {
     const d = w.document
-    const initial = d.querySelector('[data-slot="dialog-content"]').textContent
+    const initial = d.querySelector('[data-instructor-skeleton="student-detail"]').textContent
     w.history.pushState(null, '', '/instructor/students/00000000-0000-4000-8000-000000000101?fixtureData=detail-race')
     w.dispatchEvent(new w.PopStateEvent('popstate')); await wait(100)
     const changed = d.querySelector('main').textContent
@@ -305,10 +333,12 @@ test('grading missing rules, terminal grades and empty recorded assessment histo
   }
 })
 
-test('grading loading uses the existing modal; failed reference/sign-off/history reads retry without a mock fallback', async () => {
-  const loading = await inDetail(390, w => ({ modal: w.document.querySelector('[data-slot="dialog-content"]').textContent,
+test('grading loading uses inline skeletons; failed reference/sign-off/history reads retry without a mock fallback', async () => {
+  const loading = await inDetail(390, w => ({ skeleton: w.document.querySelector('[aria-label="Grading eligibility"] [data-instructor-skeleton]')?.textContent,
+    modal: !!w.document.querySelector('[data-slot="dialog-content"]'),
     main: w.document.querySelector('main').textContent }), { query: '?fixtureData=grading-loading&tab=grading', delay: 200 })
-  assert.match(loading.modal, /Loading student details/)
+  assert.match(loading.skeleton, /Loading/)
+  assert.equal(loading.modal, false)
   assert.doesNotMatch(loading.main, /Stored next grade|Ready to start assessment/)
   for (const resource of ['reference', 'signoffs', 'history']) {
     const result = await inDetail(390, async (w, wait) => {

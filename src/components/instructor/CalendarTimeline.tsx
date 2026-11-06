@@ -416,6 +416,7 @@ export default function CalendarTimeline({
                                             <button
                                                 key={item.id}
                                                 type="button"
+                                                data-prefetch-class={item.kind === "class" && item.event.type === "training" ? item.event.id : undefined}
                                                 aria-pressed={selectedId === item.id}
                                                 aria-controls={
                                                     isDay && isClass && selectedId === item.id

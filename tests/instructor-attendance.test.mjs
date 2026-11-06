@@ -26,13 +26,14 @@ test('editable rows preserve explicit/arrival-derived late and excused states an
   assert.equal(records[1].attendance_status, 'present')
 })
 
-test('authoritative attendance reload follows all roster pages and rejects lost event ownership', async () => {
-  const rows = Array.from({ length: 205 }, (_, index) => ({ record: { student_id: `student-${index}` } }))
+test('attendance reload delegates to the service with the event and cancellation signal', async () => {
   const signal = new AbortController().signal
-  const result = await loadAttendanceRoster({ getEvent: async () => ({ event }), getRoster: async (_id, options) => ({
-    items: rows.slice(options.offset, options.offset + 40), total: 205, offset: options.offset, limit: options.limit,
-  }) }, 'event', signal)
-  assert.equal(result.entries.length, 205)
-  assert.equal(result.session.event, event)
-  await assert.rejects(loadAttendanceRoster({ getEvent: async () => null }, 'event', signal), { code: 'forbidden' })
+  const result = { session: { event }, entries: [] }
+  const api = { getAttendanceRoster: async (id, passedSignal) => {
+    assert.equal(id, 'event')
+    assert.equal(passedSignal, signal)
+    return result
+  } }
+  assert.equal(await loadAttendanceRoster(api, 'event', signal), result)
+  await assert.rejects(loadAttendanceRoster({ getAttendanceRoster: async () => { throw new Error('ownership lost') } }, 'event', signal), /ownership lost/)
 })

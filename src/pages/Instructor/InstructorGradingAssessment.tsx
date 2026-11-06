@@ -10,6 +10,8 @@ import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
 import InstructorLoadingBoundary from "@/components/instructor/InstructorLoadingBoundary";
 import { useInstructorApi } from "@/lib/instructor/data-context";
 import { useInstructorQuery } from "@/hooks/use-instructor-data";
+import { useInstructorEditProtection } from "@/hooks/use-instructor-edit-protection";
+import { instructorQueryKeys as queryKeys, instructorQueryTimes as queryTimes } from "@/lib/instructor/query-keys";
 import { assessmentKey, sessionCalendarHref, sessionDateLabel, sessionStudentHref } from "@/lib/instructor/session-reads";
 import type { AssessmentDetail } from "@/lib/instructor/types";
 import { useInstructorSessionSave } from "@/hooks/use-instructor-session-save";
@@ -57,7 +59,17 @@ function AssessmentForm({ detail }: { detail: AssessmentDetail }) {
                     <CardTitle>Grading assessment</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <form
+                    {mutation.unconfirmed ? <div className="space-y-2">
+                        <p role="status" className="text-sm text-muted-foreground">Reload the saved record to see the latest assessment.</p>
+                        {mutation.error && <><p role="alert" className="text-sm text-destructive">{mutation.error}</p>
+                            <Button type="button" variant="outline" disabled={mutation.pending} onClick={async () => {
+                                if (mutation.retryMode === "write") await finish(await mutation.retry());
+                                else {
+                                    const fresh = await mutation.reload();
+                                    if (fresh && mutation.isCurrent()) { setExpected(assessmentSnapshot(fresh.record)); setNotice("Saved record reloaded. Your draft is kept; review the latest saved notes below."); }
+                                }
+                            }}>{mutation.retryLabel}</Button></>}
+                    </div> : <form
                         className="space-y-5"
                         onSubmit={async (submit) => {
                             submit.preventDefault();
@@ -138,7 +150,7 @@ function AssessmentForm({ detail }: { detail: AssessmentDetail }) {
                             <p className="text-xs text-muted-foreground">Latest saved assessment · {record.assessment_status ?? "Unrecorded"}</p>
                             <p className="whitespace-pre-wrap text-sm wrap-break-word">{record.assessment_notes || "No assessment notes recorded."}</p>
                         </div>}
-                    </form>
+                    </form>}
                 </CardContent>
             </Card>
         </section>
@@ -149,10 +161,15 @@ function GradingAssessmentPage() {
     const { assessmentId, eventId, studentId } = useParams();
     const api = useInstructorApi();
     const load = useCallback((signal: AbortSignal) => api.getAssessment(assessmentKey({ assessmentId, eventId, studentId }), signal), [api, assessmentId, eventId, studentId]);
-    const query = useInstructorQuery(JSON.stringify(["assessment", assessmentId, eventId, studentId]), load);
+    let pair: ReturnType<typeof assessmentKey> | undefined;
+    try { pair = assessmentKey({ assessmentId, eventId, studentId }); } catch { /* The service loader reports invalid routes. */ }
+    const retainDuringWrite = useInstructorEditProtection(pair?.eventId, pair?.studentId);
+    const query = useInstructorQuery(userId => pair ? queryKeys.assessment(userId, pair.eventId, pair.studentId)
+        : queryKeys.assessmentRoute(userId, assessmentId, eventId, studentId), load,
+    { ...queryTimes.assessment, retainDuringWrite });
     if (query.status !== "success") return <section className="space-y-4">
         <Link to="/instructor/calendar" className="text-sm underline">Back to calendar</Link>
-        <InstructorDataStatus loading={query.status === "loading"} error={query.error} onRetry={query.retry} />
+        <InstructorDataStatus loading={query.status === "loading"} error={query.error} onRetry={query.retry} variant="assessment" />
     </section>;
     if (!query.data) {
         return (

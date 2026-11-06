@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link, useParams, useSearchParams } from "react-router";
 import {
     ChevronLeft,
@@ -32,14 +33,17 @@ import {
 import GradeBadge from "@/components/instructor/DatabaseGradeBadge";
 import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
 import InstructorLoadingBoundary from "@/components/instructor/InstructorLoadingBoundary";
+import { InstructorSkeleton } from "@/components/instructor/InstructorSkeletons";
 import StudentSessionHistory from "@/components/instructor/StudentSessionHistory";
 import StudentGradingRead from "@/components/instructor/StudentGradingRead";
 import { useAuth } from "@/hooks/use-auth";
 import { useInstructorQuery } from "@/hooks/use-instructor-data";
+import { instructorQueryKeys as queryKeys, instructorQueryTimes as queryTimes } from "@/lib/instructor/query-keys";
 import { useInstructorApi } from "@/lib/instructor/data-context";
 import { gradingEventDate, parseEntityId } from "@/lib/instructor/adapters";
 import { loadStudentGrading } from "@/lib/instructor/grading";
 import { directoryStudent, singaporeToday } from "@/lib/instructor/directory";
+import { cachedStudentPreview } from "@/lib/instructor/student-preview";
 import {
     attendanceTotals,
     historyDate,
@@ -259,7 +263,7 @@ function AttendanceSummary({ studentId }: { studentId: StudentId }) {
         (signal: AbortSignal) => api.getStudentSummary(studentId, signal),
         [api, studentId],
     );
-    const summary = useInstructorQuery(`student-summary:${studentId}`, load);
+    const summary = useInstructorQuery(userId => queryKeys.studentSummary(userId, studentId), load, queryTimes.studentHistory);
     const totals = summary.data && attendanceTotals(summary.data);
     return (
         <section className="detail-section" aria-label="Attendance summary">
@@ -374,7 +378,7 @@ function RecentFeedback({
             }),
         [api, studentId],
     );
-    const feedback = useInstructorQuery(`student-feedback:${studentId}`, load);
+    const feedback = useInstructorQuery(userId => queryKeys.studentFeedback(userId, studentId), load, queryTimes.studentHistory);
     return (
         <section className="detail-section">
             <div className="detail-section-header">
@@ -440,9 +444,9 @@ function StudentDetailContent({ detail }: { detail: StudentDetail }) {
         [api, requestedContext],
     );
     const context = useInstructorQuery(
-        `student-context:${requestedContext}`,
+        userId => queryKeys.studentContext(userId, requestedContext?.toLowerCase() ?? ''),
         loadContext,
-        !!requestedContext,
+        { ...queryTimes.roster, enabled: !!requestedContext },
     );
     const linkedContext = context.data?.roster.some(
         (entry) => entry.student.student.id === detail.student.id,
@@ -463,7 +467,8 @@ function StudentDetailContent({ detail }: { detail: StudentDetail }) {
         (signal: AbortSignal) => loadStudentGrading(api, detail.student.id, signal),
         [api, detail.student.id],
     );
-    const grading = useInstructorQuery(`student-grading:${detail.student.id}`, loadGrading, activeTab !== "sessions");
+    const grading = useInstructorQuery(userId => queryKeys.studentGrading(userId, detail.student.id), loadGrading,
+        { ...queryTimes.studentGrading, enabled: activeTab !== "sessions" });
     const sidebarRef = useRef<HTMLElement>(null);
     const [sidebarFits, setSidebarFits] = useState(false);
     useEffect(() => {
@@ -563,6 +568,7 @@ function StudentDetailContent({ detail }: { detail: StudentDetail }) {
                         loading={context.status === "loading"}
                         error={context.error}
                         onRetry={context.retry}
+                        variant="inline"
                     />
                 ) : (
                     !linkedContext && (
@@ -657,15 +663,20 @@ function StudentDetailContent({ detail }: { detail: StudentDetail }) {
 
 function StudentDetailPage() {
     const api = useInstructorApi();
-    const { session } = useAuth();
+    const client = useQueryClient();
+    const { session, profile } = useAuth();
     const { studentId } = useParams();
     const load = useCallback(
         (signal: AbortSignal) =>
             api.getStudentDetail(parseEntityId(studentId, "student"), signal),
         [api, studentId],
     );
-    const detail = useInstructorQuery(`student-detail:${studentId}`, load);
-    if (detail.status !== "success")
+    const detail = useInstructorQuery(userId => queryKeys.studentDetail(userId, studentId?.toLowerCase() ?? ''), load, queryTimes.student);
+    if (detail.status === "loading") {
+        const userId = profile?.role === 'instructor' && profile.id === session?.user.id ? session.user.id : undefined;
+        return <InstructorSkeleton variant="student-detail" entry={cachedStudentPreview(client, userId, studentId)} />;
+    }
+    if (detail.status === "error")
         return (
             <section className="student-detail-view space-y-4">
                 <Button
@@ -677,7 +688,6 @@ function StudentDetailPage() {
                     Back to students
                 </Button>
                 <InstructorDataStatus
-                    loading={detail.status === "loading"}
                     error={detail.error}
                     onRetry={detail.retry}
                 />

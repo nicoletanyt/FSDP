@@ -198,7 +198,7 @@ function httpClient(handler, { instructorRecord = instructor } = {}) {
     } },
   })
   client.auth.getUser = async () => ({ data: { user: { id: userId } }, error: null })
-  return { api: createInstructorApi(client), requests }
+  return { api: createInstructorApi(client), requests, client }
 }
 
 const eventId = '00000000-0000-4000-8000-000000000006'
@@ -222,6 +222,81 @@ const record = {
 }
 const page = (items, total = items.length, offset = 0, limit = 50) => ({ items, total, offset, limit })
 const responsePage = (items, total = items.length) => Response.json(items, { headers: { 'content-range': `0-${Math.max(0, items.length - 1)}/${total}` } })
+
+test('each attendance load verifies ownership once, follows all pages and rejects reassignment', async () => {
+  let assigned = true
+  let authReads = 0
+  const secondStudentId = '00000000-0000-4000-8000-000000000099'
+  const rows = [
+    { ...record, student },
+    { ...record, student_id: secondStudentId, student: { ...student, id: secondStudentId } },
+  ]
+  const { api, requests, client } = httpClient(async (_request, url) => {
+    if (url.pathname === '/rest/v1/events') {
+      assert.equal(url.searchParams.get('instructor_id'), `eq.${instructorId}`)
+      return Response.json(assigned ? calendarEntry : null)
+    }
+    assert.equal(url.pathname, '/rest/v1/event_students')
+    assert.equal(url.searchParams.get('event_id'), `eq.${eventId}`)
+    const offset = Number(url.searchParams.get('offset') ?? 0)
+    return responsePage(rows.slice(offset, offset + 1), rows.length)
+  })
+  client.auth.getUser = async () => { authReads++; return { data: { user: { id: userId } }, error: null } }
+  const signal = new AbortController().signal
+  for (let open = 0; open < 2; open++) {
+    const before = requests.length
+    const result = await api.getAttendanceRoster(eventId, signal)
+    assert.equal(result.entries.length, 2)
+    assert.deepEqual(requests.slice(before).map(request => new URL(request.url).pathname), [
+      '/rest/v1/users', '/rest/v1/instructors', '/rest/v1/events', '/rest/v1/event_students', '/rest/v1/event_students',
+    ])
+  }
+  assert.equal(authReads, 2)
+  assigned = false
+  const before = requests.length
+  await assert.rejects(api.getAttendanceRoster(eventId, signal), { code: 'forbidden' })
+  assert.deepEqual(requests.slice(before).map(request => new URL(request.url).pathname), ['/rest/v1/users', '/rest/v1/instructors', '/rest/v1/events'])
+  assert.equal(authReads, 3)
+})
+
+test('attendance loads reject an event returned for another instructor', async () => {
+  const { api, requests } = httpClient(async (_request, url) => {
+    assert.equal(url.pathname, '/rest/v1/events')
+    return Response.json({ ...calendarEntry, instructor_id: otherUserId })
+  })
+  await assert.rejects(api.getAttendanceRoster(eventId, new AbortController().signal), { code: 'invalid_data' })
+  assert.ok(!requests.some(request => new URL(request.url).pathname === '/rest/v1/event_students'))
+})
+
+test('attendance and session writes independently verify the account after a roster load', async () => {
+  let authReads = 0
+  const { api, requests, client } = httpClient(async (request, url) => {
+    if (url.pathname === '/rest/v1/events') return Response.json(calendarEntry)
+    if (url.pathname === '/rest/v1/event_students') return responsePage([{ ...record, student }])
+    const body = await request.json()
+    if (url.pathname === '/rest/v1/rpc/save_instructor_attendance') return Response.json({
+      requestId: body.request_id, eventId, attendance: body.expected_attendance.map(row => ({ ...row, status: body.new_status })),
+    })
+    assert.equal(url.pathname, '/rest/v1/rpc/save_instructor_session_record')
+    return Response.json({ requestId: body.request_id, eventId, studentId, kind: body.write_kind,
+      value: body.write_kind === 'report' ? { report: body.new_value.report, reportAuthorId: instructorId } : body.new_value })
+  })
+  client.auth.getUser = async () => { authReads++; return { data: { user: { id: userId } }, error: null } }
+  await api.getAttendanceRoster(eventId, new AbortController().signal)
+  const key = { requestId: otherUserId, expectedUserId: userId, eventId, studentId }
+  const pathsAfter = async operation => {
+    const before = requests.length
+    await operation()
+    return requests.slice(before).map(request => new URL(request.url).pathname)
+  }
+  assert.deepEqual(await pathsAfter(() => api.saveAttendance({ ...key, scope: 'student', status: 'present',
+    expected: [{ studentId, status: null, recordedAt: null, checkedInAt: null }] })), ['/rest/v1/users', '/rest/v1/rpc/save_instructor_attendance'])
+  for (const operation of [
+    () => api.saveReport({ ...key, report: 'Report', expected: { report: null, reportAuthorId: null } }),
+    () => api.saveAssessment({ ...key, status: null, notes: null, expected: { status: null, notes: null } }),
+  ]) assert.deepEqual(await pathsAfter(operation), ['/rest/v1/users', '/rest/v1/instructors', '/rest/v1/rpc/save_instructor_session_record'])
+  assert.equal(authReads, 4, 'the read and each write independently verify the current account')
+})
 
 test('report/assessment saves send narrow snapshots with account fences and validate actor-owned authoritative results', async () => {
   const requests = []
