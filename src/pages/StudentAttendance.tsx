@@ -276,7 +276,7 @@ export default function StudentAttendance() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-2xl font-semibold">
-            My schedule & attendance
+            Timetable
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
             Select a date to see your classes,
@@ -286,7 +286,7 @@ export default function StudentAttendance() {
 
         <Button
           variant="outline"
-          render={<Link to="/timetable" />}
+          render={<Link to="/classes" />}
         >
           Browse classes
         </Button>

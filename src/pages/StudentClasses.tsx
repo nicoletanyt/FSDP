@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { Link, useOutletContext } from 'react-router'
 import {
   CalendarDays,
@@ -7,7 +7,9 @@ import {
   MapPin,
   SlidersHorizontal,
   Sparkles,
-  UsersRound
+  UsersRound,
+  Coins, // 👈 新增图标
+  AlertCircle
 } from 'lucide-react'
 import { Button } from '@/components/student/button'
 import {
@@ -50,6 +52,12 @@ const input =
 
 export default function StudentClasses() {
   const { classes, schedule } = useOutletContext<StudentContext>()
+
+  // 👇 新增：读取并管理 Credits 余额
+  const [credits, setCredits] = useState(0)
+  useEffect(() => {
+    setCredits(parseInt(localStorage.getItem('student_credits') || '0'))
+  }, [])
 
   const [centre, setCentre] = useState('all')
   const [day, setDay] = useState('all')
@@ -114,28 +122,42 @@ export default function StudentClasses() {
     setShowAllLevels(false)
   }
 
+  // 👇 核心修改：加入扣费逻辑的确认函数
   function confirm() {
     if (!action) return
 
     const { kind, session } = action
 
-    const error =
-      kind === 'enroll'
-        ? schedule.enroll(session)
-        : kind === 'waitlist'
-          ? schedule.joinWaitlist(session)
-          : (schedule.leaveWaitlist(session.id), null)
+    if (kind === 'enroll') {
+      // 1. 检查余额
+      if (credits <= 0) {
+        setMessage('❌ Insufficient credits. Please top up your account to enrol.')
+        setAction(null)
+        return
+      }
 
-    setMessage(
-      error ??
-      (
-        kind === 'enroll'
-          ? `Enrolled in ${session.title} on ${prettyDate(session.date)}.`
-          : kind === 'waitlist'
-            ? 'You joined the demo waitlist. Joining does not guarantee a class spot. An administrator would email you if a space becomes available and is allocated to you; email notifications are not yet connected.'
-            : 'You have left the demo waitlist.'
+      // 2. 尝试报名
+      const error = schedule.enroll(session)
+      
+      if (error) {
+        setMessage(error)
+      } else {
+        // 3. 报名成功，扣除 1 Credit 并更新本地存储
+        const newCredits = credits - 1
+        localStorage.setItem('student_credits', newCredits.toString())
+        setCredits(newCredits)
+        setMessage(`✅ Enrolled in ${session.title} on ${prettyDate(session.date)}. (1 Credit deducted)`)
+      }
+    } else if (kind === 'waitlist') {
+      const error = schedule.joinWaitlist(session)
+      setMessage(
+        error ??
+        'You joined the demo waitlist. Joining does not guarantee a class spot. An administrator would email you if a space becomes available.'
       )
-    )
+    } else {
+      schedule.leaveWaitlist(session.id)
+      setMessage('You have left the demo waitlist.')
+    }
 
     setAction(null)
   }
@@ -153,13 +175,29 @@ export default function StudentClasses() {
           </p>
         </div>
 
-        <Button
-          variant="outline"
-          render={<Link to="/attendance" />}
-        >
-          <CalendarDays className="size-4" />
-          My schedule
-        </Button>
+        {/* 👇 新增：顶部显示余额 & 跳转充值 */}
+        <div className="flex items-center gap-3">
+          <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold ${
+            credits > 0 ? 'bg-[#2c3f67]/10 text-[#2c3f67] dark:bg-blue-900/30 dark:text-blue-400' : 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'
+          }`}>
+            <Coins className="w-4 h-4" />
+            {credits} Credits
+          </div>
+          <Button
+            variant="outline"
+            render={<Link to="/student/credits" />}
+            className="gap-2"
+          >
+            Top Up
+          </Button>
+          <Button
+            variant="outline"
+            render={<Link to="/timetable" />}
+          >
+            <CalendarDays className="size-4" />
+            My schedule
+          </Button>
+        </div>
       </div>
 
       <Card className="gap-3">
@@ -294,9 +332,18 @@ export default function StudentClasses() {
       {message && (
         <div
           role="status"
-          className="rounded-lg border bg-muted px-4 py-3 text-sm"
+          className={`rounded-lg border px-4 py-3 text-sm font-medium ${
+            message.includes('❌') 
+              ? 'bg-red-50 border-red-200 text-red-700 dark:bg-red-900/20 dark:border-red-900/50 dark:text-red-400' 
+              : 'bg-green-50 border-green-200 text-green-700 dark:bg-green-900/20 dark:border-green-900/50 dark:text-green-400'
+          }`}
         >
           {message}
+          {message.includes('❌') && (
+            <Link to="/student/credits" className="ml-2 underline hover:text-red-900 dark:hover:text-red-300">
+              Go to Top Up page
+            </Link>
+          )}
         </div>
       )}
 
@@ -423,7 +470,7 @@ export default function StudentClasses() {
                     </Button>
                   ) : (
                     <Button
-                      className="w-full"
+                      className="w-full flex items-center justify-center gap-2"
                       disabled={!eligible}
                       onClick={() =>
                         setAction({
@@ -432,9 +479,14 @@ export default function StudentClasses() {
                         })
                       }
                     >
-                      {full
-                        ? 'Join waitlist'
-                        : 'Enrol in this class'}
+                      {full ? (
+                        'Join waitlist'
+                      ) : (
+                        <>
+                          Enrol in this class 
+                          <span className="opacity-80 text-xs bg-black/10 dark:bg-white/10 px-1.5 py-0.5 rounded">- 1 Credit</span>
+                        </>
+                      )}
                     </Button>
                   )}
                 </CardContent>
@@ -444,6 +496,7 @@ export default function StudentClasses() {
         </div>
       )}
 
+      {/* 👇 确认弹窗中增加点数显示 */}
       {action && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
@@ -458,7 +511,7 @@ export default function StudentClasses() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="class-confirm-title"
-            className="w-full max-w-md space-y-4 rounded-xl bg-background p-6 shadow-xl"
+            className="w-full max-w-md space-y-4 rounded-xl bg-background p-6 shadow-xl border border-border"
           >
             <h3
               id="class-confirm-title"
@@ -477,17 +530,21 @@ export default function StudentClasses() {
               {formatTime(action.session.startTime)}
             </p>
 
+            {action.kind === 'enroll' && (
+              <div className="rounded-lg bg-muted p-3 text-sm flex items-center justify-between">
+                <span>Enrolment Fee:</span>
+                <span className="font-bold flex items-center gap-1 text-[#2c3f67] dark:text-blue-400">
+                  <Coins className="w-4 h-4" /> 1 Credit
+                </span>
+              </div>
+            )}
+
             {action.kind === 'waitlist' && (
               <p className="rounded-lg bg-muted p-3 text-sm">
                 <strong>Important:</strong> Joining the waitlist
                 does not guarantee a spot. If a slot opens and
                 you are selected, an administrator will notify
                 you by email.
-                {' '}
-                <strong>
-                  This draft does not send actual emails or
-                  notify administrators.
-                </strong>
               </p>
             )}
 

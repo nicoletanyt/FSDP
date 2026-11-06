@@ -5,14 +5,16 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import ThemeToggle from '@/components/theme-toggle'
 import { useEmptyAuthForm } from '@/hooks/use-empty-auth-form'
 import { supabase } from '@/lib/supabase'
-import { Mail, Lock, ArrowRight } from 'lucide-react'
+import { Mail, Lock, ArrowRight, Eye, EyeOff } from 'lucide-react'
 
 export default function Login({ staff = false }: { staff?: boolean }) {
   const formRef = useEmptyAuthForm()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [pending, setPending] = useState(false)
   const [error, setError] = useState('')
 
@@ -35,6 +37,9 @@ export default function Login({ staff = false }: { staff?: boolean }) {
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col lg:flex-row bg-white dark:bg-slate-950 font-sans overflow-y-auto transition-colors">
+      <div className="fixed right-4 top-4 z-20 rounded-full bg-background/80 text-foreground shadow-sm ring-1 ring-border backdrop-blur">
+        <ThemeToggle />
+      </div>
       <div className="hidden lg:flex lg:w-1/2 relative bg-[#2c3f67] flex-shrink-0">
         <div className="absolute top-12 left-12 text-white/10 text-7xl font-serif leading-tight flex flex-col">
           <span>合</span>
@@ -103,15 +108,24 @@ export default function Login({ staff = false }: { staff?: boolean }) {
                 <Input
                   id="password"
                   name="password"
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   autoComplete="new-password"
                   required
                   // 👇 加上了 bg-white dark:bg-slate-900
-                  className="pl-10 h-12 rounded-md border-gray-300 dark:border-slate-700 focus-visible:ring-[#2c3f67] w-full text-black dark:text-white bg-white dark:bg-slate-900 transition-colors"
+                  className="pl-10 pr-12 h-12 rounded-md border-gray-300 dark:border-slate-700 focus-visible:ring-[#2c3f67] w-full text-black dark:text-white bg-white dark:bg-slate-900 transition-colors"
                   placeholder="Enter your password"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((visible) => !visible)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  title={showPassword ? 'Hide password' : 'Show password'}
+                  className="absolute right-2 top-1/2 z-10 grid size-9 -translate-y-1/2 place-items-center rounded-md text-gray-400 transition-colors hover:text-gray-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2c3f67] dark:text-gray-500 dark:hover:text-gray-300 dark:focus-visible:ring-blue-500"
+                >
+                  {showPassword ? <EyeOff className="size-5" /> : <Eye className="size-5" />}
+                </button>
               </div>
             </div>
 
