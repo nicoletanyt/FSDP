@@ -254,6 +254,77 @@ test('an uncertain attendance save hides the roster and retries the same request
   } finally { await f.cleanup() }
 })
 
+test('attendance baseline waits for one acknowledgement and one authoritative reload, blocking duplicate taps', async () => {
+  const f = fixture()
+  const calls = []
+  let acknowledge, finishReload
+  const api = {
+    getAttendanceRoster: async () => {
+      calls.push('read')
+      if (calls.length === 1) return roster(null)
+      return new Promise(resolve => { finishReload = () => resolve(roster('present')) })
+    },
+    saveAttendance: input => {
+      calls.push('write')
+      assert.equal(input.scope, 'student')
+      assert.equal(input.expected.length, 1)
+      return new Promise(resolve => { acknowledge = resolve })
+    },
+  }
+  try {
+    await f.render(api)
+    await until(() => f.current().attendance.query.status === 'success')
+    await act(async () => {
+      f.current().attendance.mark('present', studentId)
+      f.current().attendance.mark('absent', studentId)
+    })
+    assert.deepEqual(calls, ['read', 'write'])
+    assert.equal(f.current().attendance.pending, true)
+    assert.equal(f.current().attendance.data.entries[0].record.attendance_status, null)
+    await act(async () => { acknowledge({}); await Promise.resolve() })
+    await until(() => Boolean(finishReload))
+    assert.deepEqual(calls, ['read', 'write', 'read'])
+    assert.equal(f.current().attendance.pending, true)
+    assert.equal(f.current().attendance.data, null)
+    await act(async () => { finishReload(); await Promise.resolve() })
+    await until(() => !f.current().attendance.pending && f.current().attendance.data?.entries[0].record.attendance_status === 'present')
+    assert.deepEqual(calls, ['read', 'write', 'read'])
+  } finally { await f.cleanup() }
+})
+
+test('attendance conflict reloads server truth before a new request with a fresh snapshot', async () => {
+  const f = fixture()
+  const writes = []
+  let status = null, reads = 0
+  const api = {
+    getAttendanceRoster: async () => { reads++; return roster(status) },
+    saveAttendance: async input => {
+      writes.push(structuredClone(input))
+      if (writes.length === 1) { status = 'absent'; throw { code: 'PAT01' } }
+      status = input.status
+      return {}
+    },
+  }
+  try {
+    await f.render(api)
+    await until(() => f.current().attendance.query.status === 'success')
+    await act(async () => { f.current().attendance.mark('present', studentId) })
+    await until(() => Boolean(f.current().attendance.error))
+    assert.match(f.current().attendance.error, /changed/i)
+    assert.equal(f.current().attendance.retryLabel, 'Reload attendance')
+    assert.equal(f.current().attendance.data, null)
+    await act(async () => { f.current().attendance.retry() })
+    await until(() => f.current().attendance.data?.entries[0].record.attendance_status === 'absent')
+    assert.equal(reads, 2)
+    await act(async () => { f.current().attendance.mark('present', studentId) })
+    await until(() => f.current().attendance.data?.entries[0].record.attendance_status === 'present')
+    assert.equal(reads, 3)
+    assert.equal(writes.length, 2)
+    assert.notEqual(writes[0].requestId, writes[1].requestId)
+    assert.equal(writes[1].expected[0].status, 'absent')
+  } finally { await f.cleanup() }
+})
+
 test('report saves invalidate active roster and old-account completions cannot affect a later login', async () => {
   const f = fixture()
   let reads = 0, report = null, finishSave

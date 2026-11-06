@@ -376,6 +376,42 @@ test('attendance sends account-fenced immutable snapshots and stable request IDs
   assert.ok(expected.every(row => row.status === null && row.checkedInAt === null))
 })
 
+test('attendance save and authoritative reload baseline counts actual service requests and serialized payloads', async t => {
+  for (const size of [1, 205]) {
+    const rows = Array.from({ length: size }, (_, index) => {
+      const id = `00000000-0000-4000-8000-${String(9000 + index).padStart(12, '0')}`
+      return { ...record, student_id: id, student: { ...student, id } }
+    })
+    let authReads = 0
+    let payloadBytes = 0
+    const { api, requests, client } = httpClient(async (request, url) => {
+      if (url.pathname === '/rest/v1/events') return Response.json(calendarEntry)
+      if (url.pathname === '/rest/v1/event_students') {
+        const offset = Number(url.searchParams.get('offset') ?? 0)
+        const limit = Number(url.searchParams.get('limit') ?? 100)
+        return responsePage(rows.slice(offset, offset + limit), size)
+      }
+      assert.equal(url.pathname, '/rest/v1/rpc/save_instructor_attendance')
+      const text = await request.text()
+      payloadBytes = Buffer.byteLength(text)
+      const body = JSON.parse(text)
+      assert.equal(body.save_scope, size === 1 ? 'student' : 'roster')
+      assert.equal(body.expected_attendance.length, size)
+      return Response.json({ requestId: body.request_id, eventId: body.target_event, attendance: body.expected_attendance })
+    })
+    client.auth.getUser = async () => { authReads++; return { data: { user: { id: userId } }, error: null } }
+    await api.saveAttendance({ requestId: otherUserId, expectedUserId: userId, eventId, scope: size === 1 ? 'student' : 'roster',
+      status: 'present', expected: rows.map(row => ({ studentId: row.student_id, status: null, recordedAt: null, checkedInAt: null })) })
+    const result = await api.getAttendanceRoster(eventId, new AbortController().signal)
+    const paths = requests.map(request => new URL(request.url).pathname)
+    assert.equal(result.entries.length, size)
+    assert.equal(authReads, 2)
+    assert.deepEqual(paths, ['/rest/v1/users', '/rest/v1/rpc/save_instructor_attendance',
+      '/rest/v1/users', '/rest/v1/instructors', '/rest/v1/events', ...Array(Math.ceil(size / 100)).fill('/rest/v1/event_students')])
+    t.diagnostic(`${size} row(s): ${payloadBytes} JSON bytes, ${paths.length} mocked REST requests and ${authReads} mocked auth checks; no network timings`)
+  }
+})
+
 test('attendance rejects malformed/incomplete actions before dispatch and fences an old form from a replacement account', async () => {
   const input = { requestId: otherUserId, expectedUserId: userId, eventId, scope: 'student', status: 'present',
     expected: [{ studentId, status: null, recordedAt: null, checkedInAt: null }] }
