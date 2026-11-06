@@ -63,6 +63,10 @@ export default function ApplyMembership() {
         setErrorMsg('Please fill in all required Personal Information fields.')
         return false
       }
+      if (!formData.photoName) {
+        setErrorMsg('Please upload a profile photo to continue.')
+        return false
+      }
       if (!isValidNric(formData.nric)) {
         setErrorMsg('Invalid NRIC / FIN format. Please use format like S1234567A.')
         return false
@@ -255,7 +259,7 @@ export default function ApplyMembership() {
                     placeholder="8-digit number" 
                     value={formData.mobile} 
                     onChange={(e) => setFormData({...formData, mobile: formatPhone(e.target.value)})} 
-                    className="flex-1 h-11 sm:h-12 bg-gray-200/60 dark:bg-slate-800 border-transparent focus-visible:ring-[#2c3f67] text-black dark:text-white" 
+                    className="flex-1 h-11 sm:h-12 lg:h-12 bg-gray-200/60 dark:bg-slate-800 border-transparent focus-visible:ring-[#2c3f67] text-black dark:text-white" 
                   />
                 </div>
               </div>
@@ -264,14 +268,15 @@ export default function ApplyMembership() {
                 <textarea placeholder="Enter address" value={formData.address} onChange={(e) => setFormData({...formData, address: e.target.value})} className="w-full min-h-[80px] sm:min-h-[100px] bg-gray-200/60 dark:bg-slate-800 rounded-md p-3 text-sm border-transparent focus:ring-[#2c3f67] resize-none text-black dark:text-white" />
               </div>
               <div className="space-y-1.5 sm:space-y-2 sm:col-span-2">
-                <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-sm sm:text-base transition-colors">Profile Photo</Label>
+                <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-sm sm:text-base transition-colors">Profile Photo <span className="text-[#e62128]">*</span></Label>
                 <label className="flex flex-col items-center justify-center w-full h-28 sm:h-32 border-2 border-dashed border-gray-300 dark:border-slate-700 rounded-xl cursor-pointer bg-gray-50 dark:bg-slate-800/50">
                   <div className="flex flex-col items-center justify-center text-gray-500 dark:text-gray-400">
                     <UploadCloud className="w-6 h-6 sm:w-8 sm:h-8 mb-1 sm:mb-2" />
                     <p className="text-xs sm:text-sm"><span className="font-semibold text-[#2c3f67] dark:text-blue-400">Click to upload</span></p>
                     {formData.photoName && <p className="text-xs text-green-600 dark:text-green-400 font-bold mt-1">Selected: {formData.photoName}</p>}
+                    {!formData.photoName && <p className="text-[10px] sm:text-xs text-[#e62128] dark:text-red-400 font-medium mt-1">Profile photo is required to continue.</p>}
                   </div>
-                  <input type="file" className="hidden" accept="image/*" onChange={handlePhotoUpload} />
+                  <input type="file" className="hidden" accept="image/*" onChange={handlePhotoUpload} required aria-required="true" />
                 </label>
               </div>
             </div>
@@ -370,7 +375,7 @@ export default function ApplyMembership() {
                       placeholder="8-digit number" 
                       value={formData.emergencyPhone} 
                       onChange={(e) => setFormData({...formData, emergencyPhone: formatPhone(e.target.value)})} 
-                      className="flex-1 h-11 sm:h-12 bg-white dark:bg-slate-900 border-transparent text-black dark:text-white" 
+                      className="flex-1 h-11 sm:h-12 lg:h-12 bg-white dark:bg-slate-900 border-transparent text-black dark:text-white" 
                     />
                   </div>
                 </div>
