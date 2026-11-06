@@ -63,7 +63,7 @@ export default function StudentTable({
                   <div className="min-w-0">
                     <p className="truncate font-medium">{fullName(student)}</p>
                     <p className="text-xs text-muted-foreground">
-                      {studentAge(student)} years
+                      {studentAge(student)} years old
                     </p>
                   </div>
                 </div>

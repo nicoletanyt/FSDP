@@ -39,7 +39,7 @@ import type {
     StudentId,
     InstructorId,
 } from "@/lib/instructor/types";
-import { cn } from "cn";
+import { cn } from "cn"; // verify this path; other imports use "@/"
 
 const PAGE_SIZE = 20;
 
@@ -53,12 +53,17 @@ function SessionReport({
     instructorId: InstructorId | null;
 }) {
     const attendance = toAttendanceState(session.record.attendance_status);
+    const { starts_at, ends_at } = session.event;
+    const now = Date.now();
     const phase =
-        !session.event.starts_at || !session.event.ends_at ? "unknown" : Date.now() < Date.parse(session.event.starts_at)
-            ? "upcoming"
-            : Date.now() < Date.parse(session.event.ends_at)
-                ? "in-progress"
-                : "past";
+        !starts_at || !ends_at
+            ? "unknown"
+            : now < Date.parse(starts_at)
+                ? "upcoming"
+                : now < Date.parse(ends_at)
+                    ? "in-progress"
+                    : "past";
+
     return (
         <Card
             size="sm"
@@ -117,7 +122,12 @@ function SessionReport({
             </CardHeader>
             <CardContent>
                 <div className="mb-4 border-t lg:mb-2" aria-hidden="true" />
-                <ReportEditor event={session.event} record={session.record} author={session.reportAuthor} instructorId={instructorId} />
+                <ReportEditor
+                    event={session.event}
+                    record={session.record}
+                    author={session.reportAuthor}
+                    instructorId={instructorId}
+                />
             </CardContent>
         </Card>
     );
@@ -199,7 +209,7 @@ export default function StudentSessionHistory({
     const api = useInstructorApi();
     const queryClient = useQueryClient();
     const { session, profile } = useAuth();
-    const userId = profile?.role === 'instructor' ? session?.user.id : undefined;
+    const userId = profile?.role === "instructor" ? session?.user.id : undefined;
     const identity = useInstructorWriteIdentity();
     const retainDuringWrite = useInstructorEditProtection(undefined, studentId);
     const [attendance, setAttendance] = useState<AttendanceState | "all">("all");
@@ -216,18 +226,28 @@ export default function StudentSessionHistory({
                 signal,
             });
             if (result.offset !== page * PAGE_SIZE || result.limit !== PAGE_SIZE) {
-                throw new InstructorDataError('invalid_data', 'The session history does not match the requested page.');
+                throw new InstructorDataError("invalid_data", "The session history does not match the requested page.");
             }
             return result;
         },
         [api, studentId, attendance, sort, page],
     );
     const history = useInstructorQuery(
-        userId => queryKeys.studentHistory(userId, studentId, { attendance, sort, page, pageSize: PAGE_SIZE }),
+        (uid) => queryKeys.studentHistory(uid, studentId, { attendance, sort, page, pageSize: PAGE_SIZE }),
         load,
-        { ...queryTimes.studentHistory, retainDuringWrite,
-            placeholderData: (previous, previousQuery) => previousHistoryPage(queryClient, userId, studentId,
-                { attendance, sort, page, pageSize: PAGE_SIZE }, previous, previousQuery) },
+        {
+            ...queryTimes.studentHistory,
+            retainDuringWrite,
+            placeholderData: (previous, previousQuery) =>
+                previousHistoryPage(
+                    queryClient,
+                    userId,
+                    studentId,
+                    { attendance, sort, page, pageSize: PAGE_SIZE },
+                    previous,
+                    previousQuery,
+                ),
+        },
     );
     useEffect(() => {
         if (
@@ -257,6 +277,7 @@ export default function StudentSessionHistory({
             setPage(0);
         },
     };
+
     return (
         <section aria-label="Session history" aria-busy={history.isPlaceholderData} className="detail-section">
             {history.isPlaceholderData && <p role="status" className="sr-only">Loading requested page. Showing page {displayedPage + 1}.</p>}

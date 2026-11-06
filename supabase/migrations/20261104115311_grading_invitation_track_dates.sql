@@ -32,4 +32,3 @@ alter table public.grading_invitation_settings
     and position('{{grading_details}}' in body) = 0
     and position('{{application_url}}' in body) = 0
   );
-;

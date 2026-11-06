@@ -22,4 +22,3 @@ alter table public.grading_invitation_settings
     length(body) - length(replace(body, 'https://fsdp-kappa.vercel.app/grading', '')) = length('https://fsdp-kappa.vercel.app/grading')
     and position('[insert actual link here]' in body) = 0
   );
-;

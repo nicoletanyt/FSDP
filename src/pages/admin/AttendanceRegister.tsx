@@ -118,9 +118,10 @@ export default function AttendanceRegister() {
   const centreOptions = useMemo(
     () =>
       centres.filter((centre) =>
-        sessions.some((session) => session.centreId === centre.id),
+        sessions.some((session) => session.centreId === centre.id) ||
+        (centre.id === centreParam && centre.status !== 'closed'),
       ),
-    [centres, sessions],
+    [centres, sessions, centreParam],
   )
 
   const candidateCentreId =
@@ -442,7 +443,7 @@ export default function AttendanceRegister() {
     setSearchParams,
   ])
 
-  if (!sessions.length || !selectedCentreId) {
+  if (!selectedCentreId) {
     return (
       <>
         <Card>

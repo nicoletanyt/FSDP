@@ -22,4 +22,3 @@ alter table public.grading_invitation_settings
     position('[insert actual link here]' in body) > 0
     and length(body) - length(replace(body, '[insert actual link here]', '')) = length('[insert actual link here]')
   );
-;

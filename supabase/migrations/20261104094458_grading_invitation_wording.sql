@@ -45,4 +45,3 @@ grant select, update on public.grading_invitation_settings to authenticated;
 alter table public.grading_email_sends add column campaign_key text;
 create unique index grading_email_one_all_campaign on public.grading_email_sends(campaign_key)
   where campaign_key is not null and status in ('pending', 'accepted');
-;

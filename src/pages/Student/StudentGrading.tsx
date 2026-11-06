@@ -8,9 +8,12 @@ import { supabase } from '@/lib/supabase'
 type Grading = {
   id: string
   name: string
-  startsAt: string
+  gradingDate: string
   deadline: string
+  reportingRelease: string | null
+  reportingTime: string | null
   centre: string
+  venueAddress: string
   target: string
   applied: boolean
 }
@@ -28,9 +31,10 @@ export default function StudentGrading() {
       try {
         const { data: events, error: eventsError } = await supabase.rpc('my_grading_opportunities')
         if (eventsError) throw eventsError
-        const mapped = (events ?? []).map((event: { id: string; name: string; starts_at: string; application_deadline: string; centre_name: string; target_grade: string; applied: boolean }) => ({
-          id: event.id, name: event.name, startsAt: event.starts_at,
-          deadline: event.application_deadline, centre: event.centre_name,
+        const mapped = (events ?? []).map((event: { id: string; name: string; grading_date: string; application_deadline: string; reporting_release_on: string | null; reporting_time: string | null; centre_name: string; venue_address: string; target_grade: string; applied: boolean }) => ({
+          id: event.id, name: event.name, gradingDate: event.grading_date,
+          deadline: event.application_deadline, reportingRelease: event.reporting_release_on,
+          reportingTime: event.reporting_time, centre: event.centre_name, venueAddress: event.venue_address,
           target: event.target_grade, applied: event.applied,
         }))
         if (active) setGradings(mapped)
@@ -72,8 +76,9 @@ export default function StudentGrading() {
       : gradings.map((grading) => <Card key={grading.id} className="gap-3 p-6">
         <h2 className="text-xl font-semibold">{grading.name}</h2>
         <dl className="grid gap-2 text-sm sm:grid-cols-2">
-          <div><dt className="text-muted-foreground">Date and time</dt><dd>{new Date(grading.startsAt).toLocaleString('en-SG', { timeZone: 'Asia/Singapore', dateStyle: 'long', timeStyle: 'short' })}</dd></div>
-          <div><dt className="text-muted-foreground">Location</dt><dd>{grading.centre}</dd></div>
+          <div><dt className="text-muted-foreground">Grading date</dt><dd>{new Date(`${grading.gradingDate}T00:00:00+08:00`).toLocaleDateString('en-SG', { timeZone: 'Asia/Singapore', dateStyle: 'long' })}</dd></div>
+          <div><dt className="text-muted-foreground">Location</dt><dd>{grading.centre} · {grading.venueAddress}</dd></div>
+          <div><dt className="text-muted-foreground">Reporting time</dt><dd>{grading.reportingTime ? new Date(`2026-01-01T${grading.reportingTime.slice(0, 5)}:00+08:00`).toLocaleTimeString('en-SG', { timeZone: 'Asia/Singapore', timeStyle: 'short' }) : 'To be confirmed'}{!grading.reportingTime && grading.reportingRelease && ` · released ${grading.reportingRelease}`}</dd></div>
           <div><dt className="text-muted-foreground">Apply by</dt><dd>{grading.deadline}</dd></div>
           <div><dt className="text-muted-foreground">Fee</dt><dd>SGD 60.00</dd></div>
           <div><dt className="text-muted-foreground">Target grade</dt><dd>{grading.target}</dd></div>

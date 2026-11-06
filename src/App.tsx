@@ -40,6 +40,7 @@ const StudentClasses = lazy(() => import('./pages/StudentClasses'))
 const StudentAttendance = lazy(() => import('./pages/StudentAttendance'))
 const StudentProfile = lazy(() => import('./pages/Student/StudentProfile'))
 const StudentPayments = lazy(() => import('./pages/Student/StudentPayments'))
+const StudentCredits = lazy(() => import('./pages/Student/StudentCredits'))
 const StudentGrading = lazy(() => import('./pages/Student/StudentGrading'))
 
 const InstructorDashboard = lazy(() => import('./pages/Instructor/InstructorDashboard'))
@@ -69,11 +70,11 @@ export default function App() {
               <Route path="apply-membership" element={<ApplyMembership />} />
               <Route path="apply-membership/success" element={<ApplicationSuccess />} /> 
               <Route path="dashboard" element={<StudentDashboard />} />
-              <Route path="timetable" element={<StudentClasses />} />
               <Route path="classes" element={<StudentClasses />} />
-              <Route path="attendance" element={<StudentAttendance />} />
+              <Route path="timetable" element={<StudentAttendance />} />
               <Route path="profile" element={<StudentProfile />} />
               <Route path="payments" element={<StudentPayments />} />
+              <Route path="student/credits" element={<StudentCredits />} />
               <Route path="grading" element={<StudentGrading />} />
             </Route>
           </Route>
@@ -111,7 +112,7 @@ export default function App() {
                 <Route path="monitoring" element={<AdminAttendanceMonitoring />} />
               </Route>
               <Route path="grading" element={<AdminGrading />}>
-                <Route index element={<Navigate to="eligibility" replace />} />
+                <Route index element={<Navigate to="opportunities" replace />} />
                 <Route path="eligibility" element={<AdminGradingEligibility />} />
                 <Route path="opportunities" element={<AdminGradingOpportunities />} />
                 <Route path="applications" element={<AdminGradingApplications />} />

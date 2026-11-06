@@ -152,4 +152,3 @@ grant execute on function public.my_grading_opportunities() to authenticated;
 
 -- Date-only events require the client to read these metadata fields instead of
 -- treating a null starts_at as midnight or an actual grading time.
-;
