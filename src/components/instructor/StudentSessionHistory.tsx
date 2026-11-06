@@ -108,7 +108,6 @@ function SessionReport({
         sessionAuthor.name,
         currentInstructorProfile,
     );
-    const authorName = session.reportAuthor?.name ?? session.instructor;
 
     return (
         <Card
@@ -270,11 +269,15 @@ function SessionFilters({
     return (
         <div className={inline ? "flex flex-wrap items-end gap-3" : "grid gap-3"}>
             <div className="flex min-w-0 flex-col gap-1.5">
-                <Label htmlFor={`${filterId}-attendance`} className="detail-label">Attendance</Label>
+                <Label htmlFor={`${filterId}-attendance`} className="detail-label">
+                    Attendance
+                </Label>
                 <select
                     id={`${filterId}-attendance`}
                     value={attendance}
-                    onChange={(event) => onAttendanceChange(event.target.value as Attendance | "all")}
+                    onChange={(event) =>
+                        onAttendanceChange(event.target.value as Attendance | "all")
+                    }
                     className={selectClassName}
                 >
                     <option value="all">All attendance</option>
@@ -284,7 +287,9 @@ function SessionFilters({
                 </select>
             </div>
             <div className="flex min-w-0 flex-col gap-1.5">
-                <Label htmlFor={`${filterId}-sort`} className="detail-label">Date order</Label>
+                <Label htmlFor={`${filterId}-sort`} className="detail-label">
+                    Date order
+                </Label>
                 <select
                     id={`${filterId}-sort`}
                     value={sort}
@@ -319,7 +324,8 @@ export default function StudentSessionHistory({
 }) {
     const [attendance, setAttendance] = useState<Attendance | "all">("all");
     const [sort, setSort] = useState("newest");
-    const activeFilterCount = Number(attendance !== "all") + Number(sort !== "newest");
+    const activeFilterCount =
+        Number(attendance !== "all") + Number(sort !== "newest");
     const visibleSessions = sessions
         .filter(
             (session) => attendance === "all" || session.attendance === attendance,
@@ -369,7 +375,10 @@ export default function StudentSessionHistory({
                             </span>
                         )}
                     </PopoverTrigger>
-                    <PopoverContent align="end" className="student-detail-view w-72 gap-3 lg:hidden">
+                    <PopoverContent
+                        align="end"
+                        className="student-detail-view w-72 gap-3 lg:hidden"
+                    >
                         <PopoverTitle>Filter sessions</PopoverTitle>
                         <SessionFilters
                             attendance={attendance}
@@ -385,7 +394,8 @@ export default function StudentSessionHistory({
             {activeFilterCount > 0 && (
                 <p role="status" className="detail-meta text-sm text-muted-foreground">
                     {visibleSessions.length} of {sessions.length} sessions
-                    {attendance !== "all" && ` · ${attendance[0].toUpperCase()}${attendance.slice(1)}`}
+                    {attendance !== "all" &&
+                        ` · ${attendance[0].toUpperCase()}${attendance.slice(1)}`}
                     {sort === "oldest" && " · Oldest first"}
                 </p>
             )}
