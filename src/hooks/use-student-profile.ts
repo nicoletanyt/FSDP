@@ -3,7 +3,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { supabase } from '@/lib/supabase'
 import type { Payment, Profile, Standing } from '@/lib/student-profile'
 
-const GRADING_FEE = 60 // SGD; create-grading-checkout only accepts this price
+const LEGACY_GRADING_FEE = 60 // SGD; attempts paid before per-grade fees were all $60
 
 const standings: Record<string, Standing> = { active: 'Active', pending: 'Pending', expired: 'Expired' }
 const paymentStatuses: Record<string, Payment['status']> = { paid: 'Paid', pending: 'Pending', refunded: 'Refunded' }
@@ -34,6 +34,7 @@ type PaymentRow = {
 type GradingAttemptRow = {
   id: string
   created_at: string
+  amount_cents: number | null
   grade: One<{ label: string }>
 }
 
@@ -65,7 +66,7 @@ async function loadProfile(userId: string, accountName: string): Promise<Profile
       .returns<PaymentRow[]>(),
     supabase
       .from('grading_checkout_attempts')
-      .select('id, created_at, grade:grades!grading_checkout_attempts_target_grade_id_fkey(label)')
+      .select('id, created_at, amount_cents, grade:grades!grading_checkout_attempts_target_grade_id_fkey(label)')
       .eq('student_id', student.id)
       .eq('status', 'paid')
       .returns<GradingAttemptRow[]>(),
@@ -98,7 +99,7 @@ async function loadProfile(userId: string, accountName: string): Promise<Profile
         item: 'Grading',
         description: `Grading fee${one(g.grade) ? ` — ${one(g.grade)!.label}` : ''}`,
         method: 'Stripe',
-        amount: GRADING_FEE,
+        amount: g.amount_cents ? g.amount_cents / 100 : LEGACY_GRADING_FEE,
         status: 'Paid',
       })),
     ],

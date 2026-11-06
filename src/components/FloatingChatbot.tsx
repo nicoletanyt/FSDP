@@ -1,10 +1,21 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { Bot, MessageCircle, Send, X } from "lucide-react";
+import { useNavigate } from "react-router";
+import { ArrowRight, Bot, MessageCircle, Send, X } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
+import { useAuth } from "@/hooks/use-auth";
+import {
+    answerFaq,
+    fallbackAnswer,
+    faqPrompts,
+    matchTopic,
+    starterTopics,
+    type FaqLink,
+    type FaqTopic,
+} from "@/lib/chatbot-faq";
 import { cn } from "@/lib/utils";
 
 type ChatMessage = {
@@ -12,7 +23,12 @@ type ChatMessage = {
     role: "user" | "assistant";
     content: string;
     timestamp: Date;
+    links?: FaqLink[];
+    followUps?: FaqTopic[];
 };
+
+// Keeps instant answers from flashing in before the typing indicator registers.
+const MIN_REPLY_MS = 450;
 
 const timeFormatter = new Intl.DateTimeFormat(undefined, {
     hour: "numeric",
@@ -22,27 +38,20 @@ const timeFormatter = new Intl.DateTimeFormat(undefined, {
 function createMessage(
     role: ChatMessage["role"],
     content: string,
+    extra: Pick<ChatMessage, "links" | "followUps"> = {},
 ): ChatMessage {
-    return { id: crypto.randomUUID(), role, content, timestamp: new Date() };
+    return { id: crypto.randomUUID(), role, content, timestamp: new Date(), ...extra };
 }
 
-function getDummyResponse(content: string) {
-    const text = content.toLowerCase();
-
-    if (/\b(hi|hello|hey)\b/.test(text)) {
-        return "Hello! It’s nice to meet you. What can I help you with today?";
+/** Short replies that don't need an FAQ lookup. */
+function smallTalk(text: string, isStudent: boolean) {
+    if (/^\s*(hi|hello|hey)\b/i.test(text)) {
+        return { text: "Hello! What would you like to know?", followUps: starterTopics(isStudent) };
     }
-    if (/\b(class|classes|schedule|calendar|lesson|lessons)\b/.test(text)) {
-        return "Looking for your next class? Your dashboard is a good place to start checking your schedule and lesson details. What would you like to know?";
+    if (/\b(thanks|thank you)\b/i.test(text)) {
+        return { text: "You’re welcome! Anything else?", followUps: starterTopics(isStudent) };
     }
-    if (/\b(account|login|log in|sign in|password|profile)\b/.test(text)) {
-        return "I can help with general account questions. You can sign in from the main navigation to access your dashboard. Which part do you need a hand with?";
-    }
-    if (/\b(thanks|thank you)\b/.test(text)) {
-        return "You’re very welcome! Feel free to ask another question — I’m here to help.";
-    }
-
-    return "Thanks for your message! This is a demo conversation, but I can share general guidance about classes, schedules, or your account. What would you like to explore?";
+    return null;
 }
 
 function AssistantAvatar({ className }: { className?: string }) {
@@ -63,28 +72,42 @@ export default function FloatingChatbot() {
     const [isOpen, setIsOpen] = useState(false);
     const [draft, setDraft] = useState("");
     const [messages, setMessages] = useState<ChatMessage[]>([]);
-    const [pendingReplies, setPendingReplies] = useState<ChatMessage[]>([]);
+    const [pending, setPending] = useState(0);
     const launcherRef = useRef<HTMLButtonElement>(null);
     const inputRef = useRef<HTMLTextAreaElement>(null);
     const viewportRef = useRef<HTMLDivElement>(null);
-    const nextReply = pendingReplies[0];
-    const isTyping = pendingReplies.length > 0;
+    const navigate = useNavigate();
+    const { session, profile } = useAuth();
+    const userId = session?.user.id;
+    const isStudent = profile?.role === "student";
+    const isTyping = pending > 0;
+    const lastAssistantId = [...messages].reverse().find((m) => m.role === "assistant")?.id;
 
-    // Process one reply at a time without blocking additional user messages.
-    useEffect(() => {
-        if (!nextReply) return;
+    /** Answers a typed message or a predefined prompt from the FAQ. */
+    async function ask(content: string, topic?: FaqTopic) {
+        setMessages((current) => [...current, createMessage("user", content)]);
+        setPending((n) => n + 1);
+        const started = Date.now();
+        const quick = topic ? null : smallTalk(content, isStudent);
+        const resolved = topic ?? matchTopic(content);
+        const answer = quick
+            ? { ...quick, links: [] }
+            : resolved
+              ? await answerFaq(resolved, userId)
+              : fallbackAnswer(isStudent);
+        const wait = MIN_REPLY_MS - (Date.now() - started);
+        if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+        setMessages((current) => [
+            ...current,
+            createMessage("assistant", answer.text, { links: answer.links, followUps: answer.followUps }),
+        ]);
+        setPending((n) => n - 1);
+    }
 
-        const timeout = window.setTimeout(() => {
-            const reply = createMessage(
-                "assistant",
-                getDummyResponse(nextReply.content),
-            );
-            setMessages((current) => [...current, reply]);
-            setPendingReplies((current) => current.slice(1));
-        }, 1100);
-
-        return () => window.clearTimeout(timeout);
-    }, [nextReply]);
+    function openLink(link: FaqLink) {
+        navigate(link.to);
+        closeChat();
+    }
 
     useEffect(() => {
         if (!isOpen) return;
@@ -123,7 +146,8 @@ export default function FloatingChatbot() {
             setMessages([
                 createMessage(
                     "assistant",
-                    "Hi there! 👋 I’m DojoGPT. How can I help you today? Ask me about classes, schedules, or getting started.",
+                    "Hi there! 👋 I’m DojoGPT. Pick a question below, or type your own about grading, fees, classes or membership.",
+                    { followUps: starterTopics(isStudent) },
                 ),
             ]);
         }
@@ -134,10 +158,8 @@ export default function FloatingChatbot() {
         const content = draft.trim();
         if (!content) return;
 
-        const message = createMessage("user", content);
-        setMessages((current) => [...current, message]);
-        setPendingReplies((current) => [...current, message]);
         setDraft("");
+        void ask(content);
         inputRef.current?.focus({ preventScroll: true });
     }
 
@@ -226,6 +248,41 @@ export default function FloatingChatbot() {
                                             </span>
                                             {message.content}
                                         </p>
+                                        {!!message.links?.length && (
+                                            <div className="mt-2 flex flex-wrap gap-1.5">
+                                                {message.links.map((link) => (
+                                                    <Button
+                                                        key={link.to}
+                                                        type="button"
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={() => openLink(link)}
+                                                        className="h-8 gap-1 rounded-full bg-card"
+                                                    >
+                                                        {link.label}
+                                                        <ArrowRight aria-hidden="true" className="size-3.5" />
+                                                    </Button>
+                                                ))}
+                                            </div>
+                                        )}
+                                        {message.id === lastAssistantId && !isTyping && !!message.followUps?.length && (
+                                            <div
+                                                role="group"
+                                                aria-label="Suggested questions"
+                                                className="mt-2 flex flex-wrap gap-1.5"
+                                            >
+                                                {message.followUps.map((topic) => (
+                                                    <button
+                                                        key={topic}
+                                                        type="button"
+                                                        onClick={() => void ask(faqPrompts[topic], topic)}
+                                                        className="rounded-full border border-primary/30 bg-primary/5 px-3 py-1.5 text-left text-xs font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                                    >
+                                                        {faqPrompts[topic]}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
                                         <time
                                             dateTime={message.timestamp.toISOString()}
                                             className={cn(
@@ -284,7 +341,7 @@ export default function FloatingChatbot() {
                                     sendMessage();
                                 }
                             }}
-                            placeholder="Type your message…"
+                            placeholder="Ask about grading, fees, classes…"
                             rows={2}
                             className="max-h-32 min-h-11 flex-1 resize-none text-base sm:text-sm"
                         />
