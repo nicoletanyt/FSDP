@@ -194,6 +194,40 @@ export interface EventStudentRow {
   checked_in_at: Timestamp | null
 }
 
+export type AttendanceMark = 'present' | 'absent' | 'unmarked'
+
+export interface AttendanceSnapshot {
+  studentId: StudentId
+  status: AttendanceStatus | null
+  recordedAt: Timestamp | null
+  checkedInAt: Timestamp | null
+}
+
+export interface AttendanceSaveInput {
+  requestId: string
+  expectedUserId: AuthUserId
+  eventId: EventId
+  scope: 'student' | 'roster'
+  status: AttendanceMark
+  expected: AttendanceSnapshot[]
+}
+
+export interface AttendanceSaveResult {
+  requestId: string
+  eventId: EventId
+  attendance: AttendanceSnapshot[]
+}
+
+export interface ReportSnapshot { report: string | null; reportAuthorId: InstructorId | null }
+export interface AssessmentSnapshot { status: AssessmentStatus | null; notes: string | null }
+interface SessionSaveKey extends AssessmentKey { requestId: string; expectedUserId: AuthUserId }
+export interface ReportSaveInput extends SessionSaveKey { report: string | null; expected: ReportSnapshot }
+export interface AssessmentSaveInput extends SessionSaveKey { status: AssessmentStatus | null; notes: string | null; expected: AssessmentSnapshot }
+export type SessionSaveInput = ({ kind: 'report' } & ReportSaveInput) | ({ kind: 'assessment' } & AssessmentSaveInput)
+export type SessionSaveResult = { requestId: string; eventId: EventId; studentId: StudentId } & (
+  { kind: 'report'; value: ReportSnapshot } | { kind: 'assessment'; value: AssessmentSnapshot }
+)
+
 export interface GradingApplicationRow {
   id: string
   student_id: StudentId
@@ -384,6 +418,7 @@ export interface StudentAttendanceSummary {
 }
 
 export interface SessionReportEntry extends RosterEntry {
+  reportAuthor: InstructorRow | null
   previousReports: StudentHistoryEntry[]
 }
 
@@ -395,4 +430,10 @@ export interface TechniqueSignOffEntry {
 export interface AssessmentDetail extends RosterEntry {
   session: CalendarEntry
   application: GradingApplicationRow | null
+  targetGrade: GradeRow | null
+}
+
+export interface ReportDetail extends RosterEntry {
+  session: CalendarEntry
+  reportAuthor: InstructorRow | null
 }

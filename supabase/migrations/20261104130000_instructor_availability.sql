@@ -1,7 +1,6 @@
 -- Provision domain instructors in the same transaction as the trusted account
 -- profile. Existing unlinked accounts are handled only on their first save.
 begin;
-
 create function public.create_linked_instructor_record()
 returns trigger language plpgsql security definer set search_path = '' as $$
 begin
@@ -17,7 +16,6 @@ revoke all on function public.create_linked_instructor_record() from public, ano
 create trigger users_create_linked_instructor
 after insert or update of role on public.users
 for each row execute function public.create_linked_instructor_record();
-
 -- Protect direct instructor REST writes as well as the RPC below. The owner row
 -- lock serializes availability writes for the same instructor across sessions.
 create function public.validate_instructor_availability()
@@ -55,7 +53,6 @@ revoke all on function public.validate_instructor_availability() from public, an
 create trigger instructor_availability_validate
 before insert or update on public.instructor_availability
 for each row execute function public.validate_instructor_availability();
-
 create function public.create_instructor_availability(expected_user uuid, slot_date date, slot_start time, slot_end time)
 returns jsonb language plpgsql security definer set search_path = '' as $$
 declare
@@ -97,5 +94,4 @@ end;
 $$;
 revoke all on function public.create_instructor_availability(uuid,date,time,time) from public, anon;
 grant execute on function public.create_instructor_availability(uuid,date,time,time) to authenticated;
-
 commit;

@@ -1,42 +1,41 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Link, useParams } from "react-router";
 import { Check, ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import GradeBadge from "@/components/GradeBadge";
-import { getNextGrade, gradingSystems } from "@/lib/student-grades";
-import {
-    calendarHref,
-    findCalendarEvent,
-    fullDate,
-    loadSession,
-    saveSession,
-    studentDetailsHref,
-    students,
-} from "@/lib/instructor-calendar";
-import type {
-    CalendarEvent,
-    Student,
-    StudentSession,
-} from "@/lib/instructor-calendar";
+import GradeBadge from "@/components/instructor/DatabaseGradeBadge";
+import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
+import InstructorLoadingBoundary from "@/components/instructor/InstructorLoadingBoundary";
+import { useInstructorApi } from "@/lib/instructor/data-context";
+import { useInstructorQuery } from "@/hooks/use-instructor-data";
+import { assessmentKey, sessionCalendarHref, sessionDateLabel, sessionStudentHref } from "@/lib/instructor/session-reads";
+import type { AssessmentDetail } from "@/lib/instructor/types";
+import { useInstructorSessionSave } from "@/hooks/use-instructor-session-save";
+import { assessmentEditable, assessmentSnapshot } from "@/lib/instructor/session-writes";
 
-function AssessmentForm({
-    event,
-    student,
-}: {
-    event: CalendarEvent;
-    student: Student;
-}) {
-    const [value, setValue] = useState(() => loadSession(event)[student.id]);
+function AssessmentForm({ detail }: { detail: AssessmentDetail }) {
+    const mutation = useInstructorSessionSave("assessment", { eventId: detail.record.event_id, studentId: detail.record.student_id });
+    const { session, student, record, application, targetGrade } = mutation.data ?? detail;
+    const [draft, setDraft] = useState(() => assessmentSnapshot(detail.record));
+    const [expected, setExpected] = useState(() => assessmentSnapshot(detail.record));
     const [notice, setNotice] = useState("");
-    const nextGrade = getNextGrade(student.gradingSystem, student.rank);
+    const canEdit = assessmentEditable(session.event);
+    const locked = !canEdit || mutation.pending || Boolean(mutation.error);
+    const dirty = draft.status !== expected.status || (draft.notes?.trim() || null) !== (expected.notes?.trim() || null);
+    async function finish(data: Awaited<ReturnType<typeof mutation.retry>>) {
+        if (!data || !mutation.isCurrent()) return;
+        const value = assessmentSnapshot(data.record);
+        setExpected(value); setDraft(value); setNotice("Assessment saved.");
+    }
+    const name = [student.student.first_name, student.student.last_name].filter(Boolean).join(" ") || student.student.email;
+    const track = session.grading?.track;
 
     return (
         <section className="space-y-6">
             <Link
-                to={calendarHref(event)}
+                to={sessionCalendarHref(session)}
                 className="inline-flex items-center gap-1 rounded-sm text-sm text-muted-foreground hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-ring"
             >
                 <ChevronLeft aria-hidden="true" className="size-4" /> Back to assessment
@@ -44,13 +43,13 @@ function AssessmentForm({
             </Link>
             <header>
                 <p className="mb-2 text-xs text-muted-foreground">
-                    Placeholder assessment form · Dummy data only
+                    Recorded assessment{!canEdit && " · Read-only"}
                 </p>
-                <h1 className="text-3xl font-semibold tracking-tight">
-                    Assess {student.name}
+                <h1 className="text-3xl font-semibold tracking-tight [overflow-wrap:anywhere]">
+                    Assess {name}
                 </h1>
                 <p className="mt-2 text-sm text-muted-foreground">
-                    {event.name} · {fullDate(event.date)} · {event.dojo}
+                    {session.event.name} · {sessionDateLabel(session)} · {session.centre?.name ?? "Dojo not recorded"}
                 </p>
             </header>
             <Card>
@@ -60,35 +59,24 @@ function AssessmentForm({
                 <CardContent>
                     <form
                         className="space-y-5"
-                        onSubmit={(submit) => {
+                        onSubmit={async (submit) => {
                             submit.preventDefault();
-                            const record = loadSession(event);
-                            saveSession(event.id, {
-                                ...record,
-                                [student.id]: {
-                                    ...record[student.id],
-                                    assessmentStatus: value.assessmentStatus,
-                                    assessmentNotes: value.assessmentNotes,
-                                },
-                            });
-                            setNotice(
-                                "Assessment saved locally. Return to the class to see the updated status.",
-                            );
+                            if (!locked && dirty) await finish(await mutation.save({ kind: "assessment", ...draft, expected }));
                         }}
                     >
                         <dl className="grid grid-cols-2 gap-4 rounded-lg bg-muted/50 p-4 text-sm">
                             <div>
                                 <dt className="text-xs text-muted-foreground">Current rank</dt>
-                                <dd className="mt-1"><GradeBadge rank={student.rank} system={student.gradingSystem} showBeltLabel /></dd>
+                                <dd className="mt-1"><GradeBadge grade={student.grade} showBeltLabel className="[&>span:first-child]:whitespace-normal" /></dd>
                             </div>
                             <div>
                                 <dt className="text-xs text-muted-foreground">Target rank</dt>
-                                <dd className="mt-1">{nextGrade
-                                    ? <GradeBadge rank={nextGrade.rank} system={student.gradingSystem} showBeltLabel />
-                                    : "No further grading configured"}</dd>
+                                <dd className="mt-1">{targetGrade
+                                    ? <GradeBadge grade={targetGrade} showBeltLabel className="[&>span:first-child]:whitespace-normal" />
+                                    : application ? "Target grade details unavailable" : "Target grade not recorded"}</dd>
                             </div>
                         </dl>
-                        <p className="text-xs text-muted-foreground">{gradingSystems[student.gradingSystem].label}</p>
+                        <p className="text-xs text-muted-foreground">{track === "children" ? "Children’s grading" : track === "adult" ? "Adults’ grading" : "Grading track not recorded"}</p>
                         <fieldset className="space-y-2">
                             <legend className="mb-2 text-sm font-medium">
                                 Assessment status
@@ -99,16 +87,11 @@ function AssessmentForm({
                                         key={status}
                                         type="button"
                                         variant={
-                                            value.assessmentStatus === status ? "default" : "outline"
+                                            draft.status === status ? "default" : "outline"
                                         }
-                                        aria-pressed={value.assessmentStatus === status}
-                                        onClick={() => {
-                                            setValue((current: StudentSession) => ({
-                                                ...current,
-                                                assessmentStatus: status,
-                                            }));
-                                            setNotice("");
-                                        }}
+                                        aria-pressed={draft.status === status}
+                                        disabled={locked}
+                                        onClick={() => { setDraft(current => ({ ...current, status: current.status === status ? null : status })); setNotice(""); }}
                                         className="capitalize"
                                     >
                                         {status === "completed" && <Check aria-hidden="true" />}
@@ -116,35 +99,45 @@ function AssessmentForm({
                                     </Button>
                                 ))}
                             </div>
+                            {draft.status === null && <p className="text-xs text-muted-foreground">No assessment status recorded.</p>}
                         </fieldset>
                         <div className="space-y-2">
                             <Label htmlFor="assessment-notes">Assessment notes</Label>
                             <Textarea
                                 id="assessment-notes"
-                                value={value.assessmentNotes}
-                                onChange={(change) => {
-                                    setValue((current) => ({
-                                        ...current,
-                                        assessmentNotes: change.target.value,
-                                    }));
-                                    setNotice("");
-                                }}
-                                placeholder="Record technique, progress, and areas to work on…"
+                                value={draft.notes ?? ""}
+                                readOnly={locked}
+                                onChange={change => { const notes = change.target.value; setDraft(current => ({ ...current, notes })); setNotice(""); }}
+                                placeholder="No assessment notes recorded."
                                 rows={5}
                             />
                         </div>
                         <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
                             <Link
-                                to={studentDetailsHref(student.id, event, "grading")}
+                                to={sessionStudentHref(session, student.student.id, "grading")}
                                 className="text-sm underline underline-offset-4"
                             >
                                 View student profile
                             </Link>
-                            <Button type="submit">Save Assessment</Button>
+                            <Button type="submit" disabled={locked || !dirty}>{mutation.pending ? "Saving…" : "Save Assessment"}</Button>
                         </div>
                         <p role="status" className="min-h-5 text-xs text-muted-foreground">
-                            {notice || "Local demo · Saves reset when you refresh"}
+                            {notice || (!canEdit ? "Cancelled sessions are read-only." : dirty ? "Unsaved changes" : "No unsaved changes")}
                         </p>
+                        {mutation.error && <div className="space-y-2">
+                            <p role="alert" className="text-sm text-destructive">{mutation.error}</p>
+                            <Button type="button" variant="outline" disabled={mutation.pending} onClick={async () => {
+                                if (mutation.retryMode === "write") await finish(await mutation.retry());
+                                else {
+                                    const fresh = await mutation.reload();
+                                    if (fresh && mutation.isCurrent()) { setExpected(assessmentSnapshot(fresh.record)); setNotice("Saved record reloaded. Your draft is kept; review the latest saved notes below."); }
+                                }
+                            }}>{mutation.retryLabel}</Button>
+                        </div>}
+                        {notice.startsWith("Saved record reloaded") && <div className="space-y-1 rounded-lg bg-muted/50 p-3">
+                            <p className="text-xs text-muted-foreground">Latest saved assessment · {record.assessment_status ?? "Unrecorded"}</p>
+                            <p className="whitespace-pre-wrap text-sm wrap-break-word">{record.assessment_notes || "No assessment notes recorded."}</p>
+                        </div>}
                     </form>
                 </CardContent>
             </Card>
@@ -152,20 +145,16 @@ function AssessmentForm({
     );
 }
 
-export default function InstructorGradingAssessment() {
+function GradingAssessmentPage() {
     const { assessmentId, eventId, studentId } = useParams();
-    const [assessmentEventId, assessmentStudentId] =
-        assessmentId?.split("--") ?? [];
-    const event = findCalendarEvent(assessmentEventId ?? eventId);
-    const student = students.find(
-        (item) => item.id === (assessmentStudentId ?? studentId),
-    );
-    if (
-        !event ||
-        event.type !== "grading" ||
-        !student ||
-        !event.studentIds.includes(student.id)
-    ) {
+    const api = useInstructorApi();
+    const load = useCallback((signal: AbortSignal) => api.getAssessment(assessmentKey({ assessmentId, eventId, studentId }), signal), [api, assessmentId, eventId, studentId]);
+    const query = useInstructorQuery(JSON.stringify(["assessment", assessmentId, eventId, studentId]), load);
+    if (query.status !== "success") return <section className="space-y-4">
+        <Link to="/instructor/calendar" className="text-sm underline">Back to calendar</Link>
+        <InstructorDataStatus loading={query.status === "loading"} error={query.error} onRetry={query.retry} />
+    </section>;
+    if (!query.data) {
         return (
             <section className="space-y-4">
                 <Link to="/instructor/calendar" className="text-sm underline">
@@ -180,9 +169,12 @@ export default function InstructorGradingAssessment() {
     }
     return (
         <AssessmentForm
-            key={`${event.id}-${student.id}`}
-            event={event}
-            student={student}
+            key={`${query.data.record.event_id}:${query.data.record.student_id}`}
+            detail={query.data}
         />
     );
+}
+
+export default function InstructorGradingAssessment() {
+    return <InstructorLoadingBoundary title="Loading grading assessment"><GradingAssessmentPage /></InstructorLoadingBoundary>;
 }

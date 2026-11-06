@@ -223,6 +223,110 @@ const record = {
 const page = (items, total = items.length, offset = 0, limit = 50) => ({ items, total, offset, limit })
 const responsePage = (items, total = items.length) => Response.json(items, { headers: { 'content-range': `0-${Math.max(0, items.length - 1)}/${total}` } })
 
+test('report/assessment saves send narrow snapshots with account fences and validate actor-owned authoritative results', async () => {
+  const requests = []
+  const { api } = httpClient(async (request, url) => {
+    assert.equal(url.pathname, '/rest/v1/rpc/save_instructor_session_record')
+    const body = await request.json(); requests.push(body)
+    assert.equal(body.expected_user, userId)
+    assert.equal(body.target_event, eventId)
+    assert.equal(body.target_student, studentId)
+    assert.deepEqual(Object.keys(body).sort(), ['expected_record','expected_user','new_value','request_id','target_event','target_student','write_kind'])
+    return Response.json({ requestId: body.request_id, eventId, studentId, kind: body.write_kind,
+      value: body.write_kind === 'report' ? { report: body.new_value.report, reportAuthorId: instructorId } : body.new_value })
+  })
+  const key = { requestId: otherUserId, expectedUserId: userId, eventId, studentId }
+  const report = { ...key, report: '  Saved report\nSecond line  ', expected: { report: null, reportAuthorId: null }, reportAuthorId: otherUserId }
+  const saved = await api.saveReport(report)
+  assert.equal(saved.value.reportAuthorId, instructorId)
+  assert.notEqual(saved.value.reportAuthorId, userId)
+  assert.equal(requests[0].new_value.report, 'Saved report\nSecond line')
+  assert.equal('reportAuthorId' in requests[0].new_value, false)
+  await api.saveReport(report)
+  assert.deepEqual(requests[0], requests[1], 'network retry keeps the same request ID and intent')
+  await api.saveAssessment({ ...key, requestId: instructorId, status: null, notes: 'Notes without inferred pending', expected: { status: null, notes: null } })
+  assert.equal(requests[2].new_value.status, null)
+  assert.deepEqual(Object.keys(requests[2].new_value).sort(), ['notes','status'])
+})
+
+test('saved session response identity/author mismatches and conflict/permission errors remain failures', async () => {
+  const input = { requestId: otherUserId, expectedUserId: userId, eventId, studentId, report: 'New', expected: { report: null, reportAuthorId: null } }
+  const result = { requestId: otherUserId, eventId, studentId, kind: 'report', value: { report: 'New', reportAuthorId: instructorId } }
+  for (const invalid of [{ ...result, studentId: userId }, { ...result, eventId: userId }, { ...result, requestId: userId },
+    { ...result, value: { ...result.value, reportAuthorId: userId } }, { ...result, value: { ...result.value, report: 'Different text' } }]) {
+    await assert.rejects(httpClient(async () => Response.json(invalid)).api.saveReport(input), { code: 'invalid_data' })
+  }
+  for (const [code, expected] of [['PRS01','conflict'], ['PRS02','forbidden'], ['PRS03','forbidden']]) {
+    await assert.rejects(httpClient(async () => Response.json({ code, message: 'Private SQL details' }, { status: 400 })).api.saveReport(input),
+      error => error.code === expected && !error.message.includes('Private SQL details'))
+  }
+  await assert.rejects(httpClient(async () => assert.fail('Old account must not dispatch a mutation')).api.saveReport({ ...input, expectedUserId: otherUserId }), { code: 'forbidden' })
+})
+
+test('report reload selects the exact assigned event/student record and actual domain author', async () => {
+  const { api } = httpClient(async (_request, url) => {
+    if (url.pathname === '/rest/v1/events') return Response.json(calendarEntry)
+    assert.equal(url.pathname, '/rest/v1/event_students')
+    assert.equal(url.searchParams.get('event_id'), `eq.${eventId}`)
+    assert.equal(url.searchParams.get('student_id'), `eq.${studentId}`)
+    assert.match(url.searchParams.get('select'), /reportAuthor:instructors!event_students_report_author_id_fkey/)
+    return Response.json({ ...record, report: 'Stored report', report_author_id: instructorId, student, reportAuthor: instructor })
+  })
+  const detail = await api.getReport({ eventId, studentId })
+  assert.equal(detail.record.report, 'Stored report')
+  assert.equal(detail.reportAuthor.id, instructorId)
+})
+
+test('attendance sends account-fenced immutable snapshots and stable request IDs, including complete rosters beyond 100 rows', async () => {
+  const expected = Array.from({ length: 205 }, (_, index) => ({ studentId: `00000000-0000-4000-8000-${String(9000 + index).padStart(12, '0')}`,
+    status: null, recordedAt: null, checkedInAt: null }))
+  const input = { requestId: otherUserId, expectedUserId: userId, eventId, scope: 'roster', status: 'present', expected }
+  const requests = []
+  const { api } = httpClient(async (request, url) => {
+    assert.equal(url.pathname, '/rest/v1/rpc/save_instructor_attendance')
+    const body = await request.json(); requests.push(body)
+    assert.equal(body.expected_user, userId)
+    assert.equal(body.request_id, body.save_scope === 'roster' ? otherUserId : instructorId)
+    assert.equal(body.target_event, eventId)
+    assert.equal(body.expected_attendance.length, body.save_scope === 'roster' ? 205 : 1)
+    assert.deepEqual(Object.keys(body).sort(), ['expected_attendance', 'expected_user', 'new_status', 'request_id', 'save_scope', 'target_event'])
+    return Response.json({ requestId: body.request_id, eventId: body.target_event,
+      attendance: body.expected_attendance.map(row => ({ ...row, status: body.new_status })) })
+  })
+  assert.equal((await api.saveAttendance(input)).attendance.length, 205)
+  await api.saveAttendance(input)
+  assert.deepEqual(requests[0], requests[1], 'retry does not generate a new request identity or snapshot')
+  await api.saveAttendance({ ...input, requestId: instructorId, scope: 'student', status: 'unmarked', expected: expected.slice(0, 1) })
+  assert.equal(requests[2].new_status, null)
+  assert.ok(expected.every(row => row.status === null && row.checkedInAt === null))
+})
+
+test('attendance rejects malformed/incomplete actions before dispatch and fences an old form from a replacement account', async () => {
+  const input = { requestId: otherUserId, expectedUserId: userId, eventId, scope: 'student', status: 'present',
+    expected: [{ studentId, status: null, recordedAt: null, checkedInAt: null }] }
+  const setup = httpClient(async () => assert.fail('Invalid attendance must not reach HTTP'))
+  for (const invalid of [{ ...input, status: 'late' }, { ...input, scope: 'other' }, { ...input, expected: [] },
+    { ...input, scope: 'roster', expected: [input.expected[0], input.expected[0]] }]) await assert.rejects(setup.api.saveAttendance(invalid), { code: 'invalid_request' })
+  assert.equal(setup.requests.length, 0)
+  const replacement = createInstructorApi(fixtureClient({ user: { id: otherUserId }, profile: { id: otherUserId, role: 'instructor' } }))
+  await assert.rejects(replacement.saveAttendance(input), { code: 'forbidden' })
+})
+
+test('attendance conflicts/read-only failures and malformed success responses cannot become local save successes', async () => {
+  const input = { requestId: otherUserId, expectedUserId: userId, eventId, scope: 'student', status: 'present',
+    expected: [{ studentId, status: null, recordedAt: null, checkedInAt: null }] }
+  for (const [code, expected] of [['PAT01', 'conflict'], ['PAT02', 'forbidden'], ['PAT03', 'forbidden']]) {
+    await assert.rejects(httpClient(async () => Response.json({ code, message: 'Private database detail' }, { status: 400 })).api.saveAttendance(input),
+      error => error.code === expected && !error.message.includes('Private database detail'))
+  }
+  for (const result of [
+    { requestId: userId, eventId, attendance: input.expected },
+    { requestId: otherUserId, eventId: studentId, attendance: input.expected },
+    { requestId: otherUserId, eventId, attendance: [] },
+    { requestId: otherUserId, eventId, attendance: [input.expected[0], input.expected[0]] },
+  ]) await assert.rejects(httpClient(async () => Response.json(result)).api.saveAttendance(input), { code: 'invalid_data' })
+})
+
 test('directory uses RPC parameters for literal search, facets and independent page totals', async () => {
   const { api } = httpClient(async (request, url) => {
     assert.equal(url.pathname, '/rest/v1/rpc/instructor_student_directory')
@@ -341,7 +445,51 @@ test('assessments use event/student keys and leave a missing application target 
   const result = await api.getAssessment({ eventId, studentId })
   assert.equal(result.record.assessment_status, null)
   assert.equal(result.application, null)
+  assert.equal(result.targetGrade, null)
   assert.equal(result.session.grading.track, null)
+})
+
+test('assessment target labels come from the recorded application join, including unknown joins and identity rejection', async () => {
+  const target = { ...grade, id: 'actual-application-target', label: 'Actual application target', is_ranked: true, sort_order: 99 }
+  const application = { id: userId, student_id: studentId, grading_event_id: eventId, target_grade_id: target.id,
+    submitted_at: metadata.created_at, status: 'submitted', notes: null, target_grade: target }
+  const session = { ...calendarEntry, event_type: 'grading', grading: { event_id: eventId, track: 'adult', application_deadline: null,
+    application_status: 'closed', target_grades: [], grading_date: null, application_opens_on: null, reporting_release_on: null, reporting_time: null, official_schedule: false } }
+  const setup = (app, enrollment = { ...record, student }) => httpClient(async (_request, url) => {
+    if (url.pathname === '/rest/v1/events') return Response.json(session)
+    if (url.pathname === '/rest/v1/event_students') return Response.json(enrollment)
+    assert.match(url.searchParams.get('select'), /target_grade:grades/)
+    return Response.json(app)
+  }).api.getAssessment({ eventId, studentId })
+  const result = await setup(application)
+  assert.equal(result.targetGrade.label, target.label)
+  assert.notEqual(result.targetGrade.id, student.current_grade_id)
+  assert.equal(result.session.targetGrades.length, 0, 'event catalogue does not replace a recorded application target')
+  assert.equal((await setup({ ...application, target_grade: null })).targetGrade, null)
+  assert.equal(await setup(application, null), null, 'an application alone is not an event/student assessment record')
+  for (const app of [{ ...application, student_id: otherUserId }, { ...application, grading_event_id: otherUserId },
+    { ...application, target_grade: { ...target, id: 'wrong-grade' } }]) await assert.rejects(setup(app), { code: 'invalid_data' })
+  await assert.rejects(setup(application, { ...record, event_id: otherUserId, student }), { code: 'invalid_data' })
+})
+
+test('report reads preserve actual current/previous authors and reject mismatched joins, students and pages', async () => {
+  const author = { ...instructor, id: otherUserId, user_id: null, first_name: 'Actual', last_name: 'Author' }
+  const previous = { record: { ...record, event_id: userId, report: 'Earlier stored feedback', report_author_id: otherUserId },
+    event: { ...event, id: userId }, centre, instructor, reportAuthor: author, targetGrade: null, grading: null }
+  const row = { record: { ...record, report: 'Current stored report', report_author_id: otherUserId }, student, reportAuthor: author, previousReports: [previous] }
+  const response = await httpClient(async (request, url) => {
+    assert.equal(url.pathname, '/rest/v1/rpc/instructor_event_reports')
+    assert.deepEqual(await request.json(), { target_event: eventId, page_size: 1, page_offset: 2 })
+    return Response.json(page([row], 3, 2, 1))
+  }).api.getSessionReports(eventId, { limit: 1, offset: 2 })
+  assert.equal(response.items[0].reportAuthor.first_name, 'Actual')
+  assert.equal(response.items[0].previousReports[0].reportAuthor.id, otherUserId)
+  for (const invalid of [{ ...row, reportAuthor: instructor },
+    { ...row, previousReports: [{ ...previous, record: { ...previous.record, student_id: otherUserId } }] },
+    { ...row, previousReports: [previous, previous, previous] }]) {
+    await assert.rejects(httpClient(async () => Response.json(page([invalid]))).api.getSessionReports(eventId), { code: 'invalid_data' })
+  }
+  await assert.rejects(httpClient(async () => Response.json(page([row], 3, 1, 1))).api.getSessionReports(eventId, { limit: 1, offset: 2 }), { code: 'invalid_data' })
 })
 
 test('rosters, reports, sign-offs and zero attendance summaries keep their real nullable values', async () => {
@@ -353,7 +501,7 @@ test('rosters, reports, sign-offs and zero attendance summaries keep their real 
         id: userId, student_id: studentId, syllabus_item_id: 'database/item', signed_off_at: metadata.created_at,
         signed_off_by: null, note: null, instructor: null,
       }])
-      case '/rest/v1/rpc/instructor_event_reports': return Response.json(page([{ record, student, previousReports: [] }]))
+      case '/rest/v1/rpc/instructor_event_reports': return Response.json(page([{ record, student, reportAuthor: null, previousReports: [] }]))
       case '/rest/v1/rpc/instructor_student_summary': return Response.json({
         pastSessions: 0, present: 0, late: 0, absent: 0, excused: 0, unmarked: 0,
         cycleStart: '2020-01-01', cycleAttended: 0, consecutiveAbsences: 0,

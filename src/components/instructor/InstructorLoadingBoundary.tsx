@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Spinner } from '@/components/ui/spinner'
 import { InstructorLoadingContext } from '@/lib/instructor/loading-context'
 
-export default function InstructorLoadingBoundary({ children }: { children: ReactNode }) {
+export default function InstructorLoadingBoundary({ children, title = 'Loading student details' }: { children: ReactNode; title?: string }) {
   const [pending, setPending] = useState<Set<string>>(() => new Set())
   const registerLoading = useCallback((id: string) => {
     setPending(current => new Set(current).add(id))
@@ -21,7 +21,7 @@ export default function InstructorLoadingBoundary({ children }: { children: Reac
       <DialogContent showCloseButton={false} className="student-detail-view sm:max-w-xs">
         <DialogHeader className="items-center gap-3 py-4 text-center">
           <Spinner className="size-6 motion-reduce:animate-none" />
-          <DialogTitle>Loading student details</DialogTitle>
+          <DialogTitle>{title}</DialogTitle>
           <DialogDescription>Please wait while the student records load.</DialogDescription>
         </DialogHeader>
       </DialogContent>

@@ -16,8 +16,9 @@ import {
     PopoverTitle,
     PopoverTrigger,
 } from "@/components/ui/popover";
-import { InstructorAvatar } from "@/components/ui/avatar";
 import InstructorDataStatus from "./InstructorDataStatus";
+import ReportEditor from "./ReportEditor";
+import { useInstructorWriteIdentity } from "@/hooks/use-instructor-write-identity";
 import { useInstructorQuery } from "@/hooks/use-instructor-data";
 import { useInstructorApi } from "@/lib/instructor/data-context";
 import { toAttendanceState } from "@/lib/instructor/adapters";
@@ -30,6 +31,7 @@ import type {
     AttendanceState,
     StudentHistoryEntry,
     StudentId,
+    InstructorId,
 } from "@/lib/instructor/types";
 import { cn } from "cn";
 
@@ -38,13 +40,13 @@ const PAGE_SIZE = 20;
 function SessionReport({
     session,
     selected,
+    instructorId,
 }: {
     session: StudentHistoryEntry;
     selected: boolean;
+    instructorId: InstructorId | null;
 }) {
     const attendance = toAttendanceState(session.record.attendance_status);
-    const report = session.record.report?.trim();
-    const author = session.reportAuthor;
     const phase =
         !session.event.starts_at || !session.event.ends_at ? "unknown" : Date.now() < Date.parse(session.event.starts_at)
             ? "upcoming"
@@ -109,39 +111,7 @@ function SessionReport({
             </CardHeader>
             <CardContent>
                 <div className="mb-4 border-t lg:mb-2" aria-hidden="true" />
-                <div className="mb-3 flex min-h-11 flex-wrap items-center justify-between gap-3 lg:mb-2 lg:min-h-8">
-                    <h4 className="text-sm font-semibold">Instructor report</h4>
-                    <Button variant="ghost" size="touch" disabled>
-                        {report ? "Edit report" : "Add report"}
-                    </Button>
-                </div>
-                {report ? (
-                    <>
-                        {author ? (
-                            <InstructorAvatar
-                                profile={{
-                                    id: author.id,
-                                    name: instructorName(author),
-                                    role: "Instructor",
-                                }}
-                                showName
-                                interactive={false}
-                                avatarClassName="size-7 lg:size-6"
-                            />
-                        ) : (
-                            <p className="detail-meta text-sm text-muted-foreground">
-                                Report author not recorded
-                            </p>
-                        )}
-                        <p className="detail-body mt-3 max-w-prose whitespace-pre-wrap text-sm wrap-break-word">
-                            {report}
-                        </p>
-                    </>
-                ) : (
-                    <p className="detail-body text-sm text-muted-foreground">
-                        No report recorded.
-                    </p>
-                )}
+                <ReportEditor event={session.event} record={session.record} author={session.reportAuthor} instructorId={instructorId} />
             </CardContent>
         </Card>
     );
@@ -221,6 +191,7 @@ export default function StudentSessionHistory({
     contextId?: string;
 }) {
     const api = useInstructorApi();
+    const identity = useInstructorWriteIdentity();
     const [attendance, setAttendance] = useState<AttendanceState | "all">("all");
     const [sort, setSort] = useState("newest");
     const [page, setPage] = useState(0);
@@ -302,6 +273,7 @@ export default function StudentSessionHistory({
                     </PopoverContent>
                 </Popover>
             </div>
+            {identity.status !== "success" && <InstructorDataStatus loading={identity.status === "loading"} error={identity.error} onRetry={identity.retry} />}
             {history.status !== "success" ? (
                 <InstructorDataStatus
                     loading={history.status === "loading"}
@@ -324,6 +296,7 @@ export default function StudentSessionHistory({
                                     key={session.event.id}
                                     session={session}
                                     selected={session.event.id === contextId}
+                                    instructorId={identity.data?.instructorId ?? null}
                                 />
                             ))
                         ) : (

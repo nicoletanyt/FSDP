@@ -24,6 +24,13 @@ export function toInstructorDataError(error: unknown, message: string): Instruct
     const code = 'code' in error ? error.code : null
     const status = 'status' in error ? error.status : null
     const name = 'name' in error ? error.name : null
+    if (code === 'PRS01') return new InstructorDataError('conflict', 'This record changed while you were editing. Reload the saved record before saving again; your draft is kept.')
+    if (code === 'PRS02') return new InstructorDataError('forbidden', 'Only the recorded report author can edit this report for an assigned class.')
+    if (code === 'PRS03') return new InstructorDataError('forbidden', 'Cancelled sessions are read-only.')
+    if (code === '40P01' || code === '40001') return new InstructorDataError('conflict', 'A concurrent save changed these records. Reload the saved data, then try again.')
+    if (code === 'PAT01') return new InstructorDataError('conflict', 'Attendance or the roster changed while saving. Reload attendance, then try again.')
+    if (code === 'PAT02') return new InstructorDataError('forbidden', 'Attendance is read-only for ended, completed, cancelled or untimed sessions. Reload attendance.')
+    if (code === 'PAT03') return new InstructorDataError('forbidden', 'Recorded late or excused attendance is read-only.')
     if (code === 'PAV01') return new InstructorDataError('conflict', 'This time overlaps an existing availability slot. Choose another time.')
     if (code === 'PAV02') return new InstructorDataError('conflict', 'This time overlaps a scheduled event. Choose another time.')
     if (code === 'PAV03') return new InstructorDataError('invalid_request', 'Choose a future time between 8 AM and 10 PM, Singapore time.')

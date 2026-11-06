@@ -1,7 +1,6 @@
 -- Instructor read contracts. No domain rows or reference values are seeded.
 -- Keep history visibility separate from event/attendance write permissions.
 begin;
-
 create or replace function public.current_instructor_id()
 returns uuid language sql stable security definer set search_path = '' as $$
   select i.id from public.instructors i
@@ -9,10 +8,8 @@ returns uuid language sql stable security definer set search_path = '' as $$
   where u.id = (select auth.uid()) and u.role = 'instructor'
   limit 1;
 $$;
-
 -- This table already has policies, but its original migration omitted ENABLE RLS.
 alter table public.grade_requirements enable row level security;
-
 -- Do not rely on project-specific Supabase default table privileges for reads.
 grant select on public.centres, public.instructors, public.students,
   public.emergency_contacts, public.student_medical_alerts,
@@ -21,7 +18,6 @@ grant select on public.centres, public.instructors, public.students,
   public.gradings, public.grading_target_grades, public.event_students,
   public.grading_applications, public.technique_sign_offs, public.instructor_availability
 to authenticated;
-
 drop policy "Participants read event students" on public.event_students;
 create policy "Participants read event students" on public.event_students
 for select to authenticated using (
@@ -30,7 +26,6 @@ for select to authenticated using (
   or public.instructor_can_see_student(student_id)
   or student_id = public.current_student_id()
 );
-
 -- The existing FOR ALL policy permits direct REST updates by event instructors.
 -- A row policy cannot protect individual report columns. Enforce ownership even
 -- for direct writes, without expanding any existing attendance/roster permission.
@@ -71,7 +66,6 @@ revoke all on function public.protect_instructor_report_author() from public, an
 create trigger event_students_report_author_guard
 before insert or update or delete on public.event_students
 for each row execute function public.protect_instructor_report_author();
-
 create function public.require_current_instructor()
 returns uuid language plpgsql stable security invoker set search_path = '' as $$
 declare caller uuid := public.current_instructor_id();
@@ -84,7 +78,6 @@ end;
 $$;
 revoke all on function public.require_current_instructor() from public, anon;
 grant execute on function public.require_current_instructor() to authenticated;
-
 -- Page totals and facets use the complete authorized directory, not the page.
 -- Search uses literal substrings; %, _, commas and PostgREST syntax are not code.
 create function public.instructor_student_directory(
@@ -138,7 +131,6 @@ end;
 $$;
 revoke all on function public.instructor_student_directory(text,text,text,uuid,integer,integer) from public, anon;
 grant execute on function public.instructor_student_directory(text,text,text,uuid,integer,integer) to authenticated;
-
 -- Complete cross-instructor/dojo history, with deterministic server pagination.
 -- Only recorded assessments have assessment_status; null is not "pending".
 create function public.instructor_student_history(
@@ -194,7 +186,6 @@ end;
 $$;
 revoke all on function public.instructor_student_history(uuid,integer,integer,public.event_type,public.attendance_status,boolean,boolean,boolean,boolean) from public, anon;
 grant execute on function public.instructor_student_history(uuid,integer,integer,public.event_type,public.attendance_status,boolean,boolean,boolean,boolean) to authenticated;
-
 -- Aggregates are independent of displayed history pages. Keep individual status
 -- counts so an excused/unmarked row is never silently counted as an absence.
 create function public.instructor_student_summary(target_student uuid)
@@ -238,7 +229,6 @@ end;
 $$;
 revoke all on function public.instructor_student_summary(uuid) from public, anon;
 grant execute on function public.instructor_student_summary(uuid) to authenticated;
-
 -- One request for a class report page, avoiding one history request per student.
 -- Previous feedback means actual earlier class reports, across dojos/instructors.
 create function public.instructor_event_reports(target_event uuid, page_size integer default 50, page_offset integer default 0)
@@ -291,5 +281,4 @@ end;
 $$;
 revoke all on function public.instructor_event_reports(uuid,integer,integer) from public, anon;
 grant execute on function public.instructor_event_reports(uuid,integer,integer) to authenticated;
-
 commit;

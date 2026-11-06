@@ -8,6 +8,8 @@ import InstructorLayout from '../../src/layouts/InstructorLayout'
 import InstructorDashboard from '../../src/pages/Instructor/InstructorDashboard'
 import InstructorStudents from '../../src/pages/Instructor/InstructorStudents'
 import InstructorStudentDetails from '../../src/pages/Instructor/InstructorStudentDetails'
+import InstructorStudentReports from '../../src/pages/Instructor/InstructorStudentReports'
+import InstructorGradingAssessment from '../../src/pages/Instructor/InstructorGradingAssessment'
 import RootLayout from '../../src/layouts/RootLayout'
 import type { Session } from '@supabase/supabase-js'
 import type { UserRole } from '../../src/lib/auth'
@@ -28,11 +30,12 @@ declare global {
 
 function FixtureApp() {
   const [account, setAccount] = useState('audit')
+  const userId = account === 'audit' ? '00000000-0000-4000-8000-000000090001' : '00000000-0000-4000-8000-000000090002'
   const api = useMemo(() => createCalendarFixtureApi(account), [account])
   useEffect(() => { window.switchInstructorFixture = () => setAccount('audit-next') }, [])
   return <AuthContext.Provider value={{
-    session: role === 'guest' ? null : { user: { id: account } } as Session,
-    profile: role === 'guest' ? null : { id: account, first_name: 'Test', last_name: role, email: 'test@example.com', role, created_at: '' },
+    session: role === 'guest' ? null : { user: { id: userId } } as Session,
+    profile: role === 'guest' ? null : { id: userId, first_name: 'Test', last_name: role, email: 'test@example.com', role, created_at: '' },
     loading: false, error: null, reloadProfile: () => {}, signOut: async () => {},
   }}>
     <InstructorApiContext.Provider value={api}>
@@ -42,6 +45,9 @@ function FixtureApp() {
           <Route path="/instructor/dashboard" element={<InstructorDashboard />} />
           <Route path="/instructor/students" element={<InstructorStudents />} />
           <Route path="/instructor/students/:studentId" element={<InstructorStudentDetails />} />
+          <Route path="/instructor/reports/:eventId" element={<InstructorStudentReports />} />
+          <Route path="/instructor/assessments/:assessmentId" element={<InstructorGradingAssessment />} />
+          <Route path="/instructor/assessments/:eventId/:studentId" element={<InstructorGradingAssessment />} />
         </Route>
         <Route element={<RootLayout />}><Route path="*" element={<p>Navigation fixture page</p>} /></Route>
       </Routes><FloatingChatbot /></BrowserRouter>

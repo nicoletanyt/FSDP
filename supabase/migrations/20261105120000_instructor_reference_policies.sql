@@ -1,7 +1,6 @@
 -- The fetched reset migration has no grade_requirements policies. The instructor
 -- read migration enables RLS, so make its intended reference access explicit.
 begin;
-
 do $$ begin
   if not exists (select 1 from pg_catalog.pg_policies
     where schemaname = 'public' and tablename = 'grade_requirements'
@@ -17,5 +16,4 @@ do $$ begin
       using (public.is_administrator()) with check (public.is_administrator());
   end if;
 end $$;
-
 commit;

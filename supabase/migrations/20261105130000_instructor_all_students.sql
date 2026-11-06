@@ -2,7 +2,6 @@
 -- Leave instructor_can_see_student and all write policies unchanged: that helper
 -- is also used by technique-sign-off mutation policies.
 begin;
-
 create function public.require_instructor_account()
 returns uuid language plpgsql stable security invoker set search_path = '' as $$
 begin
@@ -14,7 +13,6 @@ end;
 $$;
 revoke all on function public.require_instructor_account() from public, anon;
 grant execute on function public.require_instructor_account() to authenticated;
-
 create function public.require_instructor_student_read(target_student uuid)
 returns void language plpgsql stable security invoker set search_path = '' as $$
 begin
@@ -26,7 +24,6 @@ end;
 $$;
 revoke all on function public.require_instructor_student_read(uuid) from public, anon;
 grant execute on function public.require_instructor_student_read(uuid) to authenticated;
-
 -- Separate permissive SELECT policies expand reads only, including instructors
 -- without a domain row. Student self-access and administrator access remain as-is.
 create policy "Instructors read all students" on public.students
@@ -41,7 +38,6 @@ create policy "Instructors read all student applications" on public.grading_appl
 for select to authenticated using ((select public.current_user_role()) = 'instructor'::public.user_role);
 create policy "Instructors read all student sign offs" on public.technique_sign_offs
 for select to authenticated using ((select public.current_user_role()) = 'instructor'::public.user_role);
-
 create or replace function public.instructor_student_directory(
   search_text text default '', filter_grade text default null,
   filter_colour text default null, filter_centre uuid default null,
@@ -90,7 +86,6 @@ begin
   );
 end;
 $$;
-
 create or replace function public.instructor_student_history(
   target_student uuid, page_size integer default 50, page_offset integer default 0,
   filter_type public.event_type default null,
@@ -139,7 +134,6 @@ begin
   );
 end;
 $$;
-
 create or replace function public.instructor_student_summary(target_student uuid)
 returns jsonb language plpgsql stable security invoker set search_path = '' as $$
 begin
@@ -176,7 +170,6 @@ begin
   );
 end;
 $$;
-
 -- Replacing the existing RPCs preserves their signatures and ACLs; keep the
 -- execute grants explicit for installations where ACLs were adjusted manually.
 revoke all on function public.instructor_student_directory(text,text,text,uuid,integer,integer) from public, anon;
@@ -185,5 +178,4 @@ revoke all on function public.instructor_student_summary(uuid) from public, anon
 grant execute on function public.instructor_student_directory(text,text,text,uuid,integer,integer) to authenticated;
 grant execute on function public.instructor_student_history(uuid,integer,integer,public.event_type,public.attendance_status,boolean,boolean,boolean,boolean) to authenticated;
 grant execute on function public.instructor_student_summary(uuid) to authenticated;
-
 commit;

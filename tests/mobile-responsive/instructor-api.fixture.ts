@@ -9,6 +9,14 @@ import type { CalendarEntry, CentreRow, EventId, Page, PageOptions, RosterEntry,
 import { createDirectoryFixtureReader } from './instructor-directory.fixture'
 import { createDetailFixtureReads } from './instructor-detail.fixture'
 import { createGradingFixtureReads } from './instructor-grading.fixture'
+import { createSessionFixtureReads } from './instructor-session.fixture'
+import { createSessionWriteFixture } from './instructor-session-writes.fixture'
+import { attendanceEditable, attendanceSnapshot, editableAttendanceRows } from '../../src/lib/instructor/attendance'
+import type { AttendanceSaveInput, AttendanceSaveResult, EventStudentRow } from '../../src/lib/instructor/types'
+
+declare global {
+  interface Window { attendanceRequestsFixture: AttendanceSaveInput[] }
+}
 
 const uuid = (number: number) => `00000000-0000-4000-8000-${String(number).padStart(12, '0')}`
 const instructorId = uuid(1) as InstructorId
@@ -69,11 +77,72 @@ export function createCalendarFixtureApi(account = 'audit'): InstructorApi {
   let rosterFailed = false
   let availabilityFailed = false
   const savedSlots: InstructorAvailabilityRow[] = []
-  const unsupported = async (): Promise<never> => { throw new Error('Unexpected fixture API operation') }
-  return {
-    getCurrentInstructor: unsupported, getStudents: createDirectoryFixtureReader(account, mode),
-    ...createDetailFixtureReads(account, mode), ...createGradingFixtureReads(account, mode),
-    getSessionReports: unsupported, getAssessment: unsupported,
+  const largeRoster = mode === 'large-roster' || mode === 'reports-large' || mode === 'reports-page-error' || mode === 'attendance-large'
+  const storageKey = `test-only-attendance:${account}`
+  const attendanceRows = new Map<string, EventStudentRow>(mode === 'attendance-persistence' ? JSON.parse(sessionStorage.getItem(storageKey) ?? '[]') : [])
+  const receipts = new Map<string, { input: string; result: AttendanceSaveResult }>()
+  const attendanceRequests: AttendanceSaveInput[] = []
+  window.attendanceRequestsFixture = attendanceRequests
+  let attendanceFailed = false
+  let attendanceSaved = false
+  let attendanceReloadFailed = false
+  let endedDuringSave = false
+  const sessionWrites = createSessionWriteFixture(account, mode, () => api)
+  const api: InstructorApi = {
+    getStudents: createDirectoryFixtureReader(account, mode),
+    ...createDetailFixtureReads(account, mode, sessionWrites), ...createGradingFixtureReads(account, mode),
+    ...createSessionFixtureReads(mode, (...args) => api.getEvent(...args), (...args) => api.getRoster(...args), sessionWrites),
+    ...sessionWrites.methods,
+    async saveAttendance(input) {
+      attendanceRequests.push(structuredClone(input))
+      await new Promise(resolve => setTimeout(resolve, mode === 'attendance-slow' ? 1600 : 150))
+      if (input.expectedUserId !== uuid(account === 'audit' ? 90001 : 90002) || account !== 'audit') throw new InstructorDataError('forbidden', 'Account changed.')
+      const receipt = receipts.get(input.requestId)
+      if (receipt) {
+        if (receipt.input !== JSON.stringify(input)) throw new InstructorDataError('conflict', 'Request changed. Reload attendance.')
+        return receipt.result
+      }
+      if (mode === 'attendance-error' && !attendanceFailed) { attendanceFailed = true; throw new InstructorDataError('request_failed', 'Attendance could not be saved. Please retry.') }
+      if (mode === 'attendance-ends-during-save') { endedDuringSave = true; throw new InstructorDataError('forbidden', 'Attendance is read-only for this session. Reload attendance.') }
+      const session = await api.getEvent(input.eventId)
+      if (!session || !attendanceEditable(session.event)) throw new InstructorDataError('forbidden', 'Attendance is read-only for this session.')
+      const all: RosterEntry[] = []
+      let total = 0
+      do {
+        const next = await api.getRoster(input.eventId, { offset: all.length, limit: 100 })
+        if (!next) throw new Error('Missing roster')
+        total = next.total; all.push(...next.items)
+      } while (all.length < total)
+      const selected = input.scope === 'roster' ? all : all.filter(entry => input.expected.some(row => row.studentId === entry.record.student_id))
+      if (mode === 'attendance-conflict' && !attendanceFailed) {
+        attendanceFailed = true
+        const entry = selected[0]
+        attendanceRows.set(`${input.eventId}:${entry.record.student_id}`, { ...entry.record, attendance_status: 'absent' })
+        throw new InstructorDataError('conflict', 'Attendance changed while saving. Reload attendance, then try again.')
+      }
+      if (selected.length !== input.expected.length || selected.some(entry => {
+        const expected = input.expected.find(row => row.studentId === entry.record.student_id)
+        return !expected || JSON.stringify(expected) !== JSON.stringify(attendanceSnapshot(entry.record))
+      })) throw new InstructorDataError('conflict', 'Attendance changed. Reload attendance.')
+      const editable = editableAttendanceRows(selected, session.event.starts_at)
+      for (const entry of editable) attendanceRows.set(`${input.eventId}:${entry.record.student_id}`, {
+        ...entry.record, attendance_status: input.status === 'unmarked' ? null : input.status,
+      })
+      const result: AttendanceSaveResult = { requestId: input.requestId, eventId: input.eventId,
+        attendance: selected.map(entry => attendanceSnapshot(attendanceRows.get(`${input.eventId}:${entry.record.student_id}`) ?? entry.record)) }
+      receipts.set(input.requestId, { input: JSON.stringify(input), result })
+      attendanceSaved = true
+      if (mode === 'attendance-persistence') sessionStorage.setItem(storageKey, JSON.stringify([...attendanceRows]))
+      if ((mode === 'attendance-lost-response' || mode === 'attendance-retry-after-change') && !attendanceFailed) {
+        attendanceFailed = true
+        if (mode === 'attendance-retry-after-change') {
+          const entry = selected[0]
+          attendanceRows.set(`${input.eventId}:${entry.record.student_id}`, { ...entry.record, attendance_status: 'absent' })
+        }
+        throw new InstructorDataError('request_failed', 'The save response was lost. Please retry.')
+      }
+      return result
+    },
     getClassTypes: async () => mode === 'empty' ? [] : catalogue,
     async getCalendar(options) {
       if (account !== 'audit') await new Promise(resolve => setTimeout(resolve, 800))
@@ -96,7 +165,7 @@ export function createCalendarFixtureApi(account = 'audit'): InstructorApi {
           const item = entry(template.id, date)
           if (item) entries.push({ ...item, event: account === 'audit' ? item.event : { ...item.event,
             id: item.event.id.replace(/^00000000/, '10000000') as EventId, name: 'Replacement account class', instructor_id: uuid(2) as InstructorId },
-          rosterCount: mode === 'empty-roster' ? 0 : mode === 'large-roster' ? 205 : item.rosterCount })
+           rosterCount: mode === 'empty-roster' ? 0 : largeRoster ? 205 : item.rosterCount })
         }
       }
       return page(entries, options)
@@ -104,7 +173,9 @@ export function createCalendarFixtureApi(account = 'audit'): InstructorApi {
     async getEvent(id) {
       if (mode === 'empty' || mode === 'unlinked' || account !== 'audit') return null
       if (id === uuid(8800)) return dateOnlyGrading(mode === 'date-only-released')
-      return findEvent(id)
+      const item = findEvent(id)
+      if (item && (mode === 'attendance-cancelled' || mode === 'assessment-cancelled' || mode === 'report-cancelled' || endedDuringSave)) return { ...item, event: { ...item.event, status: endedDuringSave ? 'completed' : 'cancelled' } }
+      return item
     },
     async getAvailability(options) {
       const initialSlots = mode === 'empty' || mode === 'unlinked' || account !== 'audit' ? [] : mockAvailability(today).map((slot, index) => ({
@@ -128,7 +199,15 @@ export function createCalendarFixtureApi(account = 'audit'): InstructorApi {
       return saved
     },
     async getRoster(id, options = {}) {
-      if (id === uuid(8800)) return page([], options)
+      if (mode === 'attendance-postread-error' && attendanceSaved && !attendanceReloadFailed) {
+        attendanceReloadFailed = true
+        throw new InstructorDataError('request_failed', 'The saved roster could not be reloaded.')
+      }
+      if (id === uuid(8800)) {
+        if (mode !== 'assessment-date-only') return page([], options)
+        const source = await api.getRoster('00000000-0000-4000-8000-202611070008' as EventId, options)
+        return source && { ...source, items: source.items.map(entry => ({ ...entry, record: { ...entry.record, event_id: id } })) }
+      }
       if (mode === 'roster-error' && !rosterFailed) {
         rosterFailed = true
         throw new InstructorDataError('request_failed', 'Roster could not be loaded.')
@@ -137,14 +216,14 @@ export function createCalendarFixtureApi(account = 'audit'): InstructorApi {
       if (!session) return null
       const sourceDate = parseCalendarDate(toSingaporeDateTime(session.event.starts_at).date)!
       const source = eventsForDate(sourceDate).find(item => eventId(item.id.replace(`-${dateKey(sourceDate)}`, ''), sourceDate) === id)!
-      const roster = mode === 'empty-roster' ? [] : mode === 'large-roster'
+      const roster = mode === 'empty-roster' ? [] : largeRoster
         ? Array.from({ length: 205 }, (_, index) => ({ ...students[index % students.length], id: `large-${index}` }))
         : students.filter(student => source.studentIds.includes(student.id))
       const items: RosterEntry[] = roster.map((student, index) => {
         const rank = getGrade(student.gradingSystem, student.rank)!
         const grade = { id: student.rank, label: student.rank.replace('-kyu', 'th Kyu').replace('-dan', 'th Dan'),
           colour: belts[rank.belt].label.replace(' belt', ''), is_ranked: true, sort_order: index }
-        const studentId = uuid(100 + (mode === 'large-roster' ? index : students.findIndex(item => item.id === student.id))) as StudentId
+        const studentId = uuid(100 + (largeRoster ? index : students.findIndex(item => item.id === student.id))) as StudentId
         const start = Date.parse(session.event.starts_at)
         const arrived = new Date(start + (index === 1 ? 6 : 2) * 60_000).toISOString()
         return {
@@ -157,7 +236,8 @@ export function createCalendarFixtureApi(account = 'audit'): InstructorApi {
           grade, centre: session.centre },
         }
       })
-      return page(items, options)
+      return page(items.map(entry => ({ ...entry, record: sessionWrites.decorate(attendanceRows.get(`${id}:${entry.record.student_id}`) ?? entry.record) })), options)
     },
   }
+  return api
 }

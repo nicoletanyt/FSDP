@@ -253,6 +253,55 @@ Roster and per-student state for an event: attendance, check-in, instructor repo
 | `assessment_notes`  | `text`              | yes      | —       |
 | `checked_in_at`     | `timestamptz`       | yes      | —       |
 
+### `instructor_attendance_requests`
+
+Private idempotency receipts added by
+`20261105160000_instructor_attendance.sql`. Browser/anonymous table privileges
+are revoked and RLS has no browser policies. The attendance RPC derives the
+actor, checks current role/event ownership and returns an exact matching receipt
+on retry; receipts cannot be used to bypass demotion or event reassignment.
+
+| Column | Type | Nullable | Default |
+| --- | --- | --- | --- |
+| `request_id` | `uuid` (PK) | no | — |
+| `user_id` | `uuid` → `users.id` | no | — |
+| `event_id` | `uuid` → `events.id` | no | — |
+| `payload` | `jsonb` | no | — |
+| `response` | `jsonb` | no | — |
+| `created_at` | `timestamptz` | no | `now()` |
+
+User/event deletion cascades to their receipts. Payload/response contain only
+attendance/request metadata, without report text or assessment notes. The RPC
+updates only `event_students.attendance_status`; arrival/recording timestamps and
+report/assessment fields are retained. Direct instructor REST insert/update/delete
+paths cannot create, alter, remove or re-key recorded attendance; trusted server
+and administrator operations retain their existing behavior.
+
+### `instructor_session_write_requests`
+
+Private report/assessment retry receipts added by
+`20261105170000_instructor_session_saves.sql`. RLS is enabled, with browser/
+anonymous table privileges revoked. The RPC checks the actual account/role,
+linked instructor, assigned event and enrolment before saves or exact receipt
+replays. There is no client-supplied author assignment.
+
+| Column | Type | Nullable | Default |
+| --- | --- | --- | --- |
+| `request_id` | `uuid` (PK) | no | — |
+| `user_id` | `uuid` → `users.id` | no | — |
+| `event_id` | `uuid` → `events.id` | no | — |
+| `student_id` | `uuid` → `students.id` | no | — |
+| `kind` | `text`, report or assessment | no | — |
+| `payload` | `jsonb` | no | — |
+| `response` | `jsonb` | no | — |
+| `created_at` | `timestamptz` | no | `now()` |
+
+User/event/student deletion cascades to their receipts. Payloads/responses contain
+the action's report/author or assessment status/note snapshots, without copying
+unrelated row fields. Existing `event_students` columns/enums are unchanged.
+The save RPC updates only its action's fields and guards direct instructor REST
+bypasses; original author and attendance guards remain independently enforced.
+
 ## Grading
 
 ### `grading_applications`

@@ -2,7 +2,6 @@
 -- All functions remain read-only and security invoker; existing RLS and report
 -- authorship protections continue to apply.
 begin;
-
 create function public.instructor_calendar(
   range_from timestamptz, range_to timestamptz,
   page_size integer default 50, page_offset integer default 0
@@ -60,7 +59,6 @@ end;
 $$;
 revoke all on function public.instructor_calendar(timestamptz, timestamptz, integer, integer) from public, anon;
 grant execute on function public.instructor_calendar(timestamptz, timestamptz, integer, integer) to authenticated;
-
 create or replace function public.instructor_student_history(
   target_student uuid, page_size integer default 50, page_offset integer default 0,
   filter_type public.event_type default null,
@@ -114,5 +112,4 @@ begin
   );
 end;
 $$;
-
 commit;

@@ -1,15 +1,16 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { parseEntityId, parseInstructorRow, resolveInstructorIdentity, timestampMilliseconds } from './adapters'
 import {
-  assertAssessment, dateOnly, decodeApplication, decodeAvailability, decodeCalendarEntry,
+  assertAssessment, dateOnly, decodeApplication, decodeAvailability, decodeCalendarEntry, nullable, object,
   decodeCentre, decodeClassType, decodeDirectory, decodeGrade, decodeGradeRequirement, decodeGradeTrack,
   decodeHistoryEntry, decodePage, decodeRosterEntry, decodeSessionReport, decodeStudentDetail,
-  decodeSummary, decodeSyllabusItem, decodeTechniqueSignOff,
+  decodeSummary, decodeSyllabusItem, decodeTechniqueSignOff, array, decodeAttendanceSave, decodeAttendanceSnapshot,
+  decodeSessionSave, decodeReportSnapshot, decodeAssessmentSnapshot,
 } from './decoders'
 import { InstructorDataError, toInstructorDataError } from './errors'
 import type {
-  AssessmentDetail, AssessmentKey, AvailabilityInput, CalendarOptions, DirectoryOptions, EventId, HistoryOptions,
-  InstructorIdentity, InstructorReferenceData, Page, PageOptions, StudentId,
+  AssessmentDetail, AssessmentKey, AttendanceSaveInput, AvailabilityInput, CalendarOptions, DirectoryOptions, EventId, HistoryOptions,
+  InstructorIdentity, InstructorReferenceData, Page, PageOptions, StudentId, ReportDetail, ReportSaveInput, AssessmentSaveInput, SessionSaveInput,
 } from './types'
 
 // Inject the existing shared Supabase client at the provider boundary. This does
@@ -180,8 +181,76 @@ export function createInstructorApi(client: InstructorClient) {
     return result
   }
 
+  async function saveSessionRecord(input: SessionSaveInput) {
+    const requestId = parseEntityId(input.requestId, 'session-request')
+    const eventId = parseEntityId(input.eventId, 'event')
+    const studentId = parseEntityId(input.studentId, 'student')
+    const expectedUser = parseEntityId(input.expectedUserId, 'auth-user')
+    const expected = input.kind === 'report' ? decodeReportSnapshot(input.expected) : decodeAssessmentSnapshot(input.expected)
+    const value = input.kind === 'report'
+      ? { report: input.report === null ? null : typeof input.report === 'string' ? input.report.trim() || null : invalidRequest('Enter valid report text.') }
+      : decodeAssessmentSnapshot({ status: input.status, notes: input.notes === null ? null : typeof input.notes === 'string' ? input.notes.trim() || null : invalidRequest('Enter valid assessment notes.') })
+    const identity = await getCurrentInstructor()
+    if (identity.userId !== expectedUser) throw new InstructorDataError('forbidden', 'Your account changed. Reopen this record before saving.')
+    const result = decodeSessionSave(await rpc('save_instructor_session_record', {
+      request_id: requestId, expected_user: expectedUser, target_event: eventId, target_student: studentId,
+      write_kind: input.kind, expected_record: expected, new_value: value,
+    }, undefined, 'Unable to save this record. Please retry.'))
+    if (result.requestId !== requestId || result.eventId !== eventId || result.studentId !== studentId || result.kind !== input.kind
+        || (result.kind === 'report' && (result.value.reportAuthorId !== identity.instructorId || result.value.report !== ('report' in value ? value.report : null)))
+        || (result.kind === 'assessment' && (result.value.status !== ('status' in value ? value.status : null) || result.value.notes !== ('notes' in value ? value.notes : null)))) {
+      throw new InstructorDataError('invalid_data', 'The saved record response does not match this request. Reload the saved record.')
+    }
+    return result
+  }
+
   return {
     getCurrentInstructor,
+
+    saveReport(input: ReportSaveInput) { return saveSessionRecord({ ...input, kind: 'report' }) },
+    saveAssessment(input: AssessmentSaveInput) { return saveSessionRecord({ ...input, kind: 'assessment' }) },
+
+    async getReport(key: AssessmentKey, signal?: AbortSignal): Promise<ReportDetail | null> {
+      const eventId = parseEntityId(key.eventId, 'event')
+      const studentId = parseEntityId(key.studentId, 'student')
+      const session = await getEventForInstructor(eventId, await getCurrentInstructor(signal), signal)
+      if (!session || session.event.event_type !== 'class') return null
+      const data = await requestInstructorData(
+        () => cancellable(client.from('event_students').select(`${rosterSelect}, reportAuthor:instructors!event_students_report_author_id_fkey(*)`)
+          .eq('event_id', eventId).eq('student_id', studentId), signal).maybeSingle<unknown>(),
+        'Unable to reload the saved report. Please try again.', signal,
+      )
+      if (data === null) return null
+      const entry = decodeRosterEntry(data)
+      const reportAuthor = nullable(parseInstructorRow)(object(data).reportAuthor)
+      if (entry.record.event_id !== eventId || entry.record.student_id !== studentId || (reportAuthor && reportAuthor.id !== entry.record.report_author_id)) {
+        throw new InstructorDataError('invalid_data', 'The report does not match this event, student or author.')
+      }
+      return { ...entry, session, reportAuthor }
+    },
+
+    async saveAttendance(input: AttendanceSaveInput) {
+      const requestId = parseEntityId(input.requestId, 'attendance-request')
+      const eventId = parseEntityId(input.eventId, 'event')
+      const expectedUser = parseEntityId(input.expectedUserId, 'auth-user')
+      const expected = array(input.expected, decodeAttendanceSnapshot)
+      if (!['student', 'roster'].includes(input.scope) || !['present', 'absent', 'unmarked'].includes(input.status)
+          || !expected.length || (input.scope === 'student' && expected.length !== 1)
+          || new Set(expected.map(item => item.studentId)).size !== expected.length) {
+        invalidRequest('Choose a valid attendance action and complete roster snapshot.')
+      }
+      const account = await getInstructorAccount()
+      if (account.userId !== expectedUser) throw new InstructorDataError('forbidden', 'Your account changed. Reload the session before saving attendance.')
+      const result = decodeAttendanceSave(await rpc('save_instructor_attendance', {
+        request_id: requestId, expected_user: expectedUser, target_event: eventId, save_scope: input.scope,
+        new_status: input.status === 'unmarked' ? null : input.status, expected_attendance: expected,
+      }, undefined, 'Unable to save attendance. Please retry.'))
+      if (result.requestId !== requestId || result.eventId !== eventId || result.attendance.length !== expected.length
+          || result.attendance.some(item => !expected.some(before => before.studentId === item.studentId))) {
+        throw new InstructorDataError('invalid_data', 'The attendance save response does not match the request. Reload the roster.')
+      }
+      return result
+    },
 
     async getClassTypes(signal?: AbortSignal) {
       await getInstructorAccount(signal)
@@ -310,7 +379,9 @@ export function createInstructorApi(client: InstructorClient) {
       const result = decodePage(await rpc('instructor_event_reports', {
         target_event: eventId, page_size: page.limit, page_offset: page.offset,
       }, page.signal), decodeSessionReport)
-      if (result.items.some(item => item.record.event_id !== eventId)) throw new InstructorDataError('invalid_data', 'The reports do not match the session.')
+      if (result.offset !== page.offset || result.limit !== page.limit || result.items.some(item => item.record.event_id !== eventId)) {
+        throw new InstructorDataError('invalid_data', 'The reports do not match the session or requested page.')
+      }
       return result
     },
 
@@ -337,11 +408,12 @@ export function createInstructorApi(client: InstructorClient) {
       const roster = decodeRosterEntry(value)
       if (roster.record.student_id !== studentId) throw new InstructorDataError('invalid_data', 'The assessment does not match the student.')
       const application = await requestInstructorData(
-        () => cancellable(client.from('grading_applications').select('*').eq('grading_event_id', eventId)
+        () => cancellable(client.from('grading_applications').select('*, target_grade:grades(*)').eq('grading_event_id', eventId)
           .eq('student_id', studentId), signal).maybeSingle<unknown>(),
         'Unable to load the assessment target grade. Please try again.', signal,
       )
-      return assertAssessment({ ...roster, session, application: application === null ? null : decodeApplication(application) })
+      return assertAssessment({ ...roster, session, application: application === null ? null : decodeApplication(application),
+        targetGrade: application === null ? null : nullable(decodeGrade)(object(application).target_grade) })
     },
   }
 }

@@ -401,7 +401,7 @@ test('Today returns to the current date and refocuses the document timeline', as
     }
 });
 
-test('recorded attendance survives resize without local mutation and drawer restores focus', async () => {
+test('recorded attendance survives resize with editable controls and the drawer restores focus', async () => {
     const result = await inCalendar(320, '/instructor/calendar?view=week&date=2026-11-27', async (w, wait, f) => {
         const d = w.document;
         const trigger = d.querySelector('[data-mobile-event]');
@@ -411,7 +411,6 @@ test('recorded attendance survives resize without local mutation and drawer rest
         const present = drawer.querySelector('button[aria-label^="Mark "][aria-label*=" present"]');
         const student = present.getAttribute('aria-label').split(' present')[0];
         const before = present.getAttribute('aria-pressed');
-        present.click(); await wait();
         const readOnly = [...drawer.querySelectorAll('button[aria-label^="Mark "]')].every(button => button.disabled);
         const bulkDisabled = [...drawer.querySelectorAll('button')].filter(e => e.textContent.includes('Mark All')).every(button => button.disabled);
         const marked = present.getAttribute('aria-pressed');
@@ -430,8 +429,8 @@ test('recorded attendance survives resize without local mutation and drawer rest
     assert.ok(result.top >= 0 && result.right <= result.width + 1);
     assert.equal(result.marked, 'true');
     assert.equal(result.marked, result.before);
-    assert.equal(result.readOnly, true);
-    assert.equal(result.bulkDisabled, true);
+    assert.equal(result.readOnly, false);
+    assert.equal(result.bulkDisabled, false);
     assert.equal(result.late.text, 'Late');
     assert.notEqual(result.late.colour, 'rgba(0, 0, 0, 0)');
     assert.equal(result.desktop.drawer, false);

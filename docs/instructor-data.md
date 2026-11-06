@@ -2,8 +2,8 @@
 
 ## Implementation status and remaining roadmap
 
-**Current checkpoint: Phase 7 is implemented and awaiting approval. Three main
-implementation phases remain.** Each phase, including each mutation checkpoint,
+**Current checkpoint: Phase 10B (reports and assessments) is implemented and awaiting approval.
+Phase 10 is in progress; Phase 11 remains.** Each phase, including each mutation checkpoint,
 requires the project owner's approval before the next one starts. The statuses
 below describe code implementation; cloud migration deployment is verified
 separately against the target project's migration history.
@@ -19,6 +19,9 @@ separately against the target project's migration history.
 | 5 | Live all-student directory, URL-backed filters, local pagination and an account-scoped in-memory snapshot. Search/filter/page changes make no further directory API requests after the initial load. |
 | 6 | Live UUID student profiles, home centres, contact/emergency records, active medical alerts, cross-instructor/dojo session history, real report authors and complete attendance summaries. |
 | 7 | Database-backed grading requirements/readiness, syllabus and recorded sign-offs, complete recorded assessment history, and date-only grading calendar/history compatibility. Existing UI structure and styling are preserved. |
+| 8 | Live class report cards with complete rosters, actual current/previous report authors and feedback; read-only assessment forms keyed by event/student UUIDs with recorded application targets and status/notes. |
+| 10A | Persisted individual present/absent/clear and atomic full-roster attendance saves, authoritative reloads, server ownership/time checks, stale-snapshot conflicts and durable retry receipts. |
+| 10B | Author-owned report add/edit/clear and persisted assessment status/notes, with linked domain authorship, field-scoped concurrency checks, durable retry receipts and draft-preserving reloads. |
 | Approved follow-ups | Calendar access for unlinked accounts, availability creation with transactional first-save linking, and linked instructor-row provisioning during trusted account creation. Availability creation was pulled forward from the mutation phase. |
 
 The calendar seed script and its Supabase test records are testing support, not
@@ -26,12 +29,11 @@ another implementation phase. See [calendar test records](../README.md#instructo
 
 ### Remaining phases
 
-The phase numbers retain the original plan. Phase 9 is deferred, so the three
-remaining main phases are **8, 10 and 11**.
+The phase numbers retain the original plan. Phase 9 is deferred, so the two
+remaining main phases are **10 and 11**.
 
 | Phase | Goal and principal files | Verification / completion checkpoint |
 | --- | --- | --- |
-| **8 — Reports and assessment-page reads** | Wire `src/pages/Instructor/InstructorStudentReports.tsx` and `src/pages/Instructor/InstructorGradingAssessment.tsx` to stored event/student records, actual previous feedback and application target grades where recorded. | Event/student composite keys, correct candidate/event association, actual authors, missing/unknown target handling, permission failures and loading/error/empty states. |
 | **10 — Persisted save actions** | Connect the verified read views to real attendance, author-owned report, assessment, technique-sign-off and availability edit/delete operations. Availability creation is already implemented. | Ship the separate checkpoints below with server-enforced permissions, pending/error/retry states, preservation of unrelated fields, concurrency/idempotency checks where relevant and persistence after reload. |
 | **11 — Mock cleanup and final verification** | Remove replaced production instructor fixtures, generated histories and local demo save helpers only after their replacements are verified. Preserve shared dependencies required by the out-of-scope student portal and intentional test fixtures. | Confirm instructor production imports use real data, verify complete read/write flows, and run the affected build, database/API and browser suites. Keep test fixtures explicitly scoped to tests. |
 
@@ -39,9 +41,9 @@ remaining main phases are **8, 10 and 11**.
 
 Each checkpoint is independently verified and approved before the next begins:
 
-1. **10A — Attendance:** individual marking/clearing and transactional bulk
-   marking, with approved time/ownership rules and complete roster handling.
-2. **10B — Reports and assessments:** persist report text and assessment
+1. **10A — Attendance (implemented):** individual marking/clearing
+   and transactional bulk marking, with time/ownership rules and complete roster handling.
+2. **10B — Reports and assessments (implemented; awaiting approval):** persist report text and assessment
    status/notes. An instructor edits only their own report; derive author identity
    from the linked instructor record rather than the auth-user ID.
 3. **10C — Availability editing/deletion:** add the remaining mutations with
@@ -57,7 +59,7 @@ Each checkpoint is independently verified and approved before the next begins:
   whether marks persist across attempts or each assessment needs its own
   checklist before proposing any schema change.
 - Photos and examiner signatures remain **browser-local**, as requested.
-- **Phase 9 / QR-check-in work is deferred** and is not counted in the three
+- **Phase 9 / QR-check-in work is deferred** and is not counted in the two
   remaining phases. The chatbot and student-portal implementation are excluded.
 - Grading-result processing, belt promotions and application approvals remain
   outside scope; recorded assessments are not treated as promotion history.
@@ -118,9 +120,9 @@ errors, and malformed responses never become successful empty lists.
 | `getStudentHistory` | `instructor_student_history` RPC; history across instructors/dojos, including event/instructor/report-author identities and grading date/reporting metadata |
 | `getRecordedAssessments` | Grading history where `assessment_status` is non-null; pending is recorded, null is unrecorded |
 | `getStudentSummary` | `instructor_student_summary` RPC; complete past training totals and cycle attendance |
-| `getSessionReports` | `instructor_event_reports` RPC; assigned class roster and up to two actual earlier class reports per student |
+| `getSessionReports` | `instructor_event_reports` RPC; assigned class roster, actual current report author and up to two actual earlier class reports per student with their authors |
 | `getTechniqueSignOffs` | Student/item sign-offs and nullable signer identities; follows all pages |
-| `getAssessment` | Assigned grading event/student pair and actual application, if present; no inferred target grade |
+| `getAssessment` | Assigned grading event/student pair and actual application with nullable joined target-grade details, if present; no inferred target grade |
 
 Page size defaults to 50 and is limited to 1–100. Page results expose `items`,
 `total`, `offset`, and `limit`. Directory results also include `scopeTotal` and
@@ -207,7 +209,7 @@ retry and successful-empty states. UUID deep links are fetched independently of
 the visible date range; the legacy `class` query parameter also accepts UUIDs.
 Calendar return navigation preserves the real session/date query values.
 
-Attendance mutations remain disabled until their mutation phase. Availability
+Phase 10A below now enables the verified attendance mutations. Availability
 creation is enabled by the follow-up below; existing availability is viewable in
 its read-only dialog until editing/deletion is wired. Present/late
 roster entries use first check-in time (or recorded time when check-in is absent)
@@ -422,7 +424,7 @@ and students without enrolment or active membership.
 ### Checkpoint boundary and schema/plan deviations
 
 No schema, API endpoint, backend function or write-permission changes are needed.
-Report add/edit controls are disabled until Phase 10B and cannot emit a demo save.
+Phase 10B below now connects report add/edit controls to persisted saves.
 The old grading sections depended on generated profiles, inferred promotion
 history and browser-local technique saves. Their section headings/cards remain,
 with an explicit unavailable message and disabled review control pending Phase 7;
@@ -572,3 +574,386 @@ migration and all existing authorization/report-author protections; it does not
 alter stored records. If disabling the new calendar RPC is necessary, revoke its
 authenticated EXECUTE privilege in a follow-up migration. No Phase 8 read views or
 Phase 10 save actions are implemented by this checkpoint.
+
+## Phase 8: class reports and assessment-page reads
+
+Implementation: `InstructorStudentReports.tsx`, `InstructorGradingAssessment.tsx`,
+`src/lib/instructor/session-reads.ts` and the existing instructor API/decoders.
+Migration: `supabase/migrations/20261105150000_instructor_report_authors.sql`.
+
+### Class reports
+
+`/instructor/reports/:eventId` resolves an assigned class independently of the
+visible calendar range and loads every `getSessionReports` page before rendering
+the roster. Stable event/student composite keys, full totals and pagination checks
+prevent duplicate or partial rosters from appearing as a completed load. A missing
+or non-class event, successful empty roster and failed read remain distinct.
+
+The existing one-column/mobile and two-column/desktop report cards are retained.
+Student names/grades, all five attendance states and current report text come from
+stored rows. Each card displays up to two actual earlier class reports returned by
+the existing RPC, including earlier sessions with other names, instructors or
+dojos. There are no generated seven/fourteen-day dates or example-feedback
+fallbacks. Missing current/earlier feedback has an explicit empty state.
+
+Current and earlier report authors use the actual `instructors` row referenced by
+`report_author_id`. Missing authors remain unknown and are not replaced with the
+assigned class teacher, signed-in account or an auth-user ID. Decoders reject
+mismatched author/student/event identities, duplicate/current-session previous
+reports, more than two earlier reports and mismatched page metadata.
+
+### Assessment reads
+
+Canonical `/instructor/assessments/:eventId/:studentId` and legacy
+`/instructor/assessments/:eventId--:studentId` routes require an exact pair of real
+UUIDs. The API resolves the assigned grading event and its matching enrolment;
+an application or student record alone does not create an assessment. Wrong event
+types, non-candidates, missing events and malformed keys do not display a form.
+
+The original form layout is retained: current/target grade summary, status
+buttons, notes textarea, profile link and Save Assessment control. Current grade
+comes from the stored student join. Target grade comes exclusively from that
+student/event application's `target_grade:grades(*)` join. It is not derived from
+the current grade, next-grade ladder or event's target-grade catalogue. A missing
+application and a recorded target whose grade details are unavailable have
+different messages.
+
+Pending/completed status and notes are displayed exactly as recorded. Null status
+is unrecorded, with neither status button selected. Status buttons and Save
+Assessment are disabled; notes are selectable/read-only. There is no browser-local
+save helper or demo-success message. Assessment records do not imply passed
+promotions, and the schema has no separate assessment-author field to infer.
+
+The existing grading-roster action now links to the corresponding canonical
+event/student assessment. Profile and calendar return links retain the same event
+UUID, student UUID, relevant tab and actual Singapore/date-only grading date.
+Date-only assessments do not gain synthetic start/reporting timestamps.
+
+### Request state and authorization
+
+Both pages use the existing account/resource-scoped query hook and shadcn loading
+modal, with errors/retry, successful-empty/not-found states and cancellation.
+Account changes immediately discard old records. Late responses after changing
+class or candidate cannot overwrite the replacement view. A failed later report
+page exposes no partial roster, and Retry starts a complete new load.
+
+These event-specific reads still require the linked instructor's assigned event;
+the broader all-student directory/history permission does not grant access to
+another instructor's report page or assessment. Existing SQL role, ownership,
+RLS and report-author write protections are retained.
+
+### Schema/plan deviations and deployment
+
+The additive migration replaces only the existing security-invoker report RPC,
+adding the current report author's nullable record to its JSON response. Its
+signature, ACL, class ownership checks and previous-report scope are preserved.
+The assessment API adds a schema-grounded grade join to the existing application
+read. No table, column, enum, seed, new endpoint, write policy or Edge Function is
+added or changed.
+
+Apply `20261105150000_instructor_report_authors.sql` to the intended Supabase
+project before deploying this frontend. Cloud migration deployment is separate
+from the offline checks; no Edge Function redeployment is required. Mutations
+remain Phase 10B, and no later checkpoint starts automatically.
+
+### Verification and rollback
+
+- `npm run build`: passes (existing bundle-size advisory remains).
+- Relevant Node suites: 64 passing checks covering session-read helpers, API,
+  offline database, grading, calendar projection and student-detail helpers.
+  Database tests include 205 report students with unknown authors/no earlier
+  feedback, cross-dojo earlier feedback, authorization and report-write guards.
+- `npm run check:functions`: passes.
+- `npm run test:functions`: 5 top-level tests and 16 steps pass.
+- New reports/assessment browser checks: 19 passing tests, including both layouts
+  at 320/390/768/1440px, actual authors, target-grade differences, no application,
+  unknown grade joins, null status/notes, read-only saves, legacy/canonical UUIDs,
+  date-only dates, 205 reports, partial-page failure/retry, permission denial,
+  account/candidate/class isolation and calendar → assessment → profile navigation.
+- Targeted student-detail loading/retry and structured grading/review regression
+  checks: 6 passing tests (including parent/width subtests).
+- A pre-existing date-only database test assumed a fixed number of timed events
+  within a Singapore day. Near midnight, an additional cross-midnight class can
+  legitimately overlap it. Its expected total now uses the stored overlapping
+  timed rows plus the date-only grading, retaining ownership assertions.
+
+Rollback reverts the Phase 8 frontend/API read wiring. Retain the additive report
+author migration and all authorization guards; its extra JSON field is compatible
+with older consumers, and no stored report/assessment record is changed.
+
+## Phase 10A: persisted attendance
+
+Implementation: `src/lib/instructor/attendance.ts`, `use-instructor-attendance.ts`,
+the instructor API/decoders and the existing `ClassSessionDetails` controls.
+Migration: `supabase/migrations/20261105160000_instructor_attendance.sql`.
+
+### Attendance rules and interface
+
+The existing present/absent buttons now save to Supabase. Selecting an already
+marked present/absent value clears it to database null (Unmarked). Bulk buttons
+retain their existing Mark All Present / Mark All Absent behavior over editable
+entries. Both bulk directions preserve explicit late/excused records and legacy
+present records whose first arrival is already classified late. Protected entries
+remain view-only badges. Bulk eligibility is computed over editable rows so a
+protected late/excused entry does not prevent switching the other rows to absent.
+
+The pre-existing calendar time rule is retained and enforced on the server:
+assigned **scheduled, timed sessions can be marked before their end**, including
+before they start. Ended, completed, cancelled and untimed/date-only sessions are
+read-only. Published reporting time alone does not establish a grading duration.
+Database end-time comparisons use actual instants and `clock_timestamp()`, including
+after locks/validation and before committing a newly executed save. Read views
+continue to display Singapore dates/times.
+
+Only `event_students.attendance_status` is updated. Report text/author, assessment
+status/notes, `recorded_at` and `checked_in_at` remain unchanged. Manual marking
+does not invent an arrival timestamp. If a present mark has actual stored late
+arrival evidence, the saved status is late. The summary RPC still counts only
+ended, non-cancelled classes and is not changed by this checkpoint.
+
+### Write contract, conflicts and retries
+
+`saveAttendance` calls `save_instructor_attendance` with an immutable request UUID,
+the expected auth-user UUID, target event UUID, student/roster scope, desired
+present/absent/null status and an attendance-only snapshot. The snapshot includes
+student ID, stored status and both original arrival/recording fields. No report,
+assessment or actor-domain identity is accepted as a write field.
+
+The security-definer function checks the actual JWT subject and current
+`public.users.role`, derives the linked instructor, and locks the account/link and
+assigned event. It rejects missing links, another instructor's event, invalid
+requests, non-members and a closed/untimed attendance window. A retained domain
+link does not grant permission after demotion. Browser requests cannot select a
+different actor by supplying an instructor ID.
+
+It locks/validates every supplied roster row in stable student-ID order before
+updating. A bulk request must name the **entire current roster**, including
+protected entries; a 100-row slice of a 205-student roster is rejected. Missing or
+extra members, duplicate IDs, changed attendance or changed arrival evidence cause
+a conflict and roll back the operation. Roster membership changes lock the same
+parent event. PostgreSQL deadlock/serialization failures remain whole-transaction
+failures and require a reload/retry; tests model stale snapshots/competing intents
+in the single-connection offline database rather than claiming a multi-connection
+cloud concurrency test.
+
+`instructor_attendance_requests` is a new, private receipt table, with RLS enabled
+and browser/anonymous table privileges revoked. It stores request/account/event
+identity, normalized attendance-only payload, response and creation time. An exact
+retry returns the original receipt without executing updates again, even if a
+newer save has since changed attendance. A reused request UUID with different
+contents is rejected. Every receipt replay still checks role/link/event ownership;
+it cannot bypass demotion or reassignment. An already-committed receipt may be
+read after the session closes because replay performs no new attendance write.
+
+Direct instructor REST writes cannot bypass this contract by changing attendance
+or arrival fields, inserting pre-marked attendance, deleting recorded attendance,
+or moving attendance-bearing records to another composite key. The invoker trigger
+distinguishes direct authenticated writes from the trusted security-definer RPC
+using PostgreSQL `current_user`, not a client-settable configuration flag.
+Administrator/trusted server operations retain their existing behavior; unrelated
+report-author protections and roster read policies remain independently enforced.
+
+### Request state and persistence
+
+The existing roster is loaded completely with authoritative event metadata before
+enabling controls. Pending submissions keep the recorded state visible, disable
+individual/bulk actions and prevent double submission. There are no optimistic
+local saves. After server acknowledgement, the hook reloads every roster page and
+updates displayed values from that successful read. Rows retain their identity
+and the calendar's existing sizing, drawer, focus and responsive layout.
+
+Transport/ambiguous-response failures preserve the same request UUID and snapshot
+for Retry save. Conflicts/permission/window errors require Reload attendance before
+another intent. If the save is acknowledged but reload fails, the UI says the
+attendance was saved and offers only a read retry, avoiding duplicate writes.
+Unknown/failed reads do not appear as an empty roster. Account/event/API changes
+invalidate old responses and abort obsolete reloads; an old account's result
+cannot populate the replacement account. Production attendance data/requests are
+not written to browser storage.
+
+### Schema/plan deviations and deployment
+
+The internal durable receipt table is an additive implementation detail needed to
+make lost-response retries safe after intervening writes. Existing event/student
+domain columns and enums are unchanged. One narrowly scoped attendance write RPC
+and REST/membership guards are added; no Edge Function or privileged role/profile
+write path is introduced. This checkpoint wires the existing roster UI only.
+Phase 10B below now enables report/assessment saves; availability edit/delete and
+technique writes remain 10C/10D. QR check-in remains deferred.
+
+Apply `20261105160000_instructor_attendance.sql` (and any earlier outstanding
+migrations) before using the enabled frontend saves. The implementation does not
+deploy to Supabase Cloud automatically. No Edge Function redeployment is required.
+
+### Verification and rollback
+
+- `npm run build`: passes; existing bundle-size advisory remains.
+- Relevant Node/API/offline database/helper checks: 76 passing tests. Database
+  checks include persisted commit/new-transaction reads, mark/clear, all 205 roster
+  rows, protected states, stale snapshots, exact receipt replay after a newer save,
+  role demotion, account/ownership/window denial, direct REST bypass denial and
+  preservation of reports/assessments/arrival fields.
+- `npm run check:functions`: passes.
+- `npm run test:functions`: 5 top-level tests and 16 steps pass.
+- Attendance browser suite: 9 passing tests, including pending/double-submit,
+  individual/bulk writes, error/lost-response retries, intervening writes, conflict
+  reloads, post-save read failure, account isolation, full reload persistence,
+  responsive geometry and late/excused preservation.
+- Calendar browser suite: 22 passing tests. Its future-session controls assertion
+  now expects editable controls; past/untimed sessions remain read-only. Geometry,
+  focus/resize, 205-student rosters, calendar states and availability flows pass.
+
+The browser fixture uses real-shaped auth UUIDs and API mutations. Only its
+explicit `attendance-persistence` mode writes test-scoped `sessionStorage` to
+simulate stored responses across document reloads; production code has no such
+fallback. Browser/Node/database tests remain offline and do not verify target
+cloud migration history or physical-device behavior.
+
+Rollback disables/reverts the new frontend save path. Revoke authenticated EXECUTE
+on `save_instructor_attendance` in a follow-up migration if writes must be stopped.
+Keep existing saved attendance, request receipts, authorization/report guards and
+read migrations. Do not remove records to roll back a mutation release. Phase 10A
+requires approval before implementing 10B.
+
+## Phase 10B: author-owned reports and assessment saves
+
+Implementation: `ReportEditor.tsx`, the existing history/report cards and assessment
+form, `use-instructor-session-save.ts`, `use-instructor-write-identity.ts`,
+`src/lib/instructor/session-writes.ts`, and the instructor API/decoders.
+Migration: `supabase/migrations/20261105170000_instructor_session_saves.sql`.
+
+### Permissions and saved fields
+
+Add report / Edit report now use the original inline textarea and Save/Cancel
+layout in student session history. The same editor is reused in grouped class
+report cards. Write identity is fetched once per history page from the linked
+instructor record; auth-user UUIDs are never substituted for domain author IDs.
+An unlinked account retains all-student history reads with report controls
+read-only. Identity-read failures have their own retry without becoming a fake
+permission grant.
+
+Report creation requires an assigned class enrolment with no report content and
+no recorded author. Editing/clearing requires both current class assignment and
+ownership of the recorded report. Other authors and non-empty reports with no
+known author remain read-only and cannot be claimed. Clearing text writes null
+while retaining the original domain author. The server derives that author from
+the actual caller's linked instructor row; no requested author ID is accepted.
+
+Reports may be written after a lesson, including completed/past assigned classes.
+They are not restricted by attendance's pre-end window. Assigned scheduled and
+completed grading-event/student records support assessment status/notes saves,
+including date-only gradings and legacy records without an application. Cancelled
+classes/gradings are read-only. This does not change target-grade resolution:
+targets still come only from actual applications where recorded.
+
+Report operations update only `report` and `report_author_id`. Assessment
+operations update only `assessment_status` and `assessment_notes`. Text saves trim
+outer whitespace and store null for blank content. Status is pending, completed
+or null; selecting the current assessment status again clears it. Notes-only saves
+do not invent a pending status. Report fields, attendance/arrival timestamps,
+student grade/last-grading dates, applications, sign-offs and event status are not
+rewritten by an assessment save. Recorded completed assessments are not promotions
+or application approvals; the schema has no assessment-author field to infer.
+
+### Transactional write and read-back contract
+
+`saveReport` / `saveAssessment` invoke the schema-grounded
+`save_instructor_session_record` RPC with an immutable request UUID, expected auth
+user, exact event/student UUID pair, action kind and only that action's expected
+fields/new values. The API verifies the current account/domain identity and checks
+the response's request/event/student/action identity, stored values and report
+author ID. `getReport` is an assigned-class table read with the actual report-author
+join for authoritative read-back; assessment read-back reuses `getAssessment`.
+
+The security-definer RPC locks/checks the current public user role, linked
+instructor, assigned event and existing enrolment. It rejects role/link/account
+changes, wrong event types and non-candidates; it does not create an enrolment or
+borrow another instructor's event. Field-scoped compare-and-set checks reject
+changed report text/author or changed assessment status/notes. Unrelated attendance
+or report updates do not get overwritten or create a false assessment conflict.
+
+`instructor_session_write_requests` stores private request/user/event/student/kind,
+normalized payload, response and creation time. RLS is enabled and browser/
+anonymous table privileges are revoked. Exact retries return the committed
+receipt without rerunning updates or overwriting newer saves. Different contents,
+event/student keys or action kinds cannot reuse a request ID. Current role, link,
+event ownership and enrolment are checked before receipt replay; demotion or
+reassignment cannot be bypassed. Returning a prior receipt after cancellation
+performs no new write.
+
+An invoker trigger prevents direct instructor REST insert/update/delete/re-key
+paths from bypassing the report/assessment save contract, including deleting one's
+own saved record through roster management. Existing report-author and attendance
+guards remain installed and independently enforced. Administrator/trusted server
+operations retain their existing behavior. The authorization bypass for the
+trusted RPC is PostgreSQL's execution identity, not a client-settable flag.
+
+### Draft, error and resource state
+
+Pending submissions preserve the entered text/status, make draft inputs read-only
+and disable repeated saves. No success notice is emitted until the RPC and an
+authoritative record reload succeed. Network/lost-response errors keep the same
+request UUID, snapshot and values for Retry save. An acknowledged save followed
+by a failed read retries only the read.
+
+Conflicts/permission failures offer Reload saved record. Reload updates the
+expected snapshot but **keeps the draft**, displays the latest saved content for
+comparison and requires an explicit new Save for the retained draft. Inputs stay
+locked while a failed request is unresolved, so a frozen retry cannot accidentally
+submit different visible text. Report Cancel discards the editor intentionally;
+after a failure it reloads the saved record rather than claiming that the server
+operation was undone. Assessment status/note state uses functional updates so a
+quick status click followed by typing does not reset the chosen status.
+
+Account, role, event/student and API-generation keys fence mutation results and
+abort obsolete read-backs. Old-account and old-candidate responses cannot close a
+new editor, replace a new draft or emit a save notice in the replacement view.
+Production drafts/requests are held in component memory, not browser storage.
+Reopening/reloading reads the actual stored rows and report author joins.
+
+### Schema/plan deviations and deployment
+
+The new private receipt table follows 10A's durable retry design and contains
+report/assessment text snapshots needed to identify exact requests. Existing domain
+columns/enums are unchanged. One narrowly scoped write RPC, the REST guard and a
+schema-grounded assigned-report API read are added; no Edge Function, role/profile
+write path, promotion processor or application approval action is introduced.
+The existing form/card layouts and structured grading review remain in place.
+
+Apply `20261105170000_instructor_session_saves.sql` and earlier outstanding
+migrations before using these enabled saves. Cloud deployment is separate from
+implementation verification; no Edge Function redeployment is required. Availability
+edit/delete remains 10C and technique mutations remain 10D, including the unresolved
+per-attempt checklist decision. Each next checkpoint still needs owner approval.
+
+### Verification and rollback
+
+- `npm run build`: passes, with the existing bundle-size advisory.
+- Relevant Node/API/offline database/helper suites: 86 passing checks. They cover
+  real domain authorship, ownership/unknown-author denial, narrow payloads and
+  immutable retries, stale-field conflicts, wrong record/type/role/account denial,
+  private receipt ACLs, direct REST bypasses, actual committed report/history reads,
+  date-only assessments and preservation of attendance, reports, grades/applications.
+- `npm run check:functions`: passes.
+- `npm run test:functions`: 5 top-level tests and 16 steps pass.
+- Session-save browser suite: 17 passing tests, including report add/edit/clear at
+  320/390/768/1440px, ownership/read-only cases, draft retention, pending/duplicate
+  suppression, error/receipt retries, conflict/read-back failures, assessment
+  status/note changes, persistence and account/candidate isolation.
+- Existing reports/assessment read-browser checks: 19 passing tests. Their
+  assessment assertions now expect editable controls with a disabled pristine save.
+- Existing student-detail browser checks: 23 passing tests.
+- Existing attendance save browser checks: 9 passing tests, including protected
+  states, receipt retries and reload persistence alongside the new session guards.
+
+The explicit report/assessment persistence fixture modes use test-scoped
+`sessionStorage`; production code has no local-save fallback. Offline PostgreSQL
+checks verify real commit/new-read persistence. Concurrency tests exercise stale
+snapshots and competing intents in the single-connection offline database; they
+do not claim multi-connection cloud or physical-device verification.
+
+Rollback disables/reverts the new save controls and API calls. If writes must stop,
+revoke authenticated EXECUTE on `save_instructor_session_record` in a follow-up
+migration. Preserve saved reports/assessments, private receipts, ownership/REST
+guards, attendance writes and read migrations. Do not delete stored records to
+roll back this checkpoint. Phase 10B requires approval before implementing 10C.

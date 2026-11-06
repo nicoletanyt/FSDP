@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import {
     Check,
@@ -14,10 +14,9 @@ import GradeBadge from "@/components/instructor/DatabaseGradeBadge";
 import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { studentDetailsHref } from "@/lib/instructor-calendar";
-import { useInstructorQuery } from "@/hooks/use-instructor-data";
-import { useInstructorApi } from "@/lib/instructor/data-context";
-import { parseEntityId, timestampMilliseconds } from "@/lib/instructor/adapters";
-import { collectCalendarPages } from "@/lib/instructor/calendar-queries";
+import { useInstructorAttendance } from "@/hooks/use-instructor-attendance";
+import { parseEntityId } from "@/lib/instructor/adapters";
+import { attendanceEditable, editableAttendanceRows } from "@/lib/instructor/attendance";
 import { rosterAttendance } from "@/lib/instructor/calendar-view";
 import type { CalendarViewEvent as CalendarEvent } from "@/lib/instructor/calendar-view";
 import type { AttendanceState as Attendance, GradeRow } from "@/lib/instructor/types";
@@ -29,11 +28,13 @@ function AttendanceControls({
     student,
     value,
     onChange,
+    pending = false,
     readOnly = false,
 }: {
     student: Student;
     value: Attendance;
     onChange?: (value: Attendance) => void;
+    pending?: boolean;
     readOnly?: boolean;
 }) {
     if (readOnly || value === "late" || value === "excused") {
@@ -86,7 +87,7 @@ function AttendanceControls({
                         variant="ghost"
                         size="icon-sm"
                         aria-pressed={value === "present"}
-                        disabled={!onChange}
+                        disabled={!onChange || pending}
                         aria-label={`Mark ${student.name} present${value === "present" ? onChange ? " · selected, click again to clear" : " · recorded" : ""}`}
                         onClick={() => onChange?.(value === "present" ? "unmarked" : "present")}
                         className={cn(
@@ -106,7 +107,7 @@ function AttendanceControls({
                         variant="ghost"
                         size="icon-sm"
                         aria-pressed={value === "absent"}
-                        disabled={!onChange}
+                        disabled={!onChange || pending}
                         aria-label={`Mark ${student.name} absent${value === "absent" ? onChange ? " · selected, click again to clear" : " · recorded" : ""}`}
                         onClick={() => onChange?.(value === "absent" ? "unmarked" : "absent")}
                         className={cn(
@@ -139,38 +140,35 @@ export default function ClassSessionDetails({
     fillHeight?: boolean;
     onToggle?: () => void;
 }) {
-    const api = useInstructorApi();
-    const loadRoster = useCallback((signal: AbortSignal) => collectCalendarPages(
-        options => api.getRoster(parseEntityId(event.id, "event"), options),
-        entry => entry.record.student_id, signal,
-    ), [api, event.id]);
-    const query = useInstructorQuery(`roster:${event.id}`, loadRoster, expanded);
-    const entries = query.data ?? [];
+    const attendance = useInstructorAttendance(parseEntityId(event.id, "event"), expanded);
+    const { query } = attendance;
+    const entries = attendance.data?.entries ?? [];
+    const storedEvent = attendance.data?.session.event;
+    const startsAt = storedEvent ? storedEvent.starts_at : event.startsAt;
     const roster: Student[] = entries.map(({ student }) => ({
         id: student.student.id,
         name: [student.student.first_name, student.student.last_name].filter(Boolean).join(" ") || student.student.email,
         grade: student.grade,
     }));
     const record = Object.fromEntries(entries.map(entry => [entry.record.student_id, {
-        attendance: rosterAttendance(entry.record, event.startsAt), comment: entry.record.report ?? "",
+        attendance: rosterAttendance(entry.record, startsAt), comment: entry.record.report ?? "",
     }]));
-    const [now, setNow] = useState(() => new Date());
+    const [, setNow] = useState(() => new Date());
     useEffect(() => {
         const timer = window.setInterval(() => setNow(new Date()), 60_000);
         return () => window.clearInterval(timer);
     }, []);
-    const isPast = event.endsAt !== null && timestampMilliseconds(event.endsAt) <= now.getTime();
+    const canEdit = storedEvent ? attendanceEditable(storedEvent) : false;
     const isGrading = event.type === "grading";
     const marked = roster.filter(
         (student) => record[student.id].attendance !== "unmarked",
     ).length;
-    const allPresent =
-        roster.length > 0 &&
-        roster.every((student) => record[student.id].attendance === "present");
+    const editable = editableAttendanceRows(entries, startsAt);
+    const allPresent = editable.length > 0 && editable.every(entry => record[entry.record.student_id].attendance === "present");
 
     return (
         <div
-            aria-busy={query.status === "loading"}
+            aria-busy={query.status === "loading" || attendance.pending}
             className={cn(
                 "bg-background text-foreground",
                 fillHeight && "lg:flex lg:min-h-0 lg:flex-1 lg:flex-col",
@@ -210,13 +208,18 @@ export default function ClassSessionDetails({
                                 aria-live="polite"
                                 className="text-muted-foreground"
                             >
-                                {query.status === "success" ? `${marked}/${roster.length} marked` : "…"}
+                                {query.status === "success" && attendance.data ? `${marked}/${roster.length} marked` : "…"}
                             </span>
                         </div>
                     </div>
                 )}
                 {query.status !== "success" ? <InstructorDataStatus loading={query.status === "loading"} error={query.error} onRetry={query.retry} /> : <>
-                {!roster.length && <p role="status" className="p-4 text-sm text-muted-foreground">No students are registered for this session.</p>}
+                {attendance.error && <div className="space-y-2 px-3 py-2">
+                    <p role="alert" className="text-sm text-destructive">{attendance.error}</p>
+                    <Button variant="outline" size="sm" onClick={attendance.retry} disabled={attendance.pending}>{attendance.retryLabel}</Button>
+                </div>}
+                {attendance.pending && <p role="status" className="px-3 py-2 text-sm text-muted-foreground">Saving attendance…</p>}
+                {attendance.data && !roster.length && <p role="status" className="p-4 text-sm text-muted-foreground">No students are registered for this session.</p>}
                 <TooltipProvider>
                     <ul
                         aria-label="Student roster"
@@ -245,19 +248,23 @@ export default function ClassSessionDetails({
                                         <AttendanceControls
                                             student={student}
                                             value={value.attendance}
-                                            readOnly={isPast}
+                                            readOnly={!canEdit}
+                                            pending={attendance.pending || Boolean(attendance.error)}
+                                            onChange={canEdit ? (status) => {
+                                                if (status === "present" || status === "absent" || status === "unmarked") attendance.mark(status, parseEntityId(student.id, "student"));
+                                            } : undefined}
                                         />
                                         <Tooltip>
                                             <TooltipTrigger render={
                                                 <Button
                                                     render={
-                                                        <Link to={studentDetailsHref(student.id, event, isGrading ? "grading" : "sessions")} />
+                                                        <Link to={isGrading ? `/instructor/assessments/${event.id}/${student.id}` : studentDetailsHref(student.id, event, "sessions")} />
                                                     }
                                                     nativeButton={false}
                                                     variant="ghost"
                                                     size="icon-sm"
                                                     aria-label={isGrading
-                                                        ? `View grading details for ${student.name}`
+                                                        ? `View grading assessment for ${student.name}`
                                                         : `View sessions and feedback for ${student.name}`}
                                                     className={cn(
                                                         "size-11 rounded-md text-foreground/70 hover:text-foreground lg:size-7",
@@ -267,7 +274,7 @@ export default function ClassSessionDetails({
                                             }>
                                                 <MessageSquare aria-hidden="true" />
                                             </TooltipTrigger>
-                                            <TooltipContent>{isGrading ? "Grading details" : "Report"}</TooltipContent>
+                                            <TooltipContent>{isGrading ? "Grading assessment" : "Report"}</TooltipContent>
                                         </Tooltip>
                                     </div>
                                     <div className="col-start-2 row-start-1 flex min-w-0 items-center lg:col-start-1 lg:row-start-2">
@@ -282,14 +289,15 @@ export default function ClassSessionDetails({
                     </ul>
                 </TooltipProvider>
                 </>}
-                {!isPast && (
+                {canEdit && (
                     <div className="shrink-0 border-t border-border/50 px-3 py-2">
                         <div className="flex items-center justify-between gap-2">
                             <Button
                                 variant="outline"
                                 size="sm"
-                                disabled
-                                title="Attendance is read-only during this phase"
+                                disabled={attendance.pending || Boolean(attendance.error) || query.status !== "success" || !editable.length}
+                                onClick={() => attendance.mark(allPresent ? "absent" : "present")}
+                                title="Applies to editable entries; recorded late and excused attendance is preserved."
                                 className="h-auto min-h-11 min-w-0 shrink px-3 py-1.5 text-xs whitespace-normal lg:min-h-8"
                             >
                                 {allPresent ? (

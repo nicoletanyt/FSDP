@@ -2,14 +2,16 @@
 import { directoryEntries } from './instructor-directory.fixture'
 import { InstructorDataError } from '../../src/lib/instructor/errors'
 import type { InstructorApi } from '../../src/lib/instructor/calendar-queries'
-import type { CentreRow, EventId, InstructorId, InstructorRow, StudentHistoryEntry, StudentId } from '../../src/lib/instructor/types'
+import type { CentreRow, EventId, EventStudentRow, InstructorId, InstructorRow, StudentHistoryEntry, StudentId } from '../../src/lib/instructor/types'
 
 const uuid = (value: number) => `00000000-0000-4000-8000-${String(value).padStart(12, '0')}`
 const metadata = { created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' }
 const teacher: InstructorRow = { id: uuid(2) as InstructorId, user_id: null, first_name: 'Class', last_name: 'Teacher', email: 'teacher@example.test', ...metadata }
 const author: InstructorRow = { ...teacher, id: uuid(3) as InstructorId, first_name: 'Visiting', last_name: 'Author' }
 
-export function createDetailFixtureReads(account: string, mode: string | null): Pick<InstructorApi, 'getStudentDetail' | 'getStudentHistory' | 'getStudentSummary'> {
+export function createDetailFixtureReads(account: string, mode: string | null, writes?: {
+  ownInstructor: InstructorRow; decorate: (record: EventStudentRow) => EventStudentRow; author: (id: EventStudentRow['report_author_id'], fallback: InstructorRow | null) => InstructorRow | null
+}): Pick<InstructorApi, 'getStudentDetail' | 'getStudentHistory' | 'getStudentSummary'> {
   const failed = new Set<string>()
   async function delayOrFail(resource: string, id: StudentId) {
     if (mode === 'detail-loading' || (mode === 'detail-race' && id === uuid(100))) await new Promise(resolve => setTimeout(resolve, 2000))
@@ -19,7 +21,7 @@ export function createDetailFixtureReads(account: string, mode: string | null): 
   function history(id: StudentId): StudentHistoryEntry[] {
     if (mode === 'detail-empty' || id === uuid(8000)) return []
     const centre = directoryEntries()[0].centre!
-    return Array.from({ length: mode === 'detail-history-large' ? 205 : 25 }, (_, index) => {
+    return Array.from({ length: mode === 'detail-history-large' ? 205 : 25 }, (_, index): StudentHistoryEntry => {
       const eventId = uuid(5000 + index) as EventId
       const starts = Date.parse('2026-11-02T10:00:00+08:00') - index * 86_400_000
       const attendance = (['present', 'late', 'absent', 'excused', null] as const)[index % 5]
@@ -32,6 +34,17 @@ export function createDetailFixtureReads(account: string, mode: string | null): 
         centre: index % 2 ? { ...centre, id: uuid(12) as CentreRow['id'], name: 'Other Dojo' } : centre,
         instructor: teacher, reportAuthor: report && index !== 3 ? author : null, targetGrade: null, grading: null,
       }
+    }).map((entry, index) => {
+      if (mode?.startsWith('report-') && writes && index < 6) {
+        entry.event.instructor_id = writes.ownInstructor.id
+        if (mode === 'report-cancelled') entry.event.status = 'cancelled'
+        entry.instructor = writes.ownInstructor
+        if (index === 0) { entry.record.report_author_id = writes.ownInstructor.id; entry.reportAuthor = writes.ownInstructor }
+        if (index === 2) { entry.record.report_author_id = author.id; entry.reportAuthor = author }
+        if (index === 5) { entry.record.report = 'Another instructor report'; entry.record.report_author_id = author.id; entry.reportAuthor = author }
+      }
+      if (writes) { entry.record = writes.decorate(entry.record); entry.reportAuthor = writes.author(entry.record.report_author_id, entry.reportAuthor) }
+      return entry
     })
   }
   return {

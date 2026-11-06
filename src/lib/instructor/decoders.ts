@@ -1,11 +1,11 @@
 import { parseEntityId, parseInstructorRow, timestampMilliseconds } from './adapters'
 import { InstructorDataError } from './errors'
 import type {
-  AssessmentDetail, CalendarEntry, CentreRow, ClassTypeRow, EventRow, EventStudentRow,
+  AssessmentDetail, AttendanceSaveResult, AttendanceSnapshot, CalendarEntry, CentreRow, ClassTypeRow, EventRow, EventStudentRow,
   GradeRequirementRow, GradeRow, GradeTrackRow, GradingApplicationRow, GradingRow,
   InstructorAvailabilityRow, Page, RosterEntry, SessionReportEntry, StudentAttendanceSummary,
   StudentDetail, StudentDirectory, StudentEntry, StudentHistoryEntry, StudentRow,
-  SyllabusItemRow, TechniqueSignOffEntry, TechniqueSignOffRow,
+  SyllabusItemRow, TechniqueSignOffEntry, TechniqueSignOffRow, ReportSnapshot, AssessmentSnapshot, SessionSaveResult,
 } from './types'
 
 type Decoder<T> = (value: unknown) => T
@@ -75,6 +75,27 @@ const time: Decoder<string> = value => {
 const track = enumeration('children', 'adult')
 const assessment = enumeration('pending', 'completed')
 const attendance = enumeration('present', 'late', 'absent', 'excused')
+
+export const decodeReportSnapshot = row<ReportSnapshot>({ report: nullable(text), reportAuthorId: nullable(instructorId) })
+export const decodeAssessmentSnapshot = row<AssessmentSnapshot>({ status: nullable(assessment), notes: nullable(text) })
+export function decodeSessionSave(value: unknown): SessionSaveResult {
+  const source = object(value)
+  const key = { requestId: uuid(source.requestId), eventId: eventId(source.eventId), studentId: studentId(source.studentId) }
+  if (source.kind === 'report') return { ...key, kind: 'report', value: decodeReportSnapshot(source.value) }
+  if (source.kind === 'assessment') return { ...key, kind: 'assessment', value: decodeAssessmentSnapshot(source.value) }
+  return invalid()
+}
+
+export const decodeAttendanceSnapshot = row<AttendanceSnapshot>({
+  studentId, status: nullable(attendance), recordedAt: nullable(timestamp), checkedInAt: nullable(timestamp),
+})
+
+export function decodeAttendanceSave(value: unknown): AttendanceSaveResult {
+  const source = object(value)
+  const result = { requestId: uuid(source.requestId), eventId: eventId(source.eventId), attendance: array(source.attendance, decodeAttendanceSnapshot) }
+  if (new Set(result.attendance.map(item => item.studentId)).size !== result.attendance.length) return invalid()
+  return result
+}
 
 export const decodeStudent = row<StudentRow>({
   id: studentId, user_id: nullable(userId), member_no: text, first_name: text, last_name: text,
@@ -232,8 +253,12 @@ export function decodeSessionReport(value: unknown): SessionReportEntry {
   const source = object(value)
   const entry = decodeRosterEntry(source)
   const previousReports = array(source.previousReports, decodeHistoryEntry)
-  if (previousReports.some(item => item.record.student_id !== entry.student.student.id)) return invalid()
-  return { ...entry, previousReports }
+  const reportAuthor = nullable(parseInstructorRow)(source.reportAuthor)
+  if ((reportAuthor && reportAuthor.id !== entry.record.report_author_id) || previousReports.length > 2
+      || new Set(previousReports.map(item => item.record.event_id)).size !== previousReports.length
+      || previousReports.some(item => item.record.student_id !== entry.student.student.id
+        || item.record.event_id === entry.record.event_id || item.event.event_type !== 'class' || !item.record.report?.trim())) return invalid()
+  return { ...entry, reportAuthor, previousReports }
 }
 
 export function decodeTechniqueSignOff(value: unknown): TechniqueSignOffEntry {
@@ -247,6 +272,7 @@ export function decodeTechniqueSignOff(value: unknown): TechniqueSignOffEntry {
 export function assertAssessment(detail: AssessmentDetail): AssessmentDetail {
   if (detail.session.event.event_type !== 'grading' || detail.record.event_id !== detail.session.event.id
       || (detail.application && (detail.application.student_id !== detail.record.student_id
-        || detail.application.grading_event_id !== detail.record.event_id))) return invalid()
+        || detail.application.grading_event_id !== detail.record.event_id))
+      || (detail.targetGrade && detail.targetGrade.id !== detail.application?.target_grade_id)) return invalid()
   return detail
 }
