@@ -7,13 +7,11 @@ create table public.student_records (
   membership_status text check (membership_status in ('active', 'expired', 'suspended', 'pending')),
   membership_expires_on date
 );
-
 create table public.instructor_students (
   instructor_id uuid references public.users(id) on delete cascade,
   student_id uuid references public.student_records(student_id) on delete cascade,
   primary key (instructor_id, student_id)
 );
-
 create table public.student_attendance (
   id uuid primary key default gen_random_uuid(),
   student_id uuid not null references public.student_records(student_id) on delete cascade,
@@ -21,7 +19,6 @@ create table public.student_attendance (
   status text not null check (status in ('present', 'absent', 'unmarked')),
   unique (student_id, session_at)
 );
-
 create table public.student_training_progress (
   student_id uuid primary key references public.student_records(student_id) on delete cascade,
   -- Counts and requirements must refer to the current grading cycle. Unknown is null.
@@ -32,24 +29,16 @@ create table public.student_training_progress (
   kata_complete boolean,
   updated_at timestamptz not null default now()
 );
-
 create index on public.student_attendance (student_id, session_at desc);
-
 alter table public.student_records enable row level security;
-
 alter table public.instructor_students enable row level security;
-
 alter table public.student_attendance enable row level security;
-
 alter table public.student_training_progress enable row level security;
-
 -- Read through the narrow RPC below. Provisioning/imports use trusted server tooling.
 revoke all on public.student_records, public.instructor_students,
   public.student_attendance, public.student_training_progress from public, anon, authenticated;
-
 grant select, insert, update, delete on public.student_records, public.instructor_students,
   public.student_attendance, public.student_training_progress to service_role;
-
 create function public.get_instructor_student_records()
 returns jsonb
 language sql stable security definer set search_path = ''
@@ -87,22 +76,16 @@ as $$
       and (select public.current_user_role()) = 'instructor'
   ) scoped;
 $$;
-
 revoke all on function public.get_instructor_student_records() from public, anon;
-
 grant execute on function public.get_instructor_student_records() to authenticated;
-
 -- Shared, atomic per-account limit across Edge Function instances.
 create table public.copilot_rate_limits (
   user_id uuid primary key references public.users(id) on delete cascade,
   window_start timestamptz not null,
   requests integer not null
 );
-
 alter table public.copilot_rate_limits enable row level security;
-
 revoke all on public.copilot_rate_limits from public, anon, authenticated;
-
 create function public.consume_copilot_request()
 returns boolean
 language plpgsql security definer set search_path = ''
@@ -121,7 +104,5 @@ begin
   return used <= 10;
 end;
 $$;
-
 revoke all on function public.consume_copilot_request() from public, anon;
-
 grant execute on function public.consume_copilot_request() to authenticated;

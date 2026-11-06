@@ -20,14 +20,16 @@ import type {
 } from "@/lib/instructor-availability";
 import {
     dateKey,
-    dojoCapacities,
     getEventStyle,
-    eventsForDate,
     formatTime,
     fullDate,
     weekDates,
 } from "@/lib/instructor-calendar";
-import type { CalendarEvent } from "@/lib/instructor-calendar";
+import { rosterSizeLabel } from "@/lib/instructor/calendar-view";
+import type {
+    CalendarEventsForDate,
+    CalendarViewEvent as CalendarEvent,
+} from "@/lib/instructor/calendar-view";
 import { cn } from "@/lib/utils";
 
 type TimelineItem = { id: string; startTime: string; endTime: string } & (
@@ -37,6 +39,7 @@ type TimelineItem = { id: string; startTime: string; endTime: string } & (
 type DragRange = { day: Date; anchor: number; end: number; pointerId: number };
 
 export default function CalendarTimeline({
+    getEvents,
     date,
     now,
     view,
@@ -49,6 +52,7 @@ export default function CalendarTimeline({
     onSelectDate,
     isDesktop,
 }: {
+    getEvents: CalendarEventsForDate;
     date: Date;
     now: Date;
     view: "day" | "week";
@@ -57,7 +61,7 @@ export default function CalendarTimeline({
     selectedId: string | null;
     onSelectClass: (event: CalendarEvent) => void;
     onSelectAvailability: (slot: AvailabilitySlot) => void;
-    onSelectRange: (range: AvailabilityRange) => void;
+    onSelectRange?: (range: AvailabilityRange) => void;
     onSelectDate: (day: Date) => void;
     isDesktop: boolean;
 }) {
@@ -144,7 +148,14 @@ export default function CalendarTimeline({
     }, [rangeKey, focusRequest, timelineStart, timelineEnd, pixelsPerMinute]);
 
     function selectRange(range: AvailabilityRange) {
-        const nextError = availabilityError(range, slots);
+        if (!onSelectRange) return;
+        const nextError = availabilityError(
+            range,
+            slots,
+            undefined,
+            now,
+            getEvents(range.date).filter((event) => event.status !== "cancelled"),
+        );
         setError(nextError);
         if (!nextError) onSelectRange(range);
     }
@@ -165,7 +176,13 @@ export default function CalendarTimeline({
             aria-label={`${view === "day" ? "Daily" : "Weekly"} hourly timeline`}
             className="flex min-w-0 flex-col gap-2 lg:min-h-0 lg:flex-1"
         >
-            {!isDesktop && view === "week" && <CalendarDaySelector date={date} today={now} onSelectDate={onSelectDate} />}
+            {!isDesktop && view === "week" && (
+                <CalendarDaySelector
+                    date={date}
+                    today={now}
+                    onSelectDate={onSelectDate}
+                />
+            )}
             {error && (
                 <p role="alert" className="text-xs text-destructive">
                     {error}
@@ -249,7 +266,7 @@ export default function CalendarTimeline({
                         const isToday = key === dateKey(now);
                         const daySlots = slots.filter((slot) => dateKey(slot.date) === key);
                         const items: TimelineItem[] = [
-                            ...eventsForDate(day).map(
+                            ...getEvents(day).filter(event => !event.dateOnly).map(
                                 (event): TimelineItem => ({ ...event, kind: "class", event }),
                             ),
                             ...daySlots.map(
@@ -281,6 +298,7 @@ export default function CalendarTimeline({
                                     style={{ height }}
                                     onPointerDown={(event) => {
                                         if (
+                                            !onSelectRange ||
                                             event.button !== 0 ||
                                             event.pointerType === "touch" ||
                                             !(event.target instanceof HTMLElement) ||
@@ -292,8 +310,7 @@ export default function CalendarTimeline({
                                         )
                                             return;
                                         const minute = pointerMinute(event);
-                                        if (slotDateTime(day, minutesTime(minute)) <= new Date())
-                                            return;
+                                        if (slotDateTime(day, minutesTime(minute)) <= now) return;
                                         event.preventDefault();
                                         event.currentTarget.setPointerCapture(event.pointerId);
                                         const next = {
@@ -342,6 +359,7 @@ export default function CalendarTimeline({
                                         const startTime = minutesTime(minute);
                                         const endTime = minutesTime(minute + 30);
                                         const disabled =
+                                            !onSelectRange ||
                                             (isDay &&
                                                 (minute < TIMELINE_START ||
                                                     minute + 30 > TIMELINE_END)) ||
@@ -398,6 +416,7 @@ export default function CalendarTimeline({
                                             <button
                                                 key={item.id}
                                                 type="button"
+                                                data-prefetch-class={item.kind === "class" && item.event.type === "training" ? item.event.id : undefined}
                                                 aria-pressed={selectedId === item.id}
                                                 aria-controls={
                                                     isDay && isClass && selectedId === item.id
@@ -468,8 +487,7 @@ export default function CalendarTimeline({
                                                             {item.event.dojo}
                                                         </span>
                                                         <span className="shrink-0">
-                                                            {item.event.studentIds.length}/
-                                                            {dojoCapacities[item.event.dojo]} students
+                                                            {rosterSizeLabel(item.event)}
                                                         </span>
                                                     </span>
                                                 )}
