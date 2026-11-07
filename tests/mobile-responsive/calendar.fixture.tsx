@@ -10,6 +10,7 @@ import InstructorDashboard from '../../src/pages/Instructor/InstructorDashboard'
 import InstructorStudents from '../../src/pages/Instructor/InstructorStudents'
 import InstructorStudentDetails from '../../src/pages/Instructor/InstructorStudentDetails'
 import InstructorGradingAssessment from '../../src/pages/Instructor/InstructorGradingAssessment'
+import InstructorGradingSession from '../../src/pages/Instructor/InstructorGradingSession'
 import RootLayout from '../../src/layouts/RootLayout'
 import type { Session } from '@supabase/supabase-js'
 import type { UserRole } from '../../src/lib/auth'
@@ -64,6 +65,7 @@ function FixtureApp() {
           <Route path="/instructor/reports/:eventId" element={<Navigate to="/instructor/calendar" replace />} />
           <Route path="/instructor/assessments/:assessmentId" element={<InstructorGradingAssessment />} />
           <Route path="/instructor/assessments/:eventId/:studentId" element={<InstructorGradingAssessment />} />
+          <Route path="/instructor/grading/:eventId" element={<InstructorGradingSession />} />
         </Route>
         <Route element={<RootLayout />}><Route path="*" element={<p>Navigation fixture page</p>} /></Route>
       </Routes><FloatingChatbot /></BrowserRouter>

@@ -137,17 +137,13 @@ test('late assessment-candidate responses cannot replace a newly selected candid
   assert.equal(result.selected, 'completed')
 })
 
-test('the existing grading-roster action opens the matching assessment and profile context', async () => {
+test('the grading-roster action opens the matching student overview with session context', async () => {
   const result = await inPage(390, `/instructor/calendar?view=month&date=2026-11-7&session=${gradingId}`, async (w, wait) => {
     const d = w.document
-    d.querySelector('a[aria-label^="View grading assessment for"]').click(); await wait()
-    const assessment = { path: w.location.pathname, notes: d.querySelector('textarea').value }
-    d.querySelector('form a').click(); await wait()
-    return { assessment, path: w.location.pathname, search: w.location.search }
+    d.querySelector('a[aria-label^="View student overview for"]').click(); await wait()
+    return { path: w.location.pathname, search: w.location.search }
   })
-  assert.equal(result.assessment.path, assessmentPath)
-  assert.match(result.assessment.notes, /000000000100/)
   assert.equal(result.path, `/instructor/students/${studentId}`)
-  assert.match(result.search, /tab=grading/)
+  assert.match(result.search, /tab=overview/)
   assert.match(result.search, /session=00000000-0000-4000-8000-202611070008/)
 })

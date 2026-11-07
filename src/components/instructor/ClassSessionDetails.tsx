@@ -20,6 +20,7 @@ import { useInstructorAttendance } from "@/hooks/use-instructor-attendance";
 import { parseEntityId } from "@/lib/instructor/adapters";
 import { attendanceEditable, editableAttendanceRows } from "@/lib/instructor/attendance";
 import { rosterAttendance } from "@/lib/instructor/calendar-view";
+import { studentDetailsHref } from "@/lib/instructor-calendar";
 import type { CalendarViewEvent as CalendarEvent } from "@/lib/instructor/calendar-view";
 import type { AttendanceState as Attendance, GradeRow, StudentEntry } from "@/lib/instructor/types";
 import { cn } from "@/lib/utils";
@@ -225,6 +226,11 @@ export default function ClassSessionDetails({
                     <Button variant="outline" size="sm" onClick={attendance.retry} disabled={attendance.pending}>{attendance.retryLabel}</Button>
                 </div>}
                 {attendance.message && <p role="status" className="px-3 py-2 text-xs text-muted-foreground">{attendance.message}</p>}
+                {isGrading && attendance.data && <div className="px-3 pb-2">
+                    <Button variant="outline" size="sm" nativeButton={false} render={<Link to={`/instructor/grading/${event.id}`} />}>
+                        View Grading
+                    </Button>
+                </div>}
                 {attendance.data && !roster.length && <p role="status" className="p-4 text-sm text-muted-foreground">No students are registered for this session.</p>}
                 <TooltipProvider>
                     <ul
@@ -263,11 +269,11 @@ export default function ClassSessionDetails({
                                         <Tooltip>
                                             <TooltipTrigger render={isGrading ? (
                                                 <Button
-                                                    render={<Link to={`/instructor/assessments/${event.id}/${student.id}`} />}
+                                                    render={<Link to={studentDetailsHref(student.id, event, "overview")} />}
                                                     nativeButton={false}
                                                     variant="ghost"
                                                     size="icon-sm"
-                                                    aria-label={`View grading assessment for ${student.name}`}
+                                                    aria-label={`View student overview for ${student.name}`}
                                                     className="size-11 rounded-md text-foreground/70 hover:text-foreground lg:size-7"
                                                 />
                                             ) : (
@@ -277,7 +283,7 @@ export default function ClassSessionDetails({
                                             )}>
                                                 <MessageSquare aria-hidden="true" />
                                             </TooltipTrigger>
-                                            <TooltipContent>{isGrading ? "Grading assessment" : "Student details and techniques"}</TooltipContent>
+                                            <TooltipContent>{isGrading ? "Student overview" : "Student details and techniques"}</TooltipContent>
                                         </Tooltip>
                                     </div>
                                     <div className="col-start-2 row-start-1 flex min-w-0 items-center lg:col-start-1 lg:row-start-2">
