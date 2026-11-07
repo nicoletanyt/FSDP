@@ -18,10 +18,7 @@ import {
     PopoverTrigger,
 } from "@/components/ui/popover";
 import InstructorDataStatus from "./InstructorDataStatus";
-import ReportEditor from "./ReportEditor";
-import { useInstructorWriteIdentity } from "@/hooks/use-instructor-write-identity";
 import { useInstructorQuery } from "@/hooks/use-instructor-data";
-import { useInstructorEditProtection } from "@/hooks/use-instructor-edit-protection";
 import { useAuth } from "@/hooks/use-auth";
 import { instructorQueryKeys as queryKeys, instructorQueryTimes as queryTimes } from "@/lib/instructor/query-keys";
 import { previousHistoryPage } from "@/lib/instructor/history-placeholder";
@@ -37,20 +34,17 @@ import type {
     AttendanceState,
     StudentHistoryEntry,
     StudentId,
-    InstructorId,
 } from "@/lib/instructor/types";
-import { cn } from "cn"; // verify this path; other imports use "@/"
+import { cn } from "cn";
 
 const PAGE_SIZE = 20;
 
-function SessionReport({
+function SessionHistoryCard({
     session,
     selected,
-    instructorId,
 }: {
     session: StudentHistoryEntry;
     selected: boolean;
-    instructorId: InstructorId | null;
 }) {
     const attendance = toAttendanceState(session.record.attendance_status);
     const { starts_at, ends_at } = session.event;
@@ -71,7 +65,7 @@ function SessionReport({
             data-selected={selected || undefined}
             data-phase={phase}
             className={cn(
-                "detail-card session-report gap-4 border border-transparent bg-card py-4",
+                "detail-card session-history-card gap-4 border border-transparent bg-card py-4",
                 selected && "border-primary/30 ring-0",
             )}
         >
@@ -120,15 +114,6 @@ function SessionReport({
                     </p>
                 )}
             </CardHeader>
-            <CardContent>
-                <div className="mb-4 border-t lg:mb-2" aria-hidden="true" />
-                <ReportEditor
-                    event={session.event}
-                    record={session.record}
-                    author={session.reportAuthor}
-                    instructorId={instructorId}
-                />
-            </CardContent>
         </Card>
     );
 }
@@ -210,8 +195,6 @@ export default function StudentSessionHistory({
     const queryClient = useQueryClient();
     const { session, profile } = useAuth();
     const userId = profile?.role === "instructor" ? session?.user.id : undefined;
-    const identity = useInstructorWriteIdentity();
-    const retainDuringWrite = useInstructorEditProtection(undefined, studentId);
     const [attendance, setAttendance] = useState<AttendanceState | "all">("all");
     const [sort, setSort] = useState("newest");
     const [page, setPage] = useState(0);
@@ -237,7 +220,6 @@ export default function StudentSessionHistory({
         load,
         {
             ...queryTimes.studentHistory,
-            retainDuringWrite,
             placeholderData: (previous, previousQuery) =>
                 previousHistoryPage(
                     queryClient,
@@ -314,7 +296,6 @@ export default function StudentSessionHistory({
                     </PopoverContent>
                 </Popover>
             </div>
-            {identity.status !== "success" && <InstructorDataStatus loading={identity.status === "loading"} error={identity.error} onRetry={identity.retry} variant="inline" />}
             {history.status !== "success" ? (
                 <InstructorDataStatus
                     loading={history.status === "loading"}
@@ -334,11 +315,10 @@ export default function StudentSessionHistory({
                     <div className="space-y-5 lg:space-y-3">
                         {history.data.items.length ? (
                             history.data.items.map((session) => (
-                                <SessionReport
+                                <SessionHistoryCard
                                     key={session.event.id}
                                     session={session}
                                     selected={session.event.id === contextId}
-                                    instructorId={identity.data?.instructorId ?? null}
                                 />
                             ))
                         ) : (

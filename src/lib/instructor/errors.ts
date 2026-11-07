@@ -25,7 +25,6 @@ export function toInstructorDataError(error: unknown, message: string): Instruct
     const status = 'status' in error ? error.status : null
     const name = 'name' in error ? error.name : null
     if (code === 'PRS01') return new InstructorDataError('conflict', 'This record changed while you were editing. Reload the saved record before saving again; your draft is kept.')
-    if (code === 'PRS02') return new InstructorDataError('forbidden', 'Only the recorded report author can edit this report for an assigned class.')
     if (code === 'PRS03') return new InstructorDataError('forbidden', 'Cancelled sessions are read-only.')
     if (code === '40P01' || code === '40001') return new InstructorDataError('conflict', 'A concurrent save changed these records. Reload the saved data, then try again.')
     if (code === 'PAT01') return new InstructorDataError('conflict', 'Attendance or the roster changed while saving. Reload attendance, then try again.')

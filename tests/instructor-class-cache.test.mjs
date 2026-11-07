@@ -49,7 +49,7 @@ function fixture() {
     latest = { attendance, mutation }
     return null
   }
-  async function render(api, show = true, kind = 'report') {
+  async function render(api, show = true, kind = 'assessment') {
     const tree = React.createElement(QueryClientProvider, { client },
       React.createElement(AuthContext.Provider, { value: auth },
         React.createElement(InstructorApiContext.Provider, { value: api },
@@ -154,22 +154,22 @@ test('availability changes invalidate all cached ranges only for the current aut
   f.client.clear()
 })
 
-test('session changes invalidate the affected user, student, class and cross-event previous-report caches', () => {
-  for (const kind of ['attendance', 'report', 'assessment']) {
+test('session changes invalidate only the affected user, student and class caches', () => {
+  for (const kind of ['attendance', 'assessment']) {
     const f = fixture()
     const differentEvent = '00000000-0000-4000-8000-000000000020'
     const otherStudent = '00000000-0000-4000-8000-000000000021'
-    const affected = [keys.roster(userId, eventId), keys.studentContext(userId, eventId), keys.reports(userId, eventId),
+    const affected = [keys.roster(userId, eventId), keys.studentContext(userId, eventId),
       keys.studentHistory(userId, studentId, { page: 0 }), keys.studentSummary(userId, studentId),
-      keys.studentGrading(userId, studentId), keys.studentFeedback(userId, studentId)]
-    if (kind !== 'attendance') affected.push(keys.assessment(userId, eventId, studentId), keys.report(userId, eventId, studentId))
-    const laterReports = keys.reports(userId, differentEvent)
+      keys.studentGrading(userId, studentId)]
+    if (kind !== 'attendance') affected.push(keys.assessment(userId, eventId, studentId))
+    const otherEvent = keys.roster(userId, differentEvent)
     const unrelated = keys.studentSummary(userId, otherStudent)
     const otherUser = keys.roster('other-user', eventId)
-    for (const key of [...affected, laterReports, unrelated, otherUser]) f.client.setQueryData(key, {})
+    for (const key of [...affected, otherEvent, unrelated, otherUser]) f.client.setQueryData(key, {})
     invalidateSessionChange(f.client, queryGeneration(f.client), userId, eventId, [studentId], kind, true)
     for (const key of affected) assert.equal(f.client.getQueryState(key).isInvalidated, true, `${kind}: ${JSON.stringify(key)}`)
-    assert.equal(f.client.getQueryState(laterReports).isInvalidated, kind === 'report')
+    assert.equal(f.client.getQueryState(otherEvent).isInvalidated, false)
     assert.equal(f.client.getQueryState(unrelated).isInvalidated, false)
     assert.equal(f.client.getQueryState(otherUser).isInvalidated, false)
     f.client.clear()
@@ -384,24 +384,24 @@ test('attendance conflict reloads server truth before a new request with a fresh
   } finally { await f.cleanup() }
 })
 
-test('report saves invalidate active roster and old-account completions cannot affect a later login', async () => {
+test('assessment saves invalidate active roster and old-account completions cannot affect a later login', async () => {
   const f = fixture()
-  let reads = 0, report = null, finishSave
+  let reads = 0, notes = null, finishSave
   const api = {
-    getAttendanceRoster: async () => { reads++; return { ...roster(null), report } },
-    saveReport: () => new Promise(resolve => { finishSave = () => { report = 'updated'; resolve({}) } }),
-    getReport: async () => ({ record: {}, session: {}, reportAuthor: null }),
+    getAttendanceRoster: async () => { reads++; return { ...roster(null), notes } },
+    saveAssessment: () => new Promise(resolve => { finishSave = () => { notes = 'updated'; resolve({}) } }),
+    getAssessment: async () => ({ record: {}, session: {} }),
   }
   try {
     await f.render(api)
     await until(() => f.current().attendance.query.status === 'success')
     let pending
-    await act(async () => { pending = f.current().mutation.save({ kind: 'report', report: 'updated', expected: { report: null, reportAuthorId: null } }) })
+    await act(async () => { pending = f.current().mutation.save({ kind: 'assessment', status: null, notes: 'updated', expected: { status: null, notes: null } }) })
     await act(async () => { finishSave(); await pending })
-    await until(() => f.current().attendance.data?.report === 'updated')
+    await until(() => f.current().attendance.data?.notes === 'updated')
     assert.equal(reads, 2)
 
-    await act(async () => { pending = f.current().mutation.save({ kind: 'report', report: 'again', expected: { report: null, reportAuthorId: null } }) })
+    await act(async () => { pending = f.current().mutation.save({ kind: 'assessment', status: null, notes: 'again', expected: { status: null, notes: 'updated' } }) })
     await f.unmount()
     f.boundary.setUser(null); f.boundary.setUser(userId); f.boundary.setRole(userId, 'instructor')
     f.client.setQueryData(keys.roster(userId, eventId), roster('absent'))
@@ -434,19 +434,19 @@ test('session saves hide unconfirmed data when the authoritative reload fails', 
   let fail = true
   const api = {
     getAttendanceRoster: async () => roster(null),
-    saveReport: async () => ({}),
-    getReport: async () => { if (fail) throw { status: 403 }; return { record: { report: 'saved' }, session: {}, reportAuthor: null } },
+    saveAssessment: async () => ({}),
+    getAssessment: async () => { if (fail) throw { status: 403 }; return { record: { assessment_notes: 'saved' }, session: {} } },
   }
   try {
     await f.render(api)
     await until(() => f.current().attendance.query.status === 'success')
-    await act(async () => { await f.current().mutation.save({ kind: 'report', report: 'saved', expected: { report: null, reportAuthorId: null } }) })
+    await act(async () => { await f.current().mutation.save({ kind: 'assessment', status: null, notes: 'saved', expected: { status: null, notes: null } }) })
     assert.equal(f.current().mutation.unconfirmed, true)
     assert.match(f.current().mutation.error, /saved, but could not be reloaded/)
     fail = false
     await act(async () => { await f.current().mutation.reload() })
     assert.equal(f.current().mutation.unconfirmed, false)
-    assert.equal(f.current().mutation.data.record.report, 'saved')
+    assert.equal(f.current().mutation.data.record.assessment_notes, 'saved')
   } finally { await f.cleanup() }
 })
 
@@ -479,20 +479,20 @@ test('student query keys isolate filters and users and reuse fresh results', asy
   } finally { if (root) await act(async () => root.unmount()); client.clear() }
 })
 
-test('failed report refresh keeps the editing component and its draft mounted until recovery', async () => {
+test('failed assessment refresh keeps the editing component and its draft mounted until recovery', async () => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } })
   const boundary = createBoundary(client)
   boundary.setUser(userId); boundary.setRole(userId, 'instructor')
   const auth = { session: { user: { id: userId } }, profile: { id: userId, role: 'instructor' } }
   let failRefresh = false, mutation, parent, root, unmounts = 0
   const api = {
-    saveReport: async () => { failRefresh = true; return {} },
-    getReport: async () => { if (failRefresh) throw { status: 403 }; return { record: { report: 'saved' }, session: {}, reportAuthor: null } },
+    saveAssessment: async () => { failRefresh = true; return {} },
+    getAssessment: async () => { if (failRefresh) throw { status: 403 }; return { record: { assessment_notes: 'saved' }, session: {} } },
   }
   const readHistory = async () => { if (failRefresh) throw { status: 403 }; return { items: [] } }
   function Editor() {
     const [draft] = React.useState('draft preserved')
-    mutation = useInstructorSessionSave('report', { eventId, studentId })
+    mutation = useInstructorSessionSave('assessment', { eventId, studentId })
     React.useEffect(() => () => { unmounts++ }, [])
     return React.createElement('span', null, draft)
   }
@@ -507,7 +507,7 @@ test('failed report refresh keeps the editing component and its draft mounted un
   try {
     await act(async () => { root = create(tree) })
     await until(() => parent.status === 'success' && mutation)
-    await act(async () => { await mutation.save({ kind: 'report', report: 'saved', expected: { report: null, reportAuthorId: null } }) })
+    await act(async () => { await mutation.save({ kind: 'assessment', status: null, notes: 'saved', expected: { status: null, notes: null } }) })
     await until(() => Boolean(mutation.error))
     assert.equal(parent.status, 'success')
     assert.equal(mutation.unconfirmed, true)

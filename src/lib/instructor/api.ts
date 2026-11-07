@@ -3,15 +3,15 @@ import { parseEntityId, parseInstructorRow, resolveInstructorIdentity, timestamp
 import {
   assertAssessment, dateOnly, decodeApplication, decodeAvailability, decodeCalendarEntry, nullable, object,
   decodeCentre, decodeClassType, decodeDirectory, decodeGrade, decodeGradeRequirement, decodeGradeTrack,
-  decodeHistoryEntry, decodePage, decodeRosterEntry, decodeSessionReport, decodeStudentDetail,
+  decodeHistoryEntry, decodePage, decodeRosterEntry, decodeStudentDetail,
   decodeSummary, decodeSyllabusItem, decodeTechniqueSignOff, array, decodeAttendanceSave, decodeAttendanceSnapshot,
-  decodeSessionSave, decodeReportSnapshot, decodeAssessmentSnapshot,
+  decodeSessionSave, decodeAssessmentSnapshot,
 } from './decoders'
 import { InstructorDataError, toInstructorDataError } from './errors'
 import { collectCalendarPages } from './page-collector'
 import type {
   AssessmentDetail, AssessmentKey, AttendanceSaveInput, AvailabilityInput, CalendarOptions, DirectoryOptions, EventId, HistoryOptions,
-  InstructorIdentity, InstructorReferenceData, Page, PageOptions, StudentId, ReportDetail, ReportSaveInput, AssessmentSaveInput, SessionSaveInput,
+  InstructorIdentity, InstructorReferenceData, Page, PageOptions, StudentId, AssessmentSaveInput, SessionSaveInput,
 } from './types'
 
 // Inject the existing shared Supabase client at the provider boundary. This does
@@ -174,7 +174,7 @@ export function createInstructorApi(client: InstructorClient) {
     const page = pagination(options)
     if (options.eventType !== undefined && !['class', 'seminar', 'workshop', 'grading'].includes(options.eventType)) invalidRequest('Choose a valid event type.')
     if (options.attendance !== undefined && !['present', 'late', 'absent', 'excused', 'unmarked'].includes(options.attendance)) invalidRequest('Choose a valid attendance filter.')
-    for (const value of [options.oldestFirst, options.recordedAssessmentsOnly, options.reportsOnly]) {
+    for (const value of [options.oldestFirst, options.recordedAssessmentsOnly]) {
       if (value !== undefined && typeof value !== 'boolean') invalidRequest('Choose valid history filters.')
     }
     await getInstructorAccount(page.signal)
@@ -183,7 +183,7 @@ export function createInstructorApi(client: InstructorClient) {
       filter_type: options.eventType ?? null,
       filter_attendance: options.attendance === 'unmarked' ? null : options.attendance ?? null,
       unmarked_only: options.attendance === 'unmarked', oldest_first: options.oldestFirst ?? false,
-      recorded_assessments_only: options.recordedAssessmentsOnly ?? false, reports_only: options.reportsOnly ?? false,
+      recorded_assessments_only: options.recordedAssessmentsOnly ?? false,
     }, page.signal)
     const result = decodePage(data, decodeHistoryEntry)
     if (result.items.some(item => item.record.student_id !== studentId
@@ -198,10 +198,8 @@ export function createInstructorApi(client: InstructorClient) {
     const eventId = parseEntityId(input.eventId, 'event')
     const studentId = parseEntityId(input.studentId, 'student')
     const expectedUser = parseEntityId(input.expectedUserId, 'auth-user')
-    const expected = input.kind === 'report' ? decodeReportSnapshot(input.expected) : decodeAssessmentSnapshot(input.expected)
-    const value = input.kind === 'report'
-      ? { report: input.report === null ? null : typeof input.report === 'string' ? input.report.trim() || null : invalidRequest('Enter valid report text.') }
-      : decodeAssessmentSnapshot({ status: input.status, notes: input.notes === null ? null : typeof input.notes === 'string' ? input.notes.trim() || null : invalidRequest('Enter valid assessment notes.') })
+    const expected = decodeAssessmentSnapshot(input.expected)
+    const value = decodeAssessmentSnapshot({ status: input.status, notes: input.notes === null ? null : typeof input.notes === 'string' ? input.notes.trim() || null : invalidRequest('Enter valid assessment notes.') })
     const identity = await getCurrentInstructor()
     if (identity.userId !== expectedUser) throw new InstructorDataError('forbidden', 'Your account changed. Reopen this record before saving.')
     const result = decodeSessionSave(await rpc('save_instructor_session_record', {
@@ -209,8 +207,7 @@ export function createInstructorApi(client: InstructorClient) {
       write_kind: input.kind, expected_record: expected, new_value: value,
     }, undefined, 'Unable to save this record. Please retry.'))
     if (result.requestId !== requestId || result.eventId !== eventId || result.studentId !== studentId || result.kind !== input.kind
-        || (result.kind === 'report' && (result.value.reportAuthorId !== identity.instructorId || result.value.report !== ('report' in value ? value.report : null)))
-        || (result.kind === 'assessment' && (result.value.status !== ('status' in value ? value.status : null) || result.value.notes !== ('notes' in value ? value.notes : null)))) {
+        || result.value.status !== value.status || result.value.notes !== value.notes) {
       throw new InstructorDataError('invalid_data', 'The saved record response does not match this request. Reload the saved record.')
     }
     return result
@@ -219,27 +216,7 @@ export function createInstructorApi(client: InstructorClient) {
   return {
     getCurrentInstructor,
 
-    saveReport(input: ReportSaveInput) { return saveSessionRecord({ ...input, kind: 'report' }) },
     saveAssessment(input: AssessmentSaveInput) { return saveSessionRecord({ ...input, kind: 'assessment' }) },
-
-    async getReport(key: AssessmentKey, signal?: AbortSignal): Promise<ReportDetail | null> {
-      const eventId = parseEntityId(key.eventId, 'event')
-      const studentId = parseEntityId(key.studentId, 'student')
-      const session = await getEventForInstructor(eventId, await getCurrentInstructor(signal), signal)
-      if (!session || session.event.event_type !== 'class') return null
-      const data = await requestInstructorData(
-        () => cancellable(client.from('event_students').select(`${rosterSelect}, reportAuthor:instructors!event_students_report_author_id_fkey(*)`)
-          .eq('event_id', eventId).eq('student_id', studentId), signal).maybeSingle<unknown>(),
-        'Unable to reload the saved report. Please try again.', signal,
-      )
-      if (data === null) return null
-      const entry = decodeRosterEntry(data)
-      const reportAuthor = nullable(parseInstructorRow)(object(data).reportAuthor)
-      if (entry.record.event_id !== eventId || entry.record.student_id !== studentId || (reportAuthor && reportAuthor.id !== entry.record.report_author_id)) {
-        throw new InstructorDataError('invalid_data', 'The report does not match this event, student or author.')
-      }
-      return { ...entry, session, reportAuthor }
-    },
 
     async saveAttendance(input: AttendanceSaveInput) {
       const requestId = parseEntityId(input.requestId, 'attendance-request')
@@ -384,19 +361,6 @@ export function createInstructorApi(client: InstructorClient) {
       const studentId = parseEntityId(id, 'student')
       await getInstructorAccount(signal)
       return decodeSummary(await rpc('instructor_student_summary', { target_student: studentId }, signal))
-    },
-
-    async getSessionReports(id: EventId, options: PageOptions = {}) {
-      const eventId = parseEntityId(id, 'event')
-      const page = pagination(options)
-      await getCurrentInstructor(page.signal)
-      const result = decodePage(await rpc('instructor_event_reports', {
-        target_event: eventId, page_size: page.limit, page_offset: page.offset,
-      }, page.signal), decodeSessionReport)
-      if (result.offset !== page.offset || result.limit !== page.limit || result.items.some(item => item.record.event_id !== eventId)) {
-        throw new InstructorDataError('invalid_data', 'The reports do not match the session or requested page.')
-      }
-      return result
     },
 
     async getTechniqueSignOffs(id: StudentId, signal?: AbortSignal) {

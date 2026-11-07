@@ -1,6 +1,6 @@
 import { createRoot } from 'react-dom/client'
 import { useEffect, useMemo, useState } from 'react'
-import { BrowserRouter, Route, Routes } from 'react-router'
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router'
 import { QueryClientProvider } from '@tanstack/react-query'
 // Browser-only fixture: exercises the real instructor pages/shell with a local auth
 // context. This entry point is outside index.html and the production bundle.
@@ -9,7 +9,6 @@ import InstructorLayout from '../../src/layouts/InstructorLayout'
 import InstructorDashboard from '../../src/pages/Instructor/InstructorDashboard'
 import InstructorStudents from '../../src/pages/Instructor/InstructorStudents'
 import InstructorStudentDetails from '../../src/pages/Instructor/InstructorStudentDetails'
-import InstructorStudentReports from '../../src/pages/Instructor/InstructorStudentReports'
 import InstructorGradingAssessment from '../../src/pages/Instructor/InstructorGradingAssessment'
 import RootLayout from '../../src/layouts/RootLayout'
 import type { Session } from '@supabase/supabase-js'
@@ -62,7 +61,7 @@ function FixtureApp() {
           <Route path="/instructor/dashboard" element={<InstructorDashboard />} />
           <Route path="/instructor/students" element={<InstructorStudents />} />
           <Route path="/instructor/students/:studentId" element={<InstructorStudentDetails />} />
-          <Route path="/instructor/reports/:eventId" element={<InstructorStudentReports />} />
+          <Route path="/instructor/reports/:eventId" element={<Navigate to="/instructor/calendar" replace />} />
           <Route path="/instructor/assessments/:assessmentId" element={<InstructorGradingAssessment />} />
           <Route path="/instructor/assessments/:eventId/:studentId" element={<InstructorGradingAssessment />} />
         </Route>

@@ -417,7 +417,7 @@ test('recorded attendance survives resize with editable controls and the drawer 
         const lateBadge = drawer.querySelector('[aria-label$=": Late"]');
         const late = { text: lateBadge?.textContent, colour: w.getComputedStyle(lateBadge).backgroundColor };
         const session = w.location.search;
-        const note = drawer.querySelector('a[href*="/instructor/students/"]')?.getAttribute('href');
+        const note = drawer.querySelector('button[aria-label^="View student details and techniques for"]')?.getAttribute('aria-haspopup');
         f.style.width = '1280px'; await wait(500);
         const desktop = { drawer: !!d.querySelector('[data-slot="drawer-content"]'), session: w.location.search, marked: [...d.querySelectorAll('button[aria-label]')].find(e => e.getAttribute('aria-label')?.startsWith(student + ' present'))?.getAttribute('aria-pressed') };
         f.style.width = '320px'; await wait(500);
@@ -436,7 +436,7 @@ test('recorded attendance survives resize with editable controls and the drawer 
     assert.equal(result.desktop.drawer, false);
     assert.equal(result.desktop.marked, 'true');
     assert.equal(result.desktop.session, result.session);
-    assert.match(result.note, /tab=sessions/);
+    assert.equal(result.note, 'dialog');
     assert.equal(result.rosters, 1);
     assert.equal(result.closed, true);
     assert.doesNotMatch(result.after, /session=/);
@@ -445,7 +445,7 @@ test('recorded attendance survives resize with editable controls and the drawer 
     assert.equal(result.focused, true);
 });
 
-test('past classes remain read-only and retain student/session note links', async () => {
+test('past classes remain read-only and retain student-details modal triggers', async () => {
     const result = await inCalendar(320, '/instructor/calendar?view=day&date=2026-10-27', async (w, wait) => {
         const d = w.document;
         d.querySelector('[data-mobile-event]').click(); await wait();
@@ -453,14 +453,15 @@ test('past classes remain read-only and retain student/session note links', asyn
         const ids = [...d.querySelectorAll('[id]')].map(e => e.id);
         return { editable: drawer.querySelectorAll('button[aria-label^="Mark "]').length,
             bulk: [...drawer.querySelectorAll('button')].some(e => e.textContent.includes('Mark All')),
-            notes: [...drawer.querySelectorAll('a[href*="/instructor/students/"]')].map(e => e.getAttribute('href')),
+            notes: [...drawer.querySelectorAll('button[aria-label^="View student details and techniques for"]')].map(e => e.getAttribute('aria-haspopup')),
             duplicateIds: ids.filter((id, i) => ids.indexOf(id) !== i),
             nameCount: drawer.querySelectorAll('[aria-label="Student roster"] li').length };
     });
     assert.equal(result.editable, 0);
     assert.equal(result.bulk, false);
     assert.ok(result.nameCount > 0);
-    assert.ok(result.notes.every(href => href.includes('tab=sessions') && href.includes('session=') && href.includes('date=2026-10-27')));
+    assert.equal(result.notes.length, result.nameCount);
+    assert.ok(result.notes.every(popup => popup === 'dialog'));
     assert.deepEqual(result.duplicateIds, []);
 });
 

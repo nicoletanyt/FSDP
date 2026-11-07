@@ -187,8 +187,6 @@ export interface EventStudentRow {
   student_id: StudentId
   attendance_status: AttendanceStatus | null
   recorded_at: Timestamp | null
-  report: string | null
-  report_author_id: InstructorId | null
   assessment_status: AssessmentStatus | null
   assessment_notes: string | null
   checked_in_at: Timestamp | null
@@ -218,15 +216,11 @@ export interface AttendanceSaveResult {
   attendance: AttendanceSnapshot[]
 }
 
-export interface ReportSnapshot { report: string | null; reportAuthorId: InstructorId | null }
 export interface AssessmentSnapshot { status: AssessmentStatus | null; notes: string | null }
 interface SessionSaveKey extends AssessmentKey { requestId: string; expectedUserId: AuthUserId }
-export interface ReportSaveInput extends SessionSaveKey { report: string | null; expected: ReportSnapshot }
 export interface AssessmentSaveInput extends SessionSaveKey { status: AssessmentStatus | null; notes: string | null; expected: AssessmentSnapshot }
-export type SessionSaveInput = ({ kind: 'report' } & ReportSaveInput) | ({ kind: 'assessment' } & AssessmentSaveInput)
-export type SessionSaveResult = { requestId: string; eventId: EventId; studentId: StudentId } & (
-  { kind: 'report'; value: ReportSnapshot } | { kind: 'assessment'; value: AssessmentSnapshot }
-)
+export type SessionSaveInput = { kind: 'assessment' } & AssessmentSaveInput
+export type SessionSaveResult = { requestId: string; eventId: EventId; studentId: StudentId; kind: 'assessment'; value: AssessmentSnapshot }
 
 export interface GradingApplicationRow {
   id: string
@@ -389,7 +383,6 @@ export interface StudentHistoryEntry {
   event: EventRow
   centre: CentreRow | null
   instructor: InstructorRow | null
-  reportAuthor: InstructorRow | null
   targetGrade: GradeRow | null
   grading: GradingRow | null
 }
@@ -399,7 +392,6 @@ export interface HistoryOptions extends PageOptions {
   attendance?: AttendanceState
   oldestFirst?: boolean
   recordedAssessmentsOnly?: boolean
-  reportsOnly?: boolean
 }
 
 export interface StudentAttendanceSummary {
@@ -417,11 +409,6 @@ export interface StudentAttendanceSummary {
   lastAttended: { event: EventRow; centre: CentreRow | null } | null
 }
 
-export interface SessionReportEntry extends RosterEntry {
-  reportAuthor: InstructorRow | null
-  previousReports: StudentHistoryEntry[]
-}
-
 export interface TechniqueSignOffEntry {
   signOff: TechniqueSignOffRow
   instructor: InstructorRow | null
@@ -431,9 +418,4 @@ export interface AssessmentDetail extends RosterEntry {
   session: CalendarEntry
   application: GradingApplicationRow | null
   targetGrade: GradeRow | null
-}
-
-export interface ReportDetail extends RosterEntry {
-  session: CalendarEntry
-  reportAuthor: InstructorRow | null
 }

@@ -6,7 +6,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import GradeBadge from './DatabaseGradeBadge'
 import type { StudentEntry } from '@/lib/instructor/types'
 
-type Variant = 'inline' | 'card' | 'directory' | 'directory-page' | 'roster' | 'history' | 'calendar' | 'calendar-page' | 'reports' | 'assessment' | 'student-detail' | 'profile' | 'check-in'
+type Variant = 'inline' | 'card' | 'directory' | 'directory-page' | 'roster' | 'history' | 'calendar' | 'calendar-page' | 'assessment' | 'student-detail' | 'profile' | 'check-in'
 
 function Bar({ className }: { className: string }) {
   return <Skeleton aria-hidden="true" className={`motion-reduce:animate-none ${className}`} />
@@ -93,7 +93,6 @@ export function InstructorSkeleton({ variant = 'card', entry }: { variant?: Vari
       : variant === 'calendar' ? <CalendarBody />
       : variant === 'calendar-page' ? <div className="space-y-6"><Bar className="h-8 w-44" /><Bar className="h-11 w-full" /><CalendarBody /></div>
       : variant === 'directory-page' ? <div className="space-y-6"><Bar className="h-8 w-36" /><Bar className="h-11 w-full" /><Card className="gap-0 overflow-hidden py-0"><Rows count={5} /></Card></div>
-      : variant === 'reports' ? <div className="space-y-6"><Bar className="h-8 w-48" /><Bar className="h-4 w-64 max-w-full" /><div className="grid gap-4 md:grid-cols-2"><DetailCard /><DetailCard /></div></div>
       : variant === 'assessment' ? <div className="space-y-6"><Bar className="h-8 w-48" /><Bar className="h-4 w-64 max-w-full" /><DetailCard /><DetailCard /></div>
       : variant === 'history' ? <div className="space-y-5 lg:space-y-3"><DetailCard /><DetailCard /></div>
       : variant === 'profile' || variant === 'check-in' ? <div className="space-y-6"><Bar className="h-8 w-44" /><DetailCard /><DetailCard /></div>

@@ -39,27 +39,12 @@ async function inPage(width, route, inspect, delay = 700) {
   return result
 }
 
-test('report cards show actual feedback/authors and preserve the responsive one/two-column layout', async t => {
-  for (const width of [320, 390, 768, 1440]) await t.test(`${width}px`, async () => {
-    const result = await inPage(width, reportsPath, w => {
-      const d = w.document, cards = [...d.querySelectorAll('[data-report-student-id]')]
-      return { text: d.querySelector('main').textContent, cards: cards.length, columns: w.getComputedStyle(cards[0].parentElement).gridTemplateColumns.split(' ').length,
-        href: cards[0].querySelector('a').getAttribute('href'), back: d.querySelector('main a').getAttribute('href'),
-        previous: cards[0].querySelectorAll('li').length, fits: d.documentElement.scrollWidth <= d.documentElement.clientWidth }
-    })
-    assert.equal(result.cards, 6)
-    assert.equal(result.columns, width >= 768 ? 2 : 1)
-    assert.match(result.text, /Stored current report/)
-    assert.match(result.text, /Report by Actual Report Author/)
-    assert.match(result.text, /Report author not recorded/)
-    assert.match(result.text, /Actual earlier feedback 1/)
-    assert.match(result.text, /Other Dojo/)
-    assert.match(result.text, /No previous lesson feedback recorded/)
-    assert.equal(result.previous, 2)
-    assert.match(result.href, /\/instructor\/students\/[0-9a-f-]{36}\?session=.*&tab=sessions&date=2026-11-02/)
-    assert.match(result.back, /session=.*&date=2026-11-02/)
-    assert.equal(result.fits, true)
-  })
+test('legacy report links redirect to the calendar without report controls', async () => {
+  const result = await inPage(390, reportsPath, w => ({ path: w.location.pathname, text: w.document.querySelector('main').textContent,
+    editors: w.document.querySelectorAll('[data-report-editor], [data-report-student-id]').length }))
+  assert.equal(result.path, '/instructor/calendar')
+  assert.equal(result.editors, 0)
+  assert.doesNotMatch(result.text, /Student reports|Add report|Edit report|Instructor report/)
 })
 
 test('assessment keeps its form layout while reading the exact event/student record and application target', async t => {
@@ -103,20 +88,17 @@ test('UUID legacy keys and date-only grading dates resolve without synthetic tim
   assert.doesNotMatch(result, /Invalid Date|12:00 AM|NaN/)
 })
 
-test('missing event/candidate, wrong event type and malformed keys never manufacture a successful form/report', async () => {
-  for (const [path, expected] of [[`${reportsPath}?fixtureData=empty`, /Class report not found/],
-    [`/instructor/reports/${gradingId}`, /Class report not found/], [`/instructor/reports/not-a-uuid`, /event ID is invalid/],
+test('missing candidate, wrong event type and malformed keys never manufacture a successful assessment', async () => {
+  for (const [path, expected] of [
     [`/instructor/assessments/${classId}/${studentId}`, /Assessment not found/],
     [`/instructor/assessments/${gradingId}/00000000-0000-4000-8000-000000009999`, /Assessment not found/],
     [`/instructor/assessments/${gradingId}--${studentId}--extra`, /assessment needs an event UUID/]]) {
     assert.match(await inPage(390, path, w => w.document.querySelector('main').textContent), expected)
   }
-  const empty = await inPage(390, `${reportsPath}?fixtureData=reports-empty`, w => w.document.querySelector('main').textContent)
-  assert.match(empty, /No students are registered for this class/)
 })
 
 test('loading skeletons, permission failures and retry remain distinct from empty successful results', async () => {
-  for (const [resource, path] of [['reports', reportsPath], ['assessment', assessmentPath]]) {
+  for (const [resource, path] of [['assessment', assessmentPath]]) {
     const loading = await inPage(390, `${path}?fixtureData=${resource}-loading`, w => w.document.querySelector('main [data-instructor-skeleton]').textContent, 200)
     assert.match(loading, /Loading/)
     const denied = await inPage(390, `${path}?fixtureData=${resource}-forbidden`, w => w.document.querySelector('main').textContent)
@@ -127,33 +109,19 @@ test('loading skeletons, permission failures and retry remain distinct from empt
       return { before, after: d.querySelector('main').textContent }
     })
     assert.match(retry.before, /could not be loaded/)
-    assert.match(retry.after, resource === 'reports' ? /Stored current report/ : /Recorded application grade/)
+    assert.match(retry.after, /Recorded application grade/)
   }
 })
 
-test('205 reports load completely; a later-page failure exposes no partial roster and can retry', async () => {
-  assert.equal(await inPage(1280, `${reportsPath}?fixtureData=reports-large`, w => w.document.querySelectorAll('[data-report-student-id]').length), 205)
-  const result = await inPage(390, `${reportsPath}?fixtureData=reports-page-error`, async (w, wait) => {
-    const d = w.document
-    await wait(1300)
-    const before = { count: d.querySelectorAll('[data-report-student-id]').length, text: d.querySelector('main').textContent }
-    ;[...d.querySelectorAll('main button')].find(e => e.textContent === 'Try again').click(); await wait(3600)
-    return { before, after: d.querySelectorAll('[data-report-student-id]').length }
-  })
-  assert.equal(result.before.count, 0)
-  assert.match(result.before.text, /reports could not be loaded/)
-  assert.equal(result.after, 205)
-})
-
-test('account changes discard reports and assessments from the previous account immediately', async () => {
-  for (const path of [reportsPath, assessmentPath]) {
+test('account changes discard assessments from the previous account immediately', async () => {
+  for (const path of [assessmentPath]) {
     const result = await inPage(390, path, async (w, wait) => {
       const before = w.document.querySelector('main').textContent
       w.switchInstructorFixture(); await wait(100)
       return { before, after: w.document.querySelector('main').textContent }
     })
-    assert.match(result.before, /Stored current report|Recorded application grade/)
-    assert.doesNotMatch(result.after, /Stored current report|Recorded application grade/)
+    assert.match(result.before, /Recorded application grade/)
+    assert.doesNotMatch(result.after, /Recorded application grade/)
     assert.match(result.after, /not found/)
   }
 })
@@ -182,14 +150,4 @@ test('the existing grading-roster action opens the matching assessment and profi
   assert.equal(result.path, `/instructor/students/${studentId}`)
   assert.match(result.search, /tab=grading/)
   assert.match(result.search, /session=00000000-0000-4000-8000-202611070008/)
-})
-
-test('late previous-class reports cannot replace a newly selected class', async () => {
-  const result = await inPage(390, `${reportsPath}?fixtureData=reports-race`, async (w, wait) => {
-    w.history.pushState(null, '', '/instructor/reports/00000000-0000-4000-8000-202611050005?fixtureData=reports-race')
-    w.dispatchEvent(new w.PopStateEvent('popstate')); await wait(1800)
-    return w.document.querySelector('main').textContent
-  }, 200)
-  assert.match(result, /202611050005/)
-  assert.doesNotMatch(result, /202611020001/)
 })

@@ -1,7 +1,7 @@
 # Instructor responsive browser checks
 
 These tests use Node's test runner and Firefox through WebDriver. They render the
-real calendar, student directory/details, reports/assessment pages and instructor layout through a separate, deterministic fixture;
+real calendar, student directory/details, assessment pages and instructor layout through a separate, deterministic fixture;
 no Supabase account or backend writes are needed. The fixture is not part of the
 production Vite entry point.
 
@@ -27,6 +27,7 @@ Then run:
 node --test tests/mobile-responsive/calendar.test.mjs
 node --test tests/mobile-responsive/students.test.mjs
 node --test tests/mobile-responsive/student-details.test.mjs
+node --test tests/mobile-responsive/student-training-dialog.test.mjs
 node --test tests/mobile-responsive/session-reads.test.mjs
 node --test tests/mobile-responsive/attendance.test.mjs
 node --test tests/mobile-responsive/session-saves.test.mjs
@@ -111,10 +112,13 @@ production records or backend behavior.
 The student-detail suite checks responsive profiles and dialogs at 320–1440px,
 stored contacts and active medical alerts, missing optional records, real UUID
 deep links and calendar/roster context navigation, 205-session history pagination,
-global attendance filters/date ordering, separate teacher/report-author identities,
-unknown authors, independent complete attendance aggregates, loading/error/retry
-and successful-empty states, unlinked/expired-student access, report edit-permission
-restrictions, account isolation and late responses after switching students.
+global attendance filters/date ordering, class instructor identities,
+independent complete attendance aggregates, loading/error/retry
+and successful-empty states, unlinked/expired-student access,
+account isolation and late responses after switching students. Session history no
+longer includes instructor reports or report editing controls. A read-only technique
+checklist appears in Overview below Next grading, using the stored syllabus/sign-offs;
+checks cover responsive layout, category toggles, progress and loading/error/empty states.
 
 Phase 7 grading records are injected from `instructor-grading.fixture.ts` through
 the same production API context. Checks cover database grade/rule/syllabus IDs,
@@ -122,12 +126,24 @@ readiness with zero technique sign-offs, actual/unknown signers, pending/complet
 recorded assessments and notes, 205-assessment pagination, missing rules/terminal
 grades, retry/inline-loading-skeleton behavior and account isolation. Grading adapts the
 original structured cards: grade/status badges, readiness progress, requirement
-rows with actual/required values, separate assessment entries and the responsive
-review dialog with category accordions and read-only technique checkboxes. Tests
-check row containment, dialog bounds and completion/close behavior at 320–1440px.
+rows with actual/required values and separate assessment entries. Overview contains
+category accordions and read-only technique checkboxes; the Grading tab has no
+Review grading action or modal. Tests check containment, tab placement and
+category toggles at 320–1440px.
 Profile loading checks cover inline skeletons and a fresh directory-backed identity
 preview without inventing emergency contacts or medical alerts; empty-period
 assertions use the reporting-period popover.
+
+The student-training-dialog suite checks training-class speech bubbles opening a
+modal without changing the calendar route, selected class or attendance roster.
+It reuses the profile sidebar's information/contact/medical components and the
+Overview technique checklist. Tests cover 320–1280px layouts, nested contact and
+medical dialogs, read-only sign-offs, lazy loading and shared profile caching,
+loading/error/retry/missing states, Escape/focus return, student changes and
+account isolation. The centered modal is capped at 80% of viewport height; only
+the technique checklist scrolls, with student information and Close staying fixed.
+Short-screen layouts compact the student information to preserve checklist space.
+Grading-roster assessment links remain covered by session reads.
 
 Calendar fixtures also provide date-only grading modes with released/unreleased
 reporting times. Existing month cards and selection drawers must show their date
@@ -138,10 +154,8 @@ event and availability behaviors.
 The Phase 8 `session-reads.test.mjs` suite uses `instructor-session.fixture.ts`
 through the same API provider. It covers:
 
-- Existing report-card and assessment-form layouts at 320/390/768/1440px.
-- Real current/earlier report text and authors, unknown authors and no-feedback
-  states, cross-dojo history and complete 205-student report loads.
-- A failed later report page exposing no partial roster and complete-load Retry.
+- Existing assessment-form layouts at 320/390/768/1440px.
+- Legacy report URLs redirecting to the calendar without report controls.
 - Canonical/legacy event/student UUID keys, wrong event types/candidates, malformed
   keys, missing applications and unknown target-grade joins.
 - Recorded pending/completed/null status, actual notes and application targets.
@@ -176,15 +190,20 @@ fixture records across a document reload. No production attendance data or save
 request is written to browser storage. Offline SQL tests separately verify a real
 committed save followed by a new authenticated read transaction.
 
-Phase 10B `session-saves.test.mjs` injects `instructor-session-writes.fixture.ts`.
-It checks the existing responsive report editor, author-owned add/edit/clear,
-unknown/other-author and assignment denial, pending drafts/double submits,
-lost-response receipts/intervening writes, draft-preserving conflict reloads,
-post-save read failures, grouped reports, assessment status/notes and null clearing,
+`session-saves.test.mjs` injects `instructor-session-writes.fixture.ts`.
+It checks assessment status/notes and null clearing, pending drafts/double submits,
+lost-response receipts, draft-preserving conflict reloads, post-save read failures,
 account/candidate changes during saves and persistence across document reloads.
-The read/structured-grading suites remain regression checks for these changes.
+Obsolete report-editor tests were removed along with the report feature; the read
+suite verifies that legacy report links redirect to the calendar.
+The structured-grading suite remains a regression check for grading review.
 
-Only explicit `report-persistence` / `assessment-persistence` test modes keep
+`tests/instructor-db.test.mjs` exercises the historical migration behavior before
+applying `20261107031006_remove_instructor_reports.sql`. Its final regression
+verifies that report columns/RPCs are removed, all other roster fields and technique
+sign-offs are preserved, history still decodes, and assessment/attendance writes work.
+
+Only explicit persistence test modes keep
 fixture row overrides in test-scoped `sessionStorage`. Production drafts and save
 requests stay in component memory, with authoritative Supabase reads after saves.
 

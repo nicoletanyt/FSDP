@@ -1,9 +1,7 @@
 import { gradingEventDate, parseEntityId } from './adapters'
-import { collectCalendarPages } from './calendar-queries'
-import type { InstructorApi } from './calendar-queries'
 import { InstructorDataError } from './errors'
 import { historyDate } from './student-detail'
-import type { AssessmentKey, CalendarEntry, EventId, StudentId } from './types'
+import type { AssessmentKey, CalendarEntry, StudentId } from './types'
 
 export function assessmentKey(params: { assessmentId?: string; eventId?: string; studentId?: string }): AssessmentKey {
   const parts = params.assessmentId === undefined ? [params.eventId, params.studentId] : params.assessmentId.split('--')
@@ -28,15 +26,4 @@ export function sessionStudentHref(session: CalendarEntry, studentId: StudentId,
   const date = gradingEventDate(session.event, session.grading)
   if (date) params.set('date', date)
   return `/instructor/students/${studentId}?${params}`
-}
-
-export async function loadClassReports(api: InstructorApi, eventId: EventId, signal: AbortSignal) {
-  const session = await api.getEvent(eventId, signal)
-  if (!session || session.event.event_type !== 'class') return null
-  const reports = await collectCalendarPages(options => api.getSessionReports(eventId, options),
-    item => `${item.record.event_id}:${item.record.student_id}`, signal)
-  if (reports.some(item => item.record.event_id !== eventId)) {
-    throw new InstructorDataError('invalid_data', 'The reports do not match the selected class.')
-  }
-  return { session, reports }
 }
