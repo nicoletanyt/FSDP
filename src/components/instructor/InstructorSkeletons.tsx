@@ -4,9 +4,10 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import GradeBadge from './DatabaseGradeBadge'
+import BackToCalendarLink from './BackToCalendarLink'
 import type { StudentEntry } from '@/lib/instructor/types'
 
-type Variant = 'inline' | 'card' | 'directory' | 'directory-page' | 'roster' | 'history' | 'calendar' | 'calendar-page' | 'reports' | 'assessment' | 'student-detail' | 'profile' | 'check-in'
+type Variant = 'inline' | 'card' | 'directory' | 'directory-page' | 'roster' | 'history' | 'calendar' | 'calendar-page' | 'assessment' | 'grading' | 'grading-page' | 'student-detail' | 'profile' | 'check-in'
 
 function Bar({ className }: { className: string }) {
   return <Skeleton aria-hidden="true" className={`motion-reduce:animate-none ${className}`} />
@@ -34,6 +35,25 @@ function CalendarBody() {
     {Array.from({ length: 7 }, (_, index) => <div key={index} className="space-y-3 rounded-lg border p-3 max-lg:[&:nth-child(n+3)]:hidden">
       <Bar className="h-4 w-2/3" /><Bar className="h-20 w-full" /><Bar className="h-16 w-full" />
     </div>)}
+  </div>
+}
+
+function GradingBody() {
+  return <div aria-hidden="true" className="space-y-6">
+    <div className="flex flex-wrap items-center justify-between gap-4">
+      <Bar className="h-10 w-48 max-w-full md:h-11 md:w-80" /><Bar className="h-9 w-33" />
+    </div>
+    <div className="flex flex-wrap gap-x-8 gap-y-3">
+      <Bar className="h-5 w-44 max-w-full" /><Bar className="h-5 w-96 max-w-full" />
+    </div>
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-4">
+        {[0, 1].map(index => <div key={index} className="flex w-44 flex-col gap-1.5">
+          <Bar className="h-5 w-28" /><Bar className="h-10 w-full" />
+        </div>)}
+      </div>
+      <div className="rounded-lg border p-4"><Bar className="h-5 w-96 max-w-full" /></div>
+    </div>
   </div>
 }
 
@@ -87,13 +107,14 @@ export function InstructorSkeleton({ variant = 'card', entry }: { variant?: Vari
   return <div role="status" aria-busy="true" aria-label="Loading instructor data" data-instructor-skeleton={variant}>
     <span className="sr-only">Loading instructor data…</span>
     {variant === 'student-detail' ? <StudentPreview entry={entry} />
+      : variant === 'grading-page' ? <section className="mx-auto w-full max-w-7xl space-y-6"><BackToCalendarLink /><GradingBody /></section>
+      : variant === 'grading' ? <GradingBody />
       : variant === 'inline' ? <Bar className="h-4 w-40 max-w-full" />
       : variant === 'directory' ? <Rows count={5} />
       : variant === 'roster' ? <Rows count={5} roster />
       : variant === 'calendar' ? <CalendarBody />
       : variant === 'calendar-page' ? <div className="space-y-6"><Bar className="h-8 w-44" /><Bar className="h-11 w-full" /><CalendarBody /></div>
       : variant === 'directory-page' ? <div className="space-y-6"><Bar className="h-8 w-36" /><Bar className="h-11 w-full" /><Card className="gap-0 overflow-hidden py-0"><Rows count={5} /></Card></div>
-      : variant === 'reports' ? <div className="space-y-6"><Bar className="h-8 w-48" /><Bar className="h-4 w-64 max-w-full" /><div className="grid gap-4 md:grid-cols-2"><DetailCard /><DetailCard /></div></div>
       : variant === 'assessment' ? <div className="space-y-6"><Bar className="h-8 w-48" /><Bar className="h-4 w-64 max-w-full" /><DetailCard /><DetailCard /></div>
       : variant === 'history' ? <div className="space-y-5 lg:space-y-3"><DetailCard /><DetailCard /></div>
       : variant === 'profile' || variant === 'check-in' ? <div className="space-y-6"><Bar className="h-8 w-44" /><DetailCard /><DetailCard /></div>

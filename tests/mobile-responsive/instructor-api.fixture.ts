@@ -78,7 +78,7 @@ export function createCalendarFixtureApi(account = 'audit'): InstructorApi {
   let rosterFailed = false
   let availabilityFailed = false
   const savedSlots: InstructorAvailabilityRow[] = []
-  const largeRoster = mode === 'large-roster' || mode === 'reports-large' || mode === 'reports-page-error' || mode === 'attendance-large'
+  const largeRoster = mode === 'large-roster' || mode === 'attendance-large'
   const storageKey = `test-only-attendance:${account}`
   const attendanceRows = new Map<string, EventStudentRow>(mode === 'attendance-persistence' ? JSON.parse(sessionStorage.getItem(storageKey) ?? '[]') : [])
   const receipts = new Map<string, { input: string; result: AttendanceSaveResult }>()
@@ -175,7 +175,7 @@ export function createCalendarFixtureApi(account = 'audit'): InstructorApi {
       if (mode === 'empty' || mode === 'unlinked' || account !== 'audit') return null
       if (id === uuid(8800)) return dateOnlyGrading(mode === 'date-only-released')
       const item = findEvent(id)
-      if (item && (mode === 'attendance-cancelled' || mode === 'assessment-cancelled' || mode === 'report-cancelled' || endedDuringSave)) return { ...item, event: { ...item.event, status: endedDuringSave ? 'completed' : 'cancelled' } }
+      if (item && (mode === 'attendance-cancelled' || mode === 'assessment-cancelled' || endedDuringSave)) return { ...item, event: { ...item.event, status: endedDuringSave ? 'completed' : 'cancelled' } }
       return item
     },
     async getAvailability(options) {
@@ -230,7 +230,7 @@ export function createCalendarFixtureApi(account = 'audit'): InstructorApi {
         return {
           record: { event_id: id, student_id: studentId, attendance_status: index < 2 ? 'present' : index === 2 ? 'excused' : index === 3 ? 'absent' : null,
             recorded_at: index < 2 ? arrived : null, checked_in_at: index < 2 ? arrived : null,
-            report: null, report_author_id: null, assessment_status: null, assessment_notes: null },
+            assessment_status: null, assessment_notes: null },
           student: { student: { id: studentId, user_id: null, member_no: `ASK-${index}`, first_name: student.name.split(' ')[0], last_name: student.name.split(' ').slice(1).join(' '),
             email: `test-${index}@example.test`, phone: null, home_centre_id: session.centre!.id, date_of_birth: '2000-01-01', current_grade_id: grade.id,
             membership_status: 'active', joined_at: '2020-01-01', last_graded_at: null, follow_up_status: 'none', outstanding_fees: false, ...metadata },

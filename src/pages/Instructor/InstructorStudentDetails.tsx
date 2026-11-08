@@ -4,25 +4,11 @@ import { Link, useParams, useSearchParams } from "react-router";
 import {
     ChevronLeft,
     ChevronRight,
-    CreditCard,
-    HeartPulse,
     Info,
-    Mail,
-    MapPin,
-    Phone,
     TriangleAlert,
-    X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-    Dialog,
-    DialogClose,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-} from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
     Popover,
@@ -30,7 +16,7 @@ import {
     PopoverTitle,
     PopoverTrigger,
 } from "@/components/ui/popover";
-import GradeBadge from "@/components/instructor/DatabaseGradeBadge";
+import { StudentInformationCards, StudentInformationActions } from "@/components/instructor/StudentInformation";
 import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
 import InstructorLoadingBoundary from "@/components/instructor/InstructorLoadingBoundary";
 import { InstructorSkeleton } from "@/components/instructor/InstructorSkeletons";
@@ -47,215 +33,12 @@ import { cachedStudentPreview } from "@/lib/instructor/student-preview";
 import {
     attendanceTotals,
     historyDate,
-    instructorName,
     loadStudentContext,
 } from "@/lib/instructor/student-detail";
 import type { StudentDetail, StudentId } from "@/lib/instructor/types";
 import { cn } from "cn";
 
 type DetailTab = "overview" | "sessions" | "grading";
-
-function StudentContactDetails({ detail }: { detail: StudentDetail }) {
-    const { student } = detail;
-    return (
-        <section
-            className="space-y-3 lg:space-y-2"
-            aria-label="Contact information"
-        >
-            <h3>Contact</h3>
-            {student.email ? (
-                <a
-                    href={`mailto:${student.email}`}
-                    className="detail-body flex min-h-11 items-center gap-2 text-sm text-muted-foreground hover:text-foreground lg:min-h-0 lg:py-1"
-                >
-                    <Mail aria-hidden="true" className="size-3.5 shrink-0" />
-                    <span className="break-all">{student.email}</span>
-                </a>
-            ) : (
-                <p className="detail-body text-sm text-muted-foreground">
-                    Email not recorded.
-                </p>
-            )}
-            {student.phone ? (
-                <a
-                    href={`tel:${student.phone.replaceAll(" ", "")}`}
-                    className="detail-body flex min-h-11 items-center gap-2 text-sm text-muted-foreground hover:text-foreground lg:min-h-0 lg:py-1"
-                >
-                    <Phone aria-hidden="true" className="size-3.5 shrink-0" />
-                    <span className="break-all">{student.phone}</span>
-                </a>
-            ) : (
-                <p className="detail-body text-sm text-muted-foreground">
-                    Phone not recorded.
-                </p>
-            )}
-            <div
-                className="space-y-3 border-t pt-4 lg:space-y-2 lg:pt-3"
-                aria-label="Emergency contacts"
-            >
-                <h3>Emergency contacts</h3>
-                {detail.emergencyContacts.length ? (
-                    detail.emergencyContacts.map((contact) => (
-                        <div key={contact.id} className="space-y-1">
-                            <p className="detail-body text-sm">
-                                <span className="font-medium">{contact.name}</span>
-                                <span className="text-muted-foreground">
-                                    {" "}
-                                    · {contact.relationship}
-                                    {contact.is_primary ? " · Primary" : ""}
-                                </span>
-                            </p>
-                            <a
-                                href={`tel:${contact.phone.replaceAll(" ", "")}`}
-                                className="detail-body inline-flex min-h-11 items-center text-sm text-muted-foreground hover:text-foreground hover:underline lg:min-h-0 lg:py-1"
-                            >
-                                {contact.phone}
-                            </a>
-                        </div>
-                    ))
-                ) : (
-                    <p className="detail-body text-sm text-muted-foreground">
-                        No emergency contacts recorded.
-                    </p>
-                )}
-            </div>
-        </section>
-    );
-}
-
-function StudentInformationCards({ detail }: { detail: StudentDetail }) {
-    const profile = directoryStudent(detail, singaporeToday());
-    const membership = detail.student.membership_status;
-    return (
-        <div className="space-y-3" aria-label="Student information">
-            <Card size="sm" className="detail-card">
-                <CardContent className="space-y-2">
-                    <h3 className="detail-label text-xs text-muted-foreground">
-                        Grading
-                    </h3>
-                    <GradeBadge
-                        grade={profile.grade}
-                        className="min-w-0 px-3 py-1.5"
-                    />
-                    <p className="detail-meta text-sm text-muted-foreground">
-                        {profile.trackLabel}
-                    </p>
-                </CardContent>
-            </Card>
-            <Card size="sm" className="detail-card">
-                <CardContent className="space-y-2">
-                    <h3 className="detail-label text-xs text-muted-foreground">
-                        Principal Dojo
-                    </h3>
-                    <p className="detail-body flex items-center gap-1.5 text-sm">
-                        <MapPin
-                            aria-hidden="true"
-                            className="size-3.5 shrink-0 text-muted-foreground"
-                        />
-                        {profile.principalDojo}
-                    </p>
-                </CardContent>
-            </Card>
-            <Card size="sm" className="detail-card">
-                <CardContent className="space-y-2">
-                    <h3 className="detail-label text-xs text-muted-foreground">
-                        Membership status
-                    </h3>
-                    <p
-                        className={cn(
-                            "detail-status inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium capitalize",
-                            membership === "active"
-                                ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200"
-                                : "bg-muted text-muted-foreground",
-                        )}
-                    >
-                        <CreditCard aria-hidden="true" className="size-3.5" />
-                        {membership}
-                    </p>
-                </CardContent>
-            </Card>
-        </div>
-    );
-}
-
-function StudentInformationActions({ detail }: { detail: StudentDetail }) {
-    return (
-        <div
-            className="grid grid-cols-2 gap-2"
-            aria-label="Contact and medical actions"
-        >
-            {(["contact", "medical"] as const).map((action) => (
-                <Dialog key={action}>
-                    <DialogTrigger
-                        render={
-                            <Button
-                                variant="outline"
-                                size="touch"
-                                className="h-auto min-w-0 gap-2 px-3 py-2 whitespace-normal"
-                            />
-                        }
-                    >
-                        {action === "contact" ? (
-                            <Phone aria-hidden="true" className="size-4 shrink-0" />
-                        ) : (
-                            <HeartPulse aria-hidden="true" className="size-4 shrink-0" />
-                        )}
-                        <span className="min-w-0">
-                            {action === "contact" ? "Contact" : "Medical alerts"}
-                        </span>
-                        {action === "medical" && detail.medicalAlerts.length > 0 && (
-                            <span className="detail-status shrink-0 rounded-md bg-amber-50 px-1.5 py-0.5 text-xs text-amber-950 dark:bg-amber-950/40 dark:text-amber-200">
-                                {detail.medicalAlerts.length}
-                            </span>
-                        )}
-                    </DialogTrigger>
-                    <DialogContent
-                        showCloseButton={false}
-                        className="student-detail-view max-h-[85dvh] overflow-y-auto"
-                    >
-                        <DialogHeader className="flex-row items-center justify-between gap-4">
-                            <DialogTitle>
-                                {action === "contact" ? "Contact details" : "Medical alerts"}
-                            </DialogTitle>
-                            <DialogClose
-                                render={
-                                    <Button
-                                        variant="ghost"
-                                        size="icon-touch"
-                                        className="-my-2 -mr-2"
-                                    />
-                                }
-                            >
-                                <X aria-hidden="true" />
-                                <span className="sr-only">Close</span>
-                            </DialogClose>
-                        </DialogHeader>
-                        {action === "contact" ? (
-                            <StudentContactDetails detail={detail} />
-                        ) : (
-                            <div className="space-y-2">
-                                {detail.medicalAlerts.length ? (
-                                    detail.medicalAlerts.map((alert) => (
-                                        <p
-                                            key={alert.id}
-                                            className="detail-body rounded-lg bg-amber-50 p-3 text-sm text-amber-950 dark:bg-amber-950/40 dark:text-amber-200"
-                                        >
-                                            {alert.description}
-                                        </p>
-                                    ))
-                                ) : (
-                                    <p className="detail-body text-sm text-muted-foreground">
-                                        No active medical alerts recorded.
-                                    </p>
-                                )}
-                            </div>
-                        )}
-                    </DialogContent>
-                </Dialog>
-            ))}
-        </div>
-    );
-}
 
 function AttendanceSummary({ studentId }: { studentId: StudentId }) {
     const api = useInstructorApi();
@@ -360,80 +143,6 @@ function AttendanceSummary({ studentId }: { studentId: StudentId }) {
     );
 }
 
-function RecentFeedback({
-    studentId,
-    onViewSessions,
-}: {
-    studentId: StudentId;
-    onViewSessions: () => void;
-}) {
-    const api = useInstructorApi();
-    const load = useCallback(
-        (signal: AbortSignal) =>
-            api.getStudentHistory(studentId, {
-                eventType: "class",
-                reportsOnly: true,
-                limit: 2,
-                signal,
-            }),
-        [api, studentId],
-    );
-    const feedback = useInstructorQuery(userId => queryKeys.studentFeedback(userId, studentId), load, queryTimes.studentHistory);
-    return (
-        <section className="detail-section">
-            <div className="detail-section-header">
-                <h2>Recent feedback</h2>
-                <Button
-                    variant="ghost"
-                    size="touch"
-                    onClick={onViewSessions}
-                    className="ml-auto"
-                >
-                    View sessions
-                    <ChevronRight aria-hidden="true" />
-                </Button>
-            </div>
-            {feedback.status !== "success" ? (
-                <InstructorDataStatus
-                    loading={feedback.status === "loading"}
-                    error={feedback.error}
-                    onRetry={feedback.retry}
-                />
-            ) : (
-                <Card size="sm" className="detail-card">
-                    <CardContent className="space-y-4">
-                        {feedback.data.items.length ? (
-                            feedback.data.items.map((session) => (
-                                <article
-                                    key={session.event.id}
-                                    className="space-y-2 not-first:border-t not-first:pt-4"
-                                >
-                                    <h3 className="text-base font-semibold">
-                                        {session.event.name}
-                                    </h3>
-                                    <p className="detail-meta text-sm text-muted-foreground">
-                                        {historyDate(session.event.starts_at)} ·{" "}
-                                        {session.reportAuthor
-                                            ? instructorName(session.reportAuthor)
-                                            : "Report author not recorded"}
-                                    </p>
-                                    <p className="detail-body max-w-prose whitespace-pre-wrap text-sm wrap-break-word">
-                                        {session.record.report}
-                                    </p>
-                                </article>
-                            ))
-                        ) : (
-                            <p className="detail-body text-sm text-muted-foreground">
-                                No feedback recorded yet.
-                            </p>
-                        )}
-                    </CardContent>
-                </Card>
-            )}
-        </section>
-    );
-}
-
 function StudentDetailContent({ detail }: { detail: StudentDetail }) {
     const api = useInstructorApi();
     const [params, setParams] = useSearchParams();
@@ -468,7 +177,7 @@ function StudentDetailContent({ detail }: { detail: StudentDetail }) {
         [api, detail.student.id],
     );
     const grading = useInstructorQuery(userId => queryKeys.studentGrading(userId, detail.student.id), loadGrading,
-        { ...queryTimes.studentGrading, enabled: activeTab !== "sessions" });
+        queryTimes.studentGrading);
     const sidebarRef = useRef<HTMLElement>(null);
     const [sidebarFits, setSidebarFits] = useState(false);
     useEffect(() => {
@@ -639,11 +348,8 @@ function StudentDetailContent({ detail }: { detail: StudentDetail }) {
                             <StudentInformationActions detail={detail} />
                         </section>
                         <AttendanceSummary studentId={detail.student.id} />
-                        <RecentFeedback
-                            studentId={detail.student.id}
-                            onViewSessions={() => selectTab("sessions")}
-                        />
                         <StudentGradingRead title="Next grading" detail={detail} reads={grading} onRetry={grading.retry} onViewGrading={() => selectTab("grading")} />
+                        <StudentGradingRead title="Technique checklist" detail={detail} reads={grading} onRetry={grading.retry} />
                     </TabsContent>
                     <TabsContent value="sessions">
                         <StudentSessionHistory

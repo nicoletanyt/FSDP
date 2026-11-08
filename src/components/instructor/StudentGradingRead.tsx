@@ -1,15 +1,14 @@
 import { useEffect, useState } from 'react'
 import { Accordion as AccordionPrimitive } from '@base-ui/react/accordion'
 import { Checkbox as CheckboxPrimitive } from '@base-ui/react/checkbox'
-import { Check, CheckCircle2, ChevronDown, ChevronRight, Info, Plus, X, XCircle } from 'lucide-react'
+import { Check, CheckCircle2, ChevronDown, ChevronRight, Info, XCircle } from 'lucide-react'
 import { cn } from 'cn'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import GradeBadge from './DatabaseGradeBadge'
 import InstructorDataStatus from './InstructorDataStatus'
 import { gradingEventDate } from '@/lib/instructor/adapters'
-import { directoryStudent, singaporeToday } from '@/lib/instructor/directory'
+import { singaporeToday } from '@/lib/instructor/directory'
 import { readinessRequirementText, studentGrading } from '@/lib/instructor/grading'
 import type { StudentGradingReads } from '@/lib/instructor/grading'
 import { historyDate, instructorName } from '@/lib/instructor/student-detail'
@@ -17,7 +16,7 @@ import type { StudentDetail, StudentHistoryEntry } from '@/lib/instructor/types'
 import type { QueryState } from '@/hooks/use-instructor-data'
 
 type GradingView = ReturnType<typeof studentGrading>
-type Section = 'Next grading' | 'Grading eligibility' | 'Grading history'
+type Section = 'Next grading' | 'Grading eligibility' | 'Grading history' | 'Technique checklist'
 const success = 'text-emerald-700 dark:text-emerald-400'
 
 function GradeTransition({ view }: { view: GradingView }) {
@@ -159,31 +158,16 @@ export default function StudentGradingRead({ title, detail, reads, onRetry, onVi
     return () => window.clearInterval(timer)
   }, [])
   const view = reads.status === 'success' ? studentGrading(detail, reads.data, today) : null
-  const profile = directoryStudent(detail, today)
   return <section className="detail-section" aria-label={title}>
     <div className="detail-section-header">
       <h2>{title}</h2>
       {title === 'Next grading' && <Button variant="ghost" size="touch" onClick={onViewGrading} className="ml-auto">View grading<ChevronRight aria-hidden="true" /></Button>}
-      {title === 'Grading eligibility' && <Dialog>
-        <DialogTrigger render={<Button size="touch" disabled={!view?.target} />}><Plus aria-hidden="true" />Review grading</DialogTrigger>
-        {view && <DialogContent showCloseButton={false} className="student-detail-view grading-review-dialog flex max-h-[85dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
-          <DialogHeader className="grading-review-header shrink-0 gap-3 border-b border-border/60 p-4 lg:px-8 lg:py-5">
-            <div className="flex min-h-11 items-center justify-between gap-4"><DialogTitle className="text-xl font-semibold tracking-tight">Grading review</DialogTitle>
-              <DialogClose render={<Button variant="ghost" size="icon-touch" className="-mr-2" />}><X aria-hidden="true" /><span className="sr-only">Close grading review</span></DialogClose>
-            </div>
-            <div className="flex flex-wrap items-center justify-between gap-3"><DialogDescription className="detail-body min-w-0 break-words text-sm font-medium text-foreground">{profile.name}</DialogDescription><GradeTransition view={view} /></div>
-          </DialogHeader>
-          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4 lg:px-8 lg:pt-5 lg:pb-8">
-            <h2>Technique checklist</h2><TechniqueChecklist view={view} />
-          </div>
-          <DialogFooter className="grading-review-footer m-0 shrink-0 flex-row items-center justify-between gap-3 border-t border-border/60 p-4 lg:px-8 lg:py-4">
-            <p className="detail-meta min-w-0 flex-1 text-sm text-muted-foreground">Recorded sign-offs · Read-only</p><DialogClose render={<Button size="touch" />}>Finish review</DialogClose>
-          </DialogFooter>
-        </DialogContent>}
-      </Dialog>}
     </div>
     {reads.status !== 'success' || !view ? <InstructorDataStatus loading={reads.status === 'loading'} error={reads.error} onRetry={onRetry} />
-      : title === 'Grading history' ? <AssessmentHistory assessments={reads.data.assessments} />
+      : title === 'Technique checklist' ? <Card size="sm" className="detail-card"><CardContent className="space-y-4">
+          <GradeTransition view={view} /><MissingGradingData view={view} /><TechniqueChecklist view={view} />
+        </CardContent></Card>
+        : title === 'Grading history' ? <AssessmentHistory assessments={reads.data.assessments} />
         : <Card size="sm" className="detail-card"><CardContent className="space-y-4">
           <div className="flex min-w-0 flex-wrap items-center justify-between gap-3"><GradeTransition view={view} /><ReadinessStatus view={view} /></div>
           <ReadinessProgress view={view} /><MissingGradingData view={view} />

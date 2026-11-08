@@ -218,7 +218,7 @@ const event = {
 const calendarEntry = { ...event, centre, class: null, grading: null, seminar: null, workshop: null, participants: [{ count: 0 }] }
 const record = {
   event_id: eventId, student_id: studentId, attendance_status: null, recorded_at: null,
-  report: null, report_author_id: null, assessment_status: null, assessment_notes: null, checked_in_at: null,
+  assessment_status: null, assessment_notes: null, checked_in_at: null,
 }
 const page = (items, total = items.length, offset = 0, limit = 50) => ({ items, total, offset, limit })
 const responsePage = (items, total = items.length) => Response.json(items, { headers: { 'content-range': `0-${Math.max(0, items.length - 1)}/${total}` } })
@@ -279,7 +279,7 @@ test('attendance and session writes independently verify the account after a ros
     })
     assert.equal(url.pathname, '/rest/v1/rpc/save_instructor_session_record')
     return Response.json({ requestId: body.request_id, eventId, studentId, kind: body.write_kind,
-      value: body.write_kind === 'report' ? { report: body.new_value.report, reportAuthorId: instructorId } : body.new_value })
+      value: body.new_value })
   })
   client.auth.getUser = async () => { authReads++; return { data: { user: { id: userId } }, error: null } }
   await api.getAttendanceRoster(eventId, new AbortController().signal)
@@ -292,13 +292,12 @@ test('attendance and session writes independently verify the account after a ros
   assert.deepEqual(await pathsAfter(() => api.saveAttendance({ ...key, scope: 'student', status: 'present',
     expected: [{ studentId, status: null, recordedAt: null, checkedInAt: null }] })), ['/rest/v1/users', '/rest/v1/rpc/save_instructor_attendance'])
   for (const operation of [
-    () => api.saveReport({ ...key, report: 'Report', expected: { report: null, reportAuthorId: null } }),
     () => api.saveAssessment({ ...key, status: null, notes: null, expected: { status: null, notes: null } }),
   ]) assert.deepEqual(await pathsAfter(operation), ['/rest/v1/users', '/rest/v1/instructors', '/rest/v1/rpc/save_instructor_session_record'])
-  assert.equal(authReads, 4, 'the read and each write independently verify the current account')
+  assert.equal(authReads, 3, 'the read and each write independently verify the current account')
 })
 
-test('report/assessment saves send narrow snapshots with account fences and validate actor-owned authoritative results', async () => {
+test('assessment saves send narrow snapshots with account fences and validate authoritative results', async () => {
   const requests = []
   const { api } = httpClient(async (request, url) => {
     assert.equal(url.pathname, '/rest/v1/rpc/save_instructor_session_record')
@@ -308,48 +307,39 @@ test('report/assessment saves send narrow snapshots with account fences and vali
     assert.equal(body.target_student, studentId)
     assert.deepEqual(Object.keys(body).sort(), ['expected_record','expected_user','new_value','request_id','target_event','target_student','write_kind'])
     return Response.json({ requestId: body.request_id, eventId, studentId, kind: body.write_kind,
-      value: body.write_kind === 'report' ? { report: body.new_value.report, reportAuthorId: instructorId } : body.new_value })
+      value: body.new_value })
   })
   const key = { requestId: otherUserId, expectedUserId: userId, eventId, studentId }
-  const report = { ...key, report: '  Saved report\nSecond line  ', expected: { report: null, reportAuthorId: null }, reportAuthorId: otherUserId }
-  const saved = await api.saveReport(report)
-  assert.equal(saved.value.reportAuthorId, instructorId)
-  assert.notEqual(saved.value.reportAuthorId, userId)
-  assert.equal(requests[0].new_value.report, 'Saved report\nSecond line')
+  const assessment = { ...key, status: 'completed', notes: '  Saved notes\nSecond line  ', expected: { status: null, notes: null } }
+  const saved = await api.saveAssessment(assessment)
+  assert.equal(saved.value.status, 'completed')
+  assert.equal(requests[0].new_value.notes, 'Saved notes\nSecond line')
   assert.equal('reportAuthorId' in requests[0].new_value, false)
-  await api.saveReport(report)
+  await api.saveAssessment(assessment)
   assert.deepEqual(requests[0], requests[1], 'network retry keeps the same request ID and intent')
   await api.saveAssessment({ ...key, requestId: instructorId, status: null, notes: 'Notes without inferred pending', expected: { status: null, notes: null } })
   assert.equal(requests[2].new_value.status, null)
   assert.deepEqual(Object.keys(requests[2].new_value).sort(), ['notes','status'])
 })
 
-test('saved session response identity/author mismatches and conflict/permission errors remain failures', async () => {
-  const input = { requestId: otherUserId, expectedUserId: userId, eventId, studentId, report: 'New', expected: { report: null, reportAuthorId: null } }
-  const result = { requestId: otherUserId, eventId, studentId, kind: 'report', value: { report: 'New', reportAuthorId: instructorId } }
+test('saved assessment response mismatches and conflict/permission errors remain failures', async () => {
+  const input = { requestId: otherUserId, expectedUserId: userId, eventId, studentId, status: 'completed', notes: 'New', expected: { status: null, notes: null } }
+  const result = { requestId: otherUserId, eventId, studentId, kind: 'assessment', value: { status: 'completed', notes: 'New' } }
   for (const invalid of [{ ...result, studentId: userId }, { ...result, eventId: userId }, { ...result, requestId: userId },
-    { ...result, value: { ...result.value, reportAuthorId: userId } }, { ...result, value: { ...result.value, report: 'Different text' } }]) {
-    await assert.rejects(httpClient(async () => Response.json(invalid)).api.saveReport(input), { code: 'invalid_data' })
+    { ...result, value: { ...result.value, status: 'pending' } }, { ...result, value: { ...result.value, notes: 'Different text' } },
+    { ...result, kind: 'report', value: { report: 'Retired', reportAuthorId: instructorId } }]) {
+    await assert.rejects(httpClient(async () => Response.json(invalid)).api.saveAssessment(input), { code: 'invalid_data' })
   }
-  for (const [code, expected] of [['PRS01','conflict'], ['PRS02','forbidden'], ['PRS03','forbidden']]) {
-    await assert.rejects(httpClient(async () => Response.json({ code, message: 'Private SQL details' }, { status: 400 })).api.saveReport(input),
+  for (const [code, expected] of [['PRS01','conflict'], ['PRS03','forbidden']]) {
+    await assert.rejects(httpClient(async () => Response.json({ code, message: 'Private SQL details' }, { status: 400 })).api.saveAssessment(input),
       error => error.code === expected && !error.message.includes('Private SQL details'))
   }
-  await assert.rejects(httpClient(async () => assert.fail('Old account must not dispatch a mutation')).api.saveReport({ ...input, expectedUserId: otherUserId }), { code: 'forbidden' })
+  await assert.rejects(httpClient(async () => assert.fail('Old account must not dispatch a mutation')).api.saveAssessment({ ...input, expectedUserId: otherUserId }), { code: 'forbidden' })
 })
 
-test('report reload selects the exact assigned event/student record and actual domain author', async () => {
-  const { api } = httpClient(async (_request, url) => {
-    if (url.pathname === '/rest/v1/events') return Response.json(calendarEntry)
-    assert.equal(url.pathname, '/rest/v1/event_students')
-    assert.equal(url.searchParams.get('event_id'), `eq.${eventId}`)
-    assert.equal(url.searchParams.get('student_id'), `eq.${studentId}`)
-    assert.match(url.searchParams.get('select'), /reportAuthor:instructors!event_students_report_author_id_fkey/)
-    return Response.json({ ...record, report: 'Stored report', report_author_id: instructorId, student, reportAuthor: instructor })
-  })
-  const detail = await api.getReport({ eventId, studentId })
-  assert.equal(detail.record.report, 'Stored report')
-  assert.equal(detail.reportAuthor.id, instructorId)
+test('retired report services are no longer exposed', () => {
+  const { api } = httpClient(async () => assert.fail('No report requests should be sent'))
+  for (const name of ['saveReport', 'getReport', 'getSessionReports']) assert.equal(name in api, false)
 })
 
 test('attendance sends account-fenced immutable snapshots and stable request IDs, including complete rosters beyond 100 rows', async () => {
@@ -583,27 +573,7 @@ test('assessment target labels come from the recorded application join, includin
   await assert.rejects(setup(application, { ...record, event_id: otherUserId, student }), { code: 'invalid_data' })
 })
 
-test('report reads preserve actual current/previous authors and reject mismatched joins, students and pages', async () => {
-  const author = { ...instructor, id: otherUserId, user_id: null, first_name: 'Actual', last_name: 'Author' }
-  const previous = { record: { ...record, event_id: userId, report: 'Earlier stored feedback', report_author_id: otherUserId },
-    event: { ...event, id: userId }, centre, instructor, reportAuthor: author, targetGrade: null, grading: null }
-  const row = { record: { ...record, report: 'Current stored report', report_author_id: otherUserId }, student, reportAuthor: author, previousReports: [previous] }
-  const response = await httpClient(async (request, url) => {
-    assert.equal(url.pathname, '/rest/v1/rpc/instructor_event_reports')
-    assert.deepEqual(await request.json(), { target_event: eventId, page_size: 1, page_offset: 2 })
-    return Response.json(page([row], 3, 2, 1))
-  }).api.getSessionReports(eventId, { limit: 1, offset: 2 })
-  assert.equal(response.items[0].reportAuthor.first_name, 'Actual')
-  assert.equal(response.items[0].previousReports[0].reportAuthor.id, otherUserId)
-  for (const invalid of [{ ...row, reportAuthor: instructor },
-    { ...row, previousReports: [{ ...previous, record: { ...previous.record, student_id: otherUserId } }] },
-    { ...row, previousReports: [previous, previous, previous] }]) {
-    await assert.rejects(httpClient(async () => Response.json(page([invalid]))).api.getSessionReports(eventId), { code: 'invalid_data' })
-  }
-  await assert.rejects(httpClient(async () => Response.json(page([row], 3, 1, 1))).api.getSessionReports(eventId, { limit: 1, offset: 2 }), { code: 'invalid_data' })
-})
-
-test('rosters, reports, sign-offs and zero attendance summaries keep their real nullable values', async () => {
+test('rosters, sign-offs and zero attendance summaries keep their real nullable values', async () => {
   const { api } = httpClient(async (_request, url) => {
     switch (url.pathname) {
       case '/rest/v1/events': return Response.json(calendarEntry)
@@ -612,7 +582,6 @@ test('rosters, reports, sign-offs and zero attendance summaries keep their real 
         id: userId, student_id: studentId, syllabus_item_id: 'database/item', signed_off_at: metadata.created_at,
         signed_off_by: null, note: null, instructor: null,
       }])
-      case '/rest/v1/rpc/instructor_event_reports': return Response.json(page([{ record, student, reportAuthor: null, previousReports: [] }]))
       case '/rest/v1/rpc/instructor_student_summary': return Response.json({
         pastSessions: 0, present: 0, late: 0, absent: 0, excused: 0, unmarked: 0,
         cycleStart: '2020-01-01', cycleAttended: 0, consecutiveAbsences: 0,
@@ -622,7 +591,6 @@ test('rosters, reports, sign-offs and zero attendance summaries keep their real 
     }
   })
   assert.equal((await api.getRoster(eventId)).items[0].record.attendance_status, 'excused')
-  assert.deepEqual((await api.getSessionReports(eventId)).items[0].previousReports, [])
   assert.equal((await api.getTechniqueSignOffs(studentId))[0].instructor, null)
   assert.equal((await api.getStudentSummary(studentId)).lastAttended, null)
 })

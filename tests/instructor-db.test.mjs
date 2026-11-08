@@ -229,7 +229,7 @@ test('current-domain instructor reads, aggregates and report ownership (offline 
 
     await suite.test('class reports batch real previous feedback and reject another instructor event', async () => {
       const reports = await asAccount(ids.userA, () => rpc('instructor_event_reports', [ids.ownFuture]))
-      decoders.decodePage(reports, decoders.decodeSessionReport)
+      decoders.decodePage(reports, value => value) // Historical pre-removal RPC shape.
       assert.equal(reports.total, 2)
       assert.equal(reports.items[0].record.report_author_id, ids.instructorB)
       assert.equal(reports.items[0].reportAuthor.id, ids.instructorB)
@@ -515,7 +515,7 @@ test('current-domain instructor reads, aggregates and report ownership (offline 
       await asAccount(ids.userA, async () => {
         const rows = []
         for (const offset of [0, 100, 200]) {
-          const page = decoders.decodePage(await rpc('instructor_event_reports', [reportEvent, 100, offset]), decoders.decodeSessionReport)
+          const page = decoders.decodePage(await rpc('instructor_event_reports', [reportEvent, 100, offset]), value => value)
           assert.equal(page.total, 205)
           rows.push(...page.items)
         }
@@ -665,7 +665,7 @@ test('current-domain instructor reads, aggregates and report ownership (offline 
         const before = (await sql('select * from public.event_students where event_id=$1 and student_id=$2', [ids.ownPast, ids.peer])).rows[0]
         const expected = { report: before.report, reportAuthorId: before.report_author_id }
         const first = await saveSession(uuid(101001), ids.userA, ids.ownPast, ids.peer, 'report', expected, { report: '  Stored report\nSecond line  ', reportAuthorId: ids.instructorB })
-        decoders.decodeSessionSave(first)
+        assert.equal(first.kind, 'report') // Historical migration behavior, not a current API response.
         assert.equal(first.value.report, 'Stored report\nSecond line')
         assert.equal(first.value.reportAuthorId, ids.instructorA)
         assert.notEqual(first.value.reportAuthorId, ids.userA)
@@ -749,9 +749,9 @@ test('current-domain instructor reads, aggregates and report ownership (offline 
         await db.exec('commit')
       } catch (error) { await db.exec('rollback'); throw error }
       await asAccount(ids.userA, async () => {
-        const history = decoders.decodePage(await rpc('instructor_student_history', [ids.peer]), decoders.decodeHistoryEntry)
+        const history = await rpc('instructor_student_history', [ids.peer])
         assert.equal(history.items.find(item => item.event.id === ids.ownPast).record.report, value.report)
-        const reports = decoders.decodePage(await rpc('instructor_event_reports', [ids.ownPast]), decoders.decodeSessionReport)
+        const reports = await rpc('instructor_event_reports', [ids.ownPast])
         assert.equal(reports.items.find(item => item.record.student_id === ids.peer).reportAuthor.id, ids.instructorA)
         await expectedFailure('42501', () => sql('select * from public.instructor_session_write_requests'))
       })
@@ -763,6 +763,36 @@ test('current-domain instructor reads, aggregates and report ownership (offline 
       assert.deepEqual(await asAccount(ids.userA, () => saveSession(uuid(101050), ids.userA, ids.ownPast, ids.peer, 'report', expected, value)), saved)
       await assert.rejects(asAccount(ids.userA, () => saveSession(uuid(101051), ids.userA, ids.ownPast, ids.peer, 'report', saved.value, { report: 'Cancelled edit' })), { code: 'PRS03' })
       await assert.rejects(asAccount(ids.userB, () => saveSession(uuid(101050), ids.userB, ids.ownPast, ids.peer, 'report', expected, value)), { code: '42501' })
+    })
+    await suite.test('report removal preserves all roster/assessment data and leaves history, attendance and assessment writes working', async () => {
+      const preserved = (await sql("select to_jsonb(es) - 'report' - 'report_author_id' as record from public.event_students es order by event_id, student_id")).rows
+      const signOffs = (await sql('select * from public.technique_sign_offs order by id')).rows
+      await db.exec(await readFile(new URL('../supabase/migrations/20261107031006_remove_instructor_reports.sql', import.meta.url), 'utf8'))
+      assert.deepEqual((await sql('select to_jsonb(es) as record from public.event_students es order by event_id, student_id')).rows, preserved)
+      assert.deepEqual((await sql('select * from public.technique_sign_offs order by id')).rows, signOffs)
+      assert.deepEqual((await sql("select column_name from information_schema.columns where table_schema='public' and table_name='event_students' and column_name in ('report','report_author_id')")).rows, [])
+      assert.equal((await sql("select to_regprocedure('public.instructor_event_reports(uuid,integer,integer)') as retired")).rows[0].retired, null)
+      await asAccount(ids.userA, async () => {
+        const history = decoders.decodePage(await rpc('instructor_student_history', [ids.student, 20, 0, 'class', null, false, false, false]), decoders.decodeHistoryEntry)
+        assert.ok(history.items.length > 0)
+        assert.equal('report' in history.items[0].record, false)
+        assert.equal('reportAuthor' in history.items[0], false)
+        decoders.decodeSummary(await rpc('instructor_student_summary', [ids.student]))
+        const row = (await sql('select * from public.event_students where event_id=$1 and student_id=$2', [ids.grading, ids.student])).rows[0]
+        const expected = { status: row.assessment_status, notes: row.assessment_notes }
+        const result = await saveSession(uuid(102001), ids.userA, ids.grading, ids.student, 'assessment', expected, { status: 'completed', notes: 'Assessment without reports' })
+        decoders.decodeSessionSave(result)
+        assert.equal(result.value.notes, 'Assessment without reports')
+        assert.deepEqual(await saveSession(uuid(102001), ids.userA, ids.grading, ids.student, 'assessment', expected, result.value), result)
+        await expectedFailure('42501', () => sql("update public.event_students set assessment_notes='Direct write' where event_id=$1 and student_id=$2", [ids.grading, ids.student]))
+        await expectedFailure('22023', () => saveSession(uuid(102002), ids.userA, ids.grading, ids.student, 'report', {}, {}))
+      })
+      await sql("update public.events set status='scheduled',starts_at=now()+interval '1 hour',ends_at=now()+interval '2 hours' where id=$1", [ids.ownFuture])
+      await asAccount(ids.userA, async () => {
+        const expected = await snapshot(ids.ownFuture, ids.peer)
+        const saved = await saveAttendance(uuid(102003), ids.userA, ids.ownFuture, 'student', 'absent', expected)
+        assert.equal(saved.attendance[0].status, 'absent')
+      })
     })
   } finally {
     await db.close()

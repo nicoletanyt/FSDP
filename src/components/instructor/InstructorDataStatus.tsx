@@ -5,7 +5,7 @@ export default function InstructorDataStatus({ loading, error, onRetry, variant 
   loading?: boolean
   error?: string | null
   onRetry: () => void
-  variant?: 'inline' | 'card' | 'directory' | 'roster' | 'history' | 'calendar' | 'reports' | 'assessment'
+  variant?: 'inline' | 'card' | 'directory' | 'roster' | 'history' | 'calendar' | 'assessment' | 'grading'
 }) {
   if (loading) return <InstructorSkeleton variant={variant} />
   return <div className="space-y-2 p-4">

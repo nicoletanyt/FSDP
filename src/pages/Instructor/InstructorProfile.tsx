@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent, SubmitEvent } from "react";
-import { Check, ChevronRight, LockKeyhole, LogOut, Trash2, Upload, X } from "lucide-react";
+import { Check, ChevronRight, LockKeyhole, Trash2, Upload, X } from "lucide-react";
 import { useLocation, useNavigate } from "react-router";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { InstructorAvatar, useInstructorPhoto } from "@/components/ui/avatar";
 import {
     Card,
@@ -27,8 +28,12 @@ import { useAuth } from "@/hooks/use-auth";
 import { prepareInstructorPhoto, saveInstructorPhoto } from "@/lib/instructor-calendar";
 import { supabase } from "@/lib/supabase";
 
+const employmentStatusLabels = { part_time: "Part time", full_time: "Full time" };
+// Placeholder until employment status is available on the instructor profile.
+const employmentStatus: keyof typeof employmentStatusLabels = "full_time";
+
 export default function InstructorProfile() {
-    const { profile, signOut } = useAuth();
+    const { profile } = useAuth();
     const location = useLocation();
     const navigate = useNavigate();
     const [pending, setPending] = useState(false);
@@ -37,8 +42,6 @@ export default function InstructorProfile() {
     const [confirmPassword, setConfirmPassword] = useState("");
     const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
     const [passwordEdited, setPasswordEdited] = useState(false);
-    const [signingOut, setSigningOut] = useState(false);
-    const [signOutError, setSignOutError] = useState("");
     const photo = useInstructorPhoto(profile?.id);
     const photoInputRef = useRef<HTMLInputElement>(null);
     const photoRequestRef = useRef(0);
@@ -46,7 +49,7 @@ export default function InstructorProfile() {
     const [photoError, setPhotoError] = useState("");
     const [photoFeedback, setPhotoFeedback] = useState("");
     const instructorName = [profile?.first_name, profile?.last_name].filter(Boolean).join(" ") || profile?.email || "Instructor";
-    const photoControlsDisabled = !profile?.id || photoPending || pending || signingOut;
+    const photoControlsDisabled = !profile?.id || photoPending || pending;
 
     useEffect(() => {
         setPhotoError("");
@@ -121,7 +124,7 @@ export default function InstructorProfile() {
 
     async function handlePasswordChange(event: SubmitEvent<HTMLFormElement>) {
         event.preventDefault();
-        if (pending || signingOut) return;
+        if (pending) return;
 
         const form = event.currentTarget;
         const values = new FormData(form);
@@ -171,24 +174,9 @@ export default function InstructorProfile() {
         }
     }
 
-    async function handleSignOut() {
-        if (signingOut || pending) return;
-        setSigningOut(true);
-        setSignOutError("");
-        try {
-            await signOut();
-        } catch (failure) {
-            setSignOutError(
-                failure instanceof Error ? failure.message : "Unable to sign out. Try again.",
-            );
-        } finally {
-            setSigningOut(false);
-        }
-    }
-
     return (
-        <section className="grid w-full items-start gap-6 md:grid-cols-2">
-            <header className="md:col-span-2">
+        <section className="w-full space-y-6">
+            <header>
                 <h1 className="text-3xl font-semibold tracking-tight">Profile</h1>
             </header>
             <Card>
@@ -244,6 +232,16 @@ export default function InstructorProfile() {
                             <dt className="text-muted-foreground">Email</dt>
                             <dd className="min-w-0 break-all sm:text-right">{profile?.email || "—"}</dd>
                         </div>
+                        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+                            <dt className="text-muted-foreground">Address</dt>
+                            <dd className="min-w-0 break-words sm:text-right">123 Example Street, Singapore 123456</dd>
+                        </div>
+                        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+                            <dt className="text-muted-foreground">Employment status</dt>
+                            <dd className="min-w-0 sm:text-right">
+                                <Badge variant="secondary" className="h-auto px-2.5 py-1">{employmentStatusLabels[employmentStatus]}</Badge>
+                            </dd>
+                        </div>
                     </dl>
                 </CardContent>
             </Card>
@@ -266,7 +264,7 @@ export default function InstructorProfile() {
                         <DialogTrigger
                             render={<Button variant="ghost" />}
                             className="h-auto w-full justify-start gap-3 px-3 py-2 font-normal"
-                            disabled={pending || signingOut}
+                            disabled={pending}
                         >
                             <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted">
                                 <LockKeyhole aria-hidden="true" className="size-4 text-muted-foreground" />
@@ -297,7 +295,7 @@ export default function InstructorProfile() {
                                         <AlertDescription>{error}</AlertDescription>
                                     </Alert>
                                 )}
-                                <fieldset disabled={pending || signingOut} className="space-y-4">
+                                <fieldset disabled={pending} className="space-y-4">
                                     <div className="space-y-2">
                                         <Label htmlFor="new-password">New password</Label>
                                         <PasswordInput
@@ -364,31 +362,13 @@ export default function InstructorProfile() {
                                     <DialogClose render={<Button type="button" variant="outline" />} disabled={pending}>
                                         Cancel
                                     </DialogClose>
-                                    <Button type="submit" disabled={pending || signingOut || !canSavePassword}>
+                                    <Button type="submit" disabled={pending || !canSavePassword}>
                                         {pending ? "Saving…" : "Save Changes"}
                                     </Button>
                                 </DialogFooter>
                             </form>
                         </DialogContent>
                     </Dialog>
-                    <div className="space-y-3">
-                        {signOutError && (
-                            <Alert variant="destructive">
-                                <AlertDescription>{signOutError}</AlertDescription>
-                            </Alert>
-                        )}
-                        <Button
-                            type="button"
-                            variant="destructive"
-                            className="h-10 w-full justify-start rounded-xl px-3"
-                            onClick={() => void handleSignOut()}
-                            disabled={signingOut || pending}
-                            aria-busy={signingOut}
-                        >
-                            <LogOut aria-hidden="true" className="size-4" />
-                            {signingOut ? "Signing out…" : "Sign out"}
-                        </Button>
-                    </div>
                 </CardContent>
             </Card>
         </section>

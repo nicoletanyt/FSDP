@@ -2,17 +2,17 @@ import type { QueryClient, QueryKey } from '@tanstack/react-query'
 import { queryGeneration } from '../query-generation'
 import { instructorQueryKeys as keys } from './query-keys'
 
-type Change = 'attendance' | 'report' | 'assessment'
+type Change = 'attendance' | 'assessment'
 
 function sessionChangeKeys(userId: string, eventId: string, studentIds: readonly string[], kind: Change) {
   const roster = keys.roster(userId, eventId)
   const affected: QueryKey[] = [
-    keys.studentContext(userId, eventId), kind === 'report' ? keys.reportsAll(userId) : keys.reports(userId, eventId),
+    keys.studentContext(userId, eventId),
     ...studentIds.map(studentId => keys.student(userId, studentId)),
   ]
   if (kind !== 'attendance') {
     for (const studentId of studentIds) {
-      affected.push(keys.report(userId, eventId, studentId), keys.assessment(userId, eventId, studentId))
+      affected.push(keys.assessment(userId, eventId, studentId))
     }
   }
   return { roster, affected }

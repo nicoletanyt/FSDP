@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { Link } from "react-router";
 import {
     Check,
@@ -12,17 +13,20 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@/components/ui/popover";
 import GradeBadge from "@/components/instructor/DatabaseGradeBadge";
 import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
+import StudentTrainingDialog from "./StudentTrainingDialog";
+import ClassUnavailableDialog from "./ClassUnavailableDialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { studentDetailsHref } from "@/lib/instructor-calendar";
+import { useAuth } from "@/hooks/use-auth";
 import { useInstructorAttendance } from "@/hooks/use-instructor-attendance";
 import { parseEntityId } from "@/lib/instructor/adapters";
 import { attendanceEditable, editableAttendanceRows } from "@/lib/instructor/attendance";
 import { rosterAttendance } from "@/lib/instructor/calendar-view";
+import { studentDetailsHref } from "@/lib/instructor-calendar";
 import type { CalendarViewEvent as CalendarEvent } from "@/lib/instructor/calendar-view";
-import type { AttendanceState as Attendance, GradeRow } from "@/lib/instructor/types";
+import type { AttendanceState as Attendance, GradeRow, StudentEntry } from "@/lib/instructor/types";
 import { cn } from "@/lib/utils";
 
-type Student = { id: string; name: string; grade: GradeRow | null };
+type Student = { id: string; name: string; grade: GradeRow | null; entry: StudentEntry };
 
 function AttendanceControls({
     student,
@@ -140,6 +144,9 @@ export default function ClassSessionDetails({
     fillHeight?: boolean;
     onToggle?: () => void;
 }) {
+    const { session, profile } = useAuth();
+    const dialogContext = JSON.stringify([event.id, session?.user.id, profile?.role, expanded]);
+    const studentDialogHandle = useMemo(() => DialogPrimitive.createHandle<StudentEntry>(), [dialogContext]);
     const attendance = useInstructorAttendance(parseEntityId(event.id, "event"), expanded);
     const { query } = attendance;
     const entries = attendance.data?.entries ?? [];
@@ -149,9 +156,10 @@ export default function ClassSessionDetails({
         id: student.student.id,
         name: [student.student.first_name, student.student.last_name].filter(Boolean).join(" ") || student.student.email,
         grade: student.grade,
+        entry: student,
     }));
     const record = Object.fromEntries(entries.map(entry => [entry.record.student_id, {
-        attendance: rosterAttendance(entry.record, startsAt), comment: entry.record.report ?? "",
+        attendance: rosterAttendance(entry.record, startsAt),
     }]));
     const [, setNow] = useState(() => new Date());
     useEffect(() => {
@@ -200,6 +208,11 @@ export default function ClassSessionDetails({
                 hidden={summary && !expanded}
                 className={cn(fillHeight && (!summary || expanded) && "lg:flex lg:min-h-0 lg:flex-1 lg:flex-col")}
             >
+                {expanded && profile?.role === "instructor" && (
+                    <div className="shrink-0 px-3 pt-3 pb-2">
+                        <ClassUnavailableDialog key={dialogContext} eventName={event.name} />
+                    </div>
+                )}
                 {!summary && (
                     <div className="shrink-0 space-y-2 px-3 py-2.5">
                         <div className="flex items-center justify-between gap-2 text-xs">
@@ -219,6 +232,11 @@ export default function ClassSessionDetails({
                     <Button variant="outline" size="sm" onClick={attendance.retry} disabled={attendance.pending}>{attendance.retryLabel}</Button>
                 </div>}
                 {attendance.message && <p role="status" className="px-3 py-2 text-xs text-muted-foreground">{attendance.message}</p>}
+                {isGrading && attendance.data && <div className="px-3 pt-4 pb-2">
+                    <Button variant="outline" size="sm" className="min-h-11 w-full" nativeButton={false} render={<Link to={`/instructor/grading/${event.id}`} />}>
+                        View Grading
+                    </Button>
+                </div>}
                 {attendance.data && !roster.length && <p role="status" className="p-4 text-sm text-muted-foreground">No students are registered for this session.</p>}
                 <TooltipProvider>
                     <ul
@@ -255,26 +273,23 @@ export default function ClassSessionDetails({
                                             } : undefined}
                                         />
                                         <Tooltip>
-                                            <TooltipTrigger render={
+                                            <TooltipTrigger render={isGrading ? (
                                                 <Button
-                                                    render={
-                                                        <Link to={isGrading ? `/instructor/assessments/${event.id}/${student.id}` : studentDetailsHref(student.id, event, "sessions")} />
-                                                    }
+                                                    render={<Link to={studentDetailsHref(student.id, event, "overview")} />}
                                                     nativeButton={false}
                                                     variant="ghost"
                                                     size="icon-sm"
-                                                    aria-label={isGrading
-                                                        ? `View grading assessment for ${student.name}`
-                                                        : `View sessions and feedback for ${student.name}`}
-                                                    className={cn(
-                                                        "size-11 rounded-md text-foreground/70 hover:text-foreground lg:size-7",
-                                                        value.comment && "bg-accent text-foreground",
-                                                    )}
+                                                    aria-label={`View student overview for ${student.name}`}
+                                                    className="size-11 rounded-md text-foreground/70 hover:text-foreground lg:size-7"
                                                 />
-                                            }>
+                                            ) : (
+                                                <DialogPrimitive.Trigger handle={studentDialogHandle} payload={student.entry} render={
+                                                    <Button variant="ghost" size="icon-sm" aria-label={`View student details and techniques for ${student.name}`} className="size-11 rounded-md text-foreground/70 hover:text-foreground lg:size-7" />
+                                                } />
+                                            )}>
                                                 <MessageSquare aria-hidden="true" />
                                             </TooltipTrigger>
-                                            <TooltipContent>{isGrading ? "Grading assessment" : "Report"}</TooltipContent>
+                                            <TooltipContent>{isGrading ? "Student overview" : "Student details and techniques"}</TooltipContent>
                                         </Tooltip>
                                     </div>
                                     <div className="col-start-2 row-start-1 flex min-w-0 items-center lg:col-start-1 lg:row-start-2">
@@ -317,6 +332,7 @@ export default function ClassSessionDetails({
                     </div>
                 )}
             </div>
+            {!isGrading && expanded && profile?.role === "instructor" && <StudentTrainingDialog key={dialogContext} handle={studentDialogHandle} />}
         </div>
     );
 }

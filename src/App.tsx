@@ -49,8 +49,7 @@ const InstructorProfile = lazy(() => import('./pages/Instructor/InstructorProfil
 const InstructorCheckIn = lazy(() => import('./pages/Instructor/InstructorCheckIn'))
 const NfcCheckIn = lazy(() => import('./pages/Instructor/NfcCheckIn'))
 const InstructorStudentDetails = lazy(() => import('./pages/Instructor/InstructorStudentDetails'))
-const InstructorStudentReports = lazy(() => import('./pages/Instructor/InstructorStudentReports'))
-const InstructorGradingAssessment = lazy(() => import('./pages/Instructor/InstructorGradingAssessment'))
+const InstructorGradingSession = lazy(() => import('./pages/Instructor/InstructorGradingSession'))
 
 export default function App() {
   return (
@@ -94,9 +93,8 @@ export default function App() {
                 <Route path="check-in" element={<InstructorCheckIn />} />
                 <Route path="nfc_checkin" element={<NfcCheckIn />} />
                 <Route path="students/:studentId" element={<InstructorStudentDetails />} />
-                <Route path="reports/:eventId" element={<InstructorStudentReports />} />
-                <Route path="assessments/:assessmentId" element={<InstructorGradingAssessment />} />
-                <Route path="assessments/:eventId/:studentId" element={<InstructorGradingAssessment />} />
+                <Route path="reports/:eventId" element={<Navigate to="/instructor/calendar" replace />} />
+                <Route path="grading/:eventId" element={<InstructorGradingSession />} />
                 <Route path="profile" element={<InstructorProfile />} />
               </Route>
             </Route>

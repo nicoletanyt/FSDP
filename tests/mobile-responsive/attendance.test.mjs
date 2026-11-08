@@ -16,7 +16,7 @@ before(async () => {
   await request(`/session/${session}/url`, { url: `${origin}/tests/mobile-responsive/calendar.html` })
 })
 after(async () => { if (session) await request(`/session/${session}`, undefined, 'DELETE') })
-async function inAttendance(width, mode, inspect) {
+async function inAttendance(width, mode, inspect, role = 'instructor') {
   const result = await request(`/session/${session}/execute/async`, { args: [], script: `
     const done = arguments[arguments.length - 1];
     (async () => {
@@ -24,10 +24,11 @@ async function inAttendance(width, mode, inspect) {
       f.style.cssText = 'position:fixed;top:0;left:0;border:0;width:${width}px;height:700px';
       document.body.append(f);
       try {
-        await new Promise(resolve => { f.onload = () => setTimeout(resolve, 700); f.src = '/tests/mobile-responsive/calendar.html?route=' + encodeURIComponent(${JSON.stringify(`/instructor/calendar?view=day&date=2026-11-27&fixtureData=${mode}`)}); });
+        await new Promise(resolve => { f.onload = () => setTimeout(resolve, 700); f.src = '/tests/mobile-responsive/calendar.html?route=' + encodeURIComponent(${JSON.stringify(`/instructor/calendar?view=day&date=2026-11-27&fixtureData=${mode}&fixtureRole=${role}`)}); });
         const w = f.contentWindow, d = w.document, wait = (ms = 350) => new Promise(resolve => setTimeout(resolve, ms));
         const event = [...d.querySelectorAll('[data-mobile-event], button[aria-label]')].find(e => e.getAttribute('aria-label')?.includes('Mixed/Family'));
-        event.click(); await wait();
+        if (event) { event.click(); await wait(); }
+        else if (${JSON.stringify(role)} === 'instructor') throw new Error('Class session was not rendered');
         done(await (${inspect.toString()})(w, wait, f));
       } catch (error) { done({ error: String(error) }); }
       finally { f.remove(); }
@@ -267,4 +268,54 @@ test('the persisted fixture read path survives a full document reload', async ()
     return value
   })
   assert.equal(result, 'true')
+})
+
+test('unavailable opens a UI-only confirmation and Cancel preserves the selected class', async t => {
+  for (const width of [320, 390, 768, 1440]) await t.test(`${width}px`, async () => {
+    const result = await inAttendance(width, 'attendance-normal', async (w, wait) => {
+      const d = w.document, route = w.location.href, roster = d.querySelector('[aria-label="Student roster"]')
+      const trigger = [...d.querySelectorAll('button')].find(node => node.textContent.trim() === 'I’m unavailable')
+      const triggerHeight = trigger.getBoundingClientRect().height
+      trigger.focus(); trigger.click(); await wait()
+      const dialog = d.querySelector('[data-slot="alert-dialog-content"]'), bounds = dialog.getBoundingClientRect()
+      const confirm = [...dialog.querySelectorAll('button')].find(node => node.textContent === 'Confirm absence')
+      const before = { text: dialog.textContent, role: dialog.getAttribute('role'), destructive: confirm.className.includes('text-destructive'), disabled: confirm.disabled, title: d.getElementById(dialog.getAttribute('aria-labelledby'))?.textContent,
+        description: d.getElementById(dialog.getAttribute('aria-describedby'))?.textContent, focusInside: dialog.contains(d.activeElement),
+        bounded: bounds.left >= 0 && bounds.right <= d.documentElement.clientWidth && bounds.top >= 0 && bounds.bottom <= w.innerHeight,
+        fits: dialog.scrollWidth <= dialog.clientWidth, triggerHeight }
+      ;[...dialog.querySelectorAll('button')].find(node => node.textContent === 'Cancel').click(); await wait()
+      return { ...before, closed: !d.querySelector('[data-slot="alert-dialog-content"]'), focusReturned: d.activeElement === trigger,
+        sameRoster: roster === d.querySelector('[aria-label="Student roster"]'), sameRoute: route === w.location.href, requests: w.attendanceRequestsFixture.length }
+    })
+    assert.equal(result.title, 'Are you sure?')
+    assert.equal(result.role, 'alertdialog')
+    assert.equal(result.destructive, true)
+    assert.equal(result.description, 'Once your absence is marked, an email will be sent out to notify other instructors and the admin.')
+    assert.match(result.text, /Mixed\/Family/)
+    assert.match(result.text, /No absence will be saved and no email will be sent/)
+    assert.equal(result.disabled, true)
+    assert.ok(result.triggerHeight >= 44)
+    for (const key of ['focusInside', 'bounded', 'fits', 'closed', 'focusReturned', 'sameRoster', 'sameRoute']) assert.equal(result[key], true, key)
+    assert.equal(result.requests, 0)
+  })
+})
+
+test('Escape dismisses unavailable confirmation without closing the class drawer', async () => {
+  const result = await inAttendance(390, 'attendance-normal', async (w, wait) => {
+    const d = w.document, drawer = d.querySelector('[data-slot="drawer-content"]')
+    const trigger = [...d.querySelectorAll('button')].find(node => node.textContent.trim() === 'I’m unavailable')
+    trigger.focus(); trigger.click(); await wait()
+    d.activeElement.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true }))
+    await wait()
+    return { closed: !d.querySelector('[data-slot="alert-dialog-content"]'), focusReturned: d.activeElement === trigger,
+      sameDrawer: drawer === d.querySelector('[data-slot="drawer-content"]') }
+  })
+  assert.deepEqual(result, { closed: true, focusReturned: true, sameDrawer: true })
+})
+
+test('unavailable is only offered to instructors, not administrators or students', async () => {
+  for (const role of ['administrator', 'student']) {
+    const count = await inAttendance(390, 'attendance-normal', w => [...w.document.querySelectorAll('button')].filter(node => node.textContent.trim() === 'I’m unavailable').length, role)
+    assert.equal(count, 0)
+  }
 })

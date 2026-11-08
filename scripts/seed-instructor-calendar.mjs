@@ -103,8 +103,6 @@ export function buildCalendarSeedRoster(event, students, classTypeId, now = new 
       ? new Date(Date.parse(event.starts_at) + (status === 'late' ? 8 : 2) * 60_000).toISOString() : null
     return { event_id: event.id, student_id: student.id, attendance_status: status,
       recorded_at: arrived ?? (status ? event.ends_at : null), checked_in_at: arrived,
-      report: arrived ? `${CALENDAR_TEST_PREFIX}Sample session feedback for calendar testing.` : null,
-      report_author_id: arrived ? event.instructor_id : null,
       assessment_status: null, assessment_notes: null }
   })
 }
@@ -178,7 +176,7 @@ export async function seedInstructorCalendar({ email, weekOf = singaporeDate(), 
 
   const verifiedEvents = checked(await db.from('events').select(`${eventColumns},centre:centres(name),classes(class_type_id),participants:event_students(count)`)
     .in('id', ids).order('starts_at'), 'Calendar verification')
-  const verifiedRoster = checked(await db.from('event_students').select('event_id,student_id,attendance_status,checked_in_at,report_author_id')
+  const verifiedRoster = checked(await db.from('event_students').select('event_id,student_id,attendance_status,checked_in_at')
     .in('event_id', ids), 'Attendance verification')
   assertCalendarSeedOwnership(verifiedEvents, instructor.id)
   if (verifiedEvents.length !== 7 || verifiedEvents.some(event => !event.classes || !event.centre)

@@ -49,10 +49,10 @@ export function createGradingFixtureReads(account: string, mode: string | null):
           application_status: 'closed', application_opens_on: null, reporting_release_on: null, reporting_time: null, official_schedule: false }
         return { record: { event_id: eventId, student_id: id, assessment_status: index % 2 ? 'completed' : 'pending',
           assessment_notes: `${mode === 'grading-race' ? id === uuid(100) ? 'Original student' : 'New student' : account === 'audit' ? 'Stored' : 'Replacement account'} assessment notes ${index + 1}`,
-          attendance_status: null, report: null, report_author_id: null, recorded_at: null, checked_in_at: null },
+           attendance_status: null, recorded_at: null, checked_in_at: null },
         event: { id: eventId, event_type: 'grading', name: `${account === 'audit' ? 'Stored' : 'Replacement'} grading ${index + 1}`, centre_id: centre.id,
           instructor_id: null, starts_at: null, ends_at: null, status: 'completed', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' },
-        grading, centre, instructor: null, reportAuthor: null, targetGrade: index % 2 ? target : null }
+         grading, centre, instructor: null, targetGrade: index % 2 ? target : null }
       })
       const offset = options.offset ?? 0
       return { items: items.slice(offset, offset + Math.min(options.limit ?? 50, 40)), offset, limit: options.limit ?? 50, total: items.length }

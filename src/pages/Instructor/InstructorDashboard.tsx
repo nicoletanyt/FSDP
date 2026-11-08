@@ -196,7 +196,7 @@ function EventCard({
                     )}
                 >
                     <div className="min-h-0 overflow-hidden">
-                        <ClassSessionDetails event={event} />
+                        <ClassSessionDetails event={event} expanded={expanded} />
                     </div>
                 </div>
             ))}

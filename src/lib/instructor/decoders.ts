@@ -3,9 +3,9 @@ import { InstructorDataError } from './errors'
 import type {
   AssessmentDetail, AttendanceSaveResult, AttendanceSnapshot, CalendarEntry, CentreRow, ClassTypeRow, EventRow, EventStudentRow,
   GradeRequirementRow, GradeRow, GradeTrackRow, GradingApplicationRow, GradingRow,
-  InstructorAvailabilityRow, Page, RosterEntry, SessionReportEntry, StudentAttendanceSummary,
+  InstructorAvailabilityRow, Page, RosterEntry, StudentAttendanceSummary,
   StudentDetail, StudentDirectory, StudentEntry, StudentHistoryEntry, StudentRow,
-  SyllabusItemRow, TechniqueSignOffEntry, TechniqueSignOffRow, ReportSnapshot, AssessmentSnapshot, SessionSaveResult,
+  SyllabusItemRow, TechniqueSignOffEntry, TechniqueSignOffRow, AssessmentSnapshot, SessionSaveResult,
 } from './types'
 
 type Decoder<T> = (value: unknown) => T
@@ -76,12 +76,10 @@ const track = enumeration('children', 'adult')
 const assessment = enumeration('pending', 'completed')
 const attendance = enumeration('present', 'late', 'absent', 'excused')
 
-export const decodeReportSnapshot = row<ReportSnapshot>({ report: nullable(text), reportAuthorId: nullable(instructorId) })
 export const decodeAssessmentSnapshot = row<AssessmentSnapshot>({ status: nullable(assessment), notes: nullable(text) })
 export function decodeSessionSave(value: unknown): SessionSaveResult {
   const source = object(value)
   const key = { requestId: uuid(source.requestId), eventId: eventId(source.eventId), studentId: studentId(source.studentId) }
-  if (source.kind === 'report') return { ...key, kind: 'report', value: decodeReportSnapshot(source.value) }
   if (source.kind === 'assessment') return { ...key, kind: 'assessment', value: decodeAssessmentSnapshot(source.value) }
   return invalid()
 }
@@ -134,7 +132,7 @@ export function decodeEvent(value: unknown): EventRow {
 }
 export const decodeEventStudent = row<EventStudentRow>({
   event_id: eventId, student_id: studentId, attendance_status: nullable(attendance), recorded_at: nullable(timestamp),
-  report: nullable(text), report_author_id: nullable(instructorId), assessment_status: nullable(assessment),
+  assessment_status: nullable(assessment),
   assessment_notes: nullable(text), checked_in_at: nullable(timestamp),
 })
 export const decodeGrading = row<GradingRow>({
@@ -229,12 +227,11 @@ export function decodeHistoryEntry(value: unknown): StudentHistoryEntry {
   const event = decodeEvent(source.event)
   const centre = nullable(decodeCentre)(source.centre)
   const instructor = nullable(parseInstructorRow)(source.instructor)
-  const reportAuthor = nullable(parseInstructorRow)(source.reportAuthor)
   if (record.event_id !== event.id || (centre && centre.id !== event.centre_id)
-      || (instructor && instructor.id !== event.instructor_id) || (reportAuthor && reportAuthor.id !== record.report_author_id)) return invalid()
+      || (instructor && instructor.id !== event.instructor_id)) return invalid()
   const grading = nullable(decodeGrading)(source.grading ?? null)
   if (grading && (grading.event_id !== event.id || event.event_type !== 'grading')) return invalid()
-  return { record, event, centre, instructor, reportAuthor, grading, targetGrade: nullable(decodeGrade)(source.targetGrade) }
+  return { record, event, centre, instructor, grading, targetGrade: nullable(decodeGrade)(source.targetGrade) }
 }
 
 export function decodeSummary(value: unknown): StudentAttendanceSummary {
@@ -247,18 +244,6 @@ export function decodeSummary(value: unknown): StudentAttendanceSummary {
     event: decodeEvent(object(source.lastAttended).event), centre: nullable(decodeCentre)(object(source.lastAttended).centre),
   }
   return { ...totals, lastAttended }
-}
-
-export function decodeSessionReport(value: unknown): SessionReportEntry {
-  const source = object(value)
-  const entry = decodeRosterEntry(source)
-  const previousReports = array(source.previousReports, decodeHistoryEntry)
-  const reportAuthor = nullable(parseInstructorRow)(source.reportAuthor)
-  if ((reportAuthor && reportAuthor.id !== entry.record.report_author_id) || previousReports.length > 2
-      || new Set(previousReports.map(item => item.record.event_id)).size !== previousReports.length
-      || previousReports.some(item => item.record.student_id !== entry.student.student.id
-        || item.record.event_id === entry.record.event_id || item.event.event_type !== 'class' || !item.record.report?.trim())) return invalid()
-  return { ...entry, reportAuthor, previousReports }
 }
 
 export function decodeTechniqueSignOff(value: unknown): TechniqueSignOffEntry {

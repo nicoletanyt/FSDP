@@ -7,14 +7,11 @@ import { InstructorDataError, toInstructorDataError } from '@/lib/instructor/err
 import { invalidateSessionChange, refreshInvalidatedSessionViews } from '@/lib/instructor/cache-invalidation'
 import { queryGeneration } from '@/lib/query-generation'
 import { protectSessionEdit } from '@/lib/instructor/edit-protection'
-import type { AssessmentDetail, AssessmentKey, AssessmentSaveInput, ReportDetail, ReportSaveInput, SessionSaveInput } from '@/lib/instructor/types'
+import type { AssessmentDetail, AssessmentKey, AssessmentSaveInput, SessionSaveInput } from '@/lib/instructor/types'
 
-type Kind = 'report' | 'assessment'
-type Detail<K extends Kind> = K extends 'report' ? ReportDetail : AssessmentDetail
-type Draft = ({ kind: 'report' } & Pick<ReportSaveInput, 'report' | 'expected'>)
-  | ({ kind: 'assessment' } & Pick<AssessmentSaveInput, 'status' | 'notes' | 'expected'>)
+type Draft = { kind: 'assessment' } & Pick<AssessmentSaveInput, 'status' | 'notes' | 'expected'>
 
-export function useInstructorSessionSave<K extends Kind>(kind: K, pair: AssessmentKey) {
+export function useInstructorSessionSave(kind: 'assessment', pair: AssessmentKey) {
   const api = useInstructorApi()
   const client = useQueryClient()
   const { session, profile } = useAuth()
@@ -27,7 +24,7 @@ export function useInstructorSessionSave<K extends Kind>(kind: K, pair: Assessme
   const frozen = useRef<SessionSaveInput | null>(null)
   const controller = useRef<AbortController | null>(null)
   const releaseProtection = useRef<(() => void) | null>(null)
-  const [fresh, setFresh] = useState<{ key: string; data: Detail<K> } | null>(null)
+  const [fresh, setFresh] = useState<{ key: string; data: AssessmentDetail } | null>(null)
   const [state, setState] = useState<{ key: string; pending: boolean; error: string | null; retry: 'write' | 'read'; unconfirmed: boolean } | null>(null)
   useEffect(() => {
     current.current.mounted = true; busy.current = false; frozen.current = null
@@ -39,7 +36,7 @@ export function useInstructorSessionSave<K extends Kind>(kind: K, pair: Assessme
   const active = state?.key === key ? state : null
   const isCurrent = () => current.current.mounted && current.current.key === key
 
-  async function perform(input: SessionSaveInput | null): Promise<Detail<K> | null> {
+  async function perform(input: SessionSaveInput | null): Promise<AssessmentDetail | null> {
     if (!isCurrent() || busy.current) return null
     busy.current = true
     let acknowledged = false
@@ -50,24 +47,22 @@ export function useInstructorSessionSave<K extends Kind>(kind: K, pair: Assessme
     setState(previous => ({ key, pending: true, error: null, retry: 'read', unconfirmed: previous?.key === key && previous.unconfirmed }))
     try {
       if (input) {
-        if (input.kind === 'report') await api.saveReport(input)
-        else await api.saveAssessment(input)
+        await api.saveAssessment(input)
         acknowledged = true
         invalidateSessionChange(client, generation, input.expectedUserId, input.eventId, [input.studentId], input.kind, false)
       }
       if (!isCurrent()) return null
       if (input) setState({ key, pending: true, error: null, retry: 'read', unconfirmed: true })
       const read = new AbortController(); controller.current = read
-      const data = kind === 'report' ? await api.getReport(pair, read.signal) : await api.getAssessment(pair, read.signal)
+      const data = await api.getAssessment(pair, read.signal)
       if (!data) throw new InstructorDataError('forbidden', 'This event/student record is no longer available to your account.')
       if (!isCurrent()) return null
       const impact = input ?? frozen.current
       if (impact) await refreshInvalidatedSessionViews(client, generation, impact.expectedUserId, impact.eventId, [impact.studentId], impact.kind)
       if (!isCurrent()) return null
-      const result = data as Detail<K>
-      setFresh({ key, data: result }); setState(null); frozen.current = null
+      setFresh({ key, data }); setState(null); frozen.current = null
       releaseProtection.current?.(); releaseProtection.current = null
-      return result
+      return data
     } catch (error) {
       if (input && !acknowledged) {
         invalidateSessionChange(client, generation, input.expectedUserId, input.eventId, [input.studentId], input.kind, false)
