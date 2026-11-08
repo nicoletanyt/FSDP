@@ -17,7 +17,7 @@ import type { AttendanceSaveInput, AttendanceSaveResult, EventStudentRow } from 
 import type { InstructorProfileDetails } from '../../src/lib/instructor/profile'
 
 declare global {
-  interface Window { attendanceRequestsFixture: AttendanceSaveInput[]; profileWriteRequestsFixture: string[] }
+  interface Window { attendanceRequestsFixture: AttendanceSaveInput[]; profileWriteRequestsFixture: string[]; availabilityReadsFixture: number; availabilityWritesFixture: number }
 }
 
 const uuid = (number: number) => `00000000-0000-4000-8000-${String(number).padStart(12, '0')}`
@@ -94,9 +94,11 @@ export function createCalendarFixtureApi(account = 'audit'): InstructorApi {
   let profileDetails: InstructorProfileDetails = JSON.parse(sessionStorage.getItem(profileStorageKey) ?? 'null') ?? {
     instructorId: uuid(account === 'audit' ? 1 : 2), userId: uuid(account === 'audit' ? 90001 : 90002),
     address: account === 'audit' && mode !== 'profile-empty' ? '18 Sin Ming Lane\nSingapore 573960' : null,
-    employmentType: account === 'audit' && mode !== 'profile-empty' ? 'part_time' : null, photoPath: null, photoUrl: null,
+    employmentType: mode === 'full-time' ? 'full_time' : account === 'audit' && !['profile-empty', 'employment-unset', 'unlinked'].includes(mode ?? '') ? 'part_time' : null, photoPath: null, photoUrl: null,
   }
   window.profileWriteRequestsFixture = []
+  window.availabilityReadsFixture = 0
+  window.availabilityWritesFixture = 0
   let profileFailed = false
   let addressFailed = false
   let photoFailed = false
@@ -105,6 +107,11 @@ export function createCalendarFixtureApi(account = 'audit'): InstructorApi {
     if (expected !== profileDetails.userId) throw new Error('The signed-in account changed.')
   }
   const api: InstructorApi = {
+    async getAvailabilityAccess(signal) {
+      await new Promise(resolve => setTimeout(resolve, 80))
+      signal?.throwIfAborted()
+      return profileDetails.employmentType === 'part_time'
+    },
     async getProfile(expectedUserId, signal) {
       await new Promise(resolve => setTimeout(resolve, mode === 'profile-loading' ? 1600 : 100))
       signal?.throwIfAborted()
@@ -229,6 +236,7 @@ export function createCalendarFixtureApi(account = 'audit'): InstructorApi {
       return item
     },
     async getAvailability(options) {
+      window.availabilityReadsFixture++
       const initialSlots = mode === 'empty' || mode === 'unlinked' || account !== 'audit' ? [] : mockAvailability(today).map((slot, index) => ({
         id: uuid(50 + index), instructor_id: instructorId,
         date: dateInputValue(slot.date), start_time: `${slot.startTime}:00`, end_time: `${slot.endTime}:00`,
@@ -237,6 +245,8 @@ export function createCalendarFixtureApi(account = 'audit'): InstructorApi {
       return page(slots, options)
     },
     async createAvailability(input) {
+      window.availabilityWritesFixture++
+      if (profileDetails.employmentType !== 'part_time') throw new InstructorDataError('forbidden', 'Availability is only available to part-time instructors.')
       await new Promise(resolve => setTimeout(resolve, 150))
       if (mode === 'availability-error' && !availabilityFailed) {
         availabilityFailed = true

@@ -228,6 +228,19 @@ const record = {
 const page = (items, total = items.length, offset = 0, limit = 50) => ({ items, total, offset, limit })
 const responsePage = (items, total = items.length) => Response.json(items, { headers: { 'content-range': `0-${Math.max(0, items.length - 1)}/${total}` } })
 
+test('availability eligibility comes from the database and a missing part-time identity is denied', async () => {
+  for (const id of [instructorId, null]) {
+    const f = httpClient((_request, url) => {
+      assert.equal(url.pathname, '/rest/v1/rpc/current_part_time_instructor_id')
+      return Response.json(id)
+    })
+    assert.equal(await f.api.getAvailabilityAccess(), id !== null)
+  }
+  const f = httpClient(() => Response.json({ code: 'PAV06', message: 'Private database details' }, { status: 403 }))
+  await assert.rejects(f.api.createAvailability({ date: '2026-11-30', startTime: '08:00', endTime: '09:00' }),
+    { code: 'forbidden', message: 'Availability is only available to part-time instructors.' })
+})
+
 test('each attendance load verifies ownership once, follows all pages and rejects reassignment', async () => {
   let assigned = true
   let authReads = 0

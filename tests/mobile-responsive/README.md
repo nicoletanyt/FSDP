@@ -62,7 +62,8 @@ gestures, the virtual keyboard, or date/time pickers.
 Data-flow checks cover loading, empty results, calendar/roster failure and retry,
 205-student roster pagination, the yellow Late badge, stale responses after date
 navigation, and account changes while a selection is open. The calendar follow-up
-also checks unlinked-account calendars, pending availability saves, double-submit
+also checks full-time/unspecified/unlinked accounts have no availability controls,
+records or reads, part-time availability access, pending availability saves, double-submit
 protection, failed-save draft retention and read-after-save refresh. Existing-slot
 availability edit/delete mutations remain disabled. Phase 10A enables the
 existing present/absent/clear and bulk controls for scheduled timed sessions before

@@ -7,6 +7,7 @@ export const instructorQueryKeys = {
   profile: (userId: string) => [...instructorQueryKeys.all(userId), 'profile'] as const,
   calendar: (userId: string, from: string, to: string) => [...instructorQueryKeys.all(userId), 'calendar', from, to] as const,
   availability: (userId: string, from: string, to: string) => [...instructorQueryKeys.all(userId), 'availability', from, to] as const,
+  availabilityAccess: (userId: string) => [...instructorQueryKeys.all(userId), 'availability-access'] as const,
   event: (userId: string, eventId: string) => [...instructorQueryKeys.all(userId), 'event', eventId] as const,
   roster: (userId: string, eventId: string) => [...instructorQueryKeys.all(userId), 'roster', eventId] as const,
   attendanceWrite: (userId: string, eventId: string) => [...instructorQueryKeys.all(userId), 'attendance-write', eventId] as const,

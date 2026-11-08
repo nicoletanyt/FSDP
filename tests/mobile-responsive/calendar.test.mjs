@@ -138,6 +138,38 @@ test('calendar controls are distinct from site navigation and information stays 
     }
 });
 
+test('desktop class details preserve Timeline in day/week views and after remounting the selected class route', async () => {
+    for (const view of ['day', 'week']) {
+        const result = await inCalendar(1280, `/instructor/calendar?view=${view}&date=2026-11-4`, async (w, wait, frame) => {
+            let d = w.document;
+            const timelineSelector = '[aria-label="Daily hourly timeline"], [aria-label="Weekly hourly timeline"]';
+            d.querySelector('[aria-label^="Calendar display mode:"]').click(); await wait();
+            [...d.querySelectorAll('[role="menuitemradio"]')].find(item => item.textContent.trim().startsWith('Timeline')).click(); await wait();
+            const timeline = d.querySelector(timelineSelector);
+            const event = timeline.querySelector('button[data-prefetch-class]');
+            const selectedId = event.getAttribute('data-prefetch-class');
+            event.click(); await wait(500);
+            const afterSelect = Boolean(d.querySelector(timelineSelector)) && Boolean(d.querySelector('[aria-label="Student roster"]'))
+                && d.querySelector('[aria-label="Calendar display mode: timeline"]') !== null;
+            const selectionRetained = new URLSearchParams(w.location.search).get('session') === selectedId;
+            const beforeReload = w.location.pathname + w.location.search;
+            await new Promise(resolve => {
+                frame.onload = () => { frame.onload = null; setTimeout(resolve, 800); };
+                frame.src = '/tests/mobile-responsive/calendar.html?route=' + encodeURIComponent(beforeReload);
+            });
+            d = w.document;
+            const afterReload = Boolean(d.querySelector(timelineSelector)) && Boolean(d.querySelector('[aria-label="Student roster"]'))
+                && d.querySelector('[aria-label="Calendar display mode: timeline"]') !== null;
+            const retainedId = new URLSearchParams(w.location.search).get('session');
+            d.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); await wait();
+            const afterClose = Boolean(d.querySelector(timelineSelector)) && !new URLSearchParams(w.location.search).has('session');
+            return { afterSelect, selectionRetained, afterReload, afterClose, retainedId, selectedId };
+        });
+        for (const key of ['afterSelect', 'selectionRetained', 'afterReload', 'afterClose']) assert.equal(result[key], true, `${view}: ${key}`);
+        assert.equal(result.retainedId, result.selectedId);
+    }
+});
+
 test('site navbar sticks to the viewport and view-picker options retain distinct icons', async () => {
     for (const width of [320, 390, 430]) {
         const result = await inCalendar(width, '/instructor/calendar?view=week&date=2026-11-4', async (w, wait) => {
@@ -596,9 +628,9 @@ test('account changes clear the previous calendar and selected roster before the
     assert.ok(result.events.every(name => name.includes('Replacement account class')));
 });
 
-test('unlinked instructors keep a navigable calendar and can save availability once', async () => {
+test('part-time instructors keep a navigable calendar and can save availability once', async () => {
     for (const width of [320, 1280]) {
-        const result = await inCalendar(width, '/instructor/calendar?view=day&date=2026-11-27&fixtureData=unlinked', async (w, wait) => {
+        const result = await inCalendar(width, '/instructor/calendar?view=day&date=2026-11-27&fixtureData=part-time', async (w, wait) => {
             const d = w.document;
             const hasCalendar = !!d.querySelector('[data-mobile-calendar], [aria-label="Daily hourly timeline"]');
             const add = [...d.querySelectorAll('button')].find(button => button.textContent.trim() === 'Add Availability');
@@ -621,6 +653,28 @@ test('unlinked instructors keep a navigable calendar and can save availability o
         assert.equal(result.saved, 1);
         assert.equal(result.closed, true);
         assert.deepEqual(result.errors, []);
+    }
+});
+
+test('full-time, unset and unlinked instructors have no availability controls, records or reads on mobile and desktop', async () => {
+    for (const mode of ['full-time', 'employment-unset', 'unlinked']) for (const width of [320, 390, 1280]) {
+        const result = await inCalendar(width, `/instructor/calendar?view=day&date=2026-11-4&fixtureData=${mode}`, async (w, wait) => {
+            const d = w.document;
+            const addButtons = [...d.querySelectorAll('button')].filter(button => button.textContent.includes('Add Availability') || button.getAttribute('aria-label')?.startsWith('Add availability'));
+            const records = d.querySelectorAll('button[aria-label^="Available,"]').length;
+            const enabledSlots = d.querySelectorAll('[data-mobile-free-slot]:not(:disabled), [data-empty-slot]:not(:disabled)').length;
+            const info = d.querySelector('[aria-label="Calendar colours"], [aria-label="Calendar information"]');
+            info.click(); await wait();
+            const legend = d.querySelector('[data-slot="popover-content"]').textContent;
+            return { addButtons: addButtons.length, records, enabledSlots, legendHasAvailability: legend.includes('Availability'),
+                reads: w.availabilityReadsFixture, writes: w.availabilityWritesFixture,
+                hasCalendar: Boolean(d.querySelector('[data-mobile-calendar], [aria-label="Daily hourly timeline"]')),
+                fits: d.documentElement.scrollWidth <= d.documentElement.clientWidth };
+        });
+        for (const key of ['addButtons', 'records', 'enabledSlots', 'reads', 'writes']) assert.equal(result[key], 0, `${mode}/${width}: ${key}`);
+        assert.equal(result.legendHasAvailability, false);
+        assert.equal(result.hasCalendar, true);
+        assert.equal(result.fits, true);
     }
 });
 

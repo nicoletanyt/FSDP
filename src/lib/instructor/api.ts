@@ -293,6 +293,17 @@ export function createInstructorApi(client: InstructorClient) {
       decodeAvailability, page)
     },
 
+    async getAvailabilityAccess(signal?: AbortSignal): Promise<boolean> {
+      await getInstructorAccount(signal)
+      const id = await requestInstructorData(
+        () => cancellable(client.rpc('current_part_time_instructor_id'), signal),
+        'Unable to verify availability access. Please try again.', signal,
+      )
+      if (id === null) return false
+      parseEntityId(id, 'instructor')
+      return true
+    },
+
     async createAvailability(input: AvailabilityInput) {
       dateOnly(input.date)
       const validTime = /^([01]\d|2[0-3]):[0-5]\d$/

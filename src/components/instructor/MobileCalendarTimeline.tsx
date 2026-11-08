@@ -197,7 +197,8 @@ export default function MobileCalendarTimeline({
                                     type="button"
                                     data-mobile-free-slot
                                     disabled={disabled}
-                                    aria-label={`Add availability on ${fullDate(day)}, ${formatTime(range.startTime)} to ${formatTime(range.endTime)}`}
+                                    aria-hidden={!onSelectRange || undefined}
+                                    aria-label={onSelectRange ? `Add availability on ${fullDate(day)}, ${formatTime(range.startTime)} to ${formatTime(range.endTime)}` : undefined}
                                     onClick={() => {
                                         const message = availabilityError(
                                             range,

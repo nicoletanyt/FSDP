@@ -519,8 +519,17 @@ export default function InstructorDashboard() {
     const isDesktop = useMediaQuery("(min-width: 1024px)");
     const [searchParams, setSearchParams] = useSearchParams();
     const [weekOverview, setWeekOverview] = useState(false);
-    const [displayMode, setDisplayMode] = useState<"timeline" | "list">("list");
-    const [dayDisplayMode, setDayDisplayMode] = useState<"timeline" | "list">("timeline");
+    // Keep the chosen display in the same URL state as class selection. A route
+    // remount or returning to class details must not reset Timeline to List.
+    const displayMode = searchParams.get("display") === "timeline" ? "timeline" : "list";
+    const dayDisplayMode = searchParams.get("dayDisplay") === "list" ? "list" : "timeline";
+    const updateDisplayMode = useCallback((range: "day" | "week", mode: "timeline" | "list") => {
+        setSearchParams(previous => {
+            const next = new URLSearchParams(previous);
+            next.set(range === "day" ? "dayDisplay" : "display", mode);
+            return next;
+        });
+    }, [setSearchParams]);
     const [timelineFocusRequest, setTimelineFocusRequest] = useState(0);
     const [mobileList, setMobileList] = useState(false);
     const classTriggerRef = useRef<HTMLElement | null>(null);
@@ -548,7 +557,14 @@ export default function InstructorDashboard() {
         (resolvedSelectionDate?.id === requestedId ? resolvedSelectionDate.date : today);
     const range = calendarRange(selectedDate, view, isDesktop, mobileList);
     const calendar = useInstructorCalendarRange(range);
+    const canUseAvailability = calendar.canUseAvailability;
     const availability = calendar.data?.availability ?? [];
+    useEffect(() => {
+        if (!canUseAvailability) {
+            setAvailabilityDialog(null);
+            setSelectedAvailabilityId(null);
+        }
+    }, [canUseAvailability]);
     const events = calendar.data?.events ?? [];
     const prefetch = useInstructorPrefetch({ selectedDate, today, range, events, ready: calendar.status === 'success',
         weekView: view === 'week', isDesktop, mobileList });
@@ -603,17 +619,20 @@ export default function InstructorDashboard() {
     }
 
     function selectAvailability(slot: AvailabilitySlot) {
+        if (!canUseAvailability) return;
         updateSelection(slot.date);
         setSelectedAvailabilityId(slot.id);
         setAvailabilityDialog({ range: slot, editingId: slot.id });
     }
 
     function selectRange(range: AvailabilityRange) {
+        if (!canUseAvailability) return;
         updateSelection(range.date);
         setAvailabilityDialog({ range });
     }
 
     function addAvailability() {
+        if (!canUseAvailability) return;
         const current = singaporeClock();
         const currentDay = new Date(current.getFullYear(), current.getMonth(), current.getDate());
         let date = selectedDate < currentDay ? currentDay : selectedDate;
@@ -632,6 +651,7 @@ export default function InstructorDashboard() {
     }
 
     async function saveAvailability(range: AvailabilityRange) {
+        if (!canUseAvailability) throw new Error("Availability is only available to part-time instructors.");
         const userId = session?.user.id;
         const generation = queryGeneration(client);
         let saved;
@@ -709,15 +729,14 @@ export default function InstructorDashboard() {
             } else if (key === "t" || key === "l") {
                 event.preventDefault();
                 setMobileList(key === "l");
-                if (view === "day") setDayDisplayMode(key === "t" ? "timeline" : "list");
-                else setDisplayMode(key === "t" ? "timeline" : "list");
+                updateDisplayMode(view === "day" ? "day" : "week", key === "t" ? "timeline" : "list");
                 if (view === "month") changeView("week");
             }
         }
 
         window.addEventListener("keydown", handleCalendarShortcut);
         return () => window.removeEventListener("keydown", handleCalendarShortcut);
-    }, [availabilityDialog, changeView, expandedClassId, selectedDateKey, setSearchParams, view]);
+    }, [availabilityDialog, changeView, expandedClassId, selectedDateKey, setSearchParams, updateDisplayMode, view]);
 
     const heading =
         view === "week"
@@ -782,7 +801,7 @@ export default function InstructorDashboard() {
                 date={selectedDate} now={now} view={mobileList ? "list" : view === "week" ? "multi-day" : view} slots={availability} focusRequest={timelineFocusRequest}
                 getEvents={getEvents} classCatalogue={calendar.data?.classTypes ?? []} catalogueStatus={catalogueStatus} content={calendarStatus ?? selectionStatus}
                 onSelectDate={selectDay} onSelectClass={calendarProps.onToggleClass} onSelectAvailability={selectAvailability}
-                onAddAvailability={addAvailability} onSelectRange={selectRange}
+                onAddAvailability={canUseAvailability ? addAvailability : undefined} onSelectRange={canUseAvailability ? selectRange : undefined}
                 onToday={() => { const current = singaporeClock(); setNow(current); updateSelection(new Date(current.getFullYear(), current.getMonth(), current.getDate())); setTimelineFocusRequest(value => value + 1); }}
                 onChangeView={(mode: MobileCalendarView) => { setMobileList(mode === "list"); if (mode !== "list") changeView(mode === "multi-day" ? "week" : mode); }}
             /> : <>
@@ -841,9 +860,9 @@ export default function InstructorDashboard() {
                         </h2>
                     </div>
                     <div className="grid w-full grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-2 sm:flex sm:flex-wrap sm:gap-3 lg:w-auto">
-                        <Button variant="outline" onClick={addAvailability} className="col-span-full h-11 w-full gap-2 px-4 sm:w-auto lg:h-10">
+                        {canUseAvailability && <Button variant="outline" onClick={addAvailability} className="col-span-full h-11 w-full gap-2 px-4 sm:w-auto lg:h-10">
                             <Plus aria-hidden="true" />Add Availability
-                        </Button>
+                        </Button>}
                         <DropdownMenu>
                             <DropdownMenuTrigger
                                 render={<Button variant="outline" className="h-11 min-w-0 justify-between gap-1 px-2 sm:min-w-28 sm:gap-3 sm:px-4 lg:h-10" />}
@@ -887,8 +906,7 @@ export default function InstructorDashboard() {
                                         value={activeDisplayMode}
                                         onValueChange={(value) => {
                                             if (value === "timeline" || value === "list") {
-                                                if (view === "day") setDayDisplayMode(value);
-                                                else setDisplayMode(value);
+                                                updateDisplayMode(view === "day" ? "day" : "week", value);
                                             }
                                         }}
                                     >
@@ -923,9 +941,9 @@ export default function InstructorDashboard() {
                                         </li>
                                     ))}
                                 </ul>
-                                <ul className="flex flex-wrap gap-4 border-t pt-3 text-xs text-muted-foreground">
+                                {canUseAvailability && <ul className="flex flex-wrap gap-4 border-t pt-3 text-xs text-muted-foreground">
                                     <li className="flex items-center gap-2"><span aria-hidden="true" className="size-2 rounded-full bg-emerald-500" />Availability</li>
-                                </ul>
+                                </ul>}
                             </PopoverContent>
                         </Popover>
                     </div>
@@ -948,7 +966,7 @@ export default function InstructorDashboard() {
                             selectedId={selectedAvailability?.id ?? expandedClassId}
                             onSelectClass={calendarProps.onToggleClass}
                             onSelectAvailability={selectAvailability}
-                            onSelectRange={selectRange}
+                            onSelectRange={canUseAvailability ? selectRange : undefined}
                             onSelectDate={selectDay}
                             isDesktop={isDesktop}
                         />
@@ -998,7 +1016,7 @@ export default function InstructorDashboard() {
                     </DrawerBody>
                 </DrawerContent>
             </Drawer>}
-            {availabilityDialog && <AvailabilityDialog
+            {canUseAvailability && availabilityDialog && <AvailabilityDialog
                 key={`${availabilityDialog.editingId ?? "new"}-${dateKey(availabilityDialog.range.date)}-${availabilityDialog.range.startTime}`}
                 initial={availabilityDialog.range}
                 editingId={availabilityDialog.editingId}

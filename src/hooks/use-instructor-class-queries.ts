@@ -49,19 +49,23 @@ export function useInstructorCalendarRange(range: { from: string; to: string }) 
   const { session, profile } = useAuth()
   const userId = profile?.role === 'instructor' ? session?.user.id : undefined
   const enabled = Boolean(userId)
+  const access = useClassQuery(keys.availabilityAccess(userId ?? ''), signal => api.getAvailabilityAccess(signal),
+    { staleTime: 30_000, gcTime: 10 * 60_000, enabled })
+  const canUseAvailability = access.status === 'success' && access.data === true
   const events = useClassQuery(keys.calendar(userId ?? '', range.from, range.to),
     signal => loadCalendarEvents(api, range, signal), { ...times.calendar, enabled })
   const availability = useClassQuery(keys.availability(userId ?? '', range.from, range.to),
-    signal => loadCalendarAvailability(api, range, signal), { ...times.availability, enabled })
+    signal => loadCalendarAvailability(api, range, signal), { ...times.availability, enabled: enabled && canUseAvailability })
   const classTypes = useClassQuery(keys.classTypes(userId ?? ''), signal => api.getClassTypes(signal), { ...times.reference, enabled })
-  const retry = () => { events.retry(); availability.retry(); classTypes.retry() }
-  if (events.status === 'error') return { ...events, retry }
-  if (availability.status === 'error') return { ...availability, retry }
-  if (classTypes.status === 'error') return { ...classTypes, retry }
-  if (events.status !== 'success' || availability.status !== 'success' || classTypes.status !== 'success') {
-    return { status: 'loading' as const, data: null, error: null, retry }
+  const retry = () => { events.retry(); access.retry(); if (canUseAvailability) availability.retry(); classTypes.retry() }
+  if (events.status === 'error') return { ...events, retry, canUseAvailability }
+  if (access.status === 'error') return { ...access, data: null, retry, canUseAvailability }
+  if (canUseAvailability && availability.status === 'error') return { ...availability, retry, canUseAvailability }
+  if (classTypes.status === 'error') return { ...classTypes, retry, canUseAvailability }
+  if (events.status !== 'success' || access.status !== 'success' || (canUseAvailability && availability.status !== 'success') || classTypes.status !== 'success') {
+    return { status: 'loading' as const, data: null, error: null, retry, canUseAvailability }
   }
-  return { status: 'success' as const, data: { events: events.data, availability: availability.data, classTypes: classTypes.data }, error: null, retry }
+  return { status: 'success' as const, data: { events: events.data, availability: canUseAvailability ? availability.data ?? [] : [], classTypes: classTypes.data }, error: null, retry, canUseAvailability }
 }
 
 export function useInstructorSelectedEvent(id: string | null, enabled: boolean) {

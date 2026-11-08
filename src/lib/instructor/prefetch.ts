@@ -31,8 +31,9 @@ export function createInstructorPrefetcher(client: QueryClient, api: InstructorA
       await Promise.all([
         client.prefetchQuery({ queryKey: keys.calendar(userId, range.from, range.to),
           queryFn: ({ signal }) => loadCalendarEvents(api, range, signal), ...times.calendar, retry: false }),
-        client.prefetchQuery({ queryKey: keys.availability(userId, range.from, range.to),
-          queryFn: ({ signal }) => loadCalendarAvailability(api, range, signal), ...times.availability, retry: false }),
+        client.getQueryData(keys.availabilityAccess(userId)) === false ? Promise.resolve() :
+          client.prefetchQuery({ queryKey: keys.availability(userId, range.from, range.to),
+            queryFn: ({ signal }) => loadCalendarAvailability(api, range, signal), ...times.availability, retry: false }),
       ])
     },
     async roster(eventId: CalendarViewEvent['id']) {
