@@ -14,6 +14,7 @@ import { useLocation, useNavigate } from "react-router";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import GradeBadge from "@/components/instructor/DatabaseGradeBadge";
 import { InstructorAvatar } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -603,6 +604,10 @@ export default function InstructorProfile() {
                                     </p>
                                 )}
                             </dd>
+                        </div>
+                        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+                            <dt className="text-muted-foreground">Grade</dt>
+                            <dd>{details.isPending ? "Loading…" : details.isError ? "Unavailable" : <GradeBadge grade={details.data?.grade ?? null} />}</dd>
                         </div>
                         <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
                             <dt className="text-muted-foreground">Employment status</dt>

@@ -82,12 +82,13 @@ export async function handleRequest(request: Request): Promise<Response> {
     const firstName = typeof details.first_name === 'string' ? details.first_name.trim() : ''
     const lastName = typeof details.last_name === 'string' ? details.last_name.trim() : ''
     const email = typeof details.email === 'string' ? details.email.trim().toLowerCase() : ''
+    const gradeId = details.grade_id == null ? null : typeof details.grade_id === 'string' ? details.grade_id.trim() : ''
     if (
       !firstName || firstName.length > 100 || !lastName || lastName.length > 100 ||
-      email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+      email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || gradeId === ''
     ) {
       return Response.json({
-        error: 'Provide both names and a valid email address.',
+        error: 'Provide both names, a valid email address and a valid grade.',
       }, { status: 400, headers })
     }
 
@@ -101,13 +102,18 @@ export async function handleRequest(request: Request): Promise<Response> {
     const admin = createClient(url, requiredEnv('SUPABASE_SERVICE_ROLE_KEY'), {
       auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
     })
+    if (gradeId) {
+      const { data: grade, error: gradeError } = await admin.from('grades').select('id').eq('id', gradeId).maybeSingle()
+      if (gradeError) return Response.json({ error: 'Unable to verify the grade. Please try again.' }, { status: 500, headers })
+      if (!grade) return Response.json({ error: 'Select a valid grade.' }, { status: 400, headers })
+    }
     const { data, error } = await admin.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
       user_metadata: { first_name: firstName, last_name: lastName },
       // Never accept a role from the request body.
-      app_metadata: { role: 'instructor' },
+      app_metadata: { role: 'instructor', ...(gradeId ? { instructor_grade_id: gradeId } : {}) },
     })
     if (error || !data.user) {
       return Response.json({

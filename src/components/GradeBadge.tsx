@@ -39,7 +39,7 @@ export default function GradeBadge({
                 <>
                     <span
                         aria-hidden="true"
-                        className={cn("h-2 w-4 shrink-0 rounded-xs border", belt.indicator)}
+                        className={cn("order-first size-3 shrink-0 rounded-xs border", belt.indicator)}
                     />
                     <span
                         className={
