@@ -17,6 +17,16 @@ export interface AdminCalendarEvent {
   centreName: string
   instructorName: string
   roster: Student[]
+  /** Live calendar events display an authoritative roster count, not mock students. */
+  rosterCount?: number
+  liveDetails?: {
+    eventId: string
+    status: string
+    classType: string
+    startsAt: string
+    endsAt: string
+    unavailability?: { id: string; status: string; notification_status: string; created_at: string; reportedBy: string } | null
+  }
 }
 
 export function parseIsoDate(value: string | null | undefined): Date | null {

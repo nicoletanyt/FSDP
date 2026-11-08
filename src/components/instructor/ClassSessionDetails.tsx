@@ -208,9 +208,11 @@ export default function ClassSessionDetails({
                 hidden={summary && !expanded}
                 className={cn(fillHeight && (!summary || expanded) && "lg:flex lg:min-h-0 lg:flex-1 lg:flex-col")}
             >
-                {expanded && profile?.role === "instructor" && (
+                {expanded && profile?.role === "instructor" && query.status === "success" &&
+                    storedEvent?.event_type === "class" && storedEvent.status === "scheduled" &&
+                    storedEvent.starts_at && new Date(storedEvent.starts_at).getTime() > Date.now() && (
                     <div className="shrink-0 px-3 pt-3 pb-2">
-                        <ClassUnavailableDialog key={dialogContext} eventName={event.name} />
+                        <ClassUnavailableDialog key={dialogContext} eventId={event.id} eventName={event.name} />
                     </div>
                 )}
                 {!summary && (
