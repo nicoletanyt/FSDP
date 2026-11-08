@@ -14,6 +14,14 @@ Student profiles/history/attendance use database-shaped records from
 `instructor-detail.fixture.ts`; directory/detail geometry checks follow real UUID
 links through the same production API context.
 
+The profile suite covers saved address/employment values, the Address pencil icon
+and edit dialog at 320–1440px, save/cancel/clear, Escape/focus return, draft retention on failure, duplicate-save
+protection, device photo preparation/upload/removal, account-avatar updates,
+reload persistence and account switching during saves. Its test-only profile API
+uses sessionStorage to simulate the database; production uses the Supabase RPCs
+and private Storage bucket, covered separately by `tests/instructor-profile.test.mjs`
+and `tests/instructor-profile-db.test.mjs`.
+
 Start the following in separate terminals:
 
 ```sh
@@ -54,7 +62,8 @@ gestures, the virtual keyboard, or date/time pickers.
 Data-flow checks cover loading, empty results, calendar/roster failure and retry,
 205-student roster pagination, the yellow Late badge, stale responses after date
 navigation, and account changes while a selection is open. The calendar follow-up
-also checks unlinked-account calendars, pending availability saves, double-submit
+also checks full-time/unspecified/unlinked accounts have no availability controls,
+records or reads, part-time availability access, pending availability saves, double-submit
 protection, failed-save draft retention and read-after-save refresh. Existing-slot
 availability edit/delete mutations remain disabled. Phase 10A enables the
 existing present/absent/clear and bulk controls for scheduled timed sessions before

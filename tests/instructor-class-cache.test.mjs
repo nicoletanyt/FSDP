@@ -181,6 +181,7 @@ test('calendar and selected-event queries reuse fresh results, including empty a
   const auth = { session: { user: { id: userId } }, profile: { id: userId, role: 'instructor' } }
   const calls = { calendar: 0, availability: 0, types: 0, event: 0 }
   const api = {
+    getAvailabilityAccess: async () => true,
     getCalendar: async ({ offset, limit }) => { calls.calendar++; return { items: [], total: 0, offset, limit } },
     getAvailability: async ({ offset, limit }) => { calls.availability++; return { items: [], total: 0, offset, limit } },
     getClassTypes: async () => { calls.types++; return [] },
@@ -207,6 +208,41 @@ test('calendar and selected-event queries reuse fresh results, including empty a
     assert.equal(current.calendar.status, 'success')
     assert.equal(current.selection.status, 'success')
     assert.deepEqual(calls, { calendar: 1, availability: 1, types: 1, event: 1 })
+  } finally { if (root) await act(async () => root.unmount()); client.clear() }
+})
+
+test('availability is neither fetched nor exposed from cache without part-time access, including after revocation', async () => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } })
+  const auth = { session: { user: { id: userId } }, profile: { id: userId, role: 'instructor' } }
+  const range = { from: '2026-11-04', to: '2026-11-05' }
+  const availabilityKey = keys.availability(userId, range.from, range.to)
+  const privateSlots = [{ id: 'previously-cached-slot', date: new Date('2026-11-04'), startTime: '09:00', endTime: '10:00' }]
+  client.setQueryData(availabilityKey, privateSlots)
+  let allowed = false, availabilityReads = 0, current, root
+  const api = {
+    getAvailabilityAccess: async () => allowed,
+    getCalendar: async ({ offset, limit }) => ({ items: [], total: 0, offset, limit }),
+    getAvailability: async ({ offset, limit }) => { availabilityReads++; return { items: [], total: 0, offset, limit } },
+    getClassTypes: async () => [],
+  }
+  function Component() { current = useInstructorCalendarRange(range); return null }
+  const tree = React.createElement(QueryClientProvider, { client }, React.createElement(AuthContext.Provider, { value: auth },
+    React.createElement(InstructorApiContext.Provider, { value: api }, React.createElement(Component))))
+  try {
+    await act(async () => { root = create(tree) })
+    await until(() => current.status === 'success')
+    assert.equal(current.canUseAvailability, false)
+    assert.deepEqual(current.data.availability, [])
+    assert.equal(availabilityReads, 0)
+    allowed = true
+    await act(async () => { await client.invalidateQueries({ queryKey: keys.availabilityAccess(userId) }) })
+    await until(() => current.canUseAvailability && current.status === 'success')
+    assert.deepEqual(current.data.availability, privateSlots)
+    allowed = false
+    await act(async () => { await client.invalidateQueries({ queryKey: keys.availabilityAccess(userId) }) })
+    await until(() => !current.canUseAvailability && current.status === 'success')
+    assert.deepEqual(current.data.availability, [])
+    assert.equal(availabilityReads, 0)
   } finally { if (root) await act(async () => root.unmount()); client.clear() }
 })
 

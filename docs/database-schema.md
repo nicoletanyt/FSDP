@@ -57,9 +57,23 @@ Instructor record. Optionally linked to an auth user and used as the owner of cl
 | `last_name`  | `text`        | no       | —                   |
 | `email`      | `text`        | no       | —                   |
 | `created_at` | `timestamptz` | no       | `now()`             |
-| `updated_at` | `timestamptz` | no       | `now()`             |
+| `profile_picture_url` | `text` | yes | — |
+| `employment_type` | `text` | yes | — |
 
-Provisioning: `20261104130000_instructor_availability.sql` creates a linked instructor row when a trusted `users` profile is inserted or assigned the `instructor` role. The existing administrator `create-instructor` function already uses that trusted Auth role path. Legacy unlinked accounts are linked on their first successful availability save. No row is claimed by matching an email or display name.
+Provisioning: `20261104130000_instructor_availability.sql` creates a linked instructor row when a trusted `users` profile is inserted or assigned the `instructor` role. The existing administrator `create-instructor` function already uses that trusted Auth role path. Availability now requires an existing linked instructor explicitly marked `part_time`; it no longer creates an unclassified instructor on first save. No row is claimed by matching an email or display name.
+
+`employment_type` is constrained to `part_time` / `full_time`; null is unspecified. Instructors cannot edit it. `updated_at` and the instructor-specific timestamp trigger were removed in `20261108062206_instructor_profile_fields.sql`.
+
+New photos are uploaded to the private `instructor-photos` Storage bucket as `<auth-user-id>/<random-uuid>.jpg`. `profile_picture_url` stores that object path, not an expiring signed URL. The UI converts JPG/PNG/WebP device files (up to 5 MB) to a 512px JPEG and generates one-hour signed URLs on reads. Authenticated users may view photos; only linked instructors may upload/delete files in their own folder. Photo updates go through the account-fenced `save_instructor_profile_photo` RPC, which checks the uploaded object and rejects a stale previous path. Employment and identity fields remain protected.
+
+### `instructor_private_details`
+
+| Column | Type | Nullable | Default |
+| --- | --- | --- | --- |
+| `instructor_id` | `uuid` | no | — |
+| `address` | `text` | yes | — |
+
+One optional row per instructor; the primary key references `instructors(id)` with cascading deletion. RLS permits administrators to manage all rows and linked instructors to read only their own. Self-service address changes use `save_instructor_address(expected_user, new_address)`, not direct table writes. The RPC verifies the current account/role/link, trims input, limits it to 1,000 characters, and treats blank input as null. Students and other instructors cannot read the address.
 
 ### `emergency_contacts`
 
@@ -418,7 +432,9 @@ Instructor availability windows used for scheduling.
 | `start_time`    | `time` | no       | —                   |
 | `end_time`      | `time` | no       | —                   |
 
-The `create_instructor_availability(expected_user, slot_date, slot_start, slot_end)` RPC derives ownership from the authenticated instructor account. It creates a missing linked instructor row and the availability in one transaction. `expected_user` is an account-switch check, not a caller-selected owner. Instructor writes enforce future times between 08:00 and 22:00 Singapore time, non-overlap with existing availability, and non-overlap with non-cancelled assigned events. Exact create retries return the existing slot. See `supabase/migrations/20261104130000_instructor_availability.sql`.
+Only instructors whose `employment_type` is explicitly `part_time` can read their own availability or create slots. Full-time, unspecified, unlinked and non-instructor accounts have no instructor availability access. Administrators retain management access. `current_part_time_instructor_id()` supplies the current permission check used by RLS and the calendar; hidden controls are not the security boundary.
+
+The `create_instructor_availability(expected_user, slot_date, slot_start, slot_end)` RPC derives ownership from the authenticated, linked part-time instructor account. `expected_user` is an account-switch check, not a caller-selected owner. Instructor writes enforce future times between 08:00 and 22:00 Singapore time, non-overlap with existing availability, and non-overlap with non-cancelled assigned events. Exact create retries return the existing slot only while employment access remains valid. The existing edit/delete RPC also checks current employment before returning a receipt, and a write trigger guards security-definer writes. Existing slots are retained if an instructor's employment changes, but become inaccessible to that instructor.
 
 ## Instructor read access
 

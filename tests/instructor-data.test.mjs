@@ -36,7 +36,7 @@ function fixtureClient({
       const read = { table, filters: [] }
       reads.push(read)
       return {
-        select() { return this },
+        select(columns) { if (table === 'instructors') assert.ok(!columns.includes('updated_at')); return this },
         eq(column, value) { read.filters.push([column, value]); return this },
         async maybeSingle() {
           if (table === 'users') return { data: profile, error: profileError }
@@ -50,6 +50,11 @@ function fixtureClient({
 
 test('current instructor resolves the domain ID, never the auth ID or a matching name/email', async () => {
   const client = fixtureClient()
+  // Other row fixtures reuse the metadata above, but instructors no longer have
+  // updated_at. Exercise the current database shape explicitly.
+  const record = { ...instructor }
+  delete record.updated_at
+  assert.equal((await createInstructorApi(fixtureClient({ record })).getCurrentInstructor()).instructorId, instructorId)
   const identity = await createInstructorApi(client).getCurrentInstructor()
   assert.deepEqual(identity, {
     userId, instructorId, name: 'Test Instructor', email: instructor.email,
@@ -222,6 +227,19 @@ const record = {
 }
 const page = (items, total = items.length, offset = 0, limit = 50) => ({ items, total, offset, limit })
 const responsePage = (items, total = items.length) => Response.json(items, { headers: { 'content-range': `0-${Math.max(0, items.length - 1)}/${total}` } })
+
+test('availability eligibility comes from the database and a missing part-time identity is denied', async () => {
+  for (const id of [instructorId, null]) {
+    const f = httpClient((_request, url) => {
+      assert.equal(url.pathname, '/rest/v1/rpc/current_part_time_instructor_id')
+      return Response.json(id)
+    })
+    assert.equal(await f.api.getAvailabilityAccess(), id !== null)
+  }
+  const f = httpClient(() => Response.json({ code: 'PAV06', message: 'Private database details' }, { status: 403 }))
+  await assert.rejects(f.api.createAvailability({ date: '2026-11-30', startTime: '08:00', endTime: '09:00' }),
+    { code: 'forbidden', message: 'Availability is only available to part-time instructors.' })
+})
 
 test('each attendance load verifies ownership once, follows all pages and rejects reassignment', async () => {
   let assigned = true

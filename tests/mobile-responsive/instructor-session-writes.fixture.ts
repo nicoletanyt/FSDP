@@ -9,7 +9,7 @@ declare global { interface Window { sessionWriteRequestsFixture: SessionSaveInpu
 
 export function createSessionWriteFixture(account: string, mode: string | null, getApi: () => InstructorApi) {
   const ownInstructor: InstructorRow = { id: uuid(account === 'audit' ? 1 : 2) as InstructorRow['id'], user_id: uuid(account === 'audit' ? 90001 : 90002) as InstructorRow['user_id'],
-    first_name: 'Test', last_name: 'Instructor', email: 'writer@example.test', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' }
+    first_name: 'Test', last_name: 'Instructor', email: 'writer@example.test', created_at: '2026-01-01T00:00:00Z' }
   const storageKey = `test-only-session-writes:${account}`
   const overrides = new Map<string, Partial<EventStudentRow>>(mode?.endsWith('-persistence') ? JSON.parse(sessionStorage.getItem(storageKey) ?? '[]') : [])
   const receipts = new Map<string, { input: string; result: SessionSaveResult }>()

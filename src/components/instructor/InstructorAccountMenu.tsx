@@ -5,9 +5,11 @@ import { InstructorAvatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@/components/ui/popover";
 import { useAuth } from "@/hooks/use-auth";
+import { useInstructorProfile } from "@/hooks/use-instructor-profile";
 
 export default function InstructorAccountMenu({ avatarClassName = "size-7" }: { avatarClassName?: string }) {
     const { profile, signOut } = useAuth();
+    const instructorProfile = useInstructorProfile();
     const { pathname, search } = useLocation();
     const [open, setOpen] = useState(false);
     const [pending, setPending] = useState(false);
@@ -44,7 +46,7 @@ export default function InstructorAccountMenu({ avatarClassName = "size-7" }: { 
                 render={<Button variant="ghost" className="size-11 shrink-0 p-0" />}
             >
                 <InstructorAvatar
-                    profile={{ id: profile?.id ?? "", name, role: "Instructor" }}
+                    profile={{ id: profile?.id ?? "", name, role: "Instructor", avatarUrl: instructorProfile.data?.photoUrl ?? undefined }}
                     interactive={false}
                     showName={false}
                     avatarClassName={avatarClassName}

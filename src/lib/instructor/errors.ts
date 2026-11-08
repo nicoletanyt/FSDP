@@ -24,6 +24,7 @@ export function toInstructorDataError(error: unknown, message: string): Instruct
     const code = 'code' in error ? error.code : null
     const status = 'status' in error ? error.status : null
     const name = 'name' in error ? error.name : null
+    if (code === 'PPR01') return new InstructorDataError('conflict', 'Your photo changed in another session. Reload your profile, then try again.')
     if (code === 'PRS01') return new InstructorDataError('conflict', 'This record changed while you were editing. Reload the saved record before saving again; your draft is kept.')
     if (code === 'PRS03') return new InstructorDataError('forbidden', 'Cancelled sessions are read-only.')
     if (code === '40P01' || code === '40001') return new InstructorDataError('conflict', 'A concurrent save changed these records. Reload the saved data, then try again.')
@@ -34,6 +35,7 @@ export function toInstructorDataError(error: unknown, message: string): Instruct
     if (code === 'PAV02') return new InstructorDataError('conflict', 'This time overlaps a scheduled event. Choose another time.')
     if (code === 'PAV03') return new InstructorDataError('invalid_request', 'Choose a future time between 8 AM and 10 PM, Singapore time.')
     if (code === 'PAV04') return new InstructorDataError('instructor_not_found', 'Your instructor record could not be linked. Please contact an administrator.')
+    if (code === 'PAV06') return new InstructorDataError('forbidden', 'Availability is only available to part-time instructors.')
     if (name === 'AbortError') return new InstructorDataError('cancelled', 'The instructor data request was cancelled.')
     if (code === '22023') return new InstructorDataError('invalid_request', 'The instructor data request contains invalid filters.')
     if (name === 'AuthSessionMissingError' || status === 401 || code === 'PGRST301' || code === 'PGRST302' || code === 'PGRST303') {

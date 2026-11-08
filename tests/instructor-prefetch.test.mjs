@@ -84,6 +84,17 @@ test('prefetched range and roster share foreground keys and do not repeat fresh 
   } finally { client.clear(); restore() }
 })
 
+test('known full-time or unspecified employment skips availability prefetch without blocking class prefetch', async () => {
+  const restore = connection({ saveData: false })
+  const { client, calls, api } = fixture()
+  client.setQueryData(keys.availabilityAccess(userId), false)
+  try {
+    await createPrefetcher(client, api, userId).range({ from: '2026-11-02', to: '2026-11-09' })
+    assert.equal(calls.calendar.length, 1)
+    assert.equal(calls.availability.length, 0)
+  } finally { client.clear(); restore() }
+})
+
 test('service-call comparison: prefetched navigation and open shift three reads to the background', async () => {
   const restore = connection({ saveData: false })
   const range = { from: '2026-11-02', to: '2026-11-09' }
