@@ -25,3 +25,7 @@ verify_jwt = false
 # The handler verifies the caller's JWT and uses a role-checked RPC.
 [functions.report-class-unavailability]
 verify_jwt = false
+
+# Verifies admin JWT, test-only recipient and RPC eligibility internally.
+[functions.send-class-cover-test-invitation]
+verify_jwt = false

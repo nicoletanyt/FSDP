@@ -11,6 +11,7 @@ type EventRow = {
   event_students: { count: number }[]
   instructor_class_unavailability: {
     id: string; status: string; notification_status: string; created_at: string
+    notification_http_status: number | null; notification_failure_reason: string | null
     instructors: { first_name: string; last_name: string } | null
   } | null
 }
@@ -45,7 +46,7 @@ export async function loadCalendarClasses(centre: Centre, firstDay: string, afte
   // than relying on PostgREST's default 1,000-row response limit.
   for (let from = 0; ; from += 500) {
     const { data, error } = await supabase.from('events')
-      .select('id,centre_id,instructor_id,name,starts_at,ends_at,status,instructors(first_name,last_name),classes(class_type_id,class_types(label)),event_students(count),instructor_class_unavailability(id,status,notification_status,created_at,instructors(first_name,last_name))')
+      .select('id,centre_id,instructor_id,name,starts_at,ends_at,status,instructors(first_name,last_name),classes(class_type_id,class_types(label)),event_students(count),instructor_class_unavailability(id,status,notification_status,notification_http_status,notification_failure_reason,created_at,instructors(first_name,last_name))')
       .eq('centre_id', centre.id).eq('event_type', 'class')
       .gt('ends_at', `${firstDay}T00:00:00+08:00`).lt('starts_at', `${afterLastDay}T00:00:00+08:00`)
       .order('starts_at').order('id').range(from, from + 499).abortSignal(signal ?? new AbortController().signal)
@@ -82,6 +83,8 @@ export async function loadCalendarClasses(centre: Centre, firstDay: string, afte
           unavailability: row.instructor_class_unavailability ? {
             id: row.instructor_class_unavailability.id, status: row.instructor_class_unavailability.status,
             notification_status: row.instructor_class_unavailability.notification_status,
+            notification_http_status: row.instructor_class_unavailability.notification_http_status,
+            notification_failure_reason: row.instructor_class_unavailability.notification_failure_reason,
             created_at: row.instructor_class_unavailability.created_at,
             reportedBy: [row.instructor_class_unavailability.instructors?.first_name,
               row.instructor_class_unavailability.instructors?.last_name].filter(Boolean).join(' ') || 'Assigned instructor',

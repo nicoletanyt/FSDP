@@ -25,7 +25,8 @@ export interface AdminCalendarEvent {
     classType: string
     startsAt: string
     endsAt: string
-    unavailability?: { id: string; status: string; notification_status: string; created_at: string; reportedBy: string } | null
+    unavailability?: { id: string; status: string; notification_status: string; created_at: string; reportedBy: string;
+      notification_http_status: number | null; notification_failure_reason: string | null } | null
   }
 }
 

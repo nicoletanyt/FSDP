@@ -1,0 +1,2 @@
+create index class_cover_test_invitations_requested_by_idx
+  on public.class_cover_test_invitations(requested_by);

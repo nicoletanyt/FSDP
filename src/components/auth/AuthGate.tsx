@@ -52,7 +52,8 @@ export function GuestRoute() {
   const location = useLocation()
   if (loading || (session && (error || !profile))) return <AuthStatus />
   if (profile) return <Navigate to={
-    profile.role === 'instructor' && ['/instructor/check-in', '/instructor/nfc_checkin'].includes(location.state?.from)
+    profile.role === 'instructor' && (['/instructor/check-in', '/instructor/nfc_checkin'].includes(location.state?.from)
+      || /^\/instructor\/cover\/[0-9a-f-]{36}$/i.test(location.state?.from ?? ''))
       ? location.state.from
       : profile.role === 'student' && location.state?.from === '/grading'
         ? '/grading' : dashboardPaths[profile.role]
@@ -66,7 +67,8 @@ export function ProtectedRoute({ role }: { role: UserRole }) {
   if (loading) return <AuthStatus />
   if (!session) {
     return <Navigate to={role === 'instructor' ? '/instructor/signin' : role === 'student' ? '/login' : '/staff/login'} state={
-      role === 'instructor' && ['/instructor/check-in', '/instructor/nfc_checkin'].includes(location.pathname)
+      role === 'instructor' && (['/instructor/check-in', '/instructor/nfc_checkin'].includes(location.pathname)
+        || /^\/instructor\/cover\/[0-9a-f-]{36}$/i.test(location.pathname))
         ? { from: location.pathname }
         : role === 'student' && location.pathname === '/grading' ? { from: '/grading' } : undefined
     } replace />
