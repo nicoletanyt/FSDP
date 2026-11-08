@@ -103,3 +103,4 @@ select
   end,
   coalesce(created_at, now())
 from auth.users;
+;

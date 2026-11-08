@@ -1,28 +1,34 @@
+import { useCallback } from "react";
 import { Link, useParams } from "react-router";
 import { ChevronLeft, FileText } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import GradeBadge from "@/components/GradeBadge";
-import {
-    addDays,
-    calendarHref,
-    eventsForDate,
-    findCalendarEvent,
-    fullDate,
-    loadSession,
-    studentDetailsHref,
-    students,
-} from "@/lib/instructor-calendar";
+import GradeBadge from "@/components/instructor/DatabaseGradeBadge";
+import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
+import InstructorLoadingBoundary from "@/components/instructor/InstructorLoadingBoundary";
+import ReportEditor from "@/components/instructor/ReportEditor";
+import { useInstructorQuery } from "@/hooks/use-instructor-data";
+import { useInstructorEditProtection } from "@/hooks/use-instructor-edit-protection";
+import { instructorQueryKeys as queryKeys, instructorQueryTimes as queryTimes } from "@/lib/instructor/query-keys";
+import { useInstructorApi } from "@/lib/instructor/data-context";
+import { parseEntityId, toAttendanceState } from "@/lib/instructor/adapters";
+import { historyDate, instructorName } from "@/lib/instructor/student-detail";
+import { loadClassReports, sessionCalendarHref, sessionDateLabel, sessionStudentHref } from "@/lib/instructor/session-reads";
 
-const exampleFeedback = [
-    "Good progress with stance and balance. Keep practising the turning sequence.",
-    "More confident with combinations. Focus on control and a consistent guard.",
-    "Strong effort throughout the lesson. Continue working on timing and footwork.",
-];
-
-export default function InstructorStudentReports() {
+function StudentReportsPage() {
     const { eventId } = useParams();
-    const event = findCalendarEvent(eventId);
-    if (!event || event.type !== "training") {
+    const api = useInstructorApi();
+    const load = useCallback((signal: AbortSignal) => loadClassReports(api, parseEntityId(eventId, "event"), signal), [api, eventId]);
+    const normalizedEvent = eventId?.toLowerCase();
+    const retainDuringWrite = useInstructorEditProtection(normalizedEvent);
+    const query = useInstructorQuery(userId => queryKeys.reports(userId, normalizedEvent ?? ''), load,
+        { ...queryTimes.report, retainDuringWrite });
+    if (query.status !== "success") {
+        return <section className="space-y-4">
+            <Link to="/instructor/calendar" className="text-sm underline">Back to calendar</Link>
+            <InstructorDataStatus loading={query.status === "loading"} error={query.error} onRetry={query.retry} variant="reports" />
+        </section>;
+    }
+    if (!query.data) {
         return (
             <section className="space-y-4">
                 <Link to="/instructor/calendar" className="text-sm underline">
@@ -32,15 +38,12 @@ export default function InstructorStudentReports() {
             </section>
         );
     }
-    const record = loadSession(event);
-    const roster = students.filter((student) =>
-        event.studentIds.includes(student.id),
-    );
+    const { session, reports } = query.data;
 
     return (
         <section className="space-y-6">
             <Link
-                to={calendarHref(event)}
+                to={sessionCalendarHref(session)}
                 className="inline-flex items-center gap-1 rounded-sm text-sm text-muted-foreground hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-ring"
             >
                 <ChevronLeft aria-hidden="true" className="size-4" /> Back to class
@@ -50,69 +53,61 @@ export default function InstructorStudentReports() {
                     Student reports
                 </h1>
                 <p className="mt-2 text-sm text-muted-foreground">
-                    {event.name} · {fullDate(event.date)} · Reports and lesson feedback
+                    {session.event.name} · {sessionDateLabel(session)} · Reports and lesson feedback
                 </p>
             </header>
             <div className="grid gap-4 md:grid-cols-2">
-                {roster.map((student, index) => (
-                    <Card key={student.id}>
+                {reports.map(({ student, record, reportAuthor, previousReports }) => (
+                    <Card key={`${record.event_id}:${record.student_id}`} data-report-student-id={record.student_id} className="min-w-0">
                         <CardHeader>
                             <CardTitle>
                                 <Link
-                                    to={studentDetailsHref(student.id, event, "sessions")}
-                                    className="underline-offset-4 hover:underline"
+                                    to={sessionStudentHref(session, student.student.id, "sessions")}
+                                    className="break-words underline-offset-4 hover:underline"
                                 >
-                                    {student.name}
+                                    {[student.student.first_name, student.student.last_name].filter(Boolean).join(" ") || student.student.email}
                                 </Link>
                             </CardTitle>
-                            <div><GradeBadge rank={student.rank} system={student.gradingSystem} /></div>
+                            <div><GradeBadge grade={student.grade} /></div>
                         </CardHeader>
                         <CardContent className="space-y-4 text-sm">
                             <div className="rounded-lg bg-muted/50 p-3">
                                 <h2 className="text-xs font-medium">
                                     Current session ·{" "}
                                     <span className="capitalize">
-                                        {record[student.id].attendance}
+                                        {toAttendanceState(record.attendance_status)}
                                     </span>
                                 </h2>
-                                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                                    {record[student.id].comment ||
-                                        "No session feedback saved yet."}
-                                </p>
+                                <ReportEditor event={session.event} record={record} author={reportAuthor} instructorId={session.event.instructor_id} compact />
                             </div>
                             <h2 className="flex items-center gap-1.5 text-xs font-semibold">
                                 <FileText aria-hidden="true" className="size-3.5" /> Previous
                                 lesson feedback
                             </h2>
                             <ul className="space-y-4">
-                                {[7, 14].map((daysAgo, offset) => {
-                                    const previousDate = addDays(event.date, -daysAgo);
-                                    const previousEvent = eventsForDate(previousDate).find(
-                                        (item) =>
-                                            item.name === event.name && item.type === "training",
-                                    );
-                                    const savedComment = previousEvent
-                                        ? loadSession(previousEvent)[student.id]?.comment
-                                        : "";
-                                    return (
-                                        <li key={daysAgo} className="border-l-2 pl-3">
+                                {previousReports.length ? previousReports.map((previous) => (
+                                        <li key={`${previous.record.event_id}:${previous.record.student_id}`} className="border-l-2 pl-3">
                                             <p className="text-xs font-medium">
-                                                {fullDate(previousDate)} · {event.name}
+                                                {historyDate(previous.event.starts_at)} · {previous.event.name}
                                             </p>
-                                            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                                                {savedComment ||
-                                                    exampleFeedback[
-                                                    (index + offset) % exampleFeedback.length
-                                                    ]}
+                                            <p className="mt-1 text-xs text-muted-foreground">
+                                                {previous.reportAuthor ? `Report by ${instructorName(previous.reportAuthor)}` : "Report author not recorded"} · {previous.centre?.name ?? "Dojo not recorded"}
+                                            </p>
+                                            <p className="mt-1 whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">
+                                                {previous.record.report}
                                             </p>
                                         </li>
-                                    );
-                                })}
+                                )) : <li className="text-xs text-muted-foreground">No previous lesson feedback recorded.</li>}
                             </ul>
                         </CardContent>
                     </Card>
                 ))}
             </div>
+            {!reports.length && <p role="status" className="text-sm text-muted-foreground">No students are registered for this class.</p>}
         </section>
     );
+}
+
+export default function InstructorStudentReports() {
+    return <InstructorLoadingBoundary title="Loading student reports"><StudentReportsPage /></InstructorLoadingBoundary>;
 }

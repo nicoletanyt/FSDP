@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import {
     ChevronDown,
     ChevronLeft,
@@ -18,6 +19,16 @@ import SelectedClassIndicator from "@/components/instructor/SelectedClassIndicat
 import CalendarTimeline from "@/components/instructor/CalendarTimeline";
 import CalendarDaySelector from "@/components/instructor/CalendarDaySelector";
 import { useMediaQuery } from "@/hooks/use-media-query";
+import { useInstructorCalendarRange, useInstructorSelectedEvent } from "@/hooks/use-instructor-class-queries";
+import { useInstructorPrefetch } from "@/hooks/use-instructor-prefetch";
+import { useAuth } from "@/hooks/use-auth";
+import { useInstructorApi } from "@/lib/instructor/data-context";
+import { needsCalendarEventLookup } from "@/lib/instructor/calendar-queries";
+import { invalidateAvailability } from "@/lib/instructor/cache-invalidation";
+import { queryGeneration } from "@/lib/query-generation";
+import { calendarClassStyle, calendarDateValue, calendarEventsForDate, calendarRange, calendarTimeLabel, rosterSizeLabel, singaporeClock } from "@/lib/instructor/calendar-view";
+import type { CalendarEventsForDate, CalendarViewEvent as CalendarEvent } from "@/lib/instructor/calendar-view";
+import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
 import { Drawer, DrawerBody, DrawerClose, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
 import MobileInstructorCalendar from "@/components/instructor/MobileInstructorCalendar";
 import type { MobileCalendarView } from "@/components/instructor/MobileInstructorCalendar";
@@ -42,21 +53,12 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from "@/components/ui/tooltip";
-import {
-    availabilityError,
-    minutesTime,
-    mockAvailability,
-    timeMinutes,
-} from "@/lib/instructor-availability";
 import type { AvailabilityRange, AvailabilitySlot } from "@/lib/instructor-availability";
+import { availabilityError, minutesTime } from "@/lib/instructor-availability";
 import {
     addDays,
     addMonths,
-    classTypes,
     dateKey,
-    dojoCapacities,
-    eventsForDate,
-    findCalendarEvent,
     getEventStyle,
     formatTime,
     fullDate,
@@ -65,11 +67,11 @@ import {
     weekDates,
     weekLabel,
 } from "@/lib/instructor-calendar";
-import type { CalendarEvent } from "@/lib/instructor-calendar";
 import { cn } from "@/lib/utils";
 
 type CalendarView = "day" | "week" | "month";
 type CalendarProps = {
+    getEvents: CalendarEventsForDate;
     date: Date;
     today: Date;
     expandedClassId: string | null;
@@ -95,7 +97,6 @@ function EventCard({
 }) {
     const showSummary = layout !== "week";
     const style = getEventStyle(event);
-    const capacity = dojoCapacities[event.dojo];
     return (
         <Card
             size="sm"
@@ -110,11 +111,12 @@ function EventCard({
         >
             <Button
                 variant="ghost"
+                data-prefetch-class={detailsInPanel && event.type === "training" ? event.id : undefined}
                 onClick={onToggle}
                 aria-expanded={expanded}
                 aria-pressed={detailsInPanel ? expanded : undefined}
                 aria-controls={detailsInPanel && !expanded ? undefined : `${showSummary || detailsInPanel ? "attendance" : "details"}-${event.id}`}
-                aria-label={`${event.name}, ${fullDate(event.date)}, ${formatTime(event.startTime)} to ${formatTime(event.endTime)}, ${event.dojo}, ${event.studentIds.length} of ${capacity} students. ${expanded ? "Collapse" : "Expand"} class details`}
+                aria-label={`${event.name}, ${fullDate(event.date)}, ${calendarTimeLabel(event, " to ")}, ${event.dojo}, ${rosterSizeLabel(event)}. ${expanded ? "Collapse" : "Expand"} class details`}
                 className={cn(
                     "h-auto w-full flex-col items-stretch gap-3 rounded-lg p-3 text-left whitespace-normal text-inherit hover:bg-foreground/5 hover:text-inherit aria-expanded:text-inherit focus-visible:-outline-offset-2",
                     showSummary && "p-4",
@@ -154,8 +156,7 @@ function EventCard({
                             className="mt-0.5 size-3 shrink-0"
                         />
                         <span className="min-w-0 wrap-break-word">
-                            {formatTime(event.startTime)} –{" "}
-                            {formatTime(event.endTime)}
+                            {calendarTimeLabel(event)}
                         </span>
                     </span>
                     <span className="flex items-center gap-1.5 text-2xs font-normal text-current opacity-80">
@@ -170,7 +171,7 @@ function EventCard({
                 </div>
                 <span className="flex items-center gap-1.5 text-2xs font-normal opacity-80">
                     <Users aria-hidden="true" className="size-3 shrink-0" />
-                    {event.studentIds.length}/{capacity} students
+                    {rosterSizeLabel(event)}
                 </span>
             </Button>
             {!detailsInPanel && (showSummary ? (
@@ -204,6 +205,7 @@ function EventCard({
 }
 
 function CalendarDays({
+    getEvents,
     date,
     today,
     view,
@@ -239,9 +241,7 @@ function CalendarDays({
                 )}
             >
                 {days.map((day) => {
-                    const events = eventsForDate(day).filter(
-                        (event) => view === "day" || event.type === "training",
-                    );
+                    const events = getEvents(day);
                     const isToday = dateKey(day) === dateKey(today);
                     const isSelected = dateKey(day) === dateKey(date);
                     const isExpanded = isSelected && expandSelectedDay;
@@ -348,6 +348,7 @@ function CalendarDays({
 }
 
 function CalendarMonth({
+    getEvents,
     date,
     today,
     expandedClassId,
@@ -372,7 +373,7 @@ function CalendarMonth({
     if (isNarrow) {
         const entries = days.filter(day => day.getMonth() === date.getMonth()).map(day => ({
             day,
-            events: eventsForDate(day),
+            events: getEvents(day),
             slots: availability.filter(slot => dateKey(slot.date) === dateKey(day)),
         }));
         const hasEntries = entries.some(group => group.events.length || group.slots.length);
@@ -395,6 +396,8 @@ function CalendarMonth({
             aria-label="Monthly class calendar"
             className="flex min-w-0 flex-col lg:min-h-0 lg:flex-1"
         >
+            {!days.some(day => getEvents(day).length || availability.some(slot => dateKey(slot.date) === dateKey(day))) &&
+                <p role="status" className="py-3 text-sm text-muted-foreground">No classes or availability this month.</p>}
             <div
                 aria-label="Month dates"
                 className="flex min-w-0 flex-col rounded-xl border bg-card lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain"
@@ -423,7 +426,7 @@ function CalendarMonth({
                         const isToday = key === dateKey(today);
                         const isCurrentMonth =
                             day.getMonth() === date.getMonth();
-                        const events = eventsForDate(day);
+                        const events = getEvents(day);
                         return (
                             <section
                                 key={key}
@@ -466,8 +469,9 @@ function CalendarMonth({
                                     <Button
                                         key={event.id}
                                         variant="ghost"
-                                        title={`${event.name} · ${formatTime(event.startTime)} · ${event.studentIds.length}/${dojoCapacities[event.dojo]} students`}
-                                        aria-label={`${event.name}, ${fullDate(day)}, ${formatTime(event.startTime)} to ${formatTime(event.endTime)}. ${expandedClassId === event.id ? "Collapse" : "Expand"} class details`}
+                                        data-prefetch-class={event.type === "training" ? event.id : undefined}
+                                        title={`${event.name} · ${formatTime(event.startTime)} · ${rosterSizeLabel(event)}`}
+                                        aria-label={`${event.name}, ${fullDate(day)}, ${calendarTimeLabel(event, " to ")}. ${expandedClassId === event.id ? "Collapse" : "Expand"} class details`}
                                         aria-expanded={
                                             expandedClassId === event.id
                                         }
@@ -507,6 +511,11 @@ function CalendarMonth({
 }
 
 export default function InstructorDashboard() {
+    const api = useInstructorApi();
+    const client = useQueryClient();
+    const { session } = useAuth();
+    const active = useRef(true);
+    useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
     const isDesktop = useMediaQuery("(min-width: 1024px)");
     const [searchParams, setSearchParams] = useSearchParams();
     const [weekOverview, setWeekOverview] = useState(false);
@@ -516,9 +525,9 @@ export default function InstructorDashboard() {
     const [mobileList, setMobileList] = useState(false);
     const classTriggerRef = useRef<HTMLElement | null>(null);
     const lastSelectedSession = useRef<CalendarEvent | null>(null);
-    const [now, setNow] = useState(() => new Date());
+    const [now, setNow] = useState(() => singaporeClock());
     useEffect(() => {
-        const timer = window.setInterval(() => setNow(new Date()), 30_000);
+        const timer = window.setInterval(() => setNow(singaporeClock()), 30_000);
         return () => window.clearInterval(timer);
     }, []);
     const requestedView = searchParams.get("view");
@@ -527,23 +536,34 @@ export default function InstructorDashboard() {
             ? requestedView
             : "week";
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const [availability, setAvailability] = useState<AvailabilitySlot[]>(() =>
-        mockAvailability(today),
-    );
     const [selectedAvailabilityId, setSelectedAvailabilityId] = useState<string | null>(null);
     const [availabilityDialog, setAvailabilityDialog] = useState<{
         range: AvailabilityRange;
         editingId?: string;
     } | null>(null);
-    const requestedEvent = findCalendarEvent(
-        searchParams.get("session") ?? searchParams.get("class") ?? undefined,
-    );
-    const requestedSession = requestedEvent;
+    const requestedId = searchParams.get("session") ?? searchParams.get("class");
+    const requestedDate = parseCalendarDate(searchParams.get("date"));
+    const [resolvedSelectionDate, setResolvedSelectionDate] = useState<{ id: string; date: Date } | null>(null);
+    const selectedDate = requestedDate ??
+        (resolvedSelectionDate?.id === requestedId ? resolvedSelectionDate.date : today);
+    const range = calendarRange(selectedDate, view, isDesktop, mobileList);
+    const calendar = useInstructorCalendarRange(range);
+    const availability = calendar.data?.availability ?? [];
+    const events = calendar.data?.events ?? [];
+    const prefetch = useInstructorPrefetch({ selectedDate, today, range, events, ready: calendar.status === 'success',
+        weekView: view === 'week', isDesktop, mobileList });
+    const rangeSession = events.find(event => event.id === requestedId);
+    const needsSelection = needsCalendarEventLookup(requestedId, Boolean(requestedDate), calendar.status, Boolean(rangeSession));
+    const selection = useInstructorSelectedEvent(requestedId, needsSelection);
+    useEffect(() => {
+        if (requestedId && !requestedDate && selection.data) {
+            setResolvedSelectionDate({ id: requestedId, date: selection.data.date });
+        }
+    }, [requestedId, requestedDate, selection.data]);
+    const getEvents = (date: Date) => calendarEventsForDate(events, date);
+    const baseSession = rangeSession ?? selection.data;
+    const requestedSession = baseSession ? calendarEventsForDate([baseSession], selectedDate)[0] : undefined;
     if (requestedSession) lastSelectedSession.current = requestedSession;
-    const selectedDate =
-        parseCalendarDate(searchParams.get("date")) ??
-        requestedSession?.date ??
-        today;
     const selectedDateKey = dateKey(selectedDate);
     const expandedClassId =
         requestedSession &&
@@ -594,23 +614,15 @@ export default function InstructorDashboard() {
     }
 
     function addAvailability() {
-        const currentTime = new Date();
-        let date = selectedDate < today ? today : selectedDate;
-        let start = dateKey(date) === dateKey(currentTime)
-            ? Math.max(8 * 60, (Math.floor((currentTime.getHours() * 60 + currentTime.getMinutes()) / 30) + 1) * 30)
-            : 8 * 60;
-        // Prefer the first free half hour so the manual dialog starts with a usable range.
+        const current = singaporeClock();
+        const currentDay = new Date(current.getFullYear(), current.getMonth(), current.getDate());
+        let date = selectedDate < currentDay ? currentDay : selectedDate;
+        let start = dateKey(date) === dateKey(current)
+            ? Math.max(8 * 60, (Math.floor((current.getHours() * 60 + current.getMinutes()) / 30) + 1) * 30) : 8 * 60;
         for (let attempt = 0; attempt < 56; attempt++) {
-            if (start >= 22 * 60) {
-                date = addDays(date, 1);
-                start = 8 * 60;
-            }
-            const range = {
-                date,
-                startTime: minutesTime(start),
-                endTime: minutesTime(start + 30),
-            };
-            if (!availabilityError(range, availability, undefined, currentTime)) {
+            if (start >= 22 * 60) { date = addDays(date, 1); start = 8 * 60; }
+            const range = { date, startTime: minutesTime(start), endTime: minutesTime(start + 30) };
+            if (!availabilityError(range, availability, undefined, current, getEvents(date).filter(event => event.status !== "cancelled"))) {
                 selectRange(range);
                 return;
             }
@@ -619,11 +631,19 @@ export default function InstructorDashboard() {
         selectRange({ date: addDays(date, 1), startTime: "08:00", endTime: "08:30" });
     }
 
-    function deleteAvailability() {
-        const id = availabilityDialog?.editingId;
-        if (!id) return;
-        setAvailability((slots) => slots.filter((slot) => slot.id !== id));
-        setSelectedAvailabilityId(null);
+    async function saveAvailability(range: AvailabilityRange) {
+        const userId = session?.user.id;
+        const generation = queryGeneration(client);
+        let saved;
+        try {
+            saved = await api.createAvailability({ date: calendarDateValue(range.date),
+                startTime: range.startTime, endTime: range.endTime });
+        } finally {
+            if (userId) invalidateAvailability(client, generation, userId);
+        }
+        if (!active.current) return;
+        updateSelection(range.date);
+        setSelectedAvailabilityId(saved.id);
         setAvailabilityDialog(null);
     }
 
@@ -710,6 +730,7 @@ export default function InstructorDashboard() {
                 year: "numeric",
             });
     const calendarProps: CalendarProps = {
+        getEvents,
         date: selectedDate,
         today,
         expandedClassId,
@@ -729,14 +750,40 @@ export default function InstructorDashboard() {
     const activeDisplayMode = view === "day" ? dayDisplayMode : displayMode;
     const isTimeline = view !== "month" && activeDisplayMode === "timeline";
     const showSidePanel = expandedClassId !== null;
+    const calendarStatus = calendar.status !== 'success'
+        ? <InstructorDataStatus loading={calendar.status === 'loading'} error={calendar.error} onRetry={calendar.retry} variant="calendar" /> : undefined;
+    const catalogueStatus = calendar.status === 'loading'
+        ? <InstructorDataStatus loading onRetry={calendar.retry} variant="inline" /> : calendarStatus;
+    const selectionStatus = requestedId && !requestedSession
+        ? selection.status === 'success'
+            ? <div className="space-y-2 p-4"><p role="status" className="text-sm text-muted-foreground">Selected class not found for this date.</p><Button variant="outline" onClick={() => updateSelection(selectedDate)}>Back to calendar</Button></div>
+            : <InstructorDataStatus loading={selection.status === 'loading'} error={selection.error} onRetry={selection.retry} variant="inline" />
+        : undefined;
 
     return (
-        <section className="flex flex-col gap-4 lg:min-h-0 lg:flex-1">
+        <section aria-busy={calendar.status === 'loading'} className="flex flex-col gap-4 lg:min-h-0 lg:flex-1"
+            onPointerOver={(event) => {
+                if (event.pointerType !== 'mouse' || !(event.target instanceof Element)) return;
+                const row = event.target.closest<HTMLElement>('[data-prefetch-class]');
+                if (!row || !event.currentTarget.contains(row) || (event.relatedTarget instanceof Node && row.contains(event.relatedTarget))) return;
+                if (row.dataset.prefetchClass) prefetch.hoverClass(row.dataset.prefetchClass);
+            }}
+            onPointerOut={(event) => {
+                if (event.pointerType !== 'mouse' || !(event.target instanceof Element)) return;
+                const row = event.target.closest<HTMLElement>('[data-prefetch-class]');
+                if (row && !(event.relatedTarget instanceof Node && row.contains(event.relatedTarget))) prefetch.cancelHover();
+            }}
+            onTouchStart={(event) => {
+                if (!(event.target instanceof Element)) return;
+                const row = event.target.closest<HTMLElement>('[data-prefetch-class]');
+                if (row && event.currentTarget.contains(row) && row.dataset.prefetchClass) prefetch.touchClass(row.dataset.prefetchClass);
+            }}>
             {!isDesktop ? <MobileInstructorCalendar
                 date={selectedDate} now={now} view={mobileList ? "list" : view === "week" ? "multi-day" : view} slots={availability} focusRequest={timelineFocusRequest}
-                onSelectDate={selectDay} onSelectClass={calendarProps.onToggleClass} onSelectAvailability={selectAvailability} onSelectRange={selectRange}
-                onAddAvailability={addAvailability}
-                onToday={() => { const current = new Date(); setNow(current); updateSelection(new Date(current.getFullYear(), current.getMonth(), current.getDate())); setTimelineFocusRequest(value => value + 1); }}
+                getEvents={getEvents} classCatalogue={calendar.data?.classTypes ?? []} catalogueStatus={catalogueStatus} content={calendarStatus ?? selectionStatus}
+                onSelectDate={selectDay} onSelectClass={calendarProps.onToggleClass} onSelectAvailability={selectAvailability}
+                onAddAvailability={addAvailability} onSelectRange={selectRange}
+                onToday={() => { const current = singaporeClock(); setNow(current); updateSelection(new Date(current.getFullYear(), current.getMonth(), current.getDate())); setTimelineFocusRequest(value => value + 1); }}
                 onChangeView={(mode: MobileCalendarView) => { setMobileList(mode === "list"); if (mode !== "list") changeView(mode === "multi-day" ? "week" : mode); }}
             /> : <>
             <header className="shrink-0">
@@ -755,7 +802,7 @@ export default function InstructorDashboard() {
                             <Button
                                 variant="outline"
                                 onClick={() => {
-                                    const now = new Date();
+                                    const now = singaporeClock();
                                     setNow(now);
                                     setTimelineFocusRequest(request => request + 1);
                                     updateSelection(
@@ -865,12 +912,14 @@ export default function InstructorDashboard() {
                             </PopoverTrigger>
                             <PopoverContent className="max-h-[min(36rem,calc(100dvh-3rem))] w-96 overflow-y-auto">
                                 <PopoverTitle>Calendar legend</PopoverTitle>
-                                <p className="-mt-2 text-xs text-muted-foreground">Classes · 60 minutes each</p>
+                                <p className="-mt-2 text-xs text-muted-foreground">Classes · Singapore time</p>
+                                {catalogueStatus}
+                                {calendar.status === 'success' && !calendar.data.classTypes.length && <p className="text-xs text-muted-foreground">No class types recorded.</p>}
                                 <ul className="space-y-3 text-xs">
-                                    {Object.entries(classTypes).map(([type, style]) => (
-                                        <li key={type} className="grid gap-1 sm:grid-cols-[9.5rem_minmax(0,1fr)] sm:items-center sm:gap-3">
-                                            <span className={cn("w-fit rounded-full border px-2 py-1 text-[10px] uppercase", style.badge)}>{style.label}</span>
-                                            <span className="text-muted-foreground">{style.description}</span>
+                                    {(calendar.data?.classTypes ?? []).map(type => (
+                                        <li key={type.id} className="grid gap-1 sm:grid-cols-[9.5rem_minmax(0,1fr)] sm:items-center sm:gap-3">
+                                            <span className={cn("w-fit rounded-full border px-2 py-1 text-[10px] uppercase", calendarClassStyle(type.id).badge)}>{type.label}</span>
+                                            <span className="text-muted-foreground">{type.description}</span>
                                         </li>
                                     ))}
                                 </ul>
@@ -885,7 +934,8 @@ export default function InstructorDashboard() {
                     "flex flex-col lg:min-h-0 lg:flex-1",
                     showSidePanel && "lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:grid-rows-1 lg:gap-3 lg:overflow-hidden",
                 )}>
-                    {view === "month" ? (
+                    {calendarStatus ?? selectionStatus}
+                    {calendar.status !== 'success' ? null : view === "month" ? (
                         <CalendarMonth {...calendarProps} onSelectDate={selectMonthDate} />
                     ) : isTimeline ? (
                         <CalendarTimeline
@@ -894,6 +944,7 @@ export default function InstructorDashboard() {
                             view={view}
                             focusRequest={timelineFocusRequest}
                             slots={availability}
+                            getEvents={getEvents}
                             selectedId={selectedAvailability?.id ?? expandedClassId}
                             onSelectClass={calendarProps.onToggleClass}
                             onSelectAvailability={selectAvailability}
@@ -952,20 +1003,10 @@ export default function InstructorDashboard() {
                 initial={availabilityDialog.range}
                 editingId={availabilityDialog.editingId}
                 slots={availability}
+                getEvents={getEvents}
                 onClose={() => setAvailabilityDialog(null)}
-                onDelete={deleteAvailability}
-                onSave={(range) => {
-                    const id = availabilityDialog.editingId ?? `availability-${crypto.randomUUID()}`;
-                    setAvailability((slots) => [
-                        ...slots.filter((slot) => slot.id !== id),
-                        { ...range, id },
-                    ].sort((a, b) =>
-                        a.date.getTime() - b.date.getTime() || timeMinutes(a.startTime) - timeMinutes(b.startTime),
-                    ));
-                    updateSelection(range.date);
-                    setSelectedAvailabilityId(id);
-                    setAvailabilityDialog(null);
-                }}
+                onSave={saveAvailability}
+                readOnly={Boolean(availabilityDialog.editingId)}
             />}
         </section>
     );
