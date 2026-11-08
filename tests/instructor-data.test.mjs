@@ -36,7 +36,7 @@ function fixtureClient({
       const read = { table, filters: [] }
       reads.push(read)
       return {
-        select() { return this },
+        select(columns) { if (table === 'instructors') assert.ok(!columns.includes('updated_at')); return this },
         eq(column, value) { read.filters.push([column, value]); return this },
         async maybeSingle() {
           if (table === 'users') return { data: profile, error: profileError }
@@ -50,6 +50,11 @@ function fixtureClient({
 
 test('current instructor resolves the domain ID, never the auth ID or a matching name/email', async () => {
   const client = fixtureClient()
+  // Other row fixtures reuse the metadata above, but instructors no longer have
+  // updated_at. Exercise the current database shape explicitly.
+  const record = { ...instructor }
+  delete record.updated_at
+  assert.equal((await createInstructorApi(fixtureClient({ record })).getCurrentInstructor()).instructorId, instructorId)
   const identity = await createInstructorApi(client).getCurrentInstructor()
   assert.deepEqual(identity, {
     userId, instructorId, name: 'Test Instructor', email: instructor.email,

@@ -14,6 +14,14 @@ Student profiles/history/attendance use database-shaped records from
 `instructor-detail.fixture.ts`; directory/detail geometry checks follow real UUID
 links through the same production API context.
 
+The profile suite covers saved address/employment values, the Address pencil icon
+and edit dialog at 320–1440px, save/cancel/clear, Escape/focus return, draft retention on failure, duplicate-save
+protection, device photo preparation/upload/removal, account-avatar updates,
+reload persistence and account switching during saves. Its test-only profile API
+uses sessionStorage to simulate the database; production uses the Supabase RPCs
+and private Storage bucket, covered separately by `tests/instructor-profile.test.mjs`
+and `tests/instructor-profile-db.test.mjs`.
+
 Start the following in separate terminals:
 
 ```sh

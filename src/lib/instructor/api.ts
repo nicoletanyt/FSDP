@@ -8,6 +8,7 @@ import {
   decodeSessionSave, decodeAssessmentSnapshot,
 } from './decoders'
 import { InstructorDataError, toInstructorDataError } from './errors'
+import { createInstructorProfileApi } from './profile'
 import { collectCalendarPages } from './page-collector'
 import type {
   AssessmentDetail, AssessmentKey, AttendanceSaveInput, AvailabilityInput, CalendarOptions, DirectoryOptions, EventId, HistoryOptions,
@@ -16,7 +17,7 @@ import type {
 
 // Inject the existing shared Supabase client at the provider boundary. This does
 // not create another auth session or require browser env configuration in tests.
-type InstructorClient = Pick<SupabaseClient, 'auth' | 'from' | 'rpc'>
+type InstructorClient = Pick<SupabaseClient, 'auth' | 'from' | 'rpc'> & Partial<Pick<SupabaseClient, 'storage'>>
 
 type TableResponse = { data: unknown[] | null; error: unknown; count: number | null }
 
@@ -90,7 +91,7 @@ export function createInstructorApi(client: InstructorClient) {
       const { userId } = await getInstructorAccount(signal)
       const record = await requestInstructorData(
         () => cancellable(client.from('instructors')
-          .select('id, user_id, first_name, last_name, email, created_at, updated_at')
+          .select('id, user_id, first_name, last_name, email, created_at')
           .eq('user_id', userId), signal).maybeSingle<unknown>(),
         'Unable to load your instructor record. Please try again.', signal,
       )
@@ -214,6 +215,7 @@ export function createInstructorApi(client: InstructorClient) {
   }
 
   return {
+    ...createInstructorProfileApi(client, getCurrentInstructor),
     getCurrentInstructor,
 
     saveAssessment(input: AssessmentSaveInput) { return saveSessionRecord({ ...input, kind: 'assessment' }) },

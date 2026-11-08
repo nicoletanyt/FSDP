@@ -4,6 +4,7 @@ type QueryFilters = Readonly<Record<string, string | number | boolean | null | u
 
 export const instructorQueryKeys = {
   all: (userId: string) => ['instructor', userId] as const,
+  profile: (userId: string) => [...instructorQueryKeys.all(userId), 'profile'] as const,
   calendar: (userId: string, from: string, to: string) => [...instructorQueryKeys.all(userId), 'calendar', from, to] as const,
   availability: (userId: string, from: string, to: string) => [...instructorQueryKeys.all(userId), 'availability', from, to] as const,
   event: (userId: string, eventId: string) => [...instructorQueryKeys.all(userId), 'event', eventId] as const,

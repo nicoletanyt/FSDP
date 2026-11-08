@@ -85,7 +85,7 @@ export function subscribeInstructorPhotos(listener: () => void) {
     };
 }
 
-export async function prepareInstructorPhoto(file: File): Promise<string> {
+export async function prepareInstructorPhoto(file: File): Promise<Blob> {
     if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
         throw new Error("Choose a JPG, PNG or WebP image.");
     }
@@ -109,7 +109,9 @@ export async function prepareInstructorPhoto(file: File): Promise<string> {
         context.fillStyle = "#ffffff";
         context.fillRect(0, 0, 512, 512);
         context.drawImage(image, (image.naturalWidth - side) / 2, (image.naturalHeight - side) / 2, side, side, 0, 0, 512, 512);
-        return canvas.toDataURL("image/jpeg", 0.85);
+        return await new Promise<Blob>((resolve, reject) => {
+            canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error("Your browser could not prepare this photo. Please try again.")), "image/jpeg", 0.85);
+        });
     } finally {
         URL.revokeObjectURL(objectUrl);
     }
