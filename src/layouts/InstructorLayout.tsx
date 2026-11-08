@@ -7,6 +7,7 @@ import { InstructorApiContext } from '@/lib/instructor/data-context'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/hooks/use-auth'
 import { cn } from '@/lib/utils'
+import FloatingChatbot from '@/components/FloatingChatbot'
 
 export type InstructorOutletContext = {
   isKiosk: boolean
@@ -18,7 +19,7 @@ const instructorApi = createInstructorApi(supabase)
 export default function InstructorLayout() {
   const { pathname, search } = useLocation()
   const injectedApi = useContext(InstructorApiContext)
-  const { session } = useAuth()
+  const { session, profile } = useAuth()
   const [params] = useSearchParams()
   const isCalendar = pathname === '/instructor/calendar' || pathname === '/instructor/dashboard'
   const isCheckIn = pathname === '/instructor/check-in'
@@ -61,6 +62,7 @@ export default function InstructorLayout() {
         </Suspense>
       </main>
       {!isKiosk && <div aria-hidden="true" className={cn('h-24 shrink-0 lg:hidden', isCheckIn && 'md:hidden')} />}
+      {!isKiosk && session && profile?.id === session.user.id && profile.role === 'instructor' && <FloatingChatbot key={session.user.id} userId={session.user.id} />}
     </div>
     </InstructorApiContext.Provider>
   )

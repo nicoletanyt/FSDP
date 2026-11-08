@@ -21,3 +21,7 @@ verify_jwt = false
 # The handler authenticates the bearer JWT and checks the instructor role.
 [functions.nfc-check-in]
 verify_jwt = false
+
+# The handler authenticates the JWT and requires the current instructor role.
+[functions.instructor-chat]
+verify_jwt = false

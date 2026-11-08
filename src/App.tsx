@@ -2,7 +2,6 @@ import { lazy } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router'
 import { GuestRoute, InstructorIndexRedirect, ProtectedRoute } from '@/components/auth/AuthGate'
 import NfcTagCapture from '@/components/instructor/NfcTagCapture'
-import FloatingChatbot from '@/components/FloatingChatbot'
 import AuthLayout from './layouts/AuthLayout'
 import RootLayout from './layouts/RootLayout'
 import InstructorLayout from './layouts/InstructorLayout'
@@ -128,7 +127,6 @@ export default function App() {
           <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>
-      <FloatingChatbot />
     </BrowserRouter>
   )
 }

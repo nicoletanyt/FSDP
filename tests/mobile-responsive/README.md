@@ -41,11 +41,29 @@ node --test tests/mobile-responsive/grading-page.test.mjs
 node --test tests/mobile-responsive/attendance.test.mjs
 node --test tests/mobile-responsive/profile.test.mjs
 node --test tests/mobile-responsive/session-saves.test.mjs
+node --test tests/mobile-responsive/chatbot.test.mjs
 ```
 
 Use `FSDP_BASE_URL` and `WEBDRIVER_URL` if those services run elsewhere. The
 WebDriver service must be free to create a new session. Run the suites
 sequentially when sharing a driver.
+
+The chatbot suite opts into `fixtureChat=true`, mocks the existing Supabase
+session/function methods in the fixture only, and never contacts Ollama or writes
+database records. It covers instructor-only visibility, send/retry/hidden sources,
+Escape/focus return, stop/clear, late replies after account switches, and panel
+bounds at 320px, 390px, short landscape and desktop sizes.
+It also verifies suggested topics, follow-up prompts, native keyboard activation,
+pending/error visibility, draft retention, duplicate-click protection and
+scroll-reachable 44px topic buttons.
+The student-style question-chip checks also verify full-question labels, primary
+outlined styling, placement directly beneath the greeting/latest assistant reply and
+before its timestamp, hiding stale suggestions, and keeping the local greeting
+out of model requests.
+Markdown checks cover emphasis/lists, literal user messages, blocked raw HTML,
+images and model links, horizontally scrollable tables and hidden source links.
+Expand/minimize tests cover modal bounds and focus trapping/return, native Escape,
+single-instance message logs, and draft/pending-reply preservation.
 
 The suite checks 320–430px views, role-based left Sheet navigation, the calendar view popover beside month/year,
 24px instructor main padding, 16px overlay padding, single-line roster alignment, measured touch-target sizes and spacing,
