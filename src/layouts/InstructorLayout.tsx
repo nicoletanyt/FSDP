@@ -26,6 +26,7 @@ export default function InstructorLayout() {
   const isStudentDetails = /^\/instructor\/students\/[^/]+\/?$/.test(pathname)
   const isStudentPage = isStudentDirectory || isStudentDetails
   const routeSkeleton = isCalendar ? 'calendar-page' : isStudentDirectory ? 'directory-page' : isStudentDetails ? 'student-detail'
+    : pathname.startsWith('/instructor/grading/') ? 'grading-page'
     : pathname.startsWith('/instructor/assessments/') ? 'assessment'
       : isCheckIn ? 'check-in' : 'profile'
   const [stationKiosk, setIsKiosk] = useState(false)

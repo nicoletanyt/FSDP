@@ -29,6 +29,7 @@ node --test tests/mobile-responsive/students.test.mjs
 node --test tests/mobile-responsive/student-details.test.mjs
 node --test tests/mobile-responsive/student-training-dialog.test.mjs
 node --test tests/mobile-responsive/session-reads.test.mjs
+node --test tests/mobile-responsive/grading-page.test.mjs
 node --test tests/mobile-responsive/attendance.test.mjs
 node --test tests/mobile-responsive/session-saves.test.mjs
 ```

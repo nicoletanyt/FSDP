@@ -226,8 +226,8 @@ export default function ClassSessionDetails({
                     <Button variant="outline" size="sm" onClick={attendance.retry} disabled={attendance.pending}>{attendance.retryLabel}</Button>
                 </div>}
                 {attendance.message && <p role="status" className="px-3 py-2 text-xs text-muted-foreground">{attendance.message}</p>}
-                {isGrading && attendance.data && <div className="px-3 pb-2">
-                    <Button variant="outline" size="sm" nativeButton={false} render={<Link to={`/instructor/grading/${event.id}`} />}>
+                {isGrading && attendance.data && <div className="px-3 pt-4 pb-2">
+                    <Button variant="outline" size="sm" className="min-h-11 w-full" nativeButton={false} render={<Link to={`/instructor/grading/${event.id}`} />}>
                         View Grading
                     </Button>
                 </div>}

@@ -96,7 +96,7 @@ test('preview helper only returns fresh, valid same-key directory entries', asyn
 })
 
 test('skeleton variants are accessible, noninteractive and respect reduced motion; errors still offer retry', async () => {
-  for (const variant of ['inline', 'card', 'directory', 'directory-page', 'roster', 'history', 'calendar', 'calendar-page', 'reports', 'assessment', 'student-detail', 'profile', 'check-in']) {
+  for (const variant of ['inline', 'card', 'directory', 'directory-page', 'roster', 'history', 'calendar', 'calendar-page', 'reports', 'assessment', 'grading', 'grading-page', 'student-detail', 'profile', 'check-in']) {
     let root
     try {
       await act(async () => { root = create(React.createElement(MemoryRouter, null, React.createElement(InstructorSkeleton, { variant }))) })

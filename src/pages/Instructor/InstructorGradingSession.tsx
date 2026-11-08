@@ -1,7 +1,8 @@
 import { useCallback, useState } from "react";
-import { Link, useParams } from "react-router";
-import { ChevronLeft, CalendarDays, MapPin } from "lucide-react";
+import { useParams } from "react-router";
+import { CalendarDays, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import BackToCalendarLink from "@/components/instructor/BackToCalendarLink";
 import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
 import GradingSignatureDialog from "@/components/instructor/GradingSignatureDialog";
 import { useInstructorApi } from "@/lib/instructor/data-context";
@@ -59,14 +60,7 @@ function GradingTable({
     const reset = () => setUnchecked(new Set());
 
     return (
-        <section className="mx-auto w-full max-w-7xl space-y-6">
-            <Link
-                to={sessionCalendarHref(session)}
-                className="inline-flex min-h-11 items-center gap-1 text-sm text-muted-foreground hover:text-foreground hover:underline"
-            >
-                <ChevronLeft aria-hidden="true" className="size-4" /> Back to
-                calendar
-            </Link>
+        <div className="space-y-6">
             <header className="flex flex-wrap items-center justify-between gap-4">
                 <h1 className="min-w-0 text-3xl font-semibold tracking-tight [overflow-wrap:anywhere]">
                     {session.event.name}
@@ -155,7 +149,13 @@ function GradingTable({
                                 <tr className="bg-muted/50">
                                     <th
                                         scope="col"
-                                        className="sticky left-0 z-10 min-w-44 border-b bg-muted px-4 py-3 text-left font-semibold"
+                                        className="sticky left-0 z-10 w-16 min-w-16 border-b bg-muted px-4 py-3 text-center font-semibold"
+                                    >
+                                        ID
+                                    </th>
+                                    <th
+                                        scope="col"
+                                        className="min-w-44 border-b border-l px-4 py-3 text-left font-semibold"
                                     >
                                         Student
                                     </th>
@@ -174,7 +174,7 @@ function GradingTable({
                                 </tr>
                             </thead>
                             <tbody>
-                                {entries.map(({ student }) => {
+                                {entries.map(({ student }, index) => {
                                     const name =
                                         [
                                             student.student.first_name,
@@ -187,9 +187,12 @@ function GradingTable({
                                             key={student.student.id}
                                             className="border-b last:border-0"
                                         >
+                                            <td className="sticky left-0 z-10 bg-background px-4 py-3 text-center tabular-nums">
+                                                {index + 1}
+                                            </td>
                                             <th
                                                 scope="row"
-                                                className="sticky left-0 z-10 bg-background px-4 py-3 text-left font-medium"
+                                                className="border-l px-4 py-3 text-left font-medium"
                                             >
                                                 {name}
                                             </th>
@@ -253,7 +256,7 @@ function GradingTable({
                     </div>
                 )}
             </section>
-        </section>
+        </div>
     );
 }
 
@@ -276,29 +279,23 @@ export default function InstructorGradingSession() {
         load,
         times.roster,
     );
-    if (query.status !== "success")
-        return (
-            <section className="space-y-4">
-                <Link to="/instructor/calendar" className="text-sm underline">
-                    Back to calendar
-                </Link>
+    return (
+        <section className="mx-auto w-full max-w-7xl space-y-6">
+            <BackToCalendarLink to={query.status === "success" ? sessionCalendarHref(query.data.session) : undefined} />
+            {query.status !== "success" ? (
                 <InstructorDataStatus
                     loading={query.status === "loading"}
                     error={query.error}
                     onRetry={query.retry}
+                    variant="grading"
                 />
-            </section>
-        );
-    if (query.data.session.event.event_type !== "grading")
-        return (
-            <section className="space-y-4">
-                <Link to="/instructor/calendar" className="text-sm underline">
-                    Back to calendar
-                </Link>
+            ) : query.data.session.event.event_type !== "grading" ? (
                 <h1 className="text-2xl font-semibold">
                     Grading session not found
                 </h1>
-            </section>
-        );
-    return <GradingTable key={eventId} {...query.data} />;
+            ) : (
+                <GradingTable key={eventId} {...query.data} />
+            )}
+        </section>
+    );
 }
