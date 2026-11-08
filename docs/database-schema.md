@@ -266,6 +266,12 @@ Roster and per-student state for an event: attendance, check-in, instructor repo
 | `assessment_status` | `assessment_status` | yes      | —       |
 | `assessment_notes`  | `text`              | yes      | —       |
 | `checked_in_at`     | `timestamptz`       | yes      | —       |
+| `candidate_number`  | `integer`, positive | yes      | assigned for grading rosters |
+
+`candidate_number` is unique within an event and assigned by a server-side trigger.
+Existing grading rosters are numbered deterministically by student UUID; new
+participants receive the next number under an event-row lock. Numbers are not
+recomputed when the UI is sorted or filtered.
 
 ### `instructor_attendance_requests`
 
@@ -317,6 +323,51 @@ The save RPC updates only its action's fields and guards direct instructor REST
 bypasses; original author and attendance guards remain independently enforced.
 
 ## Grading
+
+### Instructor grading batches
+
+Migration: `20261108152249_instructor_grading_batches.sql` (applied to Supabase).
+Resume/edit support: `20261108154345_resume_editable_grading_batches.sql`.
+
+Each instructor has one independent batch per `(event_id, instructor_id, track,
+target_grade_id)`. The only states are `draft` and `submitted`. No final grade,
+student promotion, legacy assessment-status update or technique sign-off is
+produced by saving/submitting a batch.
+
+| Table | Columns |
+| --- | --- |
+| `grading_batches` | `id uuid` PK, `event_id uuid` FK to gradings, `instructor_id uuid` FK, `track grade_track`, `target_grade_id text`, `status text` default draft, `version integer` default 1, `signature jsonb` nullable, `submitted_at timestamptz` nullable, `created_at timestamptz`, `updated_at timestamptz` |
+| `grading_batch_students` | `batch_id uuid`, `event_id uuid`, `student_id uuid`, `candidate_number integer`, `name text` snapshot, `notes text` nullable; PK `(batch_id, student_id)` |
+| `grading_batch_items` | `batch_id uuid`, `syllabus_item_id text`, `category text` snapshot, `label text` snapshot, `sort_order integer`; PK `(batch_id, syllabus_item_id)` |
+| `grading_batch_results` | `batch_id uuid`, `student_id uuid`, `syllabus_item_id text`, `checked boolean`; PK across the first three columns |
+| `grading_batch_write_requests` | `request_id uuid` PK, `instructor_id uuid`, `batch_id uuid`, `payload jsonb`, `response jsonb`, `created_at timestamptz` |
+
+Composite foreign keys keep every result inside its batch's participant and
+technique sets. Batch participants must belong to the event roster. Snapshot
+rows preserve the names, candidate numbers and technique labels that were signed.
+
+All five tables have RLS. Owners and administrators may read batches and their
+contents; other instructors cannot read each other's drafts/submissions. No
+browser direct writes are granted. Retry receipts intentionally have no browser
+policies or grants. Authenticated RPCs derive/check the actual linked instructor;
+`grading_batch_document` is internal and not browser-executable.
+
+- `get_instructor_grading_batch(event, track, grade)` returns the caller's batch or null.
+- `get_latest_instructor_grading_batch(event)` returns the caller's most recently
+  updated draft or submission for the session, restoring its track, target grade
+  and matrix automatically. Other instructors' batches are never considered.
+- `save_instructor_grading_batch(request_id, expected_user, event, track, grade,
+  expected_version, cells, submit, examiner_signature)` saves a complete matrix
+  atomically. Version 0 means first creation. Exact retries return the original
+  receipt; stale versions, changed matrices and reused request IDs are rejected.
+- Submission requires a bounded, normalized signature. Both drafts and submitted
+  batches remain editable by their owner through the version-checked save RPC.
+  Saving edits as a draft clears the current signature and submission timestamp;
+  resubmitting requires a fresh signature. Prior signed matrices and signatures
+  remain immutable in the private request receipts. There is no voiding or
+  final-decision operation in this phase.
+- The grading page shows the server's `updated_at` as "Last saved" for drafts or
+  `submitted_at` as "Last submitted" for submissions, below the table in Singapore time.
 
 ### `grading_applications`
 

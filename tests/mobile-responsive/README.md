@@ -48,6 +48,17 @@ Use `FSDP_BASE_URL` and `WEBDRIVER_URL` if those services run elsewhere. The
 WebDriver service must be free to create a new session. Run the suites
 sequentially when sharing a driver.
 
+The grading-page suite covers per-instructor batch drafts, a complete persisted
+student/technique matrix, automatic resume after reload, editable signed submissions, account
+isolation, version conflicts and exact-request retries after lost responses.
+Only `batch-persistence` mode uses test-scoped session storage. Production batch
+data and signatures are saved through the database RPCs, never browser storage.
+`tests/instructor-grading-batches-db.test.mjs` applies the batch migration to an
+offline PostgreSQL instance and checks constraints, RLS, atomicity and unchanged
+student grades/legacy assessments. Draft and submitted checklists can be edited;
+resubmission requires a new signature and each prior signed receipt is retained.
+Timestamp checks verify "Last saved" / "Last submitted" appears below the table.
+
 The chatbot suite opts into `fixtureChat=true`, mocks the existing Supabase
 session/function methods in the fixture only, and never contacts Ollama or writes
 database records. It covers instructor-only visibility, send/retry/hidden sources,

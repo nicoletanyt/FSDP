@@ -10,6 +10,7 @@ import type { CalendarEntry, CentreRow, EventId, Page, PageOptions, RosterEntry,
 import { createDirectoryFixtureReader } from './instructor-directory.fixture'
 import { createDetailFixtureReads } from './instructor-detail.fixture'
 import { createGradingFixtureReads } from './instructor-grading.fixture'
+import { createGradingBatchFixture } from './instructor-grading-batches.fixture'
 import { createSessionFixtureReads } from './instructor-session.fixture'
 import { createSessionWriteFixture } from './instructor-session-writes.fixture'
 import { attendanceEditable, attendanceSnapshot, editableAttendanceRows } from '../../src/lib/instructor/attendance'
@@ -151,6 +152,7 @@ export function createCalendarFixtureApi(account = 'audit'): InstructorApi {
     ...createDetailFixtureReads(account, mode, sessionWrites), ...createGradingFixtureReads(account, mode),
     ...createSessionFixtureReads(mode, (...args) => api.getEvent(...args), (...args) => api.getRoster(...args), sessionWrites),
     ...sessionWrites.methods,
+    ...createGradingBatchFixture(account, mode, () => api),
     async saveAttendance(input) {
       attendanceRequests.push(structuredClone(input))
       await new Promise(resolve => setTimeout(resolve, mode === 'attendance-slow' ? 1600 : 150))
@@ -229,7 +231,7 @@ export function createCalendarFixtureApi(account = 'audit'): InstructorApi {
       return page(entries, options)
     },
     async getEvent(id) {
-      if (mode === 'empty' || mode === 'unlinked' || account !== 'audit') return null
+      if (mode === 'empty' || mode === 'unlinked' || (account !== 'audit' && !mode?.startsWith('batch-'))) return null
       if (id === uuid(8800)) return dateOnlyGrading(mode === 'date-only-released')
       const item = findEvent(id)
       if (item && (mode === 'attendance-cancelled' || mode === 'assessment-cancelled' || endedDuringSave)) return { ...item, event: { ...item.event, status: endedDuringSave ? 'completed' : 'cancelled' } }
@@ -307,7 +309,7 @@ export function createCalendarFixtureApi(account = 'audit'): InstructorApi {
       const session = await api.getEvent(id, signal)
       if (!session) throw new InstructorDataError('forbidden', 'This session is no longer assigned to your account.')
       const entries = await collectCalendarPages(options => api.getRoster(id, options), item => item.record.student_id, signal)
-      return { session, entries }
+      return { session, entries, canEditAttendance: account === 'audit' }
     },
   }
   return api

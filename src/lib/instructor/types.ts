@@ -189,6 +189,34 @@ export interface EventStudentRow {
   assessment_status: AssessmentStatus | null
   assessment_notes: string | null
   checked_in_at: Timestamp | null
+  candidate_number?: number | null
+}
+
+export interface GradingSignature { version: 1; strokes: { x: number; y: number }[][] }
+export interface GradingBatchCell { student_id: StudentId; syllabus_item_id: string; checked: boolean }
+export interface GradingBatch {
+  id: string
+  event_id: EventId
+  instructor_id: InstructorId
+  track: GradeTrack
+  target_grade_id: string
+  status: 'draft' | 'submitted'
+  version: number
+  signature: GradingSignature | null
+  submitted_at: Timestamp | null
+  updated_at: Timestamp
+  students: { student_id: StudentId; candidate_number: number; name: string; notes: string | null }[]
+  items: { syllabus_item_id: string; category: string; label: string; sort_order: number }[]
+  results: GradingBatchCell[]
+}
+export interface GradingBatchKey { eventId: EventId; track: GradeTrack; gradeId: string }
+export interface GradingBatchSaveInput extends GradingBatchKey {
+  requestId: string
+  expectedUserId: AuthUserId
+  expectedVersion: number
+  cells: GradingBatchCell[]
+  submit: boolean
+  signature: GradingSignature | null
 }
 
 export type AttendanceMark = 'present' | 'absent' | 'unmarked'

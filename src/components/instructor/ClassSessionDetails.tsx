@@ -166,7 +166,7 @@ export default function ClassSessionDetails({
         const timer = window.setInterval(() => setNow(new Date()), 60_000);
         return () => window.clearInterval(timer);
     }, []);
-    const canEdit = storedEvent ? attendanceEditable(storedEvent) : false;
+    const canEdit = storedEvent ? attendance.data?.canEditAttendance !== false && attendanceEditable(storedEvent) : false;
     const isGrading = event.type === "grading";
     const marked = roster.filter(
         (student) => record[student.id].attendance !== "unmarked",

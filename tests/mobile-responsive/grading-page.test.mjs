@@ -111,6 +111,7 @@ test('grading assigns sequential roster IDs and only the ID column stays fixed w
       const ids = rows.map(row => row.cells[0].textContent.trim())
       const stickyColumns = [...table.rows].map(row => [...row.cells].flatMap((cell, index) => w.getComputedStyle(cell).position === 'sticky' ? [index] : []))
       const checkbox = rows[0].querySelector('input[type="checkbox"]'); checkbox.click(); await wait(50)
+      ;[...d.querySelectorAll('button')].find(node => node.textContent === 'Save draft').click(); await wait(500)
       track.value = 'adult'; track.dispatchEvent(new w.Event('change', { bubbles: true })); await wait()
       grade.value = 'stored-target-grade'; grade.dispatchEvent(new w.Event('change', { bubbles: true })); await wait()
       return { headers: [...header.cells].map(cell => cell.textContent.trim()), ids, stickyColumns, before, after, scroll,
@@ -130,4 +131,145 @@ test('grading assigns sequential roster IDs and only the ID column stays fixed w
     assert.deepEqual(result.nextIds, result.ids)
     assert.equal(result.fits, true)
   })
+})
+
+test('grading drafts save the complete matrix and survive a document reload', async () => {
+  const result = await inPage(390, `${gradingPath}?fixtureData=batch-persistence`, async (w, wait) => {
+    let d = w.document
+    const choose = async () => {
+      const [track, grade] = w.document.querySelectorAll('main select')
+      track.value = 'children'; track.dispatchEvent(new w.Event('change', { bubbles: true })); await wait()
+      grade.value = 'stored-target-grade'; grade.dispatchEvent(new w.Event('change', { bubbles: true })); await wait()
+    }
+    await choose()
+    d.querySelector('tbody input').click(); await wait(30)
+    const groupLocked = [...d.querySelectorAll('main select')].every(node => node.disabled)
+    const cleanUi = !d.querySelector('main').textContent.includes('Unsaved changes. Save your draft before changing track or grade.')
+      && ![...d.querySelectorAll('button')].some(node => node.textContent.includes('Reload saved version'))
+    const save = [...d.querySelectorAll('button')].find(node => node.textContent === 'Save draft')
+    save.click(); save.click(); await wait(500)
+    const requests = w.gradingBatchRequestsFixture.map(r => ({ cells: r.cells.length, unchecked: r.cells.filter(c => !c.checked).length, submit: r.submit }))
+    const savedText = d.querySelector('main').textContent
+    const route = w.location.pathname + w.location.search
+    w.location.href = '/tests/mobile-responsive/calendar.html?route=' + encodeURIComponent(route)
+    await wait(1000); d = w.document
+    const value = d.querySelector('tbody input').checked, text = d.querySelector('main').textContent
+    const group = [...d.querySelectorAll('main select')].map(node => node.value)
+    const timestamp = d.querySelector('[data-grading-timestamp]')
+    const footer = { text: timestamp.textContent, datetime: timestamp.querySelector('time').dateTime,
+      below: timestamp.getBoundingClientRect().top >= d.querySelector('table').getBoundingClientRect().bottom }
+    w.sessionStorage.removeItem('test-only-grading-batches:audit')
+    return { groupLocked, cleanUi, requests, savedText, value, text, group, footer }
+  })
+  assert.equal(result.groupLocked, true)
+  assert.equal(result.cleanUi, true)
+  assert.deepEqual(result.requests, [{ cells: 4, unchecked: 1, submit: false }])
+  assert.doesNotMatch(result.savedText, /Your draft has been saved|New draft|Your draft · Version/)
+  assert.equal(result.value, false)
+  assert.doesNotMatch(result.text, /New draft|Your draft · Version/)
+  assert.deepEqual(result.group,['children','stored-target-grade'])
+  assert.match(result.footer.text,/Last saved:/)
+  assert.ok(result.footer.datetime)
+  assert.equal(result.footer.below,true)
+})
+
+test('submitted grading automatically resumes, stays editable and supports draft saves and re-signing', async () => {
+  const result = await inPage(390, `${gradingPath}?fixtureData=batch-persistence`, async (w, wait) => {
+    let d = w.document
+    const [track, grade] = d.querySelectorAll('main select')
+    track.value = 'children'; track.dispatchEvent(new w.Event('change', { bubbles: true })); await wait()
+    grade.value = 'stored-target-grade'; grade.dispatchEvent(new w.Event('change', { bubbles: true })); await wait()
+    const sign = async () => {
+      ;[...d.querySelectorAll('button')].find(node => node.textContent === 'Submit grading').click(); await wait()
+      const canvas = d.querySelector('canvas'), bounds = canvas.getBoundingClientRect()
+      const confirm = [...d.querySelectorAll('[data-slot="dialog-content"] button')].find(node => node.textContent === 'Confirm and submit')
+      const emptyDisabled = confirm.disabled
+      canvas.setPointerCapture = () => {}; canvas.hasPointerCapture = () => false
+      for (const [type, x] of [['pointerdown', 20], ['pointermove', 40], ['pointerup', 60]]) canvas.dispatchEvent(new w.PointerEvent(type, {
+        bubbles: true, pointerId: 1, isPrimary: true, button: 0, clientX: bounds.left + x, clientY: bounds.top + 30,
+      }))
+      await wait(50); confirm.click(); confirm.click(); await wait(500)
+      return emptyDisabled
+    }
+    const emptyDisabled = await sign()
+    const after = { text: d.querySelector('main').textContent, editable: [...d.querySelectorAll('tbody input')].every(node => !node.disabled),
+      dialogClosed: !d.querySelector('[data-slot="dialog-content"]'), timestamp: d.querySelector('[data-grading-timestamp]').textContent }
+    const route = w.location.pathname + w.location.search
+    w.location.href = '/tests/mobile-responsive/calendar.html?route=' + encodeURIComponent(route)
+    await wait(1000); d = w.document
+    const resumed = { group: [...d.querySelectorAll('main select')].map(node => node.value), editable: !d.querySelector('tbody input').disabled,
+      timestamp: d.querySelector('[data-grading-timestamp]').textContent,
+      versionLabelAbsent: !d.querySelector('main').textContent.includes('Your submitted grading · Version') }
+    d.querySelector('tbody input').click(); await wait(30)
+    ;[...d.querySelectorAll('button')].find(node => node.textContent === 'Save draft').click(); await wait(500)
+    const edited = { value: d.querySelector('tbody input').checked, timestamp: d.querySelector('[data-grading-timestamp]').textContent,
+      request: w.gradingBatchRequestsFixture[0] }
+    const signatureRequiredAgain = await sign()
+    const resubmitted = { value: d.querySelector('tbody input').checked, timestamp: d.querySelector('[data-grading-timestamp]').textContent,
+      request: w.gradingBatchRequestsFixture[1] }
+    w.sessionStorage.removeItem('test-only-grading-batches:audit')
+    w.switchInstructorFixture(); await wait(1200)
+    const [nextTrack, nextGrade] = d.querySelectorAll('main select')
+    nextTrack.value = 'children'; nextTrack.dispatchEvent(new w.Event('change', { bubbles: true })); await wait()
+    nextGrade.value = 'stored-target-grade'; nextGrade.dispatchEvent(new w.Event('change', { bubbles: true })); await wait()
+    return { emptyDisabled, after, resumed, edited, signatureRequiredAgain, resubmitted, ownDraft: d.querySelector('main').textContent, editable: !d.querySelector('tbody input').disabled }
+  })
+  assert.equal(result.emptyDisabled, true)
+  assert.equal(result.after.editable, true)
+  assert.equal(result.after.dialogClosed, true)
+  assert.match(result.after.timestamp,/Last submitted:/)
+  assert.doesNotMatch(result.after.text, /grading batch has been submitted|New draft|Your draft · Version/)
+  assert.deepEqual(result.resumed.group,['children','stored-target-grade'])
+  assert.equal(result.resumed.editable,true)
+  assert.equal(result.resumed.versionLabelAbsent,true)
+  assert.match(result.resumed.timestamp,/Last submitted:/)
+  assert.equal(result.edited.value,false)
+  assert.match(result.edited.timestamp,/Last saved:/)
+  assert.equal(result.edited.request.signature,null)
+  assert.equal(result.edited.request.expectedVersion,1)
+  assert.equal(result.signatureRequiredAgain,true)
+  assert.equal(result.resubmitted.value,false)
+  assert.match(result.resubmitted.timestamp,/Last submitted:/)
+  assert.equal(result.resubmitted.request.expectedVersion,2)
+  assert.ok(result.resubmitted.request.signature.strokes.length)
+  assert.doesNotMatch(result.ownDraft, /New draft|Your draft · Version/)
+  assert.equal(result.editable, true)
+})
+
+test('lost grading save responses retry the exact request without duplicate drafts', async () => {
+  const result = await inPage(390, `${gradingPath}?fixtureData=batch-lost-response`, async (w, wait) => {
+    const d = w.document, [track, grade] = d.querySelectorAll('main select')
+    track.value = 'children'; track.dispatchEvent(new w.Event('change', { bubbles: true })); await wait()
+    grade.value = 'stored-target-grade'; grade.dispatchEvent(new w.Event('change', { bubbles: true })); await wait()
+    d.querySelector('tbody input').click(); await wait(30)
+    ;[...d.querySelectorAll('button')].find(node => node.textContent === 'Save draft').click(); await wait(500)
+    const error = d.querySelector('[role="alert"]').textContent, locked = d.querySelector('tbody input').disabled
+    ;[...d.querySelectorAll('button')].find(node => node.textContent === 'Retry draft save').click(); await wait(500)
+    return { message: error, locked, requests: w.gradingBatchRequestsFixture, text: d.querySelector('main').textContent, value: d.querySelector('tbody input').checked }
+  })
+  assert.match(result.message, /response was lost/)
+  assert.equal(result.locked, true)
+  assert.equal(result.requests.length, 2)
+  assert.deepEqual(result.requests[0], result.requests[1])
+  assert.match(result.text, /Last saved:/)
+  assert.equal(result.value, false)
+})
+
+test('grading conflicts keep local edits and explain page refresh without a reload button', async () => {
+  const result = await inPage(390, `${gradingPath}?fixtureData=batch-conflict`, async (w, wait) => {
+    const d = w.document, [track, grade] = d.querySelectorAll('main select')
+    track.value = 'children'; track.dispatchEvent(new w.Event('change', { bubbles: true })); await wait()
+    grade.value = 'stored-target-grade'; grade.dispatchEvent(new w.Event('change', { bubbles: true })); await wait()
+    const save = () => [...d.querySelectorAll('button')].find(node => node.textContent === 'Save draft')
+    save().click(); await wait(500)
+    d.querySelector('tbody input').click(); await wait(30); save().click(); await wait(500)
+    const local = d.querySelector('tbody input').checked, message = d.querySelector('[role="alert"]').textContent
+    return { local, message, locked: d.querySelector('tbody input').disabled,
+      reloadButton: [...d.querySelectorAll('button')].some(node => node.textContent.includes('Reload saved version')) }
+  })
+  assert.equal(result.local, false)
+  assert.match(result.message, /changed in another tab/)
+  assert.match(result.message, /Refresh the page/)
+  assert.equal(result.locked, true)
+  assert.equal(result.reloadButton, false)
 })
