@@ -57,7 +57,6 @@ function SessionHistoryCard({
                 : now < Date.parse(ends_at)
                     ? "in-progress"
                     : "past";
-
     return (
         <Card
             size="sm"
