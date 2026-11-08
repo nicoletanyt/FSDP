@@ -375,7 +375,8 @@ export default function CalendarTimeline({
                                                 type="button"
                                                 data-empty-slot
                                                 disabled={disabled}
-                                                aria-label={`Add availability on ${fullDate(day)}, ${formatTime(startTime)} to ${formatTime(minutesTime((minute + 30) % (24 * 60)))}`}
+                                                aria-hidden={!onSelectRange || undefined}
+                                                aria-label={onSelectRange ? `Add availability on ${fullDate(day)}, ${formatTime(startTime)} to ${formatTime(minutesTime((minute + 30) % (24 * 60)))}` : undefined}
                                                 onClick={(event) => {
                                                     // Mouse/pen selection is handled on pointer-up; touch and keyboard use click.
                                                     if (

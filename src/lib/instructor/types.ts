@@ -47,7 +47,6 @@ export interface InstructorRow {
   last_name: string
   email: string
   created_at: Timestamp
-  updated_at: Timestamp
 }
 
 export interface StudentRow {

@@ -14,9 +14,10 @@ import { createSessionFixtureReads } from './instructor-session.fixture'
 import { createSessionWriteFixture } from './instructor-session-writes.fixture'
 import { attendanceEditable, attendanceSnapshot, editableAttendanceRows } from '../../src/lib/instructor/attendance'
 import type { AttendanceSaveInput, AttendanceSaveResult, EventStudentRow } from '../../src/lib/instructor/types'
+import type { InstructorProfileDetails } from '../../src/lib/instructor/profile'
 
 declare global {
-  interface Window { attendanceRequestsFixture: AttendanceSaveInput[] }
+  interface Window { attendanceRequestsFixture: AttendanceSaveInput[]; profileWriteRequestsFixture: string[]; availabilityReadsFixture: number; availabilityWritesFixture: number }
 }
 
 const uuid = (number: number) => `00000000-0000-4000-8000-${String(number).padStart(12, '0')}`
@@ -89,7 +90,63 @@ export function createCalendarFixtureApi(account = 'audit'): InstructorApi {
   let attendanceReloadFailed = false
   let endedDuringSave = false
   const sessionWrites = createSessionWriteFixture(account, mode, () => api)
+  const profileStorageKey = `test-only-profile:${account}`
+  let profileDetails: InstructorProfileDetails = JSON.parse(sessionStorage.getItem(profileStorageKey) ?? 'null') ?? {
+    instructorId: uuid(account === 'audit' ? 1 : 2), userId: uuid(account === 'audit' ? 90001 : 90002),
+    address: account === 'audit' && mode !== 'profile-empty' ? '18 Sin Ming Lane\nSingapore 573960' : null,
+    employmentType: mode === 'full-time' ? 'full_time' : account === 'audit' && !['profile-empty', 'employment-unset', 'unlinked'].includes(mode ?? '') ? 'part_time' : null, photoPath: null, photoUrl: null,
+  }
+  window.profileWriteRequestsFixture = []
+  window.availabilityReadsFixture = 0
+  window.availabilityWritesFixture = 0
+  let profileFailed = false
+  let addressFailed = false
+  let photoFailed = false
+  const persistProfile = () => sessionStorage.setItem(profileStorageKey, JSON.stringify(profileDetails))
+  const checkProfileUser = (expected: string) => {
+    if (expected !== profileDetails.userId) throw new Error('The signed-in account changed.')
+  }
   const api: InstructorApi = {
+    async getAvailabilityAccess(signal) {
+      await new Promise(resolve => setTimeout(resolve, 80))
+      signal?.throwIfAborted()
+      return profileDetails.employmentType === 'part_time'
+    },
+    async getProfile(expectedUserId, signal) {
+      await new Promise(resolve => setTimeout(resolve, mode === 'profile-loading' ? 1600 : 100))
+      signal?.throwIfAborted()
+      checkProfileUser(expectedUserId)
+      if (mode === 'profile-error' && !profileFailed) { profileFailed = true; throw new Error('Unable to load your profile. Please try again.') }
+      return { ...profileDetails }
+    },
+    async saveAddress(expectedUserId, value) {
+      window.profileWriteRequestsFixture.push('address')
+      await new Promise(resolve => setTimeout(resolve, mode === 'address-slow' ? 1600 : 150))
+      checkProfileUser(expectedUserId)
+      if (mode === 'address-error' && !addressFailed) { addressFailed = true; throw new Error('Unable to save your address. Your draft is kept; please try again.') }
+      profileDetails = { ...profileDetails, address: value.trim() || null }
+      persistProfile()
+      return profileDetails.address
+    },
+    async uploadProfilePhoto(expectedUserId, expectedPath, image) {
+      window.profileWriteRequestsFixture.push('upload')
+      await new Promise(resolve => setTimeout(resolve, mode === 'photo-slow' ? 1600 : 150))
+      checkProfileUser(expectedUserId)
+      if (mode === 'photo-error' && !photoFailed) { photoFailed = true; throw new Error('Unable to save your photo. Reload your profile, then try again.') }
+      if (expectedPath !== profileDetails.photoPath) throw new Error('Photo changed. Reload your profile.')
+      const photoUrl = await new Promise<string>(resolve => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.readAsDataURL(image) })
+      const saved = { photoPath: `${expectedUserId}/${crypto.randomUUID()}.jpg`, photoUrl }
+      profileDetails = { ...profileDetails, ...saved }; persistProfile()
+      return saved
+    },
+    async removeProfilePhoto(expectedUserId, expectedPath) {
+      window.profileWriteRequestsFixture.push('remove')
+      await new Promise(resolve => setTimeout(resolve, 150))
+      checkProfileUser(expectedUserId)
+      if (expectedPath !== profileDetails.photoPath) throw new Error('Photo changed. Reload your profile.')
+      profileDetails = { ...profileDetails, photoPath: null, photoUrl: null }; persistProfile()
+      return { photoPath: null, photoUrl: null }
+    },
     getStudents: createDirectoryFixtureReader(account, mode),
     ...createDetailFixtureReads(account, mode, sessionWrites), ...createGradingFixtureReads(account, mode),
     ...createSessionFixtureReads(mode, (...args) => api.getEvent(...args), (...args) => api.getRoster(...args), sessionWrites),
@@ -179,6 +236,7 @@ export function createCalendarFixtureApi(account = 'audit'): InstructorApi {
       return item
     },
     async getAvailability(options) {
+      window.availabilityReadsFixture++
       const initialSlots = mode === 'empty' || mode === 'unlinked' || account !== 'audit' ? [] : mockAvailability(today).map((slot, index) => ({
         id: uuid(50 + index), instructor_id: instructorId,
         date: dateInputValue(slot.date), start_time: `${slot.startTime}:00`, end_time: `${slot.endTime}:00`,
@@ -187,6 +245,8 @@ export function createCalendarFixtureApi(account = 'audit'): InstructorApi {
       return page(slots, options)
     },
     async createAvailability(input) {
+      window.availabilityWritesFixture++
+      if (profileDetails.employmentType !== 'part_time') throw new InstructorDataError('forbidden', 'Availability is only available to part-time instructors.')
       await new Promise(resolve => setTimeout(resolve, 150))
       if (mode === 'availability-error' && !availabilityFailed) {
         availabilityFailed = true

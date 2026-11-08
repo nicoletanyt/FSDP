@@ -44,13 +44,12 @@ export function parseInstructorRow(value: unknown): InstructorRow {
     throw new InstructorDataError('invalid_data', 'The instructor record is invalid.')
   }
   const row = value as Record<string, unknown>
-  for (const field of ['first_name', 'last_name', 'email', 'created_at', 'updated_at']) {
+  for (const field of ['first_name', 'last_name', 'email', 'created_at']) {
     if (typeof row[field] !== 'string') {
       throw new InstructorDataError('invalid_data', 'The instructor record is incomplete.')
     }
   }
   timestampMilliseconds(row.created_at)
-  timestampMilliseconds(row.updated_at)
   return {
     id: parseEntityId(row.id, 'instructor'),
     user_id: row.user_id === null ? null : parseEntityId(row.user_id, 'auth-user'),
@@ -58,7 +57,6 @@ export function parseInstructorRow(value: unknown): InstructorRow {
     last_name: row.last_name as string,
     email: row.email as string,
     created_at: row.created_at as Timestamp,
-    updated_at: row.updated_at as Timestamp,
   }
 }
 

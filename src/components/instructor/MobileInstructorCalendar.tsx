@@ -472,15 +472,14 @@ export default function MobileInstructorCalendar({
                         </Button>
                     </div>
                     <div className="ml-auto flex items-center">
-                        <Button
+                        {onAddAvailability && <Button
                             variant="ghost"
                             onClick={onAddAvailability}
-                            disabled={!onAddAvailability}
                             className="h-11 gap-1.5 rounded-full px-3 text-[14px] font-medium text-primary"
                         >
                             <Plus aria-hidden="true" className="size-4" />
                             Add Availability
-                        </Button>
+                        </Button>}
                         <Popover>
                             <PopoverTrigger
                                 aria-label="Calendar colours"
@@ -522,12 +521,12 @@ export default function MobileInstructorCalendar({
                                         </span>
                                     </li>
                                 </ul>
-                                <p>
+                                {onAddAvailability && <p>
                                     <span className="text-emerald-600 dark:text-emerald-400">
                                         ●
                                     </span>{" "}
                                     Availability
-                                </p>
+                                </p>}
                                 <p className="text-muted-foreground">
                                     Tap an event for details. Times are shown in Singapore time.
                                 </p>
