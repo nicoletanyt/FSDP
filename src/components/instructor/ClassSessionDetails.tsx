@@ -14,6 +14,7 @@ import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@/compone
 import GradeBadge from "@/components/instructor/DatabaseGradeBadge";
 import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
 import StudentTrainingDialog from "./StudentTrainingDialog";
+import ClassUnavailableDialog from "./ClassUnavailableDialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/use-auth";
 import { useInstructorAttendance } from "@/hooks/use-instructor-attendance";
@@ -207,6 +208,11 @@ export default function ClassSessionDetails({
                 hidden={summary && !expanded}
                 className={cn(fillHeight && (!summary || expanded) && "lg:flex lg:min-h-0 lg:flex-1 lg:flex-col")}
             >
+                {expanded && profile?.role === "instructor" && (
+                    <div className="shrink-0 px-3 pt-3 pb-2">
+                        <ClassUnavailableDialog key={dialogContext} eventName={event.name} />
+                    </div>
+                )}
                 {!summary && (
                     <div className="shrink-0 space-y-2 px-3 py-2.5">
                         <div className="flex items-center justify-between gap-2 text-xs">

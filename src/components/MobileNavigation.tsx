@@ -4,11 +4,8 @@ import { Check, Menu } from "lucide-react";
 import { Link, useLocation } from "react-router";
 import logo from "@/assets/logo.png";
 import ThemeToggle from "@/components/theme-toggle";
-import {
-    Avatar,
-    AvatarFallback,
-    InstructorAvatar,
-} from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import InstructorAccountMenu from "@/components/instructor/InstructorAccountMenu";
 import { Button } from "@/components/ui/button";
 import {
     Sheet,
@@ -118,12 +115,7 @@ export default function MobileNavigation({
                         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain">
                             <div className="flex min-w-0 items-center gap-3 border-b pb-4">
                                 {profile?.role === "instructor" ? (
-                                    <InstructorAvatar
-                                        profile={{ id: profile.id, name, role }}
-                                        interactive={false}
-                                        showName={false}
-                                        avatarClassName="size-10"
-                                    />
+                                    <InstructorAccountMenu avatarClassName="size-10" />
                                 ) : (
                                     <Avatar className="size-10">
                                         <AvatarFallback>{initials}</AvatarFallback>
