@@ -487,6 +487,8 @@ Only instructors whose `employment_type` is explicitly `part_time` can read thei
 
 The `create_instructor_availability(expected_user, slot_date, slot_start, slot_end)` RPC derives ownership from the authenticated, linked part-time instructor account. `expected_user` is an account-switch check, not a caller-selected owner. Instructor writes enforce future times between 08:00 and 22:00 Singapore time, non-overlap with existing availability, and non-overlap with non-cancelled assigned events. Exact create retries return the existing slot only while employment access remains valid. The existing edit/delete RPC also checks current employment before returning a receipt, and a write trigger guards security-definer writes. Existing slots are retained if an instructor's employment changes, but become inaccessible to that instructor.
 
+The calendar now connects edits and confirmed deletions to `save_instructor_availability(request_id, expected_user, target_slot, write_kind, expected_record, new_value)`. The opening date/time snapshot is kept separate from refreshed query data, including database seconds. Lost responses retry the same request ID and payload. Conflicts offer a caller-scoped reload that updates the snapshot without discarding the draft. All cached availability/calendar ranges for the current account are invalidated after write attempts; old-account completions cannot affect a later login.
+
 ## Instructor read access
 
 `supabase/migrations/20261104120000_instructor_reads.sql` adds instructor read contracts without changing the tables or enums above:

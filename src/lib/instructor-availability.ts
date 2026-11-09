@@ -5,6 +5,7 @@ export type AvailabilitySlot = {
     date: Date;
     startTime: string;
     endTime: string;
+    snapshot?: { date: string; startTime: string; endTime: string };
 };
 export type AvailabilityRange = Omit<AvailabilitySlot, "id">;
 

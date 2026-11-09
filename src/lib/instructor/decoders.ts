@@ -6,7 +6,7 @@ import type {
   InstructorAvailabilityRow, Page, RosterEntry, StudentAttendanceSummary,
   StudentDetail, StudentDirectory, StudentEntry, StudentHistoryEntry, StudentRow,
   SyllabusItemRow, TechniqueSignOffEntry, TechniqueSignOffRow, AssessmentSnapshot, SessionSaveResult,
-  GradingBatch, GradingSignature,
+  GradingBatch, GradingSignature, AvailabilitySaveResult,
 } from './types'
 
 type Decoder<T> = (value: unknown) => T
@@ -185,6 +185,15 @@ export const decodeApplication = row<GradingApplicationRow>({
 export const decodeAvailability = row<InstructorAvailabilityRow>({
   id: uuid, instructor_id: instructorId, date: dateOnly, start_time: time, end_time: time,
 })
+export const decodeAvailabilitySnapshot = row({ date: dateOnly, startTime: time, endTime: time })
+
+export function decodeAvailabilitySave(value: unknown): AvailabilitySaveResult {
+  const result = row<AvailabilitySaveResult>({
+    requestId: uuid, slotId: uuid, kind: enumeration('update', 'delete'), slot: nullable(decodeAvailability),
+  })(value)
+  if (result.kind === 'update' ? result.slot?.id !== result.slotId : result.slot !== null) return invalid()
+  return result
+}
 const decodeSignOff = row<TechniqueSignOffRow>({
   id: uuid, student_id: studentId, syllabus_item_id: text, signed_off_at: timestamp,
   signed_off_by: nullable(instructorId), note: nullable(text),

@@ -81,7 +81,7 @@ The suite checks 320–430px views, role-based left Sheet navigation, the calend
 sticky-header clearance in short landscapes, single-day/two-day timeline positioning,
 second-day class/availability actions, the simplified List header, week paging, synthetic
 day-swipe handlers, Today, UUID drawer/history/focus, recorded attendance and read-only controls,
-availability creation/read-only existing slots, resizing, and short-landscape bounds. Header controls retain
+availability creation/editing/confirmed deletion, resizing, and short-landscape bounds. Header controls retain
 44px targets; the existing seven-column day grids are checked against their
 viewport-relative geometry, including Firefox's reserved scrollbar on narrow frames. Iframes
 provide exact CSS widths below Firefox's minimum headless window size. These
@@ -94,10 +94,16 @@ navigation, and account changes while a selection is open. The calendar follow-u
 also checks full-time/unspecified/unlinked accounts have no availability controls,
 records or reads, part-time availability access, pending availability saves, double-submit
 protection, failed-save draft retention and read-after-save refresh. Existing-slot
-availability edit/delete mutations remain disabled. Phase 10A enables the
+availability checks cover edit/delete persistence across reload at 320/390/1280px,
+deletion confirmation/cancellation, exact-request retries after lost update/delete
+responses, and conflict reload without losing the draft. Production mutations use
+the Supabase RPC; only `availability-persistence` fixture mode uses session storage.
+`tests/instructor-availability.test.mjs` validates API payloads/receipts and
+`tests/instructor-availability-access-db.test.mjs` verifies authorization, snapshots,
+retries and overlap/time rules against offline PostgreSQL. Phase 10A enables the
 existing present/absent/clear and bulk controls for scheduled timed sessions before
 their end. Past/completed/cancelled/untimed sessions and late/excused entries stay
-read-only; the existing-slot availability mutations remain a later checkpoint.
+read-only.
 
 The directory suite checks:
 

@@ -86,7 +86,8 @@ export function calendarTimeLabel(event: CalendarViewEvent, separator = ' – ')
 export function toCalendarAvailability(slot: InstructorAvailabilityRow): AvailabilitySlot {
   const date = parseCalendarDate(slot.date)
   if (!date) throw new InstructorDataError('invalid_data', 'The availability date is invalid.')
-  return { id: slot.id, date, startTime: slot.start_time.slice(0, 5), endTime: slot.end_time.slice(0, 5) }
+  return { id: slot.id, date, startTime: slot.start_time.slice(0, 5), endTime: slot.end_time.slice(0, 5),
+    snapshot: { date: slot.date, startTime: slot.start_time, endTime: slot.end_time } }
 }
 
 export function calendarRange(date: Date, view: 'day' | 'week' | 'month', desktop: boolean, mobileList: boolean) {

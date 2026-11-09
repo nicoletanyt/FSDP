@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
-import { useQueryClient } from "@tanstack/react-query";
 import {
     ChevronDown,
     ChevronLeft,
@@ -22,11 +21,8 @@ import { useMediaQuery } from "@/hooks/use-media-query";
 import { useInstructorCalendarRange, useInstructorSelectedEvent } from "@/hooks/use-instructor-class-queries";
 import { useInstructorPrefetch } from "@/hooks/use-instructor-prefetch";
 import { useAuth } from "@/hooks/use-auth";
-import { useInstructorApi } from "@/lib/instructor/data-context";
 import { needsCalendarEventLookup } from "@/lib/instructor/calendar-queries";
-import { invalidateAvailability } from "@/lib/instructor/cache-invalidation";
-import { queryGeneration } from "@/lib/query-generation";
-import { calendarClassStyle, calendarDateValue, calendarEventsForDate, calendarRange, calendarTimeLabel, rosterSizeLabel, singaporeClock } from "@/lib/instructor/calendar-view";
+import { calendarClassStyle, calendarEventsForDate, calendarRange, calendarTimeLabel, rosterSizeLabel, singaporeClock } from "@/lib/instructor/calendar-view";
 import type { CalendarEventsForDate, CalendarViewEvent as CalendarEvent } from "@/lib/instructor/calendar-view";
 import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
 import { Drawer, DrawerBody, DrawerClose, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
@@ -34,8 +30,8 @@ import MobileInstructorCalendar from "@/components/instructor/MobileInstructorCa
 import type { MobileCalendarView } from "@/components/instructor/MobileInstructorCalendar";
 import {
     AvailabilityCard,
-    AvailabilityDialog,
 } from "@/components/instructor/CalendarAvailability";
+import InstructorAvailabilityEditor from "@/components/instructor/InstructorAvailabilityEditor";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Kbd } from "@/components/ui/kbd";
@@ -511,11 +507,7 @@ function CalendarMonth({
 }
 
 export default function InstructorDashboard() {
-    const api = useInstructorApi();
-    const client = useQueryClient();
     const { session } = useAuth();
-    const active = useRef(true);
-    useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
     const isDesktop = useMediaQuery("(min-width: 1024px)");
     const [searchParams, setSearchParams] = useSearchParams();
     const [weekOverview, setWeekOverview] = useState(false);
@@ -650,20 +642,9 @@ export default function InstructorDashboard() {
         selectRange({ date: addDays(date, 1), startTime: "08:00", endTime: "08:30" });
     }
 
-    async function saveAvailability(range: AvailabilityRange) {
-        if (!canUseAvailability) throw new Error("Availability is only available to part-time instructors.");
-        const userId = session?.user.id;
-        const generation = queryGeneration(client);
-        let saved;
-        try {
-            saved = await api.createAvailability({ date: calendarDateValue(range.date),
-                startTime: range.startTime, endTime: range.endTime });
-        } finally {
-            if (userId) invalidateAvailability(client, generation, userId);
-        }
-        if (!active.current) return;
+    function availabilitySaved(range: AvailabilityRange, id: string | null) {
         updateSelection(range.date);
-        setSelectedAvailabilityId(saved.id);
+        setSelectedAvailabilityId(id);
         setAvailabilityDialog(null);
     }
 
@@ -1016,15 +997,14 @@ export default function InstructorDashboard() {
                     </DrawerBody>
                 </DrawerContent>
             </Drawer>}
-            {canUseAvailability && availabilityDialog && <AvailabilityDialog
-                key={`${availabilityDialog.editingId ?? "new"}-${dateKey(availabilityDialog.range.date)}-${availabilityDialog.range.startTime}`}
+            {canUseAvailability && availabilityDialog && <InstructorAvailabilityEditor
+                key={`${session?.user.id}-${availabilityDialog.editingId ?? "new"}-${dateKey(availabilityDialog.range.date)}-${availabilityDialog.range.startTime}`}
                 initial={availabilityDialog.range}
                 editingId={availabilityDialog.editingId}
                 slots={availability}
                 getEvents={getEvents}
                 onClose={() => setAvailabilityDialog(null)}
-                onSave={saveAvailability}
-                readOnly={Boolean(availabilityDialog.editingId)}
+                onSaved={availabilitySaved}
             />}
         </section>
     );

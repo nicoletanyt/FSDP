@@ -283,6 +283,20 @@ export interface AvailabilityInput {
   endTime: TimeOnly
 }
 
+export type AvailabilitySaveInput = {
+  requestId: string
+  expectedUserId: AuthUserId
+  slotId: string
+  expected: AvailabilityInput
+} & ({ kind: 'update'; value: AvailabilityInput } | { kind: 'delete'; value?: never })
+
+export interface AvailabilitySaveResult {
+  requestId: string
+  slotId: string
+  kind: 'update' | 'delete'
+  slot: InstructorAvailabilityRow | null
+}
+
 // Includes the project owner's live DDL additions, documented in the schema.
 export interface GradingEmailSendRow {
   id: string

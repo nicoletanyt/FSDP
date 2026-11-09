@@ -6,7 +6,7 @@ import {
   decodeHistoryEntry, decodePage, decodeRosterEntry, decodeStudentDetail,
   decodeSummary, decodeSyllabusItem, decodeTechniqueSignOff, array, decodeAttendanceSave, decodeAttendanceSnapshot,
   decodeSessionSave, decodeAssessmentSnapshot,
-  decodeGradingBatch, decodeGradingSignature,
+  decodeGradingBatch, decodeGradingSignature, decodeAvailabilitySave, decodeAvailabilitySnapshot,
 } from './decoders'
 import { InstructorDataError, toInstructorDataError } from './errors'
 import { createInstructorProfileApi } from './profile'
@@ -14,7 +14,7 @@ import { collectCalendarPages } from './page-collector'
 import type {
   AssessmentDetail, AssessmentKey, AttendanceSaveInput, AvailabilityInput, CalendarOptions, DirectoryOptions, EventId, HistoryOptions,
   InstructorIdentity, InstructorReferenceData, Page, PageOptions, StudentId, AssessmentSaveInput, SessionSaveInput,
-  GradingBatchKey, GradingBatchSaveInput,
+  GradingBatchKey, GradingBatchSaveInput, AvailabilitySaveInput,
 } from './types'
 
 // Inject the existing shared Supabase client at the provider boundary. This does
@@ -29,6 +29,15 @@ const rosterSelect = `*, student:students(${studentSelect})`
 
 function invalidRequest(message: string): never {
   throw new InstructorDataError('invalid_request', message)
+}
+
+function validateAvailability(input: AvailabilityInput) {
+  dateOnly(input.date)
+  const validTime = /^([01]\d|2[0-3]):[0-5]\d$/
+  if (!validTime.test(input.startTime) || !validTime.test(input.endTime)
+      || input.startTime < '08:00' || input.endTime > '22:00' || input.endTime <= input.startTime) {
+    invalidRequest('Choose a valid availability between 8 AM and 10 PM, Singapore time.')
+  }
 }
 
 function pagination(options: PageOptions = {}) {
@@ -365,16 +374,47 @@ export function createInstructorApi(client: InstructorClient) {
     },
 
     async createAvailability(input: AvailabilityInput) {
-      dateOnly(input.date)
-      const validTime = /^([01]\d|2[0-3]):[0-5]\d$/
-      if (!validTime.test(input.startTime) || !validTime.test(input.endTime)
-          || input.startTime < '08:00' || input.endTime > '22:00' || input.endTime <= input.startTime) {
-        invalidRequest('Choose a valid availability between 8 AM and 10 PM, Singapore time.')
-      }
+      validateAvailability(input)
       const account = await getInstructorAccount()
       return decodeAvailability(await rpc('create_instructor_availability', {
         expected_user: account.userId, slot_date: input.date, slot_start: input.startTime, slot_end: input.endTime,
       }, undefined, 'Unable to save your availability. Please try again.'))
+    },
+
+    async getAvailabilitySlot(id: string, signal?: AbortSignal) {
+      const slotId = parseEntityId(id, 'record')
+      const identity = await getCurrentInstructor(signal)
+      const data = await requestInstructorData(() => cancellable(client.from('instructor_availability').select('*')
+        .eq('id', slotId).eq('instructor_id', identity.instructorId), signal).maybeSingle<unknown>(),
+      'Unable to reload your availability. Please try again.', signal)
+      if (data === null) return null
+      const slot = decodeAvailability(data)
+      if (slot.id !== slotId || slot.instructor_id !== identity.instructorId) {
+        throw new InstructorDataError('invalid_data', 'The availability does not match the current instructor.')
+      }
+      return slot
+    },
+
+    async saveAvailability(input: AvailabilitySaveInput) {
+      const requestId = parseEntityId(input.requestId, 'record')
+      const slotId = parseEntityId(input.slotId, 'record')
+      const expectedUserId = parseEntityId(input.expectedUserId, 'auth-user')
+      if (input.kind !== 'update' && input.kind !== 'delete') invalidRequest('Choose a valid availability action.')
+      const expected = decodeAvailabilitySnapshot(input.expected)
+      if (input.kind === 'update') validateAvailability(input.value)
+      else if (input.value !== undefined) invalidRequest('Deletion has no new availability value.')
+      const account = await getInstructorAccount()
+      if (account.userId !== expectedUserId) throw new InstructorDataError('forbidden', 'Your account changed. Reopen availability before trying again.')
+      const saved = decodeAvailabilitySave(await rpc('save_instructor_availability', {
+        request_id: requestId, expected_user: expectedUserId, target_slot: slotId, write_kind: input.kind,
+        expected_record: expected, new_value: input.kind === 'update' ? input.value : null,
+      }, undefined, 'Unable to save your availability. Please retry.'))
+      if (saved.requestId !== requestId || saved.slotId !== slotId || saved.kind !== input.kind
+          || (input.kind === 'update' && (!saved.slot || saved.slot.date !== input.value.date
+            || saved.slot.start_time !== `${input.value.startTime}:00` || saved.slot.end_time !== `${input.value.endTime}:00`))) {
+        throw new InstructorDataError('invalid_data', 'The availability receipt does not match your changes. Retry to confirm the saved record.')
+      }
+      return saved
     },
 
     async getStudents(options: DirectoryOptions = {}) {
