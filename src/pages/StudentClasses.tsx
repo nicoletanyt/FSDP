@@ -8,8 +8,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   UsersRound,
-  Coins, // 👈 新增图标
-  AlertCircle
+  Coins // 👈 新增图标
 } from 'lucide-react'
 import { Button } from '@/components/student/button'
 import {

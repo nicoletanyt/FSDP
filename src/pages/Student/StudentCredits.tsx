@@ -56,7 +56,7 @@ export default function StudentCredits() {
     }
   }, [])
 
-  const handlePurchase = async (planId: string, creditsToAdd: number, price: number) => {
+  const handlePurchase = async (planId: string, creditsToAdd: number) => {
     setLoading(planId)
     setTimeout(() => {
       addCredits(creditsToAdd)
@@ -142,7 +142,7 @@ export default function StudentCredits() {
 
             {/* 右侧按钮 */}
             <Button
-              onClick={() => handlePurchase(plan.id, plan.credits, plan.price)}
+              onClick={() => handlePurchase(plan.id, plan.credits)}
               disabled={loading !== null}
               className={`w-full sm:w-auto px-8 h-11 rounded-xl font-bold transition-all ${
                 plan.popular
