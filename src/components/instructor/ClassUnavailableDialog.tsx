@@ -4,7 +4,7 @@ import { CircleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
     AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-    AlertDialogDescription, AlertDialogFooter, AlertDialogHeader,
+    AlertDialogFooter, AlertDialogHeader,
     AlertDialogMedia, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useAuth } from "@/hooks/use-auth";
@@ -12,7 +12,7 @@ import { supabase } from "@/lib/supabase";
 
 type RequestStatus = { id: string };
 
-export default function ClassUnavailableDialog({ eventId, eventName }: { eventId: string; eventName: string }) {
+export default function ClassUnavailableDialog({ eventId }: { eventId: string }) {
     const { session } = useAuth();
     const [open, setOpen] = useState(false);
     const [pending, setPending] = useState(false);
@@ -60,15 +60,11 @@ export default function ClassUnavailableDialog({ eventId, eventName }: { eventId
             <AlertDialogTrigger render={<Button variant="destructive" className="min-h-11 w-full" disabled={status.isPending || status.isError} />}>
                 I’m unavailable
             </AlertDialogTrigger>
-            <AlertDialogContent>
-                <AlertDialogHeader>
-                    <AlertDialogMedia className="bg-destructive/10 text-destructive"><CircleAlert aria-hidden="true" /></AlertDialogMedia>
-                    <AlertDialogTitle>Report unavailable for this class?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                        Your request will be recorded for the admin to review. Your class assignment will not change yet; other instructors will not be contacted now.
-                    </AlertDialogDescription>
+            <AlertDialogContent className="data-[size=default]:sm:max-w-md">
+                <AlertDialogHeader className="flex flex-row items-center justify-start gap-3 text-left">
+                    <AlertDialogMedia className="mb-0 shrink-0 bg-destructive/10 text-destructive"><CircleAlert aria-hidden="true" /></AlertDialogMedia>
+                    <AlertDialogTitle className="translate-y-1">Report unavailable for this class?</AlertDialogTitle>
                 </AlertDialogHeader>
-                <p className="font-medium wrap-break-word">{eventName}</p>
                 {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
                 <AlertDialogFooter>
                     <AlertDialogCancel className="min-h-11" disabled={pending}>Cancel</AlertDialogCancel>

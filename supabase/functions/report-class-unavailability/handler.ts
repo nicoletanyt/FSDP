@@ -4,9 +4,7 @@ const uuid = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i
 const email = /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/
 // Temporary exact origin for local phone testing, as in nfc-check-in.
 const httpTestOrigin = 'http://192.168.1.13:5173'
-// Temporary: admin opens the alert on the same computer running Vite.
-// Replace with the deployed admin app origin before sending real alerts.
-const adminEmailLinkOrigin = 'http://localhost:5173'
+const adminEmailLinkOrigin = 'https://fsdp-kappa.vercel.app'
 
 type CoverRequest = {
   id: string; event_id: string; notification_status: 'pending' | 'sending' | 'accepted' | 'failed'

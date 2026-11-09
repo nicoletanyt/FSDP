@@ -212,7 +212,7 @@ export default function ClassSessionDetails({
                     storedEvent?.event_type === "class" && storedEvent.status === "scheduled" &&
                     storedEvent.starts_at && new Date(storedEvent.starts_at).getTime() > Date.now() && (
                     <div className="shrink-0 px-3 pt-3 pb-2">
-                        <ClassUnavailableDialog key={dialogContext} eventId={event.id} eventName={event.name} />
+                        <ClassUnavailableDialog key={dialogContext} eventId={event.id} />
                     </div>
                 )}
                 {!summary && (
