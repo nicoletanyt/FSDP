@@ -19,7 +19,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useAuth } from "@/hooks/use-auth";
 import { useInstructorAttendance } from "@/hooks/use-instructor-attendance";
 import { parseEntityId } from "@/lib/instructor/adapters";
-import { attendanceEditable, editableAttendanceRows } from "@/lib/instructor/attendance";
+import { attendanceEditable, editableAttendanceRows, lessonNotEnded } from "@/lib/instructor/attendance";
 import { rosterAttendance } from "@/lib/instructor/calendar-view";
 import { studentDetailsHref } from "@/lib/instructor-calendar";
 import type { CalendarViewEvent as CalendarEvent } from "@/lib/instructor/calendar-view";
@@ -161,7 +161,7 @@ export default function ClassSessionDetails({
     const record = Object.fromEntries(entries.map(entry => [entry.record.student_id, {
         attendance: rosterAttendance(entry.record, startsAt),
     }]));
-    const [, setNow] = useState(() => new Date());
+    const [now, setNow] = useState(() => new Date());
     useEffect(() => {
         const timer = window.setInterval(() => setNow(new Date()), 60_000);
         return () => window.clearInterval(timer);
@@ -208,7 +208,7 @@ export default function ClassSessionDetails({
                 hidden={summary && !expanded}
                 className={cn(fillHeight && (!summary || expanded) && "lg:flex lg:min-h-0 lg:flex-1 lg:flex-col")}
             >
-                {expanded && profile?.role === "instructor" && (
+                {expanded && profile?.role === "instructor" && lessonNotEnded(storedEvent ? storedEvent.ends_at : event.endsAt, now) && (
                     <div className="shrink-0 px-3 pt-3 pb-2">
                         <ClassUnavailableDialog key={dialogContext} eventName={event.name} />
                     </div>
