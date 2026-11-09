@@ -42,11 +42,20 @@ node --test tests/mobile-responsive/attendance.test.mjs
 node --test tests/mobile-responsive/profile.test.mjs
 node --test tests/mobile-responsive/session-saves.test.mjs
 node --test tests/mobile-responsive/chatbot.test.mjs
+node --test tests/mobile-responsive/nfc.test.mjs
 ```
 
 Use `FSDP_BASE_URL` and `WEBDRIVER_URL` if those services run elsewhere. The
 WebDriver service must be free to create a new session. Run the suites
 sequentially when sharing a driver.
+
+The NFC suite simulates Android Chrome 89+, tablets, Edge, missing Web NFC,
+old Chrome, iPhones and insecure contexts without using real NFC hardware or
+calling Supabase. It checks ready/QR-only states, the compatible-device list,
+QR navigation, layout at 320–1280px, and that unsupported devices never submit
+captured tags. Physical NFC hardware and whether it is enabled cannot be reliably
+detected without starting a scan; production checks Android, Web NFC API exposure
+and a secure context before displaying readiness.
 
 The grading-page suite covers per-instructor batch drafts, a complete persisted
 student/technique matrix, automatic resume after reload, editable signed submissions, account
