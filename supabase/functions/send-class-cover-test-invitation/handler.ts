@@ -2,8 +2,9 @@ import { createClient } from 'npm:@supabase/supabase-js@2.118.0'
 
 const uuid = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i
 const testEmail = /^[^\s@,;<>]+@example(?:\.test)?\.com$/i
-// Temporary test-only destination; replace before real instructor invitations.
-const confirmationOrigin = 'http://localhost:5173'
+// Invitations remain test-only, but the confirmation link opens the deployed app.
+const confirmationOrigin = 'https://fsdp-kappa.vercel.app'
+const localTestOrigin = 'http://localhost:5173'
 
 function requireEnv(name: string): string {
   const value = Deno.env.get(name)?.trim()
@@ -12,7 +13,7 @@ function requireEnv(name: string): string {
 }
 
 function headersFor(request: Request) {
-  const origins = [requireEnv('APP_URL'), ...(Deno.env.get('AUTH_ALLOWED_ORIGINS') ?? '').split(','), confirmationOrigin, 'http://192.168.1.13:5173']
+  const origins = [requireEnv('APP_URL'), ...(Deno.env.get('AUTH_ALLOWED_ORIGINS') ?? '').split(','), confirmationOrigin, localTestOrigin, 'http://192.168.1.13:5173']
     .filter(Boolean).map(value => new URL(value.trim()).origin)
   const origin = request.headers.get('origin')
   return {
@@ -36,7 +37,7 @@ function related<T>(value: T | T[] | null): T | null {
   return Array.isArray(value) ? value[0] ?? null : value
 }
 
-export function invitationCopy(event: Details, instructor: Instructor, adminEmail: string, confirmationUrl: string) {
+export function invitationCopy(event: Details, instructor: Instructor, confirmationUrl: string) {
   const date = new Date(event.starts_at).toLocaleDateString('en-SG', {
     timeZone: 'Asia/Singapore', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
   })
@@ -46,17 +47,18 @@ export function invitationCopy(event: Details, instructor: Instructor, adminEmai
   const email_subject = `[Cover Test] Cover request: ${event.name} — ${date}`
   const email_body = `Hi ${instructor.first_name} ${instructor.last_name},
 
-Could you cover the following TEST class?
+You have been requested to cover the following class as the assigned instructor is unavailable.
 
 Class: ${event.name}
 Date: ${date}
 Time: ${time(event.starts_at)}–${time(event.ends_at)} (Singapore time)
 Dojo: ${related(event.centres)?.name ?? 'Dojo not recorded'}
 
-To respond, sign in as ${instructor.email} and accept or decline here:
-${confirmationUrl}
+Please confirm your availability by accepting or declining the request through the link below.
 
-The link alone does not grant access. This is a test invitation only; the class is not reassigned until a valid acceptance is confirmed. For questions, contact ${adminEmail}.
+Respond to Cover Request: ${confirmationUrl}
+
+Thank you for your support.
 
 Aikido Shinju-Kai`
   return { email_subject, email_body }
@@ -103,7 +105,6 @@ export async function handleRequest(request: Request): Promise<Response> {
       event.status !== 'scheduled' || new Date(event.starts_at).getTime() <= Date.now() || !testEmail.test(instructor.email)) {
       return Response.json({ error: 'Test class or recipient is unavailable.' }, { status: 409, headers })
     }
-    const adminEmail = requireEnv('ADMIN_UNAVAILABILITY_EMAIL')
     if (action === 'preview') return Response.json({ error: 'Preview is no longer available.' }, { status: 410, headers })
 
     const template = Deno.env.get('EMAILJS_TEMPLATE_ID')?.trim()
@@ -117,7 +118,7 @@ export async function handleRequest(request: Request): Promise<Response> {
     })
     if (reserveError || !invitationId) return Response.json({ error: 'Invitation already recorded or no longer eligible. Check send history before trying again.' }, { status: 409, headers })
     const confirmationUrl = `${confirmationOrigin}/instructor/calendar?cover=${invitationId}`
-    const copy = invitationCopy(event as Details, instructor as Instructor, adminEmail, confirmationUrl)
+    const copy = invitationCopy(event as Details, instructor as Instructor, confirmationUrl)
     const { error: copyError } = await db.from('class_cover_test_invitations')
       .update({ ...copy, updated_at: new Date().toISOString() }).eq('id', invitationId).eq('status', 'sending')
     if (copyError) throw copyError // Claimed; do not send if the audit copy cannot be saved.

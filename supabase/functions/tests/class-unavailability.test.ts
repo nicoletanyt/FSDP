@@ -86,7 +86,7 @@ Deno.test('class-cover request emails admin once, and retry returns recorded sta
       assert.equal(body.template_params.instructor_name, 'Test Instructor')
       assert.equal(body.template_params.class_name, 'Evening class')
       const calendarLink = new URL(body.template_params.admin_calendar_url)
-      assert.equal(calendarLink.origin, 'http://localhost:5173')
+      assert.equal(calendarLink.origin, 'https://fsdp-kappa.vercel.app')
       assert.equal(calendarLink.pathname, '/admin/calendar')
       assert.equal(calendarLink.searchParams.get('session'), `${eventId}:2099-11-08`)
       return new Response(providerRejects ? 'The user_id is invalid; suroul29@gmail.com private-key-dont-store-this' : 'OK', { status: providerRejects ? 403 : 200 })
