@@ -1,5 +1,5 @@
 import { lazy } from 'react'
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router'
+import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router'
 import { GuestRoute, InstructorIndexRedirect, ProtectedRoute } from '@/components/auth/AuthGate'
 import NfcTagCapture from '@/components/instructor/NfcTagCapture'
 import FloatingChatbot from '@/components/FloatingChatbot'
@@ -19,7 +19,7 @@ const AdminOverview = lazy(() => import('./pages/admin/Overview'))
 const AdminCentres = lazy(() => import('./pages/admin/Centres'))
 const AdminStudentDetail = lazy(() => import('./pages/admin/StudentDetail'))
 const AdminAttendance = lazy(() => import('./pages/admin/Attendance'))
-const AdminAttendanceRegister = lazy(() => import('./pages/admin/AttendanceRegister'))
+const AdminAttendanceRegister = lazy(() => import('./pages/admin/LiveAttendanceRegister'))
 const AdminAttendanceRecords = lazy(() => import('./pages/admin/AttendanceRecords'))
 const AdminAttendanceMonitoring = lazy(() => import('./pages/admin/AttendanceMonitoring'))
 const AdminGrading = lazy(() => import('./pages/admin/Grading'))
@@ -50,6 +50,11 @@ const InstructorCheckIn = lazy(() => import('./pages/Instructor/InstructorCheckI
 const NfcCheckIn = lazy(() => import('./pages/Instructor/NfcCheckIn'))
 const InstructorStudentDetails = lazy(() => import('./pages/Instructor/InstructorStudentDetails'))
 const InstructorGradingSession = lazy(() => import('./pages/Instructor/InstructorGradingSession'))
+
+function LegacyCoverInvitationRedirect() {
+  const { invitationId } = useParams()
+  return <Navigate to={`/instructor/calendar?cover=${encodeURIComponent(invitationId ?? '')}`} replace />
+}
 
 export default function App() {
   return (
@@ -91,6 +96,7 @@ export default function App() {
                 <Route path="calendar" element={<InstructorDashboard />} />
                 <Route path="students" element={<InstructorStudents />} />
                 <Route path="check-in" element={<InstructorCheckIn />} />
+                <Route path="cover/:invitationId" element={<LegacyCoverInvitationRedirect />} />
                 <Route path="nfc_checkin" element={<NfcCheckIn />} />
                 <Route path="students/:studentId" element={<InstructorStudentDetails />} />
                 <Route path="reports/:eventId" element={<Navigate to="/instructor/calendar" replace />} />

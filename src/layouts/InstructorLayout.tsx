@@ -15,6 +15,12 @@ export type InstructorOutletContext = {
 
 const instructorApi = createInstructorApi(supabase)
 
+function withoutCoverParam(search: string) {
+  const params = new URLSearchParams(search)
+  params.delete('cover')
+  return params.size ? `?${params}` : ''
+}
+
 export default function InstructorLayout() {
   const { pathname, search } = useLocation()
   const injectedApi = useContext(InstructorApiContext)
@@ -44,11 +50,11 @@ export default function InstructorLayout() {
   }
 
   useEffect(() => {
-    if (isCalendar) setCalendarSearch(search)
+    if (isCalendar) setCalendarSearch(withoutCoverParam(search))
   }, [isCalendar, search])
 
   const calendarTo = isCalendar
-    ? `/instructor/calendar${search}`
+    ? `/instructor/calendar${withoutCoverParam(search)}`
     : contextSession ? `/instructor/calendar?${contextParams}` : `/instructor/calendar${calendarSearch}`
 
   return (

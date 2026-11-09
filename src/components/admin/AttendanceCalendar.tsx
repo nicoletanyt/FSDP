@@ -8,6 +8,7 @@ import {
   Users,
 } from 'lucide-react'
 import AttendanceClassDetails from '@/components/admin/AttendanceClassDetails'
+import LiveClassDetails from '@/components/admin/LiveClassDetails'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import type { AdminCalendarEvent } from '@/lib/admin/attendance-calendar'
@@ -86,7 +87,7 @@ export function EventCard({
             ? `attendance-details-${event.id}`
             : undefined
         }
-        aria-label={`${event.name}, ${fullDate(event.date)}, ${formatTime(event.startTime)} to ${formatTime(event.endTime)}, ${event.centreName}, ${event.roster.length} students. ${expanded ? 'Collapse' : 'Expand'} session attendance`}
+        aria-label={`${event.name}, ${fullDate(event.date)}, ${formatTime(event.startTime)} to ${formatTime(event.endTime)}, ${event.centreName}, ${event.rosterCount ?? event.roster.length} students. ${expanded ? 'Collapse' : 'Expand'} session details`}
         className={cn(
           'h-auto w-full shrink-0 flex-col items-stretch gap-3 rounded-lg p-3 text-left whitespace-normal text-inherit hover:bg-foreground/5 hover:text-inherit aria-expanded:text-inherit focus-visible:-outline-offset-2',
           showSummary && 'p-4',
@@ -142,20 +143,22 @@ export function EventCard({
           </span>
         )}
 
+        {event.liveDetails?.unavailability?.status === 'open' &&
+          <span className="w-fit rounded-md border border-destructive/30 bg-destructive/10 px-2 py-1 text-xs font-medium text-destructive">
+            Cover needed
+          </span>}
+
         <span className="flex items-center gap-1.5 text-2xs font-normal opacity-80">
           <Users aria-hidden="true" className="size-3 shrink-0" />
-          {event.roster.length}{' '}
-          {event.roster.length === 1 ? 'student' : 'students'}
+          {event.rosterCount ?? event.roster.length}{' '}
+          {(event.rosterCount ?? event.roster.length) === 1 ? 'student' : 'students'}
         </span>
       </Button>
 
       {!detailsInPanel &&
         (layout === 'panel' ? (
-          <AttendanceClassDetails
-            event={event}
-            focusStudentId={focusStudentId}
-            fillHeight
-          />
+          event.liveDetails ? <LiveClassDetails event={event} fillHeight /> :
+            <AttendanceClassDetails event={event} focusStudentId={focusStudentId} fillHeight />
         ) : (
           <div
             id={`attendance-details-${event.id}`}
@@ -169,10 +172,8 @@ export function EventCard({
             )}
           >
             <div className="min-h-0 overflow-hidden">
-              <AttendanceClassDetails
-                event={event}
-                focusStudentId={focusStudentId}
-              />
+              {event.liveDetails ? <LiveClassDetails event={event} /> :
+                <AttendanceClassDetails event={event} focusStudentId={focusStudentId} />}
             </div>
           </div>
         ))}
@@ -475,7 +476,7 @@ function CalendarMonth({
                     <Button
                       key={event.id}
                       variant="ghost"
-                      title={`${event.name} · ${formatTime(event.startTime)} · ${event.roster.length} students`}
+                       title={`${event.name} · ${formatTime(event.startTime)} · ${event.rosterCount ?? event.roster.length} students`}
                       aria-label={`${event.name}, ${fullDate(day)}, ${formatTime(event.startTime)} to ${formatTime(event.endTime)}. ${selected ? 'Collapse' : 'Expand'} session attendance`}
                       aria-expanded={selected}
                       aria-pressed={selected}
@@ -771,8 +772,8 @@ function CalendarTimeline({
                               {item.instructorName}
                             </span>
                             <span className="min-w-0 truncate">
-                              {item.roster.length}{' '}
-                              {item.roster.length === 1
+                              {item.rosterCount ?? item.roster.length}{' '}
+                              {(item.rosterCount ?? item.roster.length) === 1
                                 ? 'student'
                                 : 'students'}
                             </span>

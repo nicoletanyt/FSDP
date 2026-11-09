@@ -14,6 +14,7 @@ import {
     Users,
 } from "lucide-react";
 import ClassSessionDetails from "@/components/instructor/ClassSessionDetails";
+import CoverInvitationDialog from "@/components/instructor/CoverInvitationDialog";
 import DayClassDetails from "@/components/instructor/DayClassDetails";
 import SelectedClassIndicator from "@/components/instructor/SelectedClassIndicator";
 import CalendarTimeline from "@/components/instructor/CalendarTimeline";
@@ -1026,6 +1027,13 @@ export default function InstructorDashboard() {
                 onSave={saveAvailability}
                 readOnly={Boolean(availabilityDialog.editingId)}
             />}
+            {searchParams.has("cover") && <CoverInvitationDialog key={searchParams.get("cover") ?? ""}
+                invitationId={searchParams.get("cover") ?? ""}
+                onClose={() => setSearchParams(previous => {
+                    const next = new URLSearchParams(previous);
+                    next.delete("cover");
+                    return next;
+                }, { replace: true })} />}
         </section>
     );
 }
