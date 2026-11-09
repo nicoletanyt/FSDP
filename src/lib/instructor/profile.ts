@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { InstructorIdentity } from './types'
+import type { GradeRow, InstructorIdentity } from './types'
 import { InstructorDataError, toInstructorDataError } from './errors'
 
 export const INSTRUCTOR_PHOTO_BUCKET = 'instructor-photos'
@@ -12,6 +12,7 @@ export interface InstructorProfileDetails {
   employmentType: 'part_time' | 'full_time' | null
   photoPath: string | null
   photoUrl: string | null
+  grade: GradeRow | null
 }
 
 type ProfileClient = Pick<SupabaseClient, 'from' | 'rpc'> & Partial<Pick<SupabaseClient, 'storage'>>
@@ -57,7 +58,7 @@ export function createInstructorProfileApi(client: ProfileClient,
     async getProfile(expectedUserId: string, signal?: AbortSignal): Promise<InstructorProfileDetails> {
       try {
         const identity = await identityFor(expectedUserId, signal)
-        const publicQuery = client.from('instructors').select('profile_picture_url, employment_type')
+        const publicQuery = client.from('instructors').select('profile_picture_url, employment_type, grade:grades(id, label, colour, is_ranked, sort_order)')
           .eq('id', identity.instructorId)
         const privateQuery = client.from('instructor_private_details').select('address')
           .eq('instructor_id', identity.instructorId)
@@ -75,7 +76,7 @@ export function createInstructorProfileApi(client: ProfileClient,
         signal?.throwIfAborted()
         return { instructorId: identity.instructorId, userId: identity.userId,
           address: privateResult.data?.address ?? null, employmentType: row.employment_type,
-          photoPath: row.profile_picture_url, photoUrl: url }
+          photoPath: row.profile_picture_url, photoUrl: url, grade: (row.grade as unknown as GradeRow | null) ?? null }
       } catch (error) {
         throw toInstructorDataError(error, 'Unable to load your profile. Please try again.')
       }

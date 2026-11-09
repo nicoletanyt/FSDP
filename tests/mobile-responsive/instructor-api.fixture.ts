@@ -10,14 +10,15 @@ import type { CalendarEntry, CentreRow, EventId, Page, PageOptions, RosterEntry,
 import { createDirectoryFixtureReader } from './instructor-directory.fixture'
 import { createDetailFixtureReads } from './instructor-detail.fixture'
 import { createGradingFixtureReads } from './instructor-grading.fixture'
+import { createGradingBatchFixture } from './instructor-grading-batches.fixture'
 import { createSessionFixtureReads } from './instructor-session.fixture'
 import { createSessionWriteFixture } from './instructor-session-writes.fixture'
 import { attendanceEditable, attendanceSnapshot, editableAttendanceRows } from '../../src/lib/instructor/attendance'
-import type { AttendanceSaveInput, AttendanceSaveResult, EventStudentRow } from '../../src/lib/instructor/types'
+import type { AttendanceSaveInput, AttendanceSaveResult, AvailabilitySaveInput, AvailabilitySaveResult, EventStudentRow } from '../../src/lib/instructor/types'
 import type { InstructorProfileDetails } from '../../src/lib/instructor/profile'
 
 declare global {
-  interface Window { attendanceRequestsFixture: AttendanceSaveInput[]; profileWriteRequestsFixture: string[]; availabilityReadsFixture: number; availabilityWritesFixture: number }
+  interface Window { attendanceRequestsFixture: AttendanceSaveInput[]; profileWriteRequestsFixture: string[]; availabilityReadsFixture: number; availabilityWritesFixture: number; availabilityRequestsFixture: AvailabilitySaveInput[] }
 }
 
 const uuid = (number: number) => `00000000-0000-4000-8000-${String(number).padStart(12, '0')}`
@@ -78,7 +79,17 @@ export function createCalendarFixtureApi(account = 'audit'): InstructorApi {
   let calendarFailed = false
   let rosterFailed = false
   let availabilityFailed = false
-  const savedSlots: InstructorAvailabilityRow[] = []
+  const availabilityStorageKey = `test-only-availability:${account}`
+  const initialSlots = mode === 'empty' || mode === 'unlinked' || account !== 'audit' ? [] : mockAvailability(today).map((slot, index) => ({
+    id: uuid(50 + index), instructor_id: instructorId,
+    date: dateInputValue(slot.date), start_time: `${slot.startTime}:00`, end_time: `${slot.endTime}:00`,
+  }))
+  const savedSlots: InstructorAvailabilityRow[] = mode === 'availability-persistence'
+    ? JSON.parse(sessionStorage.getItem(availabilityStorageKey) ?? 'null') ?? initialSlots : initialSlots
+  const availabilityReceipts = new Map<string, AvailabilitySaveResult>()
+  const persistAvailability = () => {
+    if (mode === 'availability-persistence') sessionStorage.setItem(availabilityStorageKey, JSON.stringify(savedSlots))
+  }
   const largeRoster = mode === 'large-roster' || mode === 'attendance-large'
   const storageKey = `test-only-attendance:${account}`
   const attendanceRows = new Map<string, EventStudentRow>(mode === 'attendance-persistence' ? JSON.parse(sessionStorage.getItem(storageKey) ?? '[]') : [])
@@ -99,6 +110,7 @@ export function createCalendarFixtureApi(account = 'audit'): InstructorApi {
   window.profileWriteRequestsFixture = []
   window.availabilityReadsFixture = 0
   window.availabilityWritesFixture = 0
+  window.availabilityRequestsFixture = []
   let profileFailed = false
   let addressFailed = false
   let photoFailed = false
@@ -151,6 +163,7 @@ export function createCalendarFixtureApi(account = 'audit'): InstructorApi {
     ...createDetailFixtureReads(account, mode, sessionWrites), ...createGradingFixtureReads(account, mode),
     ...createSessionFixtureReads(mode, (...args) => api.getEvent(...args), (...args) => api.getRoster(...args), sessionWrites),
     ...sessionWrites.methods,
+    ...createGradingBatchFixture(account, mode, () => api),
     async saveAttendance(input) {
       attendanceRequests.push(structuredClone(input))
       await new Promise(resolve => setTimeout(resolve, mode === 'attendance-slow' ? 1600 : 150))
@@ -229,7 +242,7 @@ export function createCalendarFixtureApi(account = 'audit'): InstructorApi {
       return page(entries, options)
     },
     async getEvent(id) {
-      if (mode === 'empty' || mode === 'unlinked' || account !== 'audit') return null
+      if (mode === 'empty' || mode === 'unlinked' || (account !== 'audit' && !mode?.startsWith('batch-'))) return null
       if (id === uuid(8800)) return dateOnlyGrading(mode === 'date-only-released')
       const item = findEvent(id)
       if (item && (mode === 'attendance-cancelled' || mode === 'assessment-cancelled' || endedDuringSave)) return { ...item, event: { ...item.event, status: endedDuringSave ? 'completed' : 'cancelled' } }
@@ -237,12 +250,44 @@ export function createCalendarFixtureApi(account = 'audit'): InstructorApi {
     },
     async getAvailability(options) {
       window.availabilityReadsFixture++
-      const initialSlots = mode === 'empty' || mode === 'unlinked' || account !== 'audit' ? [] : mockAvailability(today).map((slot, index) => ({
-        id: uuid(50 + index), instructor_id: instructorId,
-        date: dateInputValue(slot.date), start_time: `${slot.startTime}:00`, end_time: `${slot.endTime}:00`,
-      }))
-      const slots = [...initialSlots, ...savedSlots].filter(slot => slot.date >= options.from && slot.date < options.to)
+      const slots = savedSlots.filter(slot => slot.date >= options.from && slot.date < options.to)
       return page(slots, options)
+    },
+    async getAvailabilitySlot(id) {
+      if (profileDetails.employmentType !== 'part_time') return null
+      return savedSlots.find(slot => slot.id === id) ?? null
+    },
+    async saveAvailability(input) {
+      window.availabilityWritesFixture++
+      window.availabilityRequestsFixture.push(structuredClone(input))
+      if (profileDetails.employmentType !== 'part_time') throw new InstructorDataError('forbidden', 'Availability is only available to part-time instructors.')
+      if (input.expectedUserId !== uuid(account === 'audit' ? 90001 : 90002)) throw new InstructorDataError('forbidden', 'Account changed.')
+      await new Promise(resolve => setTimeout(resolve, 150))
+      const receipt = availabilityReceipts.get(input.requestId)
+      if (receipt) return receipt
+      const index = savedSlots.findIndex(slot => slot.id === input.slotId)
+      if (index < 0) throw new InstructorDataError('conflict', 'This availability was removed. Reload the saved record.')
+      if (mode === 'availability-conflict' && !availabilityFailed) {
+        availabilityFailed = true
+        savedSlots[index] = { ...savedSlots[index], end_time: '10:30:00' }
+      }
+      const original = savedSlots[index]
+      if (input.expected.date !== original.date || input.expected.startTime.slice(0, 5) !== original.start_time.slice(0, 5)
+          || input.expected.endTime.slice(0, 5) !== original.end_time.slice(0, 5)) {
+        throw new InstructorDataError('conflict', 'This availability changed. Reload the saved record; your draft is kept.')
+      }
+      const slot = input.kind === 'update' ? { ...original, date: input.value.date,
+        start_time: `${input.value.startTime}:00`, end_time: `${input.value.endTime}:00` } : null
+      if (slot) savedSlots[index] = slot
+      else savedSlots.splice(index, 1)
+      const result = { requestId: input.requestId, slotId: input.slotId, kind: input.kind, slot }
+      availabilityReceipts.set(input.requestId, result)
+      persistAvailability()
+      if (mode === 'availability-lost-response' && !availabilityFailed) {
+        availabilityFailed = true
+        throw new InstructorDataError('request_failed', 'The availability response was lost.')
+      }
+      return result
     },
     async createAvailability(input) {
       window.availabilityWritesFixture++
@@ -257,6 +302,7 @@ export function createCalendarFixtureApi(account = 'audit'): InstructorApi {
       const saved = { id: uuid(500 + savedSlots.length), instructor_id: instructorId, date: input.date,
         start_time: `${input.startTime}:00`, end_time: `${input.endTime}:00` }
       savedSlots.push(saved)
+      persistAvailability()
       return saved
     },
     async getRoster(id, options = {}) {
@@ -307,7 +353,7 @@ export function createCalendarFixtureApi(account = 'audit'): InstructorApi {
       const session = await api.getEvent(id, signal)
       if (!session) throw new InstructorDataError('forbidden', 'This session is no longer assigned to your account.')
       const entries = await collectCalendarPages(options => api.getRoster(id, options), item => item.record.student_id, signal)
-      return { session, entries }
+      return { session, entries, canEditAttendance: account === 'audit' }
     },
   }
   return api

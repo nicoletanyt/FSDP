@@ -207,6 +207,59 @@ function httpClient(handler, { instructorRecord = instructor } = {}) {
 }
 
 const eventId = '00000000-0000-4000-8000-000000000006'
+const batchExample = {
+  id: '00000000-0000-4000-8000-000000000099', event_id: eventId, instructor_id: instructorId,
+  track: 'adult', target_grade_id: 'database-grade', status: 'draft', version: 1,
+  signature: null, submitted_at: null, updated_at: '2026-11-08T00:00:00Z',
+  students: [{ student_id: studentId, candidate_number: 1, name: 'Stored student', notes: null }],
+  items: [{ syllabus_item_id: 'stored-technique', category: 'Basics', label: 'Stored technique', sort_order: 1 }],
+  results: [{ student_id: studentId, syllabus_item_id: 'stored-technique', checked: false }],
+}
+
+test('batch reads are account scoped and validate a complete normalized matrix', async () => {
+  const group = { eventId, track: 'adult', gradeId: 'database-grade' }
+  const client = httpClient(async (request,url) => {
+    assert.equal(url.pathname, '/rest/v1/rpc/get_instructor_grading_batch')
+    assert.deepEqual(await request.json(), { target_event: eventId, target_track: 'adult', target_grade: 'database-grade' })
+    return Response.json(batchExample)
+  })
+  assert.equal((await client.api.getGradingBatch(group)).results[0].checked, false)
+  assert.equal(await httpClient(async () => Response.json(null)).api.getGradingBatch(group),null)
+  for (const value of [{ ...batchExample,instructor_id:otherUserId },{ ...batchExample,results:[] },{ ...batchExample,status:'voided' }]) {
+    await assert.rejects(httpClient(async () => Response.json(value)).api.getGradingBatch(group),{code:'invalid_data'})
+  }
+})
+
+test('latest grading lookup is scoped to the instructor and event before restoring a saved group', async () => {
+  const client=httpClient(async (request,url) => {
+    assert.equal(url.pathname,'/rest/v1/rpc/get_latest_instructor_grading_batch')
+    assert.deepEqual(await request.json(),{target_event:eventId})
+    return Response.json(batchExample)
+  })
+  assert.deepEqual(await client.api.getLatestGradingBatch(eventId),batchExample)
+  assert.equal(await httpClient(async () => Response.json(null)).api.getLatestGradingBatch(eventId),null)
+  for(const value of [{...batchExample,instructor_id:otherUserId},{...batchExample,event_id:otherUserId}]) {
+    await assert.rejects(httpClient(async () => Response.json(value)).api.getLatestGradingBatch(eventId),{code:'invalid_data'})
+  }
+})
+
+test('batch saves send exact versions, signatures and immutable cell payloads and reject mismatched responses', async () => {
+  const input = { eventId, track:'adult', gradeId:'database-grade', requestId:batchExample.id,
+    expectedUserId:userId, expectedVersion:0, cells:batchExample.results, submit:false, signature:null }
+  const client = httpClient(async (request,url) => {
+    assert.equal(url.pathname,'/rest/v1/rpc/save_instructor_grading_batch')
+    const body=await request.json()
+    assert.equal(body.expected_user,userId); assert.equal(body.expected_version,0)
+    assert.deepEqual(body.cells,batchExample.results); assert.equal(body.examiner_signature,null)
+    return Response.json(batchExample)
+  })
+  assert.equal((await client.api.saveGradingBatch(input)).version,1)
+  const wrong=httpClient(async () => Response.json({...batchExample,results:batchExample.results.map(c=>({...c,checked:true}))}))
+  await assert.rejects(wrong.api.saveGradingBatch(input),{code:'invalid_data'})
+  const before=client.requests.length
+  await assert.rejects(client.api.saveGradingBatch({...input,expectedUserId:otherUserId}),{code:'forbidden'})
+  assert.equal(client.requests.slice(before).some(r=>r.url.includes('/rpc/')),false)
+})
 const metadata = { created_at: instructor.created_at, updated_at: instructor.updated_at }
 const centre = { id: centreId, name: 'Live dojo', short_name: 'live', address: '', timezone: 'Asia/Singapore', status: 'active', capacity: null, ...metadata }
 const grade = { id: 'unranked', label: 'Unranked', colour: null, is_ranked: false, sort_order: 0 }
@@ -251,7 +304,7 @@ test('each attendance load verifies ownership once, follows all pages and reject
   ]
   const { api, requests, client } = httpClient(async (_request, url) => {
     if (url.pathname === '/rest/v1/events') {
-      assert.equal(url.searchParams.get('instructor_id'), `eq.${instructorId}`)
+      assert.equal(url.searchParams.get('or'), `(instructor_id.eq.${instructorId},event_type.eq.grading)`)
       return Response.json(assigned ? calendarEntry : null)
     }
     assert.equal(url.pathname, '/rest/v1/event_students')
@@ -527,7 +580,9 @@ test('calendar RPC decodes date-only grading metadata and rejects wrong-account 
   assert.equal(response.items[0].event.starts_at, null)
   assert.equal(response.items[0].grading.grading_date, '2026-11-05')
   assert.equal(response.items[0].grading.reporting_time, null)
-  for (const invalid of [page([dateOnlyEntry], 4, 0, 1), page([{ ...dateOnlyEntry, instructor_id: otherUserId }], 4, 3, 1)]) {
+  const shared = await httpClient(async () => Response.json(page([{ ...dateOnlyEntry, instructor_id: otherUserId }], 4, 3, 1))).api.getCalendar(options)
+  assert.equal(shared.items[0].event.instructor_id, otherUserId)
+  for (const invalid of [page([dateOnlyEntry], 4, 0, 1), page([{ ...calendarEntry, instructor_id: otherUserId }], 4, 3, 1)]) {
     await assert.rejects(httpClient(async () => Response.json(invalid)).api.getCalendar(options), { code: 'invalid_data' })
   }
 })

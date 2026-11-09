@@ -74,6 +74,27 @@ test('instructor profile fields and private addresses (offline PostgreSQL)', asy
 
     await migrate('20261108062206_instructor_profile_fields.sql')
     await migrate('20261108064635_instructor_profile_editing.sql')
+    await migrate('20261108161141_instructor_grades.sql')
+
+    await suite.test('instructor grades are assigned atomically from trusted account metadata', async () => {
+      await db.query("insert into public.grades(id,label,colour,is_ranked,sort_order) values ('test-instructor-grade','Test instructor grade','black',true,999)")
+      const newUser = uuid(20)
+      await db.query('insert into auth.users(id,email,raw_app_meta_data) values ($1,$2,$3)',
+        [newUser, 'graded@example.test', JSON.stringify({ role: 'instructor', instructor_grade_id: 'test-instructor-grade' })])
+      const { rows } = await db.query('select grade_id from public.instructors where user_id=$1', [newUser])
+      assert.equal(rows[0].grade_id, 'test-instructor-grade')
+      const old = await db.query('select grade_id from public.instructors where user_id=$1', [ids.instructor])
+      assert.equal(old.rows[0].grade_id, null)
+      await assert.rejects(() => db.query('insert into auth.users(id,email,raw_app_meta_data) values ($1,$2,$3)',
+        [uuid(21), 'invalid-grade@example.test', JSON.stringify({ role: 'instructor', instructor_grade_id: 'missing' })]),
+      error => error.code === '23503')
+      const rejected = await db.query('select id from auth.users where id=$1', [uuid(21)])
+      assert.equal(rejected.rows.length, 0)
+      const updated = await asAccount(ids.instructor, () => db.query("update public.instructors set grade_id='test-instructor-grade' where id=$1 returning id", [instructor]))
+      assert.equal(updated.rows.length, 0)
+      await db.query('delete from public.instructors where user_id=$1', [newUser])
+      await db.query('delete from auth.users where id=$1', [newUser])
+    })
 
     await suite.test('existing instructors are preserved with unspecified new fields', async () => {
       const { rows } = await db.query('select id,user_id,created_at from public.instructors order by user_id')

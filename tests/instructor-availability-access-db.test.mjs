@@ -95,6 +95,54 @@ test('only part-time instructors can read or write availability (offline Postgre
       await assert.rejects(() => asAccount(users.part, () => create(users.part, '07:00', '08:00')), error => error.code === 'PAV03')
     })
 
+    await suite.test('updates return authoritative receipts and exact retries do not apply the change twice', async () => {
+      const slot = (await db.query('select id from public.instructor_availability where instructor_id=$1', [instructors.part])).rows[0].id
+      const expected = { date, startTime: '09:00:00', endTime: '10:00:00' }
+      const desired = { date, startTime: '11:00', endTime: '12:00' }
+      await asAccount(users.part, async () => {
+        const first = await save(uuid(210), users.part, slot, 'update', expected, desired)
+        const retry = await save(uuid(210), users.part, slot, 'update', expected, desired)
+        assert.deepEqual(retry.rows, first.rows)
+        assert.equal(first.rows[0].saved.slot.start_time, '11:00:00')
+        assert.equal(first.rows[0].saved.slot.end_time, '12:00:00')
+        assert.equal(first.rows[0].saved.slot.instructor_id, instructors.part)
+        const stored = await db.query('select start_time,end_time from public.instructor_availability where id=$1', [slot])
+        assert.deepEqual(stored.rows[0], { start_time: '11:00:00', end_time: '12:00:00' })
+      })
+      for (const kind of ['update', 'delete']) {
+        await assert.rejects(() => asAccount(users.part, () => save(uuid(211), users.part, slot, kind,
+          { ...expected, endTime: '10:30:00' }, kind === 'update' ? desired : null)), error => error.code === 'PAV05')
+        await assert.rejects(() => asAccount(users.peer, () => save(uuid(212), users.peer, slot, kind,
+          expected, kind === 'update' ? desired : null)), error => error.code === '42501')
+        await assert.rejects(() => asAccount(users.full, () => save(uuid(213), users.full, slot, kind,
+          expected, kind === 'update' ? desired : null)), error => error.code === 'PAV06')
+      }
+      await assert.rejects(() => asAccount(users.part, async () => {
+        await save(uuid(214), users.part, slot, 'update', expected, desired)
+        await save(uuid(214), users.part, slot, 'update', expected, { ...desired, endTime: '12:30' })
+      }), error => error.code === 'PAV05')
+    })
+
+    await suite.test('updates enforce slot/event overlaps, Singapore bounds and future times', async () => {
+      const slot = (await db.query('select id from public.instructor_availability where instructor_id=$1', [instructors.part])).rows[0].id
+      const expected = { date, startTime: '09:00', endTime: '10:00' }
+      await assert.rejects(() => asAccount(users.part, async () => {
+        await create(users.part)
+        await save(uuid(220), users.part, slot, 'update', expected, { date, startTime: '16:30', endTime: '17:30' })
+      }), error => error.code === 'PAV01')
+      for (const desired of [
+        { date, startTime: '07:00', endTime: '08:00' },
+        { date, startTime: '21:00', endTime: '22:30' },
+        { date: '2000-01-01', startTime: '11:00', endTime: '12:00' },
+      ]) await assert.rejects(() => asAccount(users.part, () => save(uuid(221), users.part, slot, 'update', expected, desired)), error => error.code === 'PAV03')
+      await db.query('insert into public.centres(id,name,short_name) values ($1,$2,$3)', [uuid(230), 'Availability test dojo', 'availability-test'])
+      await db.query(`insert into public.events(id,event_type,centre_id,instructor_id,name,starts_at,ends_at)
+        values ($1,'class',$2,$3,'Assigned class',($4::date+time '18:00') at time zone 'Asia/Singapore',($4::date+time '19:00') at time zone 'Asia/Singapore')`,
+      [uuid(231), uuid(230), instructors.part, date])
+      await assert.rejects(() => asAccount(users.part, () => save(uuid(222), users.part, slot, 'update', expected,
+        { date, startTime: '18:30', endTime: '19:30' })), error => error.code === 'PAV02')
+    })
+
     await suite.test('full-time, unset and unlinked instructors cannot create or retrieve an old exact-slot retry', async () => {
       for (const name of ['full', 'unset', 'unlinked']) {
         await assert.rejects(() => asAccount(users[name], () => create(users[name])), error => error.code === 'PAV06', name)

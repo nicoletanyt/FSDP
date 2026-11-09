@@ -12,6 +12,10 @@ export function attendanceEditable(event: EventRow, now = new Date()) {
     && timestampMilliseconds(event.ends_at) > now.getTime()
 }
 
+export function lessonNotEnded(endsAt: string | null, now = new Date()) {
+  return endsAt === null || timestampMilliseconds(endsAt) > now.getTime()
+}
+
 export function editableAttendanceRows(entries: RosterEntry[], startsAt: string | null) {
   return entries.filter(entry => !['late', 'excused'].includes(rosterAttendance(entry.record, startsAt)))
 }
