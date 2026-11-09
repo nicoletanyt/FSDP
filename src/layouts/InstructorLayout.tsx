@@ -15,6 +15,12 @@ export type InstructorOutletContext = {
 
 const instructorApi = createInstructorApi(supabase)
 
+function withoutCoverParam(search: string) {
+  const params = new URLSearchParams(search)
+  params.delete('cover')
+  return params.size ? `?${params}` : ''
+}
+
 export default function InstructorLayout() {
   const { pathname, search } = useLocation()
   const injectedApi = useContext(InstructorApiContext)
@@ -22,7 +28,6 @@ export default function InstructorLayout() {
   const [params] = useSearchParams()
   const isCalendar = pathname === '/instructor/calendar' || pathname === '/instructor/dashboard'
   const isCheckIn = pathname === '/instructor/check-in'
-  const isCoverInvitation = pathname.startsWith('/instructor/cover/')
   const isStudentDirectory = /^\/instructor\/students\/?$/.test(pathname)
   const isStudentDetails = /^\/instructor\/students\/[^/]+\/?$/.test(pathname)
   const isStudentPage = isStudentDirectory || isStudentDetails
@@ -45,18 +50,18 @@ export default function InstructorLayout() {
   }
 
   useEffect(() => {
-    if (isCalendar) setCalendarSearch(search)
+    if (isCalendar) setCalendarSearch(withoutCoverParam(search))
   }, [isCalendar, search])
 
   const calendarTo = isCalendar
-    ? `/instructor/calendar${search}`
+    ? `/instructor/calendar${withoutCoverParam(search)}`
     : contextSession ? `/instructor/calendar?${contextParams}` : `/instructor/calendar${calendarSearch}`
 
   return (
     <InstructorApiContext.Provider value={injectedApi ?? instructorApi}>
     <div className={cn('flex flex-col bg-muted/30 text-foreground', isCalendar ? 'min-h-dvh lg:h-dvh lg:overflow-hidden' : isCheckIn ? 'min-h-dvh md:h-dvh md:overflow-hidden' : 'min-h-dvh', isKiosk && 'h-dvh min-h-0 overflow-hidden')}>
       {!isKiosk && <InstructorNavigation calendarTo={calendarTo} contentWidthClassName={isCheckIn ? stationWidth : isCalendar ? calendarWidth : isStudentPage ? studentNavigationWidth : undefined} />}
-      <main className={cn('mx-auto p-6 max-lg:p-6 lg:px-0 lg:py-6', contentWidthClassName, isCalendar ? 'flex flex-col lg:min-h-0 lg:flex-1' : isCheckIn ? 'flex min-h-0 flex-1 flex-col lg:py-3' : isCoverInvitation ? 'flex flex-1 flex-col justify-center lg:py-8' : 'lg:py-8', isKiosk && 'w-full max-w-none p-0 lg:p-0')}>
+      <main className={cn('mx-auto p-6 max-lg:p-6 lg:px-0 lg:py-6', contentWidthClassName, isCalendar ? 'flex flex-col lg:min-h-0 lg:flex-1' : isCheckIn ? 'flex min-h-0 flex-1 flex-col lg:py-3' : 'lg:py-8', isKiosk && 'w-full max-w-none p-0 lg:p-0')}>
         <Suspense fallback={<InstructorSkeleton variant={routeSkeleton} />}>
           <Outlet key={session?.user.id} context={{ isKiosk, setIsKiosk } satisfies InstructorOutletContext} />
         </Suspense>

@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import { useParams, Link } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { CircleCheck } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useAuth } from '@/hooks/use-auth'
 import { supabase } from '@/lib/supabase'
 
@@ -30,8 +30,7 @@ const messages: Record<Invitation['state'], string> = {
   closed: 'This class is no longer open for cover.',
 }
 
-export default function InstructorCoverInvitation() {
-  const { invitationId } = useParams()
+export default function CoverInvitationDialog({ invitationId, onClose }: { invitationId: string; onClose: () => void }) {
   const { session } = useAuth()
   const queryClient = useQueryClient()
   const [pending, setPending] = useState(false)
@@ -45,7 +44,7 @@ export default function InstructorCoverInvitation() {
       const { data, error: fetchError } = await supabase.rpc('get_class_cover_test_invitation', { target_invitation: invitationId! })
       if (fetchError) throw fetchError
       return data as Invitation | null
-    }, retry: false, staleTime: 0,
+    }, retry: false, staleTime: 0, refetchInterval: pending ? false : 5_000,
   })
 
   async function decide(response: 'accept' | 'decline') {
@@ -75,11 +74,16 @@ export default function InstructorCoverInvitation() {
     }
   }
 
-  return <div className="mx-auto w-full max-w-2xl space-y-5">
-    <Link to="/instructor/calendar" className="text-sm text-primary underline underline-offset-4">Back to calendar</Link>
-    <Card>
-      <CardHeader><CardTitle>Class cover invitation</CardTitle></CardHeader>
-      <CardContent className="space-y-5">
+  const covered = invitation.data?.state === 'covered' ||
+    (invitation.data?.state === 'open' && outcome === messages.covered)
+
+  return <Dialog open onOpenChange={open => { if (!open && !pending) onClose() }}>
+    <DialogContent showCloseButton={!pending} className="sm:max-w-lg">
+      <DialogHeader>
+        <DialogTitle>Class cover invitation</DialogTitle>
+        <DialogDescription>{covered ? 'No response is needed.' : 'Review this test invitation before responding.'}</DialogDescription>
+      </DialogHeader>
+      <div className="space-y-5">
         {!valid && <Alert variant="destructive"><AlertDescription>This invitation link is invalid.</AlertDescription></Alert>}
         {valid && invitation.isPending && <p role="status">Loading invitation…</p>}
         {valid && invitation.isError && <Alert variant="destructive"><AlertTitle>Unable to load invitation</AlertTitle>
@@ -95,15 +99,24 @@ export default function InstructorCoverInvitation() {
             <dt className="text-muted-foreground">Time:</dt><dd>{time.format(new Date(invitation.data.starts_at))} – {time.format(new Date(invitation.data.ends_at))} SGT</dd>
             <dt className="text-muted-foreground">Dojo:</dt><dd>{invitation.data.centre_name}</dd>
           </dl>
-          <p role="status" className="text-sm">{messages[invitation.data.state]}</p>
-          {invitation.data.state === 'open' && <div className="flex flex-wrap gap-3">
-            <Button disabled={pending} onClick={() => void decide('accept')}>{pending ? 'Confirming…' : 'Accept cover'}</Button>
-            <Button variant="outline" disabled={pending} onClick={() => void decide('decline')}>Decline</Button>
-          </div>}
+          {covered ? <Alert className="border-success/30 bg-success/10 text-foreground">
+            <CircleCheck className="text-success" aria-hidden="true" />
+            <AlertTitle>Already covered</AlertTitle>
+            <AlertDescription className="text-foreground">
+              <span className="block">Another instructor has taken this class.</span>
+              <span className="block">Your invitation is closed.</span>
+            </AlertDescription>
+          </Alert> : <p role="status" className="text-sm">{messages[invitation.data.state]}</p>}
         </>}
-        {outcome && outcome !== messages[invitation.data?.state ?? 'open'] && <p role="status" className="text-sm">{outcome}</p>}
+        {outcome && !covered && outcome !== messages[invitation.data?.state ?? 'open'] && <p role="status" className="text-sm">{outcome}</p>}
         {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
-      </CardContent>
-    </Card>
-  </div>
+      </div>
+      <DialogFooter>
+        {invitation.data?.state === 'open' && !covered ? <>
+          <Button variant="outline" disabled={pending} onClick={() => void decide('decline')}>Decline</Button>
+          <Button disabled={pending} onClick={() => void decide('accept')}>{pending ? 'Confirming…' : 'Accept cover'}</Button>
+        </> : <Button variant="outline" disabled={pending} onClick={onClose}>Close</Button>}
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
 }

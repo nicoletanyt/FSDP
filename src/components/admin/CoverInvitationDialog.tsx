@@ -25,9 +25,12 @@ async function sendInvitation(eventId: string, instructorId: string) {
 const classTime = (value: string) => new Date(value).toLocaleTimeString('en-SG', {
   timeZone: 'Asia/Singapore', hour: 'numeric', minute: '2-digit', hour12: true,
 })
+const classDate = (value: string) => new Date(value).toLocaleDateString('en-SG', {
+  timeZone: 'Asia/Singapore', day: 'numeric', month: 'short', year: 'numeric',
+})
 
-export default function CoverInvitationDialog({ eventId, className, startsAt, endsAt, studentCount, recipients }: {
-  eventId: string; className: string; startsAt: string; endsAt: string; studentCount: number; recipients: Recipient[]
+export default function CoverInvitationDialog({ eventId, className, startsAt, endsAt, recipients }: {
+  eventId: string; className: string; startsAt: string; endsAt: string; recipients: Recipient[]
 }) {
   const [open, setOpen] = useState(false)
   const [selected, setSelected] = useState<string[]>(() => recipients.map(person => person.instructor_id))
@@ -81,9 +84,11 @@ export default function CoverInvitationDialog({ eventId, className, startsAt, en
       </AlertDialogTrigger>
       <AlertDialogContent className="sm:max-w-xl">
         <AlertDialogHeader>
-          <AlertDialogTitle>Request cover · test invitations</AlertDialogTitle>
+          <AlertDialogTitle>Request cover</AlertDialogTitle>
           <AlertDialogDescription>
-            {className} · {classTime(startsAt)} – {classTime(endsAt)} SGT · {studentCount} {studentCount === 1 ? 'student' : 'students'}
+            <span className="block"><span className="font-medium text-foreground">Class:</span> {className}</span>
+            <span className="block"><span className="font-medium text-foreground">Date:</span> {classDate(startsAt)}</span>
+            <span className="block"><span className="font-medium text-foreground">Time:</span> {classTime(startsAt)} – {classTime(endsAt)}</span>
           </AlertDialogDescription>
         </AlertDialogHeader>
         <fieldset className="space-y-2" disabled={sending}>
@@ -100,7 +105,7 @@ export default function CoverInvitationDialog({ eventId, className, startsAt, en
         <AlertDialogFooter>
           <AlertDialogCancel disabled={sending}>Cancel</AlertDialogCancel>
           <AlertDialogAction disabled={sending || !current.length || !recordedInvitations.isSuccess} onClick={() => void send()}>
-            {sending ? 'Sending…' : `Send ${current.length} test ${current.length === 1 ? 'invitation' : 'invitations'}`}
+            {sending ? 'Sending…' : `Send ${current.length} ${current.length === 1 ? 'invitation' : 'invitations'}`}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

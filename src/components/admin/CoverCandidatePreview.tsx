@@ -19,8 +19,8 @@ type NearbyInstructor = {
   distance_km: number
 }
 
-export default function CoverCandidatePreview({ eventId, className, startsAt, endsAt, studentCount }: {
-  eventId: string; className: string; startsAt: string; endsAt: string; studentCount: number
+export default function CoverCandidatePreview({ eventId, className, startsAt, endsAt }: {
+  eventId: string; className: string; startsAt: string; endsAt: string
 }) {
   const preview = useQuery({
     queryKey: ['admin', 'cover-candidates', eventId, 'available'],
@@ -69,7 +69,7 @@ export default function CoverCandidatePreview({ eventId, className, startsAt, en
       </li>)}
     </ul>}
     {preview.isSuccess && <CoverInvitationDialog eventId={eventId} className={className}
-      startsAt={startsAt} endsAt={endsAt} studentCount={studentCount} recipients={preview.data} />}
+      startsAt={startsAt} endsAt={endsAt} recipients={preview.data} />}
     <footer className="mt-auto border-t border-foreground/10 pt-3 text-xs text-muted-foreground">
       © <a className="underline underline-offset-2" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a>
     </footer>

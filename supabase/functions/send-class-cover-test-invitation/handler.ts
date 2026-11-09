@@ -1,7 +1,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0'
 
 const uuid = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i
-const testEmail = /^[^\s@,;<>]+@example\.com$/i
+const testEmail = /^[^\s@,;<>]+@example(?:\.test)?\.com$/i
 // Temporary test-only destination; replace before real instructor invitations.
 const confirmationOrigin = 'http://localhost:5173'
 
@@ -116,7 +116,7 @@ export async function handleRequest(request: Request): Promise<Response> {
       target_event: event_id, target_instructor: instructor_id,
     })
     if (reserveError || !invitationId) return Response.json({ error: 'Invitation already recorded or no longer eligible. Check send history before trying again.' }, { status: 409, headers })
-    const confirmationUrl = `${confirmationOrigin}/instructor/cover/${invitationId}`
+    const confirmationUrl = `${confirmationOrigin}/instructor/calendar?cover=${invitationId}`
     const copy = invitationCopy(event as Details, instructor as Instructor, adminEmail, confirmationUrl)
     const { error: copyError } = await db.from('class_cover_test_invitations')
       .update({ ...copy, updated_at: new Date().toISOString() }).eq('id', invitationId).eq('status', 'sending')

@@ -28,7 +28,7 @@ test('only an invited linked instructor can decide; first valid acceptance wins 
         select exists(select 1 from public.users where id=auth.uid() and role='administrator') $$;
       grant usage on schema public,auth to authenticated; grant execute on function auth.uid() to authenticated;
     `)
-    for (const file of ['20261108181922_class_cover_demo_locations.sql','20261108190452_class_cover_test_invitations.sql','20261108192742_class_cover_test_decisions.sql'])
+    for (const file of ['20261108181922_class_cover_demo_locations.sql','20261108190452_class_cover_test_invitations.sql','20261108192742_class_cover_test_decisions.sql','20261109051434_cover_invitation_covered_status.sql'])
       await db.exec(await readFile(new URL(`../supabase/migrations/${file}`,import.meta.url),'utf8'))
     await db.query(`insert into public.users values ($1,'administrator'),($2,'instructor'),($3,'instructor'),($4,'instructor'),($5,'instructor')`,[id(1),id(2),id(3),id(4),id(5)])
     for (const [n,u,email,employment] of [[10,2,'benone@example.com','full_time'],[11,3,'bentwo@example.com','part_time'],[12,4,'benthree@example.com','full_time'],[13,5,'stranger@gmail.com','full_time']])
@@ -83,6 +83,7 @@ test('only an invited linked instructor can decide; first valid acceptance wins 
     assert.equal((await get(32)).rows[0].detail.state,'accepted')
     await as(3)
     assert.equal((await decide(31,'accept')).rows[0].result,'declined')
+    assert.equal((await get(31)).rows[0].detail.state,'covered')
     await as(4)
     assert.equal((await get(31)).rows[0].detail,null)
     await db.exec('reset role')

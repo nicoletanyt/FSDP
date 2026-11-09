@@ -23,7 +23,7 @@ export default function LiveClassDetails({ event, fillHeight = false }: {
         <dt className="text-muted-foreground">Students</dt><dd>{event.rosterCount ?? 0}</dd>
       </dl>
       {details.unavailability?.status === 'open' && <CoverCandidatePreview eventId={details.eventId} className={event.name}
-        startsAt={details.startsAt} endsAt={details.endsAt} studentCount={event.rosterCount ?? 0} />}
+        startsAt={details.startsAt} endsAt={details.endsAt} />}
     </div>
   )
 }

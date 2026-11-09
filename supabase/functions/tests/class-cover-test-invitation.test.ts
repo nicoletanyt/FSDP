@@ -10,11 +10,11 @@ Deno.test('test invitation copy links to an authenticated confirmation, not auto
   const copy = invitationCopy({ id: eventId, name: '[Cover Test] Weekday 3 PM', centre_id: 'x',
     starts_at: '2099-11-09T07:00:00Z', ends_at: '2099-11-09T08:00:00Z', status: 'scheduled',
     centres: { name: 'Bukit Timah Dojo' } },
-  { id: instructorId, first_name: 'Ben', last_name: 'Two', email: 'bentwo@example.com' }, 'suroul29@gmail.com', `http://localhost:5173/instructor/cover/${invitationId}`)
+  { id: instructorId, first_name: 'Ben', last_name: 'Two', email: 'bentwo@example.com' }, 'suroul29@gmail.com', `http://localhost:5173/instructor/calendar?cover=${invitationId}`)
   assert.match(copy.email_subject, /Cover request/)
   assert.match(copy.email_body, /Ben Two/)
   assert.match(copy.email_body, /Bukit Timah Dojo/)
-  assert.match(copy.email_body, new RegExp(`http://localhost:5173/instructor/cover/${invitationId}`))
+  assert.match(copy.email_body, new RegExp(`http://localhost:5173/instructor/calendar\\?cover=${invitationId}`))
   assert.match(copy.email_body, /link alone does not grant access/)
 })
 
@@ -29,6 +29,7 @@ Deno.test('preview never sends, send reserves once, and rejected attempt stays t
   let reservations = 0
   let providerRejects = false
   let providerTimesOut = false
+  let recipientEmail = 'bentwo@example.com'
   let status = 'sending'
   globalThis.fetch = async (input,init) => {
     const req = new Request(input,init)
@@ -41,7 +42,7 @@ Deno.test('preview never sends, send reserves once, and rejected attempt stays t
     }
     if (req.url.includes('/rest/v1/events?')) return Response.json({ id:eventId,name:'[Cover Test] Weekday 3 PM',centre_id:'test',
       starts_at:'2099-11-09T07:00:00Z',ends_at:'2099-11-09T08:00:00Z',status:'scheduled',centres:{name:'Bukit Timah Dojo'} })
-    if (req.url.includes('/rest/v1/instructors?')) return Response.json({ id:instructorId,first_name:'Ben',last_name:'Two',email:'bentwo@example.com' })
+    if (req.url.includes('/rest/v1/instructors?')) return Response.json({ id:instructorId,first_name:'Ben',last_name:'Two',email:recipientEmail })
     if (req.url.includes('/rest/v1/class_cover_test_invitations?')) {
       const updated = await req.json()
       if (updated.status) status = updated.status
@@ -51,10 +52,10 @@ Deno.test('preview never sends, send reserves once, and rejected attempt stays t
       sends++
       const payload = await req.json()
       assert.equal(payload.template_id,'template_test')
-      assert.equal(payload.template_params.to_email,'bentwo@example.com')
+      assert.equal(payload.template_params.to_email,recipientEmail)
       assert.match(payload.template_params.email_subject,/Cover request/)
       assert.match(payload.template_params.email_body,/test invitation/i)
-      assert.match(payload.template_params.email_body, new RegExp(`instructor/cover/${invitationId}`))
+      assert.match(payload.template_params.email_body, new RegExp(`instructor/calendar\\?cover=${invitationId}`))
       if (providerTimesOut) throw new Error('Network response unknown')
       return new Response(providerRejects ? 'sensitive: suroul29@gmail.com' : 'OK',{status:providerRejects ? 400 : 200})
     }
@@ -77,6 +78,7 @@ Deno.test('preview never sends, send reserves once, and rejected attempt stays t
     assert.equal(sends,1)
     providerRejects = true
     reservations = 0
+    recipientEmail = 'benten@example.test.com'
     const failed = await handleRequest(request('send'))
     assert.equal((await failed.json()).status,'failed')
     assert.equal(status,'failed')
