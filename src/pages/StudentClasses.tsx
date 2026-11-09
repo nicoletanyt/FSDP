@@ -6,10 +6,9 @@ import {
   Clock3,
   MapPin,
   SlidersHorizontal,
-  Sparkles,
   UsersRound
 } from 'lucide-react'
-import { Button } from '@/components/student/button'
+import { Button, buttonVariants } from '@/components/student/button'
 import {
   Card,
   CardContent,
@@ -18,15 +17,11 @@ import {
 } from '@/components/ui/card'
 import type { StudentContext } from '@/layouts/StudentLayout'
 import {
-  beltRanks,
   dateTime,
   formatTime,
-  isEligible,
-  isRecommended,
   prettyDate
 } from '@/lib/student-schedule'
 import type {
-  BeltRank,
   ClassOffering
 } from '@/lib/student-schedule'
 
@@ -56,7 +51,6 @@ export default function StudentClasses() {
   const [period, setPeriod] = useState('all')
   const [instructor, setInstructor] = useState('all')
   const [showAdvanced, setShowAdvanced] = useState(false)
-  const [showAllLevels, setShowAllLevels] = useState(false)
   const [selected, setSelected] = useState<Record<string, string>>({})
   const [action, setAction] = useState<Action | null>(null)
   const [message, setMessage] = useState('')
@@ -70,7 +64,7 @@ export default function StudentClasses() {
         const hour = Number(c.startTime.slice(0, 2))
 
         return (
-          dateTime(c).getTime() > Date.now() &&
+          c.scheduled && dateTime(c).getTime() > Date.now() &&
           (centre === 'all' || c.centre === centre) &&
           (day === 'all' || c.date.getDay() === Number(day)) &&
           (instructor === 'all' || c.instructor === instructor) &&
@@ -79,8 +73,7 @@ export default function StudentClasses() {
             (period === 'morning' && hour < 12) ||
             (period === 'afternoon' && hour >= 12 && hour < 17) ||
             (period === 'evening' && hour >= 17)
-          ) &&
-          (showAllLevels || isEligible(c, schedule.belt))
+          )
         )
       }),
     [
@@ -88,9 +81,7 @@ export default function StudentClasses() {
       centre,
       day,
       instructor,
-      period,
-      showAllLevels,
-      schedule.belt
+      period
     ]
   )
 
@@ -111,20 +102,19 @@ export default function StudentClasses() {
     setDay('all')
     setPeriod('all')
     setInstructor('all')
-    setShowAllLevels(false)
   }
 
-  function confirm() {
+  async function confirm() {
     if (!action) return
 
     const { kind, session } = action
 
     const error =
       kind === 'enroll'
-        ? schedule.enroll(session)
+        ? await schedule.enroll(session)
         : kind === 'waitlist'
-          ? schedule.joinWaitlist(session)
-          : (schedule.leaveWaitlist(session.id), null)
+          ? await schedule.joinWaitlist(session)
+          : await schedule.leaveWaitlist(session.id)
 
     setMessage(
       error ??
@@ -132,8 +122,8 @@ export default function StudentClasses() {
         kind === 'enroll'
           ? `Enrolled in ${session.title} on ${prettyDate(session.date)}.`
           : kind === 'waitlist'
-            ? 'You joined the demo waitlist. Joining does not guarantee a class spot. An administrator would email you if a space becomes available and is allocated to you; email notifications are not yet connected.'
-            : 'You have left the demo waitlist.'
+            ? 'You joined the waitlist. Check the timetable for an available spot.'
+            : 'You have left the waitlist.'
       )
     )
 
@@ -153,13 +143,10 @@ export default function StudentClasses() {
           </p>
         </div>
 
-        <Button
-          variant="outline"
-          render={<Link to="/attendance" />}
-        >
+        <Link to="/attendance" className={buttonVariants({ variant: 'outline' })}>
           <CalendarDays className="size-4" />
           My schedule
-        </Button>
+        </Link>
       </div>
 
       <Card className="gap-3">
@@ -167,7 +154,7 @@ export default function StudentClasses() {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <CardTitle>Find a class</CardTitle>
             <span className="text-xs text-muted-foreground">
-              Demo belt: {schedule.belt}
+              {schedule.grade ? `Current grade: ${schedule.grade}` : 'Student membership'}
             </span>
           </div>
         </CardHeader>
@@ -206,20 +193,6 @@ export default function StudentClasses() {
               </select>
             </label>
 
-            <label className="space-y-1 text-sm">
-              <span>My belt level (demo)</span>
-              <select
-                className={input}
-                value={schedule.belt}
-                onChange={e =>
-                  schedule.setBelt(e.target.value as BeltRank)
-                }
-              >
-                {beltRanks.map(b => (
-                  <option key={b}>{b}</option>
-                ))}
-              </select>
-            </label>
           </div>
 
           <button
@@ -267,16 +240,6 @@ export default function StudentClasses() {
                 </select>
               </label>
 
-              <label className="flex items-center gap-2 self-end pb-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={showAllLevels}
-                  onChange={e =>
-                    setShowAllLevels(e.target.checked)
-                  }
-                />
-                Show classes above my belt level
-              </label>
             </div>
           )}
 
@@ -316,7 +279,6 @@ export default function StudentClasses() {
             const booked = schedule.isBooked(current.id)
             const waitlisted = schedule.isWaitlisted(current.id)
             const full = schedule.isFull(current)
-            const eligible = isEligible(current, schedule.belt)
 
             const available = Math.max(
               0,
@@ -333,12 +295,6 @@ export default function StudentClasses() {
                       {first.title}
                     </CardTitle>
 
-                    {isRecommended(current, schedule.belt) && (
-                      <span className="flex items-center gap-1 rounded-full bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
-                        <Sparkles className="size-3" />
-                        Recommended
-                      </span>
-                    )}
                   </div>
 
                   <p className="text-xs text-muted-foreground">
@@ -363,7 +319,7 @@ export default function StudentClasses() {
 
                     <span className="flex items-center gap-2">
                       <UsersRound className="size-4" />
-                      {full
+                      {!current.bookable ? 'Online booking unavailable' : full
                         ? 'Fully booked'
                         : `${available} of ${current.capacity} slots left`}
                     </span>
@@ -387,7 +343,7 @@ export default function StudentClasses() {
                       {sessions.slice(0, 12).map(c => (
                         <option key={c.id} value={c.id}>
                           {prettyDate(c.date)} ·{' '}
-                          {schedule.isFull(c)
+                          {!c.bookable ? 'Online booking unavailable' : schedule.isFull(c)
                             ? 'Full'
                             : `${Math.max(
                                 0,
@@ -398,17 +354,12 @@ export default function StudentClasses() {
                     </select>
                   </label>
 
-                  {!eligible && (
-                    <p className="text-xs text-destructive">
-                      This class requires a higher belt level.
-                    </p>
-                  )}
 
                   {booked ? (
                     <Button className="w-full" disabled>
                       Already enrolled
                     </Button>
-                  ) : waitlisted ? (
+                  ) : waitlisted && full ? (
                     <Button
                       className="w-full"
                       variant="outline"
@@ -424,7 +375,7 @@ export default function StudentClasses() {
                   ) : (
                     <Button
                       className="w-full"
-                      disabled={!eligible}
+                      disabled={!current.bookable || !schedule.active || schedule.saving}
                       onClick={() =>
                         setAction({
                           kind: full ? 'waitlist' : 'enroll',
@@ -432,9 +383,7 @@ export default function StudentClasses() {
                         })
                       }
                     >
-                      {full
-                        ? 'Join waitlist'
-                        : 'Enrol in this class'}
+                      {!current.bookable ? 'Booking unavailable' : full ? 'Join waitlist' : 'Enrol in this class'}
                     </Button>
                   )}
                 </CardContent>
@@ -478,17 +427,7 @@ export default function StudentClasses() {
             </p>
 
             {action.kind === 'waitlist' && (
-              <p className="rounded-lg bg-muted p-3 text-sm">
-                <strong>Important:</strong> Joining the waitlist
-                does not guarantee a spot. If a slot opens and
-                you are selected, an administrator will notify
-                you by email.
-                {' '}
-                <strong>
-                  This draft does not send actual emails or
-                  notify administrators.
-                </strong>
-              </p>
+              <p className="text-sm text-muted-foreground">Joining the waitlist does not reserve a spot.</p>
             )}
 
             <div className="flex justify-end gap-2">
@@ -499,7 +438,7 @@ export default function StudentClasses() {
                 Back
               </Button>
 
-              <Button onClick={confirm}>
+              <Button onClick={confirm} disabled={schedule.saving}>
                 {action.kind === 'enroll'
                   ? 'Yes, enrol'
                   : action.kind === 'waitlist'
@@ -511,11 +450,9 @@ export default function StudentClasses() {
         </div>
       )}
 
-      <p className="text-xs text-muted-foreground">
-        Prototype: class capacity, enrolments and waitlists use
-        demo data/local browser storage. Waitlist allocation
-        and administrator email alerts need backend integration.
-      </p>
+      {!schedule.active && (
+        <p className="text-sm text-muted-foreground">An active student membership is required to book online.</p>
+      )}
     </div>
   )
 }

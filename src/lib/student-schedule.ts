@@ -14,11 +14,15 @@ export type ClassOffering = {
   level: string
   capacity: number
   occupied: number
+  startsAt?: string
+  scheduled?: boolean
+  bookable?: boolean
+  classType?: string
 }
 
 export type Enrollment = {
   id: string
-  status: 'enrolled' | 'attended' | 'missed' | 'make-up'
+  status: 'enrolled' | 'attended' | 'missed' | 'make-up' | 'late' | 'excused' | 'cancelled'
   movedFrom?: string
 }
 
@@ -77,7 +81,7 @@ export function isRecommended(offering: ClassOffering, belt: BeltRank) {
 }
 
 export function dateTime(session: ClassOffering) {
-  return new Date(`${session.dateId}T${session.startTime}:00`)
+  return new Date(session.startsAt ?? `${session.dateId}T${session.startTime}:00`)
 }
 
 export function prettyDate(date: Date) {
