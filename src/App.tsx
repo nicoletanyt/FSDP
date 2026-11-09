@@ -5,14 +5,14 @@ import NfcTagCapture from '@/components/instructor/NfcTagCapture'
 import FloatingChatbot from '@/components/FloatingChatbot'
 import AuthLayout from './layouts/AuthLayout'
 import RootLayout from './layouts/RootLayout'
-import InstructorLayout from './layouts/InstructorLayout'
-import StudentLayout from './layouts/StudentLayout'
 import CheckoutCancel from './pages/CheckoutCancel'
 import CheckoutSuccess from './pages/CheckoutSuccess'
 import NotFound from './pages/NotFound'
 
 const Login = lazy(() => import('./pages/Login'))
 const Signup = lazy(() => import('./pages/Signup'))
+const InstructorLayout = lazy(() => import('./layouts/InstructorLayout'))
+const StudentLayout = lazy(() => import('./layouts/StudentLayout'))
 
 const AdminLayout = lazy(() => import('./pages/admin/AdminLayout'))
 const AdminOverview = lazy(() => import('./pages/admin/Overview'))
