@@ -18,7 +18,7 @@ export function useInstructorGradingBatch({ session, entries, identity, track, g
   const queryKey = keys.gradingBatch(identity.userId, session.event.id, track, grade)
   const load = useCallback((signal: AbortSignal) => api.getGradingBatch({ eventId: session.event.id, track: track as GradeTrack, gradeId: grade }, signal), [api, session.event.id, track, grade])
   const query = useInstructorQuery(() => queryKey, load, { enabled: Boolean(track && grade), staleTime: Infinity, gcTime: 10 * 60_000 })
-  const [draft, setDraft] = useState<{ key: string; saved: GradingBatch | null; unchecked: Set<string>; dirty: boolean }>({ key: '', saved: null, unchecked: new Set(), dirty: false })
+  const [draft, setDraft] = useState<{ key: string; saved: GradingBatch | null; unchecked: Set<string>; comments: Record<string, string>; dirty: boolean }>({ key: '', saved: null, unchecked: new Set(), comments: {}, dirty: false })
   const [pending, setPending] = useState(false)
   const [retryMode, setRetryMode] = useState<'draft' | 'submit' | null>(null)
   const [needsReload, setNeedsReload] = useState(false)
@@ -32,7 +32,7 @@ export function useInstructorGradingBatch({ session, entries, identity, track, g
   useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
   useEffect(() => {
     if (query.status === 'success' && draft.key !== key) {
-      setDraft({ key, saved: query.data, unchecked: uncheckedCells(query.data), dirty: false })
+      setDraft({ key, saved: query.data, unchecked: uncheckedCells(query.data), comments: Object.fromEntries(query.data?.students.map(student => [student.student_id, student.notes ?? '']) ?? []), dirty: false })
       intent.current = null; setRetryMode(null); setNeedsReload(false); setError(''); setNotice('')
     }
   }, [query.status, query.data, key, draft.key])
@@ -62,6 +62,7 @@ export function useInstructorGradingBatch({ session, entries, identity, track, g
         track, gradeId: grade, expectedVersion: saved?.version ?? 0, submit, signature,
         cells: students.flatMap(student => items.map(item => ({ student_id: student.student_id, syllabus_item_id: item.syllabus_item_id,
           checked: !draft.unchecked.has(gradingCellKey(student.student_id, item.syllabus_item_id)) }))),
+        comments: students.map(student => ({ student_id: student.student_id, notes: draft.comments[student.student_id] || null })),
       }
     }
     const request = intent.current
@@ -72,7 +73,7 @@ export function useInstructorGradingBatch({ session, entries, identity, track, g
       if (!mounted.current || currentKey.current !== operationKey) return false
       client.setQueryData(queryKey, result)
       client.setQueryData(keys.gradingSession(identity.userId, session.event.id), (current: Record<string, unknown> | undefined) => current ? { ...current, initialBatch: result } : undefined)
-      setDraft({ key, saved: result, unchecked: uncheckedCells(result), dirty: false })
+      setDraft({ key, saved: result, unchecked: uncheckedCells(result), comments: Object.fromEntries(result.students.map(student => [student.student_id, student.notes ?? ''])), dirty: false })
       intent.current = null; setRetryMode(null)
       setNotice(result.status === 'submitted' ? 'Your grading batch has been submitted. No final grades have been assigned.' : 'Your draft has been saved.')
       return true
@@ -98,6 +99,12 @@ export function useInstructorGradingBatch({ session, entries, identity, track, g
     groupLocked: pending || draft.dirty || retryMode !== null || needsReload,
     dirty: draft.dirty, save,
     checked: (student: string, item: string) => !draft.unchecked.has(gradingCellKey(student, item)),
+    comment: (student: string) => draft.comments[student] ?? '',
+    changeComment(student: string, value: string) {
+      if (locked) return
+      setDraft(current => ({ ...current, comments: { ...current.comments, [student]: value }, dirty: true }))
+      setNotice('')
+    },
     change(student: string, item: string, checked: boolean) {
       if (locked) return
       setDraft(current => {

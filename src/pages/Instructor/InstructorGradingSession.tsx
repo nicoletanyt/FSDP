@@ -188,6 +188,7 @@ function GradingTable({
                                             {item.label}
                                         </th>
                                     ))}
+                                    <th scope="col" className="min-w-60 border-b border-l px-3 py-3 text-left align-bottom font-medium">Comments</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -228,6 +229,17 @@ function GradingTable({
                                                     </td>
                                                 );
                                             })}
+                                            <td className="border-l px-3 py-2">
+                                                <textarea
+                                                    aria-label={`${name}: Comments`}
+                                                    value={batch.comment(student.student_id)}
+                                                    onChange={(event) => batch.changeComment(student.student_id, event.target.value)}
+                                                    disabled={batch.locked}
+                                                    maxLength={2000}
+                                                    rows={2}
+                                                    className="w-full min-w-52 rounded-md border border-input bg-background px-3 py-2 text-sm disabled:opacity-50"
+                                                />
+                                            </td>
                                         </tr>
                                     );
                                 })}

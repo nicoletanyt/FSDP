@@ -143,27 +143,31 @@ test('grading drafts save the complete matrix and survive a document reload', as
     }
     await choose()
     d.querySelector('tbody input').click(); await wait(30)
+    const comment = d.querySelector('tbody textarea')
+    Object.getOwnPropertyDescriptor(w.HTMLTextAreaElement.prototype, 'value').set.call(comment, 'Good progress')
+    comment.dispatchEvent(new w.Event('input', { bubbles: true })); await wait(30)
     const groupLocked = [...d.querySelectorAll('main select')].every(node => node.disabled)
     const cleanUi = !d.querySelector('main').textContent.includes('Unsaved changes. Save your draft before changing track or grade.')
       && ![...d.querySelectorAll('button')].some(node => node.textContent.includes('Reload saved version'))
     const save = [...d.querySelectorAll('button')].find(node => node.textContent === 'Save draft')
     save.click(); save.click(); await wait(500)
-    const requests = w.gradingBatchRequestsFixture.map(r => ({ cells: r.cells.length, unchecked: r.cells.filter(c => !c.checked).length, submit: r.submit }))
+    const requests = w.gradingBatchRequestsFixture.map(r => ({ cells: r.cells.length, unchecked: r.cells.filter(c => !c.checked).length, submit: r.submit, comments: r.comments.map(c => c.notes) }))
     const savedText = d.querySelector('main').textContent
     const route = w.location.pathname + w.location.search
     w.location.href = '/tests/mobile-responsive/calendar.html?route=' + encodeURIComponent(route)
     await wait(1000); d = w.document
-    const value = d.querySelector('tbody input').checked, text = d.querySelector('main').textContent
+    const value = d.querySelector('tbody input').checked, text = d.querySelector('main').textContent, restoredComment = d.querySelector('tbody textarea').value
     const group = [...d.querySelectorAll('main select')].map(node => node.value)
     const timestamp = d.querySelector('[data-grading-timestamp]')
     const footer = { text: timestamp.textContent, datetime: timestamp.querySelector('time').dateTime,
       below: timestamp.getBoundingClientRect().top >= d.querySelector('table').getBoundingClientRect().bottom }
     w.sessionStorage.removeItem('test-only-grading-batches:audit')
-    return { groupLocked, cleanUi, requests, savedText, value, text, group, footer }
+    return { groupLocked, cleanUi, requests, savedText, value, text, group, footer, restoredComment }
   })
   assert.equal(result.groupLocked, true)
   assert.equal(result.cleanUi, true)
-  assert.deepEqual(result.requests, [{ cells: 4, unchecked: 1, submit: false }])
+  assert.deepEqual(result.requests, [{ cells: 4, unchecked: 1, submit: false, comments: ['Good progress', null, null, null] }])
+  assert.equal(result.restoredComment, 'Good progress')
   assert.doesNotMatch(result.savedText, /Your draft has been saved|New draft|Your draft · Version/)
   assert.equal(result.value, false)
   assert.doesNotMatch(result.text, /New draft|Your draft · Version/)

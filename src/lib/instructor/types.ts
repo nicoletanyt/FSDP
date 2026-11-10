@@ -215,6 +215,7 @@ export interface GradingBatchSaveInput extends GradingBatchKey {
   expectedUserId: AuthUserId
   expectedVersion: number
   cells: GradingBatchCell[]
+  comments: { student_id: StudentId; notes: string | null }[]
   submit: boolean
   signature: GradingSignature | null
 }
