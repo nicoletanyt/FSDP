@@ -269,19 +269,24 @@ export function createInstructorApi(client: InstructorClient) {
       if (!['children', 'adult'].includes(input.track) || !input.gradeId || !Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 0
         || typeof input.submit !== 'boolean' || !Array.isArray(input.cells) || !input.cells.length
         || input.cells.some(c => typeof c.checked !== 'boolean' || !c.syllabus_item_id)
-        || new Set(input.cells.map(c => JSON.stringify([c.student_id, c.syllabus_item_id]))).size !== input.cells.length) invalidRequest('Enter a complete grading checklist.')
-      const result = decodeGradingBatch(await rpc('save_instructor_grading_batch', {
+        || new Set(input.cells.map(c => JSON.stringify([c.student_id, c.syllabus_item_id]))).size !== input.cells.length
+        || !Array.isArray(input.comments) || input.comments.some(c => c.notes !== null && (typeof c.notes !== 'string' || c.notes.length > 2000))
+        || new Set(input.comments.map(c => c.student_id)).size !== input.comments.length) invalidRequest('Enter a complete grading checklist.')
+      const result = decodeGradingBatch(await rpc('save_instructor_grading_batch_with_comments', {
         request_id: parseEntityId(input.requestId, 'grading-request'), expected_user: input.expectedUserId,
         target_event: parseEntityId(input.eventId, 'event'), target_track: input.track, target_grade: input.gradeId,
         expected_version: input.expectedVersion,
         cells: input.cells.map(c => ({ ...c, student_id: parseEntityId(c.student_id, 'student') })),
+        comments: input.comments.map(c => ({ ...c, student_id: parseEntityId(c.student_id, 'student') })),
         submit: input.submit, examiner_signature: input.signature === null ? null : decodeGradingSignature(input.signature),
       }, undefined, 'Unable to save your grading batch. Please retry.'))
       const expected = new Map(input.cells.map(c => [JSON.stringify([c.student_id, c.syllabus_item_id]), c.checked]))
+      const expectedComments = new Map(input.comments.map(c => [c.student_id, c.notes]))
       if (result.event_id !== input.eventId || result.instructor_id !== identity.instructorId || result.track !== input.track
         || result.target_grade_id !== input.gradeId || result.version !== input.expectedVersion + 1
         || result.status !== (input.submit ? 'submitted' : 'draft') || result.results.length !== expected.size
-        || result.results.some(c => expected.get(JSON.stringify([c.student_id, c.syllabus_item_id])) !== c.checked)) {
+        || result.results.some(c => expected.get(JSON.stringify([c.student_id, c.syllabus_item_id])) !== c.checked)
+        || result.students.length !== expectedComments.size || result.students.some(s => !expectedComments.has(s.student_id) || expectedComments.get(s.student_id) !== s.notes)) {
         throw new InstructorDataError('invalid_data', 'The save response did not match the grading batch. Retry the same request.')
       }
       return result

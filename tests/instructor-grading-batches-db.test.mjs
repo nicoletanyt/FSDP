@@ -63,6 +63,7 @@ test('instructor grading batches (offline PostgreSQL)', async suite => {
     `)
     await db.exec(await readFile(new URL('../supabase/migrations/20261108152249_instructor_grading_batches.sql',import.meta.url),'utf8'))
     await db.exec(await readFile(new URL('../supabase/migrations/20261108154345_resume_editable_grading_batches.sql',import.meta.url),'utf8'))
+    await db.exec(await readFile(new URL('../supabase/migrations/20261110120000_grading_batch_comments.sql',import.meta.url),'utf8'))
     let batchA,batchB
     await suite.test('new drafts are absent, two instructors own independent matrices and candidate numbers',async () => {
       assert.equal(await get(a),null)
@@ -140,11 +141,32 @@ test('instructor grading batches (offline PostgreSQL)', async suite => {
       for(const user of [studentUser,unlinked,admin]) await assert.rejects(save(user,0))
       await assert.rejects(as(a,()=>sql("select public.save_instructor_grading_batch($1,$2,$3,'adult','target',1,$4,false,null)",[uuid(sequence++),b,event,JSON.stringify(cells)])))
     })
+    await suite.test('comments save atomically, survive retries and can be cleared',async () => {
+      const write = (user, version, comments, request = uuid(sequence++)) => as(user, async () => (await sql(
+        "select public.save_instructor_grading_batch_with_comments($1,$2,$3,'adult','target',$4,$5,$6,false,null) as data",
+        [request,user,event,version,JSON.stringify(cells),JSON.stringify(comments)]
+      )).rows[0].data)
+      const comments = [{student_id:student,notes:'Good progress'}, {student_id:peer,notes:null}]
+      const request = uuid(sequence++)
+      const saved = await write(b,1,comments,request)
+      assert.equal(saved.students.find(s=>s.student_id===student).notes,'Good progress')
+      assert.deepEqual(await write(b,1,comments,request),saved)
+      await assert.rejects(write(b,1,[{...comments[0],notes:'Changed'},comments[1]],request),e=>e.code==='PGB01')
+      assert.equal((await get(b)).students.find(s=>s.student_id===student).notes,'Good progress')
+      assert.equal((await get(a)).students.find(s=>s.student_id===student).notes,null)
+      for (const invalid of [comments.slice(0,1), [comments[0],comments[0]], [{...comments[0],notes:'x'.repeat(2001)},comments[1]]]) {
+        await assert.rejects(write(b,2,invalid))
+      }
+      assert.equal((await get(b)).version,2)
+      const cleared = await write(b,2,comments.map(c=>({...c,notes:null})))
+      assert.equal(cleared.students.find(s=>s.student_id===student).notes,null)
+      await assert.rejects(write(studentUser,0,comments))
+    })
     await suite.test('cancelled sessions reject saves and candidate numbers cannot be reassigned',async () => {
       await sql('update public.event_students set candidate_number=99 where event_id=$1 and student_id=$2',[event,student])
       assert.equal((await sql('select candidate_number from public.event_students where event_id=$1 and student_id=$2',[event,student])).rows[0].candidate_number,1)
       await sql("update public.events set status='cancelled' where id=$1",[event])
-      await assert.rejects(save(b,1),e=>e.code==='PGB03')
+      await assert.rejects(save(b,3),e=>e.code==='PGB03')
     })
   } finally { await db.close() }
 })

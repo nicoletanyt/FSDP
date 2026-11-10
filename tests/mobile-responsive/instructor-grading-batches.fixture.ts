@@ -48,8 +48,9 @@ export function createGradingBatchFixture(account: string, mode: string | null, 
         track: input.track, target_grade_id: input.gradeId, version: input.expectedVersion + 1,
         status: input.submit ? 'submitted' : 'draft', signature: input.signature, submitted_at: input.submit ? new Date().toISOString() : null,
         updated_at: new Date().toISOString(),
-        students: existing?.students ?? roster.entries.map(({ student, record }, index) => ({ student_id: student.student.id,
-          name: [student.student.first_name, student.student.last_name].join(' '), candidate_number: record.candidate_number ?? index + 1, notes: null })),
+        students: (existing?.students ?? roster.entries.map(({ student, record }, index) => ({ student_id: student.student.id,
+          name: [student.student.first_name, student.student.last_name].join(' '), candidate_number: record.candidate_number ?? index + 1, notes: null })))
+          .map(student => ({ ...student, notes: input.comments.find(comment => comment.student_id === student.student_id)?.notes ?? null })),
         items: existing?.items ?? reference.syllabusItems.filter(i => i.track === input.track && i.grade_id === input.gradeId).map(i => ({
           syllabus_item_id: i.id, category: i.category, label: i.label, sort_order: i.sort_order,
         })),
