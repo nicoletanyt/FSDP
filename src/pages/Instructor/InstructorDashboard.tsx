@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import {
     ChevronDown,
     ChevronLeft,
@@ -543,6 +543,7 @@ export default function InstructorDashboard() {
         range: AvailabilityRange;
         editingId?: string;
     } | null>(null);
+    const navigate = useNavigate();
     const requestedId = searchParams.get("session") ?? searchParams.get("class");
     const requestedDate = parseCalendarDate(searchParams.get("date"));
     const [resolvedSelectionDate, setResolvedSelectionDate] = useState<{ id: string; date: Date } | null>(null);
@@ -737,6 +738,12 @@ export default function InstructorDashboard() {
         expandedClassId,
         onSelectDate: selectDay,
         onToggleClass: (event) => {
+            // A grade session block opens that grade's grading checklist.
+            const gradeSession = event.gradeSession;
+            if (gradeSession) {
+                void navigate(`/instructor/grading/${gradeSession.eventId}?grade=${encodeURIComponent(gradeSession.gradeId)}`);
+                return;
+            }
             if (document.activeElement instanceof HTMLElement) classTriggerRef.current = document.activeElement;
             updateSelection(
                 event.date,

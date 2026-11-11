@@ -5,7 +5,7 @@ import { PGlite } from '@electric-sql/pglite'
 
 const uuid = n => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
 const [a, b, c, studentUser, admin] = [1, 2, 3, 4, 5].map(uuid)
-const [ia, ib, ic, centre, student, event, otherEvent] = [11, 12, 13, 20, 31, 100, 102].map(uuid)
+const [ia, ib, ic, centre, student, event, otherEvent, walkIn] = [11, 12, 13, 20, 31, 100, 102, 33].map(uuid)
 const cells = ['one', 'two'].map(syllabus_item_id => ({ student_id: student, syllabus_item_id, checked: true }))
 const migration = name => new URL(`../supabase/migrations/${name}.sql`, import.meta.url)
 
@@ -56,21 +56,32 @@ test('grading panels and examiners (offline PostgreSQL)', async suite => {
       insert into public.instructors(id,user_id,first_name,last_name,email) values
         ('${ia}','${a}','A','Instructor','a@example.test'),('${ib}','${b}','B','Instructor','b@example.test'),('${ic}','${c}','C','Instructor','c@example.test');
       insert into public.students(id,user_id,member_no,first_name,last_name,email,home_centre_id,date_of_birth,joined_at) values
-        ('${student}','${studentUser}','001','First','Student','s@example.test','${centre}','2000-01-01','2020-01-01');
+        ('${student}','${studentUser}','001','First','Student','s@example.test','${centre}','2000-01-01','2020-01-01'),
+        ('${walkIn}',null,'003','Walk','In','w@example.test','${centre}','2000-01-01','2020-01-01');
       insert into public.events(id,event_type,centre_id,instructor_id,name,starts_at,ends_at) values
         ('${event}','grading','${centre}','${ia}','Grading',now(),now()+interval '1 hour'),
         ('${otherEvent}','grading','${centre}',null,'Other grading',now(),now()+interval '1 hour');
       insert into public.gradings(event_id) values('${event}'),('${otherEvent}');
-      insert into public.event_students(event_id,student_id) values('${event}','${student}');
+      insert into public.event_students(event_id,student_id) values('${event}','${student}'),('${event}','${walkIn}');
+      insert into public.grading_target_grades(grading_event_id,grade_id) values('${event}','target');
     `)
     for (const name of ['20261108152249_instructor_grading_batches', '20261108154345_resume_editable_grading_batches',
       '20261110120000_grading_batch_comments', '20261108161141_instructor_grades', '20261111100917_instructor_titles',
       '20261111120948_required_instructor_title']) {
       await db.exec(await readFile(migration(name), 'utf8'))
     }
+    // The pre-existing roster snapshot covered everyone; B's legacy draft uses both students.
+    await sql("insert into public.grading_applications(student_id,grading_event_id,target_grade_id) values($1,$2,'target')", [student, event])
+    const legacyCells = [student, walkIn].flatMap(student_id => ['one', 'two'].map(syllabus_item_id => ({ student_id, syllabus_item_id, checked: true })))
     // B starts a draft before panels exist; the backfill must keep it editable.
-    const draft = await save(b, 0)
+    const draft = await as(b, async () => (await sql(
+      "select public.save_instructor_grading_batch($1,$2,$3,'adult','target',0,$4,false,null) as data",
+      [uuid(sequence++), b, event, JSON.stringify(legacyCells)])).rows[0].data)
     await db.exec(await readFile(migration('20261111123748_grading_panels'), 'utf8'))
+    await db.exec(await readFile(migration('20261111131029_examiner_grading_list'), 'utf8'))
+    await db.exec(await readFile(migration('20261111135426_grading_grade_sessions'), 'utf8'))
+    await db.exec(await readFile(migration('20261111143128_grade_session_times'), 'utf8'))
+    await db.exec(await readFile(migration('20261111143913_grading_day_current_grade'), 'utf8'))
 
     await suite.test('backfill makes the assessing instructor chief and keeps existing graders on the panel', async () => {
       assert.deepEqual(await panel(), [{ instructor_id: ia, is_chief: true }, { instructor_id: ib, is_chief: false }])
@@ -78,7 +89,10 @@ test('grading panels and examiners (offline PostgreSQL)', async suite => {
       assert.equal(await examiner(ia), true)
       assert.equal(await examiner(ib), true)
       assert.equal(await examiner(ic), false)
-      const resumed = await save(b, draft.version)
+      // Existing batches keep their snapshot, so the legacy draft still saves both students.
+      const resumed = await as(b, async () => (await sql(
+        "select public.save_instructor_grading_batch($1,$2,$3,'adult','target',$4,$5,false,null) as data",
+        [uuid(sequence++), b, event, draft.version, JSON.stringify(legacyCells)])).rows[0].data)
       assert.equal(resumed.version, draft.version + 1)
     })
 
@@ -93,9 +107,14 @@ test('grading panels and examiners (offline PostgreSQL)', async suite => {
       const result = await setPanel(admin, [ic, ia, ic], ic)
       assert.deepEqual(result.map(row => [row.instructor_id, row.is_chief]), [[ic, true], [ia, false]])
       assert.deepEqual(await panel(), [{ instructor_id: ia, is_chief: false }, { instructor_id: ic, is_chief: true }])
-      assert.equal((await save(c, 0)).version, 1)
+      const created = await save(c, 0)
+      assert.equal(created.version, 1)
+      // New batches contain only this grade's applicants, not the walk-in.
+      assert.deepEqual(created.students.map(row => row.student_id), [student])
       // B was removed, so B's draft is locked.
-      await assert.rejects(save(b, draft.version + 1), error => error.code === 'PGP01')
+      await assert.rejects(as(b, () => sql(
+        "select public.save_instructor_grading_batch($1,$2,$3,'adult','target',$4,$5,false,null)",
+        [uuid(sequence++), b, event, draft.version + 1, JSON.stringify(legacyCells)])), error => error.code === 'PGP01')
       await assert.rejects(setPanel(admin, [ia], ic), error => error.code === 'PGP04')
       assert.deepEqual((await panel()).map(row => row.instructor_id), [ia, ic])
       assert.deepEqual(await setPanel(admin, []), [])
@@ -124,6 +143,73 @@ test('grading panels and examiners (offline PostgreSQL)', async suite => {
         await db.exec('set local role anon')
         return sql('select * from public.grading_panel_members')
       }), error => error.code === '42501')
+    })
+
+    await suite.test('instructors read only the panels they sit on', async () => {
+      // Panel is now A (chief) and C. B was removed earlier.
+      assert.deepEqual((await as(a, () => sql('select instructor_id from public.grading_panel_members order by instructor_id'))).rows
+        .map(row => row.instructor_id), [ia, ic])
+      assert.equal((await as(b, () => sql('select * from public.grading_panel_members'))).rows.length, 0)
+      assert.equal((await as(admin, () => sql('select * from public.grading_panel_members'))).rows.length, 2)
+    })
+
+    await suite.test('my_grading_panels lists only the caller\'s sessions with their co-examiners', async () => {
+      const mine = user => as(user, async () => (await sql('select public.my_grading_panels() as data')).rows[0].data)
+      const [session] = await mine(a)
+      assert.equal((await mine(a)).length, 1)
+      assert.equal(session.event_id, event)
+      assert.equal(session.is_chief, true)
+      assert.equal(session.candidates, 2)
+      assert.deepEqual(session.centre, { name: 'Test', address: '' })
+      assert.deepEqual(session.panel.map(member => [member.instructor_id, member.name, member.is_chief]),
+        [[ia, 'A Instructor', true], [ic, 'C Instructor', false]])
+      assert.equal((await mine(c))[0].is_chief, false)
+      for (const user of [b, studentUser, admin]) assert.deepEqual(await mine(user), [], user)
+      await assert.rejects(as(null, async () => {
+        await db.exec('set local role anon')
+        return sql('select public.my_grading_panels()')
+      }), error => error.code === '42501')
+    })
+
+    await suite.test('examiner_grading_day lists each target grade with its candidates for panel members only', async () => {
+      const day = user => as(user, async () => (await sql('select public.examiner_grading_day($1) as data', [event])).rows[0].data)
+      const result = await day(a)
+      assert.equal(result.event_id, event)
+      assert.equal(result.is_chief, true)
+      assert.deepEqual(result.panel.map(member => member.instructor_id), [ia, ic])
+      assert.equal(result.grades.length, 1)
+      const [target] = result.grades
+      assert.equal(target.grade.id, 'target')
+      assert.deepEqual(target.candidates.map(row => [row.student_id, row.name, row.member_no]), [[student, 'First Student', '001']])
+      const current = (await sql('select current_grade_id from public.students where id=$1', [student])).rows[0].current_grade_id
+      assert.equal(target.candidates[0].current_grade?.id ?? null, current)
+      if (current) assert.deepEqual(Object.keys(target.candidates[0].current_grade).sort(), ['colour', 'id', 'is_ranked', 'label', 'sort_order'])
+      assert.equal(target.my_batch, null)
+      assert.equal((await day(c)).grades[0].my_batch.status, 'draft')
+      assert.equal((await day(admin)).grades.length, 1)
+      for (const user of [b, studentUser]) await assert.rejects(day(user), error => error.code === 'PGP01')
+      await assert.rejects(as(a, () => sql('select public.examiner_grading_day($1)', [otherEvent])), error => error.code === 'PGP01')
+      await sql("update public.grading_applications set status='withdrawn' where student_id=$1", [student])
+      assert.deepEqual((await day(a)).grades[0].candidates, [])
+      await sql("update public.grading_applications set status='submitted' where student_id=$1", [student])
+    })
+
+    await suite.test('grade sessions have their own times in the grading day and the calendar', async () => {
+      await assert.rejects(sql("update public.grading_target_grades set starts_at=now() where grading_event_id=$1", [event]),
+        error => error.code === '23514')
+      await assert.rejects(sql("update public.grading_target_grades set starts_at=now(), ends_at=now() - interval '1 minute' where grading_event_id=$1", [event]),
+        error => error.code === '23514')
+      await sql("update public.grading_target_grades set starts_at='2026-11-14T02:00:00Z', ends_at='2026-11-14T02:30:00Z' where grading_event_id=$1", [event])
+      const day = await as(a, async () => (await sql('select public.examiner_grading_day($1) as data', [event])).rows[0].data)
+      assert.equal(Date.parse(day.grades[0].starts_at), Date.parse('2026-11-14T02:00:00Z'))
+      assert.equal(Date.parse(day.grades[0].ends_at), Date.parse('2026-11-14T02:30:00Z'))
+      const calendar = user => as(user, async () => (await sql(
+        "select public.instructor_calendar(now() - interval '1 day', now() + interval '1 day', 50, 0) as data")).rows[0].data)
+      const mine = (await calendar(a)).items.find(item => item.id === event)
+      assert.equal(mine.on_panel, true)
+      assert.deepEqual(mine.grading.target_grades.map(row => [row.grade.id, row.candidates, Date.parse(row.starts_at)]),
+        [['target', 1, Date.parse('2026-11-14T02:00:00Z')]])
+      assert.equal((await calendar(b)).items.find(item => item.id === event).on_panel, false)
     })
 
     await suite.test('examiners on a scheduled panel keep the flag until removed or the grading ends', async () => {

@@ -1,6 +1,6 @@
 import type { createInstructorApi } from './api'
 import { collectCalendarPages } from './page-collector'
-import { toCalendarAvailability, toCalendarViewEvent } from './calendar-view'
+import { toCalendarAvailability, toCalendarViewEvents } from './calendar-view'
 
 export type InstructorApi = ReturnType<typeof createInstructorApi>
 export { collectCalendarPages } from './page-collector'
@@ -14,7 +14,7 @@ export async function loadCalendarEvents(api: InstructorApi, range: { from: stri
   const events = await collectCalendarPages(options => api.getCalendar({ ...options,
     from: `${range.from}T00:00:00+08:00`, to: `${range.to}T00:00:00+08:00`,
   }), entry => entry.event.id, signal)
-  return events.map(toCalendarViewEvent)
+  return events.flatMap(toCalendarViewEvents)
 }
 
 export async function loadCalendarAvailability(api: InstructorApi, range: { from: string; to: string }, signal: AbortSignal) {
