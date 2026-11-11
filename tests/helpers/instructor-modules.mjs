@@ -13,8 +13,11 @@ const adaptersUrl = moduleUrl((await readFile(new URL('adapters.ts', sourceDirec
 const decodersUrl = moduleUrl((await readFile(new URL('decoders.ts', sourceDirectory), 'utf8'))
   .replaceAll("'./errors'", JSON.stringify(errorsUrl))
   .replaceAll("'./adapters'", JSON.stringify(adaptersUrl)))
+// titles.ts only re-exports the shared module, so load the shared source directly.
+const titlesUrl = moduleUrl(await readFile(new URL('../../../supabase/functions/_shared/instructor-titles.ts', sourceDirectory), 'utf8'))
 const profileUrl = moduleUrl((await readFile(new URL('profile.ts', sourceDirectory), 'utf8'))
-  .replaceAll("'./errors'", JSON.stringify(errorsUrl)))
+  .replaceAll("'./errors'", JSON.stringify(errorsUrl))
+  .replaceAll("'./titles'", JSON.stringify(titlesUrl)))
 const apiUrl = moduleUrl((await readFile(new URL('api.ts', sourceDirectory), 'utf8'))
   .replaceAll("'./profile'", JSON.stringify(profileUrl))
   .replaceAll("'./errors'", JSON.stringify(errorsUrl))

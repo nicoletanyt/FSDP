@@ -1,6 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { GradeRow, InstructorIdentity } from './types'
 import { InstructorDataError, toInstructorDataError } from './errors'
+import { isInstructorTitle } from './titles'
+import type { InstructorTitle } from './titles'
 
 export const INSTRUCTOR_PHOTO_BUCKET = 'instructor-photos'
 export const MAX_ADDRESS_LENGTH = 1000
@@ -13,6 +15,7 @@ export interface InstructorProfileDetails {
   photoPath: string | null
   photoUrl: string | null
   grade: GradeRow | null
+  instructorTitle: InstructorTitle
 }
 
 type ProfileClient = Pick<SupabaseClient, 'from' | 'rpc'> & Partial<Pick<SupabaseClient, 'storage'>>
@@ -58,7 +61,7 @@ export function createInstructorProfileApi(client: ProfileClient,
     async getProfile(expectedUserId: string, signal?: AbortSignal): Promise<InstructorProfileDetails> {
       try {
         const identity = await identityFor(expectedUserId, signal)
-        const publicQuery = client.from('instructors').select('profile_picture_url, employment_type, grade:grades(id, label, colour, is_ranked, sort_order)')
+        const publicQuery = client.from('instructors').select('profile_picture_url, employment_type, instructor_title, grade:grades(id, label, colour, is_ranked, sort_order)')
           .eq('id', identity.instructorId)
         const privateQuery = client.from('instructor_private_details').select('address')
           .eq('instructor_id', identity.instructorId)
@@ -69,6 +72,7 @@ export function createInstructorProfileApi(client: ProfileClient,
         const row = publicResult.data
         if (!row || (row.profile_picture_url !== null && typeof row.profile_picture_url !== 'string')
           || ![null, 'part_time', 'full_time'].includes(row.employment_type)
+          || !isInstructorTitle(row.instructor_title)
           || (privateResult.data?.address != null && typeof privateResult.data.address !== 'string')) {
           throw new InstructorDataError('invalid_data', 'Your instructor profile contains invalid data.')
         }
@@ -76,7 +80,8 @@ export function createInstructorProfileApi(client: ProfileClient,
         signal?.throwIfAborted()
         return { instructorId: identity.instructorId, userId: identity.userId,
           address: privateResult.data?.address ?? null, employmentType: row.employment_type,
-          photoPath: row.profile_picture_url, photoUrl: url, grade: (row.grade as unknown as GradeRow | null) ?? null }
+          photoPath: row.profile_picture_url, photoUrl: url, grade: (row.grade as unknown as GradeRow | null) ?? null,
+          instructorTitle: row.instructor_title }
       } catch (error) {
         throw toInstructorDataError(error, 'Unable to load your profile. Please try again.')
       }

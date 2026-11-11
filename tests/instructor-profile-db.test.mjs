@@ -75,25 +75,70 @@ test('instructor profile fields and private addresses (offline PostgreSQL)', asy
     await migrate('20261108062206_instructor_profile_fields.sql')
     await migrate('20261108064635_instructor_profile_editing.sql')
     await migrate('20261108161141_instructor_grades.sql')
+    await migrate('20261111100917_instructor_titles.sql')
+    const legacyTitles = await db.query('select instructor_title from public.instructors where user_id = any($1::uuid[])', [[ids.instructor, ids.other]])
+    assert.ok(legacyTitles.rows.every(row => row.instructor_title === null))
+    await migrate('20261111120948_required_instructor_title.sql')
 
-    await suite.test('instructor grades are assigned atomically from trusted account metadata', async () => {
-      await db.query("insert into public.grades(id,label,colour,is_ranked,sort_order) values ('test-instructor-grade','Test instructor grade','black',true,999)")
-      const newUser = uuid(20)
-      await db.query('insert into auth.users(id,email,raw_app_meta_data) values ($1,$2,$3)',
-        [newUser, 'graded@example.test', JSON.stringify({ role: 'instructor', instructor_grade_id: 'test-instructor-grade' })])
-      const { rows } = await db.query('select grade_id from public.instructors where user_id=$1', [newUser])
-      assert.equal(rows[0].grade_id, 'test-instructor-grade')
-      const old = await db.query('select grade_id from public.instructors where user_id=$1', [ids.instructor])
-      assert.equal(old.rows[0].grade_id, null)
+    await suite.test('existing null titles are backfilled to none and the column is required', async () => {
+      const { rows } = await db.query('select instructor_title from public.instructors where user_id = any($1::uuid[])', [[ids.instructor, ids.other]])
+      assert.deepEqual(rows.map(row => row.instructor_title), ['none', 'none'])
+      const column = await db.query(`select is_nullable, column_default from information_schema.columns
+        where table_schema='public' and table_name='instructors' and column_name='instructor_title'`)
+      assert.equal(column.rows[0].is_nullable, 'NO')
+      assert.match(column.rows[0].column_default, /'none'/)
+      await assert.rejects(() => db.query('update public.instructors set instructor_title=null where id=$1', [instructor]),
+        error => error.code === '23502')
+      // Grade stays nullable until the flagged ungraded instructors are assigned one.
+      const grade = await db.query(`select is_nullable from information_schema.columns
+        where table_schema='public' and table_name='instructors' and column_name='grade_id'`)
+      assert.equal(grade.rows[0].is_nullable, 'YES')
+    })
+
+    await suite.test('instructor title CHECK matches the shared list and rejects other roles', async () => {
+      const source = await readFile(new URL('../supabase/functions/_shared/instructor-titles.ts', import.meta.url), 'utf8')
+      const shared = [...source.match(/INSTRUCTOR_TITLES = \[([^\]]*)\]/)[1].matchAll(/'([^']+)'/g)].map(match => match[1])
+      assert.deepEqual(shared, ['none', 'fukushidoin', 'shidoin', 'shihan'])
+      const { rows } = await db.query(`select pg_get_constraintdef(oid) as definition from pg_constraint
+        where conrelid='public.instructors'::regclass and conname='instructors_instructor_title_check'`)
+      assert.deepEqual([...rows[0].definition.matchAll(/'([^']+)'/g)].map(match => match[1]).sort(), shared.toSorted())
+      for (const value of shared) {
+        await db.query('update public.instructors set instructor_title=$1 where id=$2', [value, instructor])
+      }
+      for (const value of ['dojo-cho', 'chief_instructor', '', 'Shihan', 'None']) {
+        await assert.rejects(() => db.query('update public.instructors set instructor_title=$1 where id=$2',
+          [value, instructor]), error => error.code === '23514')
+      }
+      await db.query("update public.instructors set instructor_title='none' where id=$1", [instructor])
+    })
+
+    await suite.test('only administrators can set instructor titles; instructors cannot self-edit', async () => {
+      for (const user of [ids.instructor, ids.other, ids.student]) {
+        const { rows } = await asAccount(user, () => db.query(
+          "update public.instructors set instructor_title='shihan' where id=$1 returning id", [instructor]))
+        assert.equal(rows.length, 0)
+      }
+      const unchanged = await db.query('select instructor_title from public.instructors where id=$1', [instructor])
+      assert.equal(unchanged.rows[0].instructor_title, 'none')
+      const { rows } = await asAccount(ids.admin, () => db.query(
+        "update public.instructors set instructor_title='shidoin' where id=$1 returning instructor_title", [instructor]))
+      assert.deepEqual(rows, [{ instructor_title: 'shidoin' }])
+    })
+
+    await suite.test('instructor titles come from trusted metadata and default to none', async () => {
+      const titled = uuid(22)
+      const untitled = uuid(24)
+      await db.query('insert into auth.users(id,email,raw_app_meta_data) values ($1,$2,$3),($4,$5,$6)', [
+        titled, 'titled@example.test', JSON.stringify({ role: 'instructor', instructor_title: 'fukushidoin' }),
+        untitled, 'untitled@example.test', JSON.stringify({ role: 'instructor' })])
+      const { rows } = await db.query('select user_id, instructor_title from public.instructors where user_id = any($1::uuid[]) order by user_id', [[titled, untitled]])
+      assert.deepEqual(rows, [{ user_id: titled, instructor_title: 'fukushidoin' }, { user_id: untitled, instructor_title: 'none' }])
       await assert.rejects(() => db.query('insert into auth.users(id,email,raw_app_meta_data) values ($1,$2,$3)',
-        [uuid(21), 'invalid-grade@example.test', JSON.stringify({ role: 'instructor', instructor_grade_id: 'missing' })]),
-      error => error.code === '23503')
-      const rejected = await db.query('select id from auth.users where id=$1', [uuid(21)])
-      assert.equal(rejected.rows.length, 0)
-      const updated = await asAccount(ids.instructor, () => db.query("update public.instructors set grade_id='test-instructor-grade' where id=$1 returning id", [instructor]))
-      assert.equal(updated.rows.length, 0)
-      await db.query('delete from public.instructors where user_id=$1', [newUser])
-      await db.query('delete from auth.users where id=$1', [newUser])
+        [uuid(23), 'bad-title@example.test', JSON.stringify({ role: 'instructor', instructor_title: 'dojo-cho' })]),
+      error => error.code === '23514')
+      assert.equal((await db.query('select id from auth.users where id=$1', [uuid(23)])).rows.length, 0)
+      await db.query('delete from public.instructors where user_id = any($1::uuid[])', [[titled, untitled]])
+      await db.query('delete from auth.users where id = any($1::uuid[])', [[titled, untitled]])
     })
 
     await suite.test('existing instructors are preserved with unspecified new fields', async () => {
