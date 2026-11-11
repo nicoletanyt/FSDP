@@ -5,6 +5,7 @@ interface InstructorDetails {
   first_name: string
   last_name: string
   email: string
+  grade_id: string | null
 }
 
 export interface InstructorAccount {

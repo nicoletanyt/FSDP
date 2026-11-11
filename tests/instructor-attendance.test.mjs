@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { attendance } from './helpers/instructor-modules.mjs'
 
-const { attendanceEditable, attendanceSnapshot, editableAttendanceRows, loadAttendanceRoster } = attendance
+const { attendanceEditable, attendanceSnapshot, editableAttendanceRows, lessonNotEnded, loadAttendanceRoster } = attendance
 const startsAt = '2026-11-03T10:00:00+08:00'
 const event = { id: 'event', status: 'scheduled', starts_at: startsAt, ends_at: '2026-11-03T11:00:00+08:00' }
 
@@ -13,6 +13,14 @@ test('attendance editing uses stored timed/scheduled end boundaries, including b
   for (const state of [{ ...event, status: 'completed' }, { ...event, status: 'cancelled' }, { ...event, starts_at: null, ends_at: null }]) {
     assert.equal(attendanceEditable(state, new Date('2026-11-03T01:00:00Z')), false)
   }
+})
+
+test('unavailability remains available until the lesson ends', () => {
+  assert.equal(lessonNotEnded(event.ends_at, new Date('2026-11-03T01:00:00Z')), true)
+  assert.equal(lessonNotEnded(event.ends_at, new Date('2026-11-03T02:30:00Z')), true)
+  assert.equal(lessonNotEnded(event.ends_at, new Date('2026-11-03T03:00:00Z')), false)
+  assert.equal(lessonNotEnded(event.ends_at, new Date('2026-11-03T04:00:00Z')), false)
+  assert.equal(lessonNotEnded(null, new Date('2026-11-03T04:00:00Z')), true)
 })
 
 test('editable rows preserve explicit/arrival-derived late and excused states and snapshots retain original arrival evidence', () => {

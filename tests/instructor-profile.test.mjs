@@ -49,7 +49,7 @@ function fixture(options = {}) {
 test('profile loads real private address, employment type and a temporary URL for the saved storage path', async () => {
   const { api, calls } = fixture()
   assert.deepEqual(await api.getProfile(userId), { instructorId, userId, address: 'Saved address',
-    employmentType: 'part_time', photoPath: oldPath, photoUrl: `https://storage.example.test/signed/${oldPath}` })
+    employmentType: 'part_time', photoPath: oldPath, photoUrl: `https://storage.example.test/signed/${oldPath}`, grade: null })
   assert.ok(calls.some(call => call[0] === 'eq' && call[1] === 'instructor_private_details' && call[3] === instructorId))
   assert.deepEqual(calls.find(call => call[0] === 'sign'), ['sign', oldPath, 3600])
 })
@@ -60,7 +60,14 @@ test('missing optional profile fields remain empty, not placeholder records', as
   assert.equal(result.address, null)
   assert.equal(result.photoUrl, null)
   assert.equal(result.employmentType, null)
+  assert.equal(result.grade, null)
   assert.ok(!calls.some(call => call[0] === 'sign'))
+})
+
+test('profile returns the instructor grade and belt colour', async () => {
+  const grade = { id: 'black', label: 'Black belt', colour: 'black', is_ranked: true, sort_order: 10 }
+  const { api } = fixture({ row: { profile_picture_url: null, employment_type: null, grade } })
+  assert.deepEqual((await api.getProfile(userId)).grade, grade)
 })
 
 test('address saves trim input, clear empty input, reject overlong drafts and require authoritative confirmation', async () => {

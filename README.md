@@ -164,6 +164,86 @@ credentials local; do not upload them to Vercel or function secrets.
 
 ## Deployment
 
+### Instructor chatbot — Ollama Cloud
+
+DojoGPT is available only inside authenticated instructor routes. It uses the
+`instructor-chat` Edge Function, not a browser-to-Ollama connection. Its five
+read-only tools cover student search, profile/attendance summaries, past session
+history, the current instructor's assigned schedule, and permitted part-time
+availability. Students and administrators cannot call this function. An unlinked
+instructor can still ask student questions, but their timeline is unavailable.
+
+The chat offers four instructor starter topics (today, this week, attendance
+and session history) and related follow-up questions after
+replies. Full question chips use an outlined, theme-aware style
+and sit directly beneath the greeting or latest assistant answer, before its
+timestamp. The greeting is local UI only; it does not invoke Ollama or become
+database context. Selected chips show a natural question in the transcript while
+the request retains the topic's pagination and student-identity guidance.
+These are shortcuts into the same Ollama/database workflow, not static
+FAQ answers; free-form questions remain available. Student-specific prompts ask
+for a name or membership number when the conversation has no identified student.
+
+Assistant replies render a restricted Markdown subset (emphasis, paragraphs,
+lists, code and scrollable tables). Raw HTML and images are disabled; model-made
+links are shown as plain text. Source links and source/query summaries are not
+displayed. The model prompt prefers stacked schedules and readable Singapore
+dates and times, and omits internal UUIDs and technical query details.
+An explicit source-footer filter runs on both the server and the Markdown
+renderer, so visible source annotations do not depend on model compliance alone.
+Deploy the updated `instructor-chat` function to apply these prompt changes.
+
+Use **Expand chat** to open a larger, focus-trapped modal and **Minimize chat**
+to return to the floating panel. Messages, unfinished drafts and pending replies
+are preserved. Escape or dismissing the modal returns to the floating panel;
+the Close chat button hides the chat entirely.
+
+Create an API key at <https://ollama.com/settings/keys>. Choose a **tool-calling
+cloud model** using its API name from <https://ollama.com/api/tags>, not a local
+CLI `:cloud` alias. Put `OLLAMA_API_KEY` and `OLLAMA_MODEL` in the root `.env`
+for local function development, and add both as **server-only Edge Function
+secrets** in your Supabase project dashboard. Never use a `VITE_` prefix or put
+the API key in Vercel's frontend configuration. `APP_URL` must be your frontend
+origin; `AUTH_ALLOWED_ORIGINS` may add development origins.
+
+After configuring secrets, deploy the backend separately from the frontend:
+
+```sh
+npx supabase@latest functions deploy instructor-chat --project-ref YOUR_PROJECT_REF --use-api
+```
+
+No new migration is required. The existing instructor directory, attendance
+summary/history and calendar RPCs must already be deployed. Do not blindly run
+`db push` against a project whose migration history differs from this checkout.
+For local testing, serve the function with the Supabase CLI against a local
+stack and configure the frontend's Supabase URL/key for that stack.
+
+Database reads carry the caller's JWT and retain RLS; the chatbot never uses a
+service-role key, writes records, or executes model-generated SQL. Only
+allowlisted fields reach Ollama. Medical alerts, contact details, date of birth,
+private addresses and free-text assessment notes are excluded. Relevant student
+records **are processed by Ollama Cloud**; review your organisation's privacy
+requirements before enabling this on real student data. Chat history stays in
+memory and resets on account changes, sign-out, new conversation or reload.
+
+Each reply is bounded to 90 seconds, five model rounds and eight tool calls;
+queries return 20-row pages and date ranges are limited to 62 days in Singapore
+time. The function has a best-effort **per-isolate**, per-account six-message
+minute limit and concurrent-reply guard, not a deployment-wide quota. Configure
+provider usage limits or an authenticated gateway for a hard spending/rate cap.
+
+Verification:
+
+```sh
+node --test tests/instructor-chat.test.mjs
+node --test tests/chat-markdown.test.mjs
+node --test tests/chat-output.test.mjs
+npm run check:functions
+npm run test:functions
+# With Vite and geckodriver running (no cloud calls):
+node --test tests/mobile-responsive/chatbot.test.mjs
+```
+
 ### NFC attendance (separate from QR check-in)
 
 The NFC URL opens `/instructor/nfc_checkin?tag=...`. This route is separate from

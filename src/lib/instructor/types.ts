@@ -189,6 +189,35 @@ export interface EventStudentRow {
   assessment_status: AssessmentStatus | null
   assessment_notes: string | null
   checked_in_at: Timestamp | null
+  candidate_number?: number | null
+}
+
+export interface GradingSignature { version: 1; strokes: { x: number; y: number }[][] }
+export interface GradingBatchCell { student_id: StudentId; syllabus_item_id: string; checked: boolean }
+export interface GradingBatch {
+  id: string
+  event_id: EventId
+  instructor_id: InstructorId
+  track: GradeTrack
+  target_grade_id: string
+  status: 'draft' | 'submitted'
+  version: number
+  signature: GradingSignature | null
+  submitted_at: Timestamp | null
+  updated_at: Timestamp
+  students: { student_id: StudentId; candidate_number: number; name: string; notes: string | null }[]
+  items: { syllabus_item_id: string; category: string; label: string; sort_order: number }[]
+  results: GradingBatchCell[]
+}
+export interface GradingBatchKey { eventId: EventId; track: GradeTrack; gradeId: string }
+export interface GradingBatchSaveInput extends GradingBatchKey {
+  requestId: string
+  expectedUserId: AuthUserId
+  expectedVersion: number
+  cells: GradingBatchCell[]
+  comments: { student_id: StudentId; notes: string | null }[]
+  submit: boolean
+  signature: GradingSignature | null
 }
 
 export type AttendanceMark = 'present' | 'absent' | 'unmarked'
@@ -253,6 +282,20 @@ export interface AvailabilityInput {
   date: DateOnly
   startTime: TimeOnly
   endTime: TimeOnly
+}
+
+export type AvailabilitySaveInput = {
+  requestId: string
+  expectedUserId: AuthUserId
+  slotId: string
+  expected: AvailabilityInput
+} & ({ kind: 'update'; value: AvailabilityInput } | { kind: 'delete'; value?: never })
+
+export interface AvailabilitySaveResult {
+  requestId: string
+  slotId: string
+  kind: 'update' | 'delete'
+  slot: InstructorAvailabilityRow | null
 }
 
 // Includes the project owner's live DDL additions, documented in the schema.

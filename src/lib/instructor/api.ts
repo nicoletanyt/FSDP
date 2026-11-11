@@ -6,6 +6,7 @@ import {
   decodeHistoryEntry, decodePage, decodeRosterEntry, decodeStudentDetail,
   decodeSummary, decodeSyllabusItem, decodeTechniqueSignOff, array, decodeAttendanceSave, decodeAttendanceSnapshot,
   decodeSessionSave, decodeAssessmentSnapshot,
+  decodeGradingBatch, decodeGradingSignature, decodeAvailabilitySave, decodeAvailabilitySnapshot,
 } from './decoders'
 import { InstructorDataError, toInstructorDataError } from './errors'
 import { createInstructorProfileApi } from './profile'
@@ -13,6 +14,7 @@ import { collectCalendarPages } from './page-collector'
 import type {
   AssessmentDetail, AssessmentKey, AttendanceSaveInput, AvailabilityInput, CalendarOptions, DirectoryOptions, EventId, HistoryOptions,
   InstructorIdentity, InstructorReferenceData, Page, PageOptions, StudentId, AssessmentSaveInput, SessionSaveInput,
+  GradingBatchKey, GradingBatchSaveInput, AvailabilitySaveInput,
 } from './types'
 
 // Inject the existing shared Supabase client at the provider boundary. This does
@@ -27,6 +29,15 @@ const rosterSelect = `*, student:students(${studentSelect})`
 
 function invalidRequest(message: string): never {
   throw new InstructorDataError('invalid_request', message)
+}
+
+function validateAvailability(input: AvailabilityInput) {
+  dateOnly(input.date)
+  const validTime = /^([01]\d|2[0-3]):[0-5]\d$/
+  if (!validTime.test(input.startTime) || !validTime.test(input.endTime)
+      || input.startTime < '08:00' || input.endTime > '22:00' || input.endTime <= input.startTime) {
+    invalidRequest('Choose a valid availability between 8 AM and 10 PM, Singapore time.')
+  }
 }
 
 function pagination(options: PageOptions = {}) {
@@ -145,15 +156,17 @@ export function createInstructorApi(client: InstructorClient) {
     return data
   }
 
-  async function getEventForInstructor(id: EventId, identity: InstructorIdentity, signal?: AbortSignal) {
+  async function getEventForInstructor(id: EventId, identity: InstructorIdentity, signal?: AbortSignal, sharedGradings = false) {
+    const query = client.from('events').select(calendarSelect).eq('id', id)
+    if (sharedGradings) query.or(`instructor_id.eq.${identity.instructorId},event_type.eq.grading`)
+    else query.eq('instructor_id', identity.instructorId)
     const data = await requestInstructorData(
-      () => cancellable(client.from('events').select(calendarSelect).eq('id', id)
-        .eq('instructor_id', identity.instructorId), signal).maybeSingle<unknown>(),
+      () => cancellable(query, signal).maybeSingle<unknown>(),
       'Unable to load the class session. Please try again.', signal,
     )
     if (data === null) return null
     const session = decodeCalendarEntry(data)
-    if (session.event.id !== id || session.event.instructor_id !== identity.instructorId) {
+    if (session.event.id !== id || (session.event.instructor_id !== identity.instructorId && !(sharedGradings && session.event.event_type === 'grading'))) {
       throw new InstructorDataError('invalid_data', 'The session does not match the current instructor.')
     }
     return session
@@ -218,6 +231,67 @@ export function createInstructorApi(client: InstructorClient) {
     ...createInstructorProfileApi(client, getCurrentInstructor),
     getCurrentInstructor,
 
+    async getLatestGradingBatch(id: EventId, signal?: AbortSignal) {
+      const identity = await getCurrentInstructor(signal)
+      const eventId = parseEntityId(id, 'event')
+      const value = await requestInstructorData(
+        () => cancellable(client.rpc('get_latest_instructor_grading_batch', { target_event: eventId }), signal),
+        'Unable to load your saved grading. Please retry.', signal,
+      )
+      if (value === null) return null
+      const batch = decodeGradingBatch(value)
+      if (batch.event_id !== eventId || batch.instructor_id !== identity.instructorId) {
+        throw new InstructorDataError('invalid_data', 'The saved grading does not match your account or selected session.')
+      }
+      return batch
+    },
+
+    async getGradingBatch(key: GradingBatchKey, signal?: AbortSignal) {
+      const identity = await getCurrentInstructor(signal)
+      const eventId = parseEntityId(key.eventId, 'event')
+      if (!['children', 'adult'].includes(key.track) || !key.gradeId) invalidRequest('Choose a grading track and target grade.')
+      const value = await requestInstructorData(
+        () => cancellable(client.rpc('get_instructor_grading_batch', {
+          target_event: eventId, target_track: key.track, target_grade: key.gradeId,
+        }), signal), 'Unable to load your grading draft. Please retry.', signal,
+      )
+      if (value === null) return null
+      const batch = decodeGradingBatch(value)
+      if (batch.event_id !== eventId || batch.instructor_id !== identity.instructorId || batch.track !== key.track || batch.target_grade_id !== key.gradeId) {
+        throw new InstructorDataError('invalid_data', 'The grading batch does not match your account or selected group.')
+      }
+      return batch
+    },
+
+    async saveGradingBatch(input: GradingBatchSaveInput) {
+      const identity = await getCurrentInstructor()
+      if (identity.userId !== input.expectedUserId) throw new InstructorDataError('forbidden', 'Your account changed. Reopen the grading session.')
+      if (!['children', 'adult'].includes(input.track) || !input.gradeId || !Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 0
+        || typeof input.submit !== 'boolean' || !Array.isArray(input.cells) || !input.cells.length
+        || input.cells.some(c => typeof c.checked !== 'boolean' || !c.syllabus_item_id)
+        || new Set(input.cells.map(c => JSON.stringify([c.student_id, c.syllabus_item_id]))).size !== input.cells.length
+        || !Array.isArray(input.comments) || input.comments.some(c => c.notes !== null && (typeof c.notes !== 'string' || c.notes.length > 2000))
+        || new Set(input.comments.map(c => c.student_id)).size !== input.comments.length) invalidRequest('Enter a complete grading checklist.')
+      const result = decodeGradingBatch(await rpc('save_instructor_grading_batch_with_comments', {
+        request_id: parseEntityId(input.requestId, 'grading-request'), expected_user: input.expectedUserId,
+        target_event: parseEntityId(input.eventId, 'event'), target_track: input.track, target_grade: input.gradeId,
+        expected_version: input.expectedVersion,
+        cells: input.cells.map(c => ({ ...c, student_id: parseEntityId(c.student_id, 'student') })),
+        comments: input.comments.map(c => ({ ...c, student_id: parseEntityId(c.student_id, 'student') })),
+        submit: input.submit, examiner_signature: input.signature === null ? null : decodeGradingSignature(input.signature),
+      }, undefined, 'Unable to save your grading batch. Please retry.'))
+      const expected = new Map(input.cells.map(c => [JSON.stringify([c.student_id, c.syllabus_item_id]), c.checked]))
+      const expectedComments = new Map(input.comments.map(c => [c.student_id, c.notes]))
+      if (result.event_id !== input.eventId || result.instructor_id !== identity.instructorId || result.track !== input.track
+        || result.target_grade_id !== input.gradeId || result.version !== input.expectedVersion + 1
+        || result.status !== (input.submit ? 'submitted' : 'draft') || result.results.length !== expected.size
+        || result.results.some(c => expected.get(JSON.stringify([c.student_id, c.syllabus_item_id])) !== c.checked)
+        || result.students.length !== expectedComments.size || result.students.some(s => !expectedComments.has(s.student_id) || expectedComments.get(s.student_id) !== s.notes)) {
+        throw new InstructorDataError('invalid_data', 'The save response did not match the grading batch. Retry the same request.')
+      }
+      return result
+    },
+
     saveAssessment(input: AssessmentSaveInput) { return saveSessionRecord({ ...input, kind: 'assessment' }) },
 
     async saveAttendance(input: AttendanceSaveInput) {
@@ -270,7 +344,7 @@ export function createInstructorApi(client: InstructorClient) {
         range_from: options.from, range_to: options.to, page_size: page.limit, page_offset: page.offset,
       }, page.signal), decodeCalendarEntry)
       if (result.offset !== page.offset || result.limit !== page.limit
-          || result.items.some(item => item.event.instructor_id !== identity.instructorId)) {
+          || result.items.some(item => item.event.instructor_id !== identity.instructorId && item.event.event_type !== 'grading')) {
         throw new InstructorDataError('invalid_data', 'The calendar response does not match the instructor or requested page.')
       }
       return result
@@ -279,7 +353,7 @@ export function createInstructorApi(client: InstructorClient) {
     async getEvent(id: EventId, signal?: AbortSignal) {
       const eventId = parseEntityId(id, 'event')
       const identity = await findCurrentInstructor(signal)
-      return identity ? getEventForInstructor(eventId, identity, signal) : null
+      return identity ? getEventForInstructor(eventId, identity, signal, true) : null
     },
 
     async getAvailability(options: PageOptions & { from: string; to: string }) {
@@ -305,16 +379,47 @@ export function createInstructorApi(client: InstructorClient) {
     },
 
     async createAvailability(input: AvailabilityInput) {
-      dateOnly(input.date)
-      const validTime = /^([01]\d|2[0-3]):[0-5]\d$/
-      if (!validTime.test(input.startTime) || !validTime.test(input.endTime)
-          || input.startTime < '08:00' || input.endTime > '22:00' || input.endTime <= input.startTime) {
-        invalidRequest('Choose a valid availability between 8 AM and 10 PM, Singapore time.')
-      }
+      validateAvailability(input)
       const account = await getInstructorAccount()
       return decodeAvailability(await rpc('create_instructor_availability', {
         expected_user: account.userId, slot_date: input.date, slot_start: input.startTime, slot_end: input.endTime,
       }, undefined, 'Unable to save your availability. Please try again.'))
+    },
+
+    async getAvailabilitySlot(id: string, signal?: AbortSignal) {
+      const slotId = parseEntityId(id, 'record')
+      const identity = await getCurrentInstructor(signal)
+      const data = await requestInstructorData(() => cancellable(client.from('instructor_availability').select('*')
+        .eq('id', slotId).eq('instructor_id', identity.instructorId), signal).maybeSingle<unknown>(),
+      'Unable to reload your availability. Please try again.', signal)
+      if (data === null) return null
+      const slot = decodeAvailability(data)
+      if (slot.id !== slotId || slot.instructor_id !== identity.instructorId) {
+        throw new InstructorDataError('invalid_data', 'The availability does not match the current instructor.')
+      }
+      return slot
+    },
+
+    async saveAvailability(input: AvailabilitySaveInput) {
+      const requestId = parseEntityId(input.requestId, 'record')
+      const slotId = parseEntityId(input.slotId, 'record')
+      const expectedUserId = parseEntityId(input.expectedUserId, 'auth-user')
+      if (input.kind !== 'update' && input.kind !== 'delete') invalidRequest('Choose a valid availability action.')
+      const expected = decodeAvailabilitySnapshot(input.expected)
+      if (input.kind === 'update') validateAvailability(input.value)
+      else if (input.value !== undefined) invalidRequest('Deletion has no new availability value.')
+      const account = await getInstructorAccount()
+      if (account.userId !== expectedUserId) throw new InstructorDataError('forbidden', 'Your account changed. Reopen availability before trying again.')
+      const saved = decodeAvailabilitySave(await rpc('save_instructor_availability', {
+        request_id: requestId, expected_user: expectedUserId, target_slot: slotId, write_kind: input.kind,
+        expected_record: expected, new_value: input.kind === 'update' ? input.value : null,
+      }, undefined, 'Unable to save your availability. Please retry.'))
+      if (saved.requestId !== requestId || saved.slotId !== slotId || saved.kind !== input.kind
+          || (input.kind === 'update' && (!saved.slot || saved.slot.date !== input.value.date
+            || saved.slot.start_time !== `${input.value.startTime}:00` || saved.slot.end_time !== `${input.value.endTime}:00`))) {
+        throw new InstructorDataError('invalid_data', 'The availability receipt does not match your changes. Retry to confirm the saved record.')
+      }
+      return saved
     },
 
     async getStudents(options: DirectoryOptions = {}) {
@@ -351,17 +456,18 @@ export function createInstructorApi(client: InstructorClient) {
     async getRoster(id: EventId, options: PageOptions = {}) {
       const eventId = parseEntityId(id, 'event')
       const page = pagination(options)
-      const session = await getEventForInstructor(eventId, await getCurrentInstructor(page.signal), page.signal)
+      const session = await getEventForInstructor(eventId, await getCurrentInstructor(page.signal), page.signal, true)
       if (!session) return null
       return getRosterPage(eventId, page)
     },
 
     async getAttendanceRoster(id: EventId, signal: AbortSignal) {
       const eventId = parseEntityId(id, 'event')
-      const session = await getEventForInstructor(eventId, await getCurrentInstructor(signal), signal)
+      const identity = await getCurrentInstructor(signal)
+      const session = await getEventForInstructor(eventId, identity, signal, true)
       if (!session) throw new InstructorDataError('forbidden', 'This session is no longer assigned to your account.')
       const entries = await collectCalendarPages(options => getRosterPage(eventId, options), item => item.record.student_id, signal)
-      return { session, entries }
+      return { session, entries, canEditAttendance: session.event.instructor_id === identity.instructorId }
     },
 
     getStudentHistory,

@@ -11,8 +11,12 @@ import type { UserProfile } from '@/lib/auth'
 import { fullName, initials } from '@/lib/admin/format'
 import type { InstructorAccount } from '@/lib/instructors'
 import { supabase } from '@/lib/supabase'
+import GradeBadge from '@/components/instructor/DatabaseGradeBadge'
+import type { GradeRow } from '@/lib/instructor/types'
 
-type InstructorProfile = Pick<UserProfile, 'id' | 'first_name' | 'last_name' | 'email'>
+type InstructorProfile = Pick<UserProfile, 'id' | 'first_name' | 'last_name' | 'email'> & {
+  instructors: { grade: GradeRow | null } | null
+}
 
 export default function Instructors() {
   const [instructors, setInstructors] = useState<InstructorProfile[]>([])
@@ -25,14 +29,14 @@ export default function Instructors() {
   const reload = useCallback(async () => {
     setLoading(true)
     const { data, error: queryError } = await supabase.from('users')
-      .select('id, first_name, last_name, email')
+      .select('id, first_name, last_name, email, instructors(grade:grades(id, label, colour, is_ranked, sort_order))')
       .eq('role', 'instructor')
       .order('first_name')
       .order('last_name')
 
     if (queryError) setError('Unable to load instructor accounts. Try again.')
     else {
-      setInstructors((data ?? []) as InstructorProfile[])
+      setInstructors((data ?? []) as unknown as InstructorProfile[])
       setError('')
     }
     setLoading(false)
@@ -155,6 +159,7 @@ export default function Instructors() {
                       <Mail className="size-4 shrink-0" aria-hidden="true" />
                       <span className="truncate">{instructor.email}</span>
                     </p>
+                    <div className="mt-1"><GradeBadge grade={instructor.instructors?.grade ?? null} /></div>
                   </div>
                 </li>
               ))}

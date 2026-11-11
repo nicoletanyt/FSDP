@@ -81,7 +81,7 @@ export function StudentInformationCards({ detail }: { detail: StudentDetail }) {
     );
 }
 
-export function StudentInformationActions({ detail }: { detail: StudentDetail }) {
+export function StudentInformationActions({ detail, showDetailsLink = true }: { detail: StudentDetail; showDetailsLink?: boolean }) {
     return (
         <div className="flex flex-col gap-2 md:flex-1" aria-label="Contact and medical actions">
             <div className="grid grid-cols-2 gap-2">
@@ -116,12 +116,12 @@ export function StudentInformationActions({ detail }: { detail: StudentDetail })
                     </Dialog>
                 ))}
             </div>
-            <Link
+            {showDetailsLink && <Link
                 to={studentDetailsHref(detail.student.id, undefined, "overview")}
                 className="mt-auto inline-flex min-h-11 items-center text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
                 View details
-            </Link>
+            </Link>}
         </div>
     );
 }

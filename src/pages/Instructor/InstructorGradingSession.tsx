@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useParams } from "react-router";
 import { CalendarDays, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -7,6 +8,7 @@ import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
 import GradingSignatureDialog from "@/components/instructor/GradingSignatureDialog";
 import { useInstructorApi } from "@/lib/instructor/data-context";
 import { useInstructorQuery } from "@/hooks/use-instructor-data";
+import { useInstructorGradingBatch } from "@/hooks/use-instructor-grading-batch";
 import { parseEntityId } from "@/lib/instructor/adapters";
 import {
     instructorQueryKeys as keys,
@@ -21,6 +23,7 @@ import type {
     InstructorReferenceData,
     InstructorIdentity,
     RosterEntry,
+    GradingBatch,
 } from "@/lib/instructor/types";
 
 function GradingTable({
@@ -28,21 +31,22 @@ function GradingTable({
     entries,
     reference,
     identity,
+    initialBatch,
 }: {
     session: CalendarEntry;
     entries: RosterEntry[];
     reference: InstructorReferenceData;
     identity: InstructorIdentity;
+    initialBatch: GradingBatch | null;
 }) {
-    const [track, setTrack] = useState<"" | "children" | "adult">("");
-    const [grade, setGrade] = useState("");
-    const [unchecked, setUnchecked] = useState<Set<string>>(() => new Set());
+    const [track, setTrack] = useState<"" | "children" | "adult">(initialBatch?.track ?? session.grading?.track ?? "");
+    const [grade, setGrade] = useState(initialBatch?.target_grade_id ?? "");
     const [signatureOpen, setSignatureOpen] = useState(false);
     const grades = reference.grades
         .filter((item) =>
-            reference.syllabusItems.some(
-                (syllabus) =>
-                    syllabus.track === track && syllabus.grade_id === item.id,
+            (initialBatch?.track === track && initialBatch.target_grade_id === item.id) || (!session.targetGrades.length || session.targetGrades.some(target => target.id === item.id)) && reference.gradeTracks.some(
+                (gradeTrack) =>
+                    gradeTrack.track === track && gradeTrack.grade_id === item.id,
             ),
         )
         .sort((a, b) => a.sort_order - b.sort_order);
@@ -54,10 +58,11 @@ function GradingTable({
                 a.sort_order - b.sort_order ||
                 a.id.localeCompare(b.id),
         );
+    const batch = useInstructorGradingBatch({ session, entries, identity, track, grade, techniques });
+    const canSave = Boolean(grade && batch.ready && batch.students.length && batch.items.length && !batch.pending && !batch.readOnly && !batch.needsReload);
     const date = session.event.starts_at
         ? `${new Intl.DateTimeFormat("en-SG", { dateStyle: "full", timeStyle: "short", timeZone: "Asia/Singapore" }).format(new Date(session.event.starts_at))} (Singapore time)`
         : `${sessionDateLabel(session)} · Time not recorded`;
-    const reset = () => setUnchecked(new Set());
 
     return (
         <div className="space-y-6">
@@ -65,9 +70,18 @@ function GradingTable({
                 <h1 className="min-w-0 text-3xl font-semibold tracking-tight [overflow-wrap:anywhere]">
                     {session.event.name}
                 </h1>
-                <Button disabled={!grade} onClick={() => setSignatureOpen(true)} className="bg-emerald-700 text-white hover:bg-emerald-800">Save grading</Button>
+                <div className="flex flex-wrap gap-2">
+                    <Button variant="outline" disabled={!canSave || batch.retryMode === "submit"} onClick={() => void batch.save(false)}>
+                        {batch.pending && batch.retryMode !== "submit" ? "Saving…" : batch.retryMode === "draft" ? "Retry draft save" : "Save draft"}
+                    </Button>
+                    <Button disabled={!canSave || batch.retryMode === "draft"} onClick={() => setSignatureOpen(true)}>
+                        {batch.retryMode === "submit" ? "Retry submission" : "Submit grading"}
+                    </Button>
+                </div>
             </header>
-            <GradingSignatureDialog open={signatureOpen} onOpenChange={setSignatureOpen} name={identity.name} />
+            <GradingSignatureDialog open={signatureOpen} onOpenChange={setSignatureOpen} name={identity.name}
+                pending={batch.pending} error={batch.error} retrying={batch.retryMode === "submit"}
+                onSubmit={(signature) => batch.save(true, signature)} />
             <div className="flex flex-wrap gap-x-8 gap-y-3 text-sm">
                     <p className="flex items-center gap-2">
                         <MapPin
@@ -86,33 +100,34 @@ function GradingTable({
             </div>
             <section
                 className="space-y-4"
-                aria-labelledby="grading-table-heading"
+                aria-label="Grading assessment"
             >
                 <div className="flex flex-wrap gap-4">
                     <label className="flex min-w-44 flex-col gap-1.5 text-sm font-medium">
                         Grading track
                         <select
                             value={track}
+                            disabled={batch.groupLocked}
                             onChange={(event) => {
+                                if (batch.groupLocked) return;
                                 setTrack(event.target.value as typeof track);
                                 setGrade("");
-                                reset();
                             }}
                             className="h-10 rounded-md border border-input bg-background px-3 text-sm"
                         >
                             <option value="">Select track</option>
-                            <option value="children">Children</option>
-                            <option value="adult">Adult</option>
+                            <option value="children" disabled={session.grading?.track === "adult"}>Children</option>
+                            <option value="adult" disabled={session.grading?.track === "children"}>Adult</option>
                         </select>
                     </label>
                     <label className="flex min-w-44 flex-col gap-1.5 text-sm font-medium">
                         Target grade
                         <select
                             value={grade}
-                            disabled={!track}
+                            disabled={!track || batch.groupLocked}
                             onChange={(event) => {
+                                if (batch.groupLocked) return;
                                 setGrade(event.target.value);
-                                reset();
                             }}
                             className="h-10 rounded-md border border-input bg-background px-3 text-sm disabled:opacity-50"
                         >
@@ -125,15 +140,17 @@ function GradingTable({
                         </select>
                     </label>
                 </div>
-                {!entries.length ? (
-                    <p className="rounded-lg border p-4 text-sm text-muted-foreground">
-                        No students are registered for this grading session.
-                    </p>
-                ) : !grade ? (
+                {!grade ? (
                     <p className="rounded-lg border p-4 text-sm text-muted-foreground">
                         Choose a track and target grade to view the checklist.
                     </p>
-                ) : !techniques.length ? (
+                ) : batch.query.status !== "success" || !batch.ready ? (
+                    <InstructorDataStatus loading={batch.query.status !== "error"} error={batch.query.error} onRetry={batch.query.retry} variant="roster" />
+                ) : !batch.students.length ? (
+                    <p className="rounded-lg border p-4 text-sm text-muted-foreground">
+                        No students are registered for this grading session.
+                    </p>
+                ) : !batch.items.length ? (
                     <p className="rounded-lg border p-4 text-sm text-muted-foreground">
                         No techniques are recorded for this track and grade.
                     </p>
@@ -159,10 +176,10 @@ function GradingTable({
                                     >
                                         Student
                                     </th>
-                                    {techniques.map((item) => (
+                                    {batch.items.map((item) => (
                                         <th
                                             scope="col"
-                                            key={item.id}
+                                            key={item.syllabus_item_id}
                                             className="min-w-36 border-b border-l px-3 py-3 text-left align-bottom font-medium"
                                         >
                                             <span className="block text-xs text-muted-foreground">
@@ -171,24 +188,19 @@ function GradingTable({
                                             {item.label}
                                         </th>
                                     ))}
+                                    <th scope="col" className="min-w-60 border-b border-l px-3 py-3 text-left align-bottom font-medium">Comments</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {entries.map(({ student }, index) => {
-                                    const name =
-                                        [
-                                            student.student.first_name,
-                                            student.student.last_name,
-                                        ]
-                                            .filter(Boolean)
-                                            .join(" ") || student.student.email;
+                                {batch.students.map((student) => {
+                                    const name = student.name;
                                     return (
                                         <tr
-                                            key={student.student.id}
+                                            key={student.student_id}
                                             className="border-b last:border-0"
                                         >
                                             <td className="sticky left-0 z-10 bg-background px-4 py-3 text-center tabular-nums">
-                                                {index + 1}
+                                                {student.candidate_number}
                                             </td>
                                             <th
                                                 scope="row"
@@ -196,14 +208,10 @@ function GradingTable({
                                             >
                                                 {name}
                                             </th>
-                                            {techniques.map((item) => {
-                                                const key = JSON.stringify([
-                                                    student.student.id,
-                                                    item.id,
-                                                ]);
+                                            {batch.items.map((item) => {
                                                 return (
                                                     <td
-                                                        key={item.id}
+                                                        key={item.syllabus_item_id}
                                                         className="border-l text-center"
                                                     >
                                                         <label className="inline-flex min-h-11 min-w-11 items-center justify-center">
@@ -211,43 +219,27 @@ function GradingTable({
                                                                 type="checkbox"
                                                                 aria-label={`${name}: ${item.label}`}
                                                                 checked={
-                                                                    !unchecked.has(
-                                                                        key,
-                                                                    )
+                                                                    batch.checked(student.student_id, item.syllabus_item_id)
                                                                 }
-                                                                onChange={(
-                                                                    event,
-                                                                ) =>
-                                                                    setUnchecked(
-                                                                        (
-                                                                            current,
-                                                                        ) => {
-                                                                            const next =
-                                                                                new Set(
-                                                                                    current,
-                                                                                );
-                                                                            if (
-                                                                                event
-                                                                                    .target
-                                                                                    .checked
-                                                                            )
-                                                                                next.delete(
-                                                                                    key,
-                                                                                );
-                                                                            else
-                                                                                next.add(
-                                                                                    key,
-                                                                                );
-                                                                            return next;
-                                                                        },
-                                                                    )
-                                                                }
+                                                                disabled={batch.locked}
+                                                                onChange={(event) => batch.change(student.student_id, item.syllabus_item_id, event.target.checked)}
                                                                 className="size-5 accent-primary"
                                                             />
                                                         </label>
                                                     </td>
                                                 );
                                             })}
+                                            <td className="border-l px-3 py-2">
+                                                <textarea
+                                                    aria-label={`${name}: Comments`}
+                                                    value={batch.comment(student.student_id)}
+                                                    onChange={(event) => batch.changeComment(student.student_id, event.target.value)}
+                                                    disabled={batch.locked}
+                                                    maxLength={2000}
+                                                    rows={2}
+                                                    className="w-full min-w-52 rounded-md border border-input bg-background px-3 py-2 text-sm disabled:opacity-50"
+                                                />
+                                            </td>
                                         </tr>
                                     );
                                 })}
@@ -255,6 +247,13 @@ function GradingTable({
                         </table>
                     </div>
                 )}
+                {grade && batch.ready && batch.error && !signatureOpen && <p role="alert" className="text-sm text-destructive">{batch.error}</p>}
+                {grade && batch.ready && batch.saved && <p role="status" className="text-sm text-muted-foreground" data-grading-timestamp>
+                    {batch.saved.status === "submitted" ? "Last submitted: " : "Last saved: "}
+                    <time dateTime={batch.saved.status === "submitted" ? batch.saved.submitted_at! : batch.saved.updated_at}>
+                        {new Intl.DateTimeFormat("en-SG", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Singapore" }).format(new Date(batch.saved.status === "submitted" ? batch.saved.submitted_at! : batch.saved.updated_at))}
+                    </time> (Singapore time)
+                </p>}
             </section>
         </div>
     );
@@ -263,19 +262,26 @@ function GradingTable({
 export default function InstructorGradingSession() {
     const { eventId } = useParams();
     const api = useInstructorApi();
+    const client = useQueryClient();
     const load = useCallback(
         async (signal: AbortSignal) => {
             const roster = await api.getAttendanceRoster(
                 parseEntityId(eventId, "event"),
                 signal,
             );
-        const [reference, identity] = await Promise.all([api.getReferenceData(signal), api.getCurrentInstructor(signal)]);
-        return { ...roster, reference, identity };
+            const [reference, identity, initialBatch] = await Promise.all([
+                api.getReferenceData(signal), api.getCurrentInstructor(signal),
+                roster.session.event.event_type === "grading" ? api.getLatestGradingBatch(roster.session.event.id, signal) : Promise.resolve(null),
+            ]);
+            signal.throwIfAborted();
+            if (initialBatch) client.setQueryData<GradingBatch>(keys.gradingBatch(identity.userId, roster.session.event.id, initialBatch.track, initialBatch.target_grade_id),
+                current => !current || current.version <= initialBatch.version ? initialBatch : current);
+            return { ...roster, reference, identity, initialBatch };
         },
-        [api, eventId],
+        [api, eventId, client],
     );
     const query = useInstructorQuery(
-        (userId) => [...keys.event(userId, eventId ?? ""), "grading-table"],
+        (userId) => keys.gradingSession(userId, eventId ?? ""),
         load,
         times.roster,
     );

@@ -10,18 +10,23 @@ Deno.test('test invitation copy links to an authenticated confirmation, not auto
   const copy = invitationCopy({ id: eventId, name: '[Cover Test] Weekday 3 PM', centre_id: 'x',
     starts_at: '2099-11-09T07:00:00Z', ends_at: '2099-11-09T08:00:00Z', status: 'scheduled',
     centres: { name: 'Bukit Timah Dojo' } },
-  { id: instructorId, first_name: 'Ben', last_name: 'Two', email: 'bentwo@example.com' }, 'suroul29@gmail.com', `http://localhost:5173/instructor/calendar?cover=${invitationId}`)
+  { id: instructorId, first_name: 'Ben', last_name: 'Two', email: 'bentwo@example.com' }, `https://fsdp-kappa.vercel.app/instructor/calendar?cover=${invitationId}`)
   assert.match(copy.email_subject, /Cover request/)
   assert.match(copy.email_body, /Ben Two/)
   assert.match(copy.email_body, /Bukit Timah Dojo/)
-  assert.match(copy.email_body, new RegExp(`http://localhost:5173/instructor/calendar\\?cover=${invitationId}`))
-  assert.match(copy.email_body, /link alone does not grant access/)
+  assert.ok(copy.email_body.includes(`https://fsdp-kappa.vercel.app/instructor/calendar?cover=${invitationId}`))
+  assert.doesNotMatch(copy.email_body, /localhost/)
+  assert.match(copy.email_body, /You have been requested to cover the following class as the assigned instructor is unavailable\./)
+  assert.match(copy.email_body, /Please confirm your availability by accepting or declining the request through the link below\./)
+  assert.match(copy.email_body, new RegExp(`Respond to Cover Request: https://fsdp-kappa\\.vercel\\.app/instructor/calendar\\?cover=${invitationId}`))
+  assert.match(copy.email_body, /Thank you for your support\./)
+  assert.doesNotMatch(copy.email_body, /The link alone does not grant access|This is a test invitation only|Could you cover the following TEST class/)
 })
 
 Deno.test('preview never sends, send reserves once, and rejected attempt stays terminal', async () => {
   const settings: Record<string,string> = { APP_URL: 'https://app.example.com', SUPABASE_URL: host,
     SUPABASE_ANON_KEY: 'test-anon', SUPABASE_SERVICE_ROLE_KEY: 'test-service', EMAILJS_TEMPLATE_ID: 'template_test',
-    EMAILJS_SERVICE_ID: 'service_test', EMAILJS_PUBLIC_KEY: 'public_test', ADMIN_UNAVAILABILITY_EMAIL: 'suroul29@gmail.com' }
+    EMAILJS_SERVICE_ID: 'service_test', EMAILJS_PUBLIC_KEY: 'public_test' }
   const old = Object.fromEntries(Object.keys(settings).map(key => [key, Deno.env.get(key)]))
   for (const [key,value] of Object.entries(settings)) Deno.env.set(key,value)
   const originalFetch = globalThis.fetch
@@ -54,8 +59,11 @@ Deno.test('preview never sends, send reserves once, and rejected attempt stays t
       assert.equal(payload.template_id,'template_test')
       assert.equal(payload.template_params.to_email,recipientEmail)
       assert.match(payload.template_params.email_subject,/Cover request/)
-      assert.match(payload.template_params.email_body,/test invitation/i)
-      assert.match(payload.template_params.email_body, new RegExp(`instructor/calendar\\?cover=${invitationId}`))
+      assert.match(payload.template_params.email_body,/You have been requested to cover the following class/)
+      assert.match(payload.template_params.email_body,/Thank you for your support\./)
+      assert.doesNotMatch(payload.template_params.email_body,/The link alone does not grant access/)
+      assert.ok(payload.template_params.email_body.includes(`https://fsdp-kappa.vercel.app/instructor/calendar?cover=${invitationId}`))
+      assert.doesNotMatch(payload.template_params.email_body, /localhost/)
       if (providerTimesOut) throw new Error('Network response unknown')
       return new Response(providerRejects ? 'sensitive: suroul29@gmail.com' : 'OK',{status:providerRejects ? 400 : 200})
     }
