@@ -29,6 +29,7 @@ const AdminGradingApplications = lazy(() => import('./pages/admin/GradingApplica
 const AdminGradingSyllabus = lazy(() => import('./pages/admin/Syllabus'))
 const AdminNotifications = lazy(() => import('./pages/admin/Notifications'))
 const AdminInstructors = lazy(() => import('./pages/admin/Instructors'))
+const AdminEmailTemplates = lazy(() => import('./pages/admin/EmailTemplates'))
 const AdminProfile = lazy(() => import('./pages/admin/Profile'))
 
 const ForgetPassword = lazy(() => import('./pages/ForgetPassword')) 
@@ -126,6 +127,7 @@ export default function App() {
               </Route>
               <Route path="notifications" element={<AdminNotifications />} />
               <Route path="instructors" element={<AdminInstructors />} />
+              <Route path="email-templates" element={<AdminEmailTemplates />} />
               <Route path="profile" element={<AdminProfile />} />
             </Route>
           </Route>

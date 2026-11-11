@@ -85,8 +85,8 @@ export default function GradingOpportunities() {
                 </CardHeader>
                 <CardContent className="space-y-4 p-5">
                   <dl className="grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
-                    <div><dt className="text-muted-foreground">Grading date</dt><dd className="mt-1 font-semibold">{showDate(item.grading_date)}</dd></div>
                     <div><dt className="text-muted-foreground">Applications open</dt><dd className="mt-1 font-semibold">{showDate(item.application_opens_on)}</dd></div>
+                    <div><dt className="text-muted-foreground">Grading date</dt><dd className="mt-1 font-semibold">{showDate(item.grading_date)}</dd></div>
                     <div><dt className="text-muted-foreground">Closing date</dt><dd className="mt-1 font-semibold">{showDate(item.application_deadline)}</dd></div>
                     <div><dt className="text-muted-foreground">Reporting time released</dt><dd className="mt-1 font-semibold">{showDate(item.reporting_release_on)}</dd></div>
                   </dl>

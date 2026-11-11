@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
-import { ArrowRight, Bell, CheckCircle2, ChevronRight } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { ArrowRight, Bell, CheckCircle2, ChevronRight, XCircle } from 'lucide-react'
 import AdminGradeBadge from '@/components/admin/AdminGradeBadge'
 import EmptyState from '@/components/admin/EmptyState'
 import EligibilityChecklist from '@/components/admin/EligibilityChecklist'
-import TechniqueRequirementBreakdown from '@/components/admin/TechniqueRequirementBreakdown'
 import { EligibilityBadge } from '@/components/admin/StatusBadge'
 import { NativeSelect } from '@/components/admin/form-controls'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -22,31 +22,25 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { useAdminData } from '@/lib/admin/admin-data-context'
-import { useAdminFilters } from '@/lib/admin/admin-filters'
+import { useAuth } from '@/hooks/use-auth'
 import {
   formatDate,
-  fullName,
   initials,
 } from '@/lib/admin/format'
 import {
   formatMonths,
-  getEligibilityAssessments,
   getGradeRequirement,
-  studentAge,
-  studentTrack,
 } from '@/lib/admin/grading-eligibility'
 import { countSyllabusItems } from '@/lib/admin/syllabus'
-import type { Grade, GradeTrack } from '@/lib/admin/types'
-import { getGradeMeta, grades } from '@/lib/admin/types'
-import { cn } from 'cn'
+import type { EligibilityRequirement, Grade, GradeTrack } from '@/lib/admin/types'
+import { getGradeMeta, grades, UNRANKED } from '@/lib/admin/types'
 import { supabase } from '@/lib/supabase'
 
 function related<T>(value: T | T[] | null | undefined): T | undefined {
   return Array.isArray(value) ? value[0] : value ?? undefined
 }
 
-interface InvitationWording { subject: string; body: string }
+interface InvitationWording { subject: string; body: string; updated_at: string }
 interface InvitationPreview {
   eligible: number
   bcc_count: number
@@ -58,18 +52,65 @@ interface InvitationPreview {
   send_ready: boolean
 }
 
-const datePlaceholders = [
-  '{{children_grading_date}}',
-  '{{children_application_close_date}}',
-  '{{adult_grading_date}}',
-  '{{adult_application_close_date}}',
-] as const
+interface LiveEligibleStudent {
+  id: string
+  first_name: string
+  last_name: string
+  date_of_birth: string
+  centre_name: string
+  current_grade: string
+  target_grade: string
+  track: GradeTrack
+  joined_at: string
+  last_graded_at: string | null
+  age_years: number
+  membership_months: number
+  grade_months: number
+  min_months: number
+  max_months: number | null
+  min_age_years: number | null
+  min_sessions: number | null
+  sessions_attended: number
+  techniques: { id: string; label: string; category: string; signed: boolean }[]
+}
+
+function studentName(student: LiveEligibleStudent) {
+  return `${student.first_name} ${student.last_name}`.trim()
+}
+
+function LiveGrade({ label, track }: { label: string; track: GradeTrack }) {
+  if (label !== UNRANKED && !grades.includes(label as (typeof grades)[number])) {
+    return <span className="inline-flex rounded-md border bg-background px-2 py-0.5 text-2xs font-semibold">{label}</span>
+  }
+  return <AdminGradeBadge grade={label as Grade} track={track} />
+}
+
+function liveRequirements(student: LiveEligibleStudent): EligibilityRequirement[] {
+  const requirements: EligibilityRequirement[] = [
+    { key: 'membership', label: 'Active membership', actual: 'Active', required: 'Active', met: true },
+    { key: 'membership-length', label: 'Time as a member', actual: formatMonths(student.membership_months), required: formatMonths(3), met: true },
+  ]
+  if (student.min_age_years !== null) requirements.push({ key: 'age', label: 'Minimum age',
+    actual: `${student.age_years} years`, required: `${student.min_age_years} years`, met: true })
+  if (student.min_months > 0) requirements.push({ key: 'time',
+    label: student.current_grade === UNRANKED ? 'Practice since joining' : 'Time in current grade',
+    actual: formatMonths(student.grade_months), required: formatMonths(student.min_months, student.max_months ?? undefined), met: true })
+  if (student.min_sessions !== null) requirements.push({ key: 'sessions', label: 'Training sessions since last grading',
+    actual: String(student.sessions_attended), required: String(student.min_sessions), met: true })
+  if (student.techniques.length) requirements.push({ key: 'techniques', label: 'Target-grade techniques signed off',
+    actual: String(student.techniques.filter(item => item.signed).length), required: String(student.techniques.length), met: true })
+  requirements.push({ key: 'fees', label: 'Fees up to date', actual: 'Clear', required: 'Clear', met: true })
+  return requirements
+}
+
+const requiredPlaceholders = [
+  '{{children_grading_date}}', '{{children_application_close_date}}',
+  '{{adult_grading_date}}', '{{adult_application_close_date}}',
+]
 const applicationUrl = 'https://fsdp-kappa.vercel.app/grading'
 
 export default function GradingEligibility() {
-  const { centres, students, attendance, sessions, techniqueSignOffs } =
-    useAdminData()
-  const { centreId } = useAdminFilters()
+  const { session } = useAuth()
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null)
   const [notice, setNotice] = useState('')
   const [noticeError, setNoticeError] = useState(false)
@@ -83,11 +124,12 @@ export default function GradingEligibility() {
   const [message, setMessage] = useState('')
   const [wordingError, setWordingError] = useState('')
   const [savingWording, setSavingWording] = useState(false)
+  const [loadingWording, setLoadingWording] = useState(false)
 
   useEffect(() => {
     const today = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Singapore', dateStyle: 'short' }).format(new Date())
-    void supabase.from('events').select('id,name,gradings!inner(track,application_status,grading_date,application_opens_on,application_deadline)')
-      .eq('event_type', 'grading').eq('status', 'scheduled').eq('gradings.application_status', 'open')
+    void supabase.from('events').select('id,name,gradings!inner(track,official_schedule,application_status,grading_date,application_opens_on,application_deadline)')
+      .eq('event_type', 'grading').eq('status', 'scheduled').eq('gradings.official_schedule', true).eq('gradings.application_status', 'open')
       .then(({ data, error }) => {
         if (error) { setNoticeError(true); setNotice('Unable to load persisted grading events.') }
         else setEvents((data ?? []).filter((event) => {
@@ -99,52 +141,44 @@ export default function GradingEligibility() {
   }, [])
 
   useEffect(() => {
+    if (!notifyOpen) return
     let active = true
-    void supabase.from('grading_invitation_settings').select('subject,body').eq('id', true).single()
+    setLoadingWording(true)
+    setWording(null)
+    setWordingError('')
+    void supabase.from('admin_email_templates').select('subject,body,updated_at').eq('id', 'grading_invitation').single()
       .then(({ data, error }) => {
         if (!active) return
-        if (error || !data) setWordingError('Unable to load invitation wording. Refresh to try again.')
+        if (error || !data) setWordingError('Unable to load the saved grading invitation. Close and reopen to try again.')
         else {
           setWording(data)
           setSubject(data.subject)
           setMessage(data.body)
         }
+        setLoadingWording(false)
       })
     return () => { active = false }
-  }, [])
+  }, [notifyOpen])
 
-  const centreNames = new Map(centres.map((centre) => [centre.id, centre.name]))
-  const scopedStudents = useMemo(
-    () =>
-      students.filter(
-        (student) => centreId === 'all' || student.homeCentreId === centreId,
-      ),
-    [students, centreId],
-  )
-  const assessments = useMemo(
-    () =>
-      getEligibilityAssessments(
-        scopedStudents,
-        attendance,
-        sessions,
-        techniqueSignOffs,
-      ),
-    [scopedStudents, attendance, sessions, techniqueSignOffs],
-  )
-
-  const selectedTrack = events.find((event) => event.id === eventId)?.track
-  const eligible = assessments.filter((assessment) => assessment.status === 'eligible' && (!selectedTrack ||
-    scopedStudents.some((student) => student.id === assessment.studentId && studentTrack(student) === selectedTrack)))
-  const selectedStudent = scopedStudents.find((student) => student.id === selectedStudentId)
-  const selectedAssessment = eligible.find((assessment) => assessment.studentId === selectedStudentId)
-  const wordingChanged = wording !== null && (subject !== wording.subject || message !== wording.body)
-
+  const eligibility = useQuery({
+    queryKey: ['admin', 'grading-eligibility', session?.user.id, eventId],
+    enabled: !!session,
+    queryFn: async (): Promise<LiveEligibleStudent[]> => {
+      const { data, error } = await supabase.rpc('admin_grading_eligibility', { target_event: eventId || null })
+      if (error) throw error
+      if (!Array.isArray(data)) throw new Error('No eligibility results were returned.')
+      return data as LiveEligibleStudent[]
+    },
+    refetchOnWindowFocus: true,
+  })
+  const eligible = eligibility.data ?? []
+  const selectedStudent = eligible.find((student) => student.id === selectedStudentId)
+  const selectedRequirements = selectedStudent ? liveRequirements(selectedStudent) : []
+  const wordingChanged = !!wording && (subject !== wording.subject || message !== wording.body)
   function changeNotifyOpen(open: boolean) {
     if (!open) {
-      if (savingWording || pendingAction) return
+      if (pendingAction || savingWording) return
       if (wordingChanged && !window.confirm('Discard unsaved invitation wording?')) return
-      setSubject(wording?.subject ?? '')
-      setMessage(wording?.body ?? '')
       setPreview(null)
       setWordingError('')
     }
@@ -152,27 +186,28 @@ export default function GradingEligibility() {
   }
 
   async function saveWording() {
-    if (!wordingChanged) return
-    if (!subject.trim() || subject.length > 150 || /[\r\n]/.test(subject) || message.length > 5000 ||
-      datePlaceholders.some((placeholder) => !message.includes(placeholder)) ||
-      message.split(applicationUrl).length !== 2 || message.includes('[insert actual link here]') ||
-      message.includes('{{grading_details}}') || message.includes('{{application_url}}')) {
-      setWordingError(`Use a subject of up to 150 characters and a message of up to 5,000 characters containing all four grading date placeholders and exactly one ${applicationUrl} link.`)
+    if (!wording || !wordingChanged || savingWording) return
+    if (!subject.trim() || subject.length > 150 || /[\r\n]/.test(subject) || !message.trim() || message.length > 5000 ||
+      requiredPlaceholders.some(placeholder => !message.includes(placeholder)) ||
+      message.split(applicationUrl).length !== 2 ||
+      message.replace(/\{\{(?:children_grading_date|children_application_close_date|adult_grading_date|adult_application_close_date)\}\}/g, '').match(/\{\{[^}]*\}\}/)) {
+      setWordingError(`Use a one-line subject, all four date placeholders, and exactly one ${applicationUrl} link.`)
       return
     }
     setSavingWording(true)
     setWordingError('')
-    setNotice('')
-    const { data, error } = await supabase.from('grading_invitation_settings')
-      .update({ subject: subject.trim(), body: message, updated_at: new Date().toISOString() })
-      .eq('id', true).select('subject,body').single()
-    if (error || !data) setWordingError('Could not save the default wording. Check administrator access and try again.')
+    const { data, error } = await supabase.from('admin_email_templates')
+      .update({ subject: subject.trim(), body: message }).eq('id', 'grading_invitation').eq('updated_at', wording.updated_at)
+      .select('subject,body,updated_at').maybeSingle()
+    if (error || !data) setWordingError(error
+      ? 'Unable to save the grading invitation. Check administrator access and try again.'
+      : 'This template changed elsewhere. Close and reopen it to review the latest version.')
     else {
       setWording(data)
       setSubject(data.subject)
       setPreview(null)
       setNoticeError(false)
-      setNotice('Default invitation wording saved. No email was sent.')
+      setNotice('Grading invitation template saved. No email was sent.')
     }
     setSavingWording(false)
   }
@@ -196,15 +231,17 @@ export default function GradingEligibility() {
         setNotice(`EmailJS accepted one invitation send (BCC: ${data.bcc_count} addresses). This does not confirm delivery.`)
         setPreview(null)
         setNotifyOpen(false)
+        void eligibility.refetch()
       } else {
         if (!data?.preview_token || !data?.email_subject || !data?.email_body) {
-          throw new Error('The editable invitation service is not deployed yet. No email was sent.')
+          throw new Error('The invitation service is not available. No email was sent.')
         }
         setPreview(data)
       }
     } catch (failure) {
       setNoticeError(true)
       setNotice(failure instanceof Error ? failure.message : 'Invitation failed.')
+      if (confirm) setPreview(null)
     } finally { setPendingAction(null) }
   }
 
@@ -224,45 +261,38 @@ export default function GradingEligibility() {
             {events.map((event) => <option key={event.id} value={event.id}>{event.name}</option>)}
           </NativeSelect>
         </div>
-        <Button className="ml-auto" variant="outline" onClick={() => { setNotice(''); setNotifyOpen(true) }} disabled={!wording || pendingAction !== null || savingWording}>
+        <Button className="ml-auto" variant="outline" onClick={() => { setPreview(null); setNotice(''); setNotifyOpen(true) }} disabled={pendingAction !== null || savingWording}>
           <Bell />
           Notify Students
         </Button>
       </div>
-      {wordingError && !wording && <p role="alert" className="text-sm text-destructive">{wordingError}</p>}
       <Dialog open={notifyOpen} onOpenChange={changeNotifyOpen}>
-        <DialogContent className={cn(
-          'max-h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)_auto] sm:max-w-2xl',
-          preview && 'lg:max-w-6xl',
-        )}>
+        <DialogContent className="max-h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)_auto] sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Notify Students</DialogTitle>
-            <DialogDescription>
-              {eventId ? events.find((event) => event.id === eventId)?.name : 'All open gradings'} · Shared invitation wording for adult and children’s gradings.
-            </DialogDescription>
+            <DialogDescription className="sr-only">Edit the saved grading invitation and preview students before sending.</DialogDescription>
           </DialogHeader>
-          <div className={cn('min-h-0 overflow-y-auto', preview && 'lg:grid lg:grid-cols-2 lg:gap-6 lg:overflow-hidden')}>
-            <div className={cn('space-y-4 pr-1', preview && 'lg:min-h-0 lg:overflow-y-auto lg:pr-3')}>
-              {notice && <Alert variant={noticeError ? 'destructive' : 'default'}>
-                {!noticeError && <CheckCircle2 className="size-4 text-success" aria-hidden="true" />}
-                <AlertDescription>{notice}</AlertDescription>
-              </Alert>}
+          <div className="min-h-0 space-y-4 overflow-y-auto px-1">
+            {notice && <Alert variant={noticeError ? 'destructive' : 'default'}>
+              {!noticeError && <CheckCircle2 className="size-4 text-success" aria-hidden="true" />}
+              <AlertDescription>{notice}</AlertDescription>
+            </Alert>}
+            {!preview ? <>
               {wordingError && <p role="alert" className="text-sm text-destructive">{wordingError}</p>}
+              {loadingWording && <p role="status" className="text-sm text-muted-foreground">Loading saved invitation…</p>}
               <div className="space-y-2"><Label htmlFor="invitation-subject">Subject</Label>
-                <Input id="invitation-subject" value={subject} maxLength={150} disabled={savingWording || pendingAction !== null}
-                  onChange={(event) => { setSubject(event.target.value); setPreview(null); setWordingError('') }} /></div>
+                <Input id="invitation-subject" value={subject} maxLength={150} disabled={loadingWording || !wording || savingWording || pendingAction !== null}
+                  onChange={event => { setSubject(event.target.value); setPreview(null); setWordingError('') }} /></div>
               <div className="space-y-2"><Label htmlFor="invitation-message">Message</Label>
-                <Textarea id="invitation-message" value={message} rows={11} maxLength={5000} disabled={savingWording || pendingAction !== null}
-                  onChange={(event) => { setMessage(event.target.value); setPreview(null); setWordingError('') }} />
-                <p className="text-xs text-muted-foreground">Keep all four date placeholders in the message: {datePlaceholders.join(', ')}. Keep the full application link in the message; only the dates are filled in for preview and send. Save changes before previewing; saving does not send an email.</p></div>
-              <Button type="button" variant="outline" disabled={wordingChanged || pendingAction !== null || savingWording} onClick={() => void notifyEligible(false)}>
-                {pendingAction === 'preview' ? 'Preparing preview…' : 'Preview recipients'}
-              </Button>
-            </div>
-            {preview && <section aria-label="Email preview" className="mt-5 space-y-3 border-t border-border pt-5 pr-1 lg:mt-0 lg:min-h-0 lg:overflow-y-auto lg:border-t-0 lg:border-l lg:py-0 lg:pl-6">
+                <Textarea id="invitation-message" value={message} rows={11} maxLength={5000} disabled={loadingWording || !wording || savingWording || pendingAction !== null}
+                  onChange={event => { setMessage(event.target.value); setPreview(null); setWordingError('') }} />
+                <p className="text-xs text-muted-foreground">Keep all four grading date placeholders and exactly one {applicationUrl} link. Save changes before previewing; saving does not send email.</p>
+              </div>
+              <Button type="button" variant="outline" disabled={!wording || wordingChanged || pendingAction !== null || savingWording}
+                onClick={() => void notifyEligible(false)}>{pendingAction === 'preview' ? 'Preparing preview…' : 'Preview students'}</Button>
+            </> : <section aria-label="Email preview" className="space-y-3">
               <h3 className="font-semibold">Email preview</h3>
-              <p>Live eligible students: {preview.eligible}. One email to suroulomg@gmail.com; {preview.bcc_count} BCC addresses (including mq07110@gmail.com).</p>
-              <p className="text-xs break-all text-muted-foreground">BCC: {preview.bcc_emails.join(', ')}</p>
+              <p className="font-medium">Send to {preview.eligible} {preview.eligible === 1 ? 'student' : 'students'}</p>
               <div className="rounded-md border border-border bg-background p-4">
                 <p className="font-medium">{preview.email_subject}</p>
                 <p className="mt-3 whitespace-pre-wrap text-sm">{preview.email_body}</p>
@@ -272,63 +302,67 @@ export default function GradingEligibility() {
             </section>}
           </div>
           <DialogFooter className="items-center border-t border-border bg-popover">
-            {wordingChanged && <span className="text-xs text-muted-foreground sm:mr-auto">Save changes before previewing or sending.</span>}
-            <Button type="button" variant="outline" disabled={!wordingChanged || savingWording || pendingAction !== null} onClick={() => void saveWording()}>
-              {savingWording ? 'Saving…' : 'Save'}
-            </Button>
+            {!preview ? <>
+              {wordingChanged && <span className="text-xs text-muted-foreground sm:mr-auto">Save changes before previewing or sending.</span>}
+              <Button type="button" variant="outline" disabled={!wordingChanged || savingWording || pendingAction !== null} onClick={() => void saveWording()}>
+                {savingWording ? 'Saving…' : 'Save'}
+              </Button>
+            </> : <Button type="button" variant="outline" className="sm:mr-auto" disabled={pendingAction !== null}
+              onClick={() => setPreview(null)}>Edit message</Button>}
             <Button type="button" disabled={!preview || pendingAction !== null || savingWording || wordingChanged || preview.eligible === 0 || preview.over_limit || !preview.send_ready}
               onClick={() => void notifyEligible(true)}>{pendingAction === 'send' ? 'Sending…' : 'Send email'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={Boolean(selectedStudent && selectedAssessment)} onOpenChange={(open) => { if (!open) setSelectedStudentId(null) }}>
-        <DialogContent className="gap-6 p-5 sm:max-w-3xl sm:p-6">
-          {selectedStudent && selectedAssessment && (
+      <Dialog open={Boolean(selectedStudent)} onOpenChange={(open) => { if (!open) setSelectedStudentId(null) }}>
+        <DialogContent className="h-[80dvh] w-[calc(100vw-2rem)] max-w-none grid-rows-[auto_minmax(0,1fr)] gap-6 overflow-hidden p-5 sm:w-[80vw] sm:max-w-none sm:p-6">
+          {selectedStudent && (
             <>
               <DialogHeader>
-                <DialogTitle className="text-xl">{fullName(selectedStudent)}</DialogTitle>
+                <DialogTitle className="text-xl">{studentName(selectedStudent)}</DialogTitle>
                 <DialogDescription>
-                  {studentAge(selectedStudent)} years old · {centreNames.get(selectedStudent.homeCentreId)}
+                  {selectedStudent.age_years} years old · {selectedStudent.centre_name}
                 </DialogDescription>
               </DialogHeader>
-              <div className="space-y-5">
+              <div className="min-h-0 space-y-5 overflow-y-auto pr-1">
                 <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-muted/30 p-4">
                   <span className="text-xs font-medium text-muted-foreground">Grade progression</span>
-                  <AdminGradeBadge grade={selectedStudent.currentGrade} track={studentTrack(selectedStudent)} />
+                  <LiveGrade label={selectedStudent.current_grade} track={selectedStudent.track} />
                   <ArrowRight className="size-4 text-muted-foreground" aria-hidden="true" />
-                  <AdminGradeBadge grade={selectedAssessment.targetGrade} track={studentTrack(selectedStudent)} />
-                  <EligibilityBadge status={selectedAssessment.status} />
+                  <LiveGrade label={selectedStudent.target_grade} track={selectedStudent.track} />
+                  <EligibilityBadge status="eligible" />
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  {selectedAssessment.metCount} of {selectedAssessment.total} requirements met · Last graded{' '}
-                  {selectedStudent.lastGradedAt ? formatDate(selectedStudent.lastGradedAt) : 'never'}
+                  {selectedRequirements.length} of {selectedRequirements.length} requirements met · Last graded{' '}
+                  {selectedStudent.last_graded_at ? formatDate(selectedStudent.last_graded_at) : 'never'}
                 </p>
-                <div className={cn(
-                  'grid gap-6',
-                  selectedAssessment.requirements.some((requirement) => requirement.key === 'techniques') && 'lg:grid-cols-2',
-                )}>
-                  <section className="space-y-3">
-                    <h3 className="text-sm font-semibold">Requirements</h3>
-                    <EligibilityChecklist requirements={selectedAssessment.requirements} compact />
-                  </section>
-                  {selectedAssessment.requirements.some((requirement) => requirement.key === 'techniques') && (
-                    <TechniqueRequirementBreakdown
-                      student={selectedStudent}
-                      targetGrade={selectedAssessment.targetGrade}
-                    />
-                  )}
-                </div>
+                <section className="flex flex-col gap-3">
+                  <h3 className="text-sm font-semibold">Requirements</h3>
+                  <EligibilityChecklist key={selectedStudent.id} requirements={selectedRequirements} compact
+                    techniqueDetails={selectedStudent.techniques.length ? <ul className="space-y-2">
+                      {selectedStudent.techniques.map(item => <li key={item.id} className="flex items-start gap-2 text-sm">
+                        {item.signed ? <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-success" aria-hidden="true" />
+                          : <XCircle className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden="true" />}
+                        <span>{item.label} <span className="text-xs text-muted-foreground">· {item.category}</span></span>
+                      </li>)}
+                    </ul> : undefined} />
+                </section>
               </div>
             </>
           )}
         </DialogContent>
       </Dialog>
 
-      {eligible.length === 0 ? (
+      {eligibility.isPending && <p role="status" className="text-sm text-muted-foreground">Loading live grading eligibility…</p>}
+      {eligibility.isError && <Alert variant="destructive" role="alert"><AlertDescription className="flex items-center gap-3">
+        Unable to load live eligibility. No demo students are shown.
+        <Button variant="outline" size="sm" onClick={() => void eligibility.refetch()}>Retry</Button>
+      </AlertDescription></Alert>}
+      {eligibility.isSuccess && (eligible.length === 0 ? (
         <EmptyState
           title="No eligible students"
-          description={eventId ? 'No students currently meet all grading requirements for this grading track.' : 'No students currently meet all grading requirements.'}
+          description={eventId ? 'No live students currently meet all requirements for this open grading.' : 'No live students currently meet all requirements for an open official grading.'}
         />
       ) : (
         <Card className="overflow-hidden py-0">
@@ -340,27 +374,21 @@ export default function GradingEligibility() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Student</TableHead>
-                  <TableHead>Centre</TableHead>
                   <TableHead>Next grade</TableHead>
                   <TableHead>Requirements</TableHead>
                   <TableHead>Last graded</TableHead>
-                  <TableHead>
-                    <span className="flex items-center gap-3">
-                      Status
-                      <span className="inline-flex items-center gap-1 rounded-md bg-success/10 px-2 py-1 text-xs font-medium text-success">
-                        Eligible now <span className="tabular-nums">{eligible.length}</span>
-                      </span>
-                    </span>
-                  </TableHead>
-                  <TableHead><span className="sr-only">Details</span></TableHead>
+                   <TableHead>Status</TableHead>
+                   <TableHead className="text-right">
+                     <span className="sr-only">Details</span>
+                     <span className="inline-flex items-center gap-1 rounded-md bg-success/10 px-2 py-1 text-xs font-medium text-success">
+                       Eligible now <span className="tabular-nums">{eligible.length}</span>
+                     </span>
+                   </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {eligible.map((assessment) => {
-                  const student = scopedStudents.find(
-                    (item) => item.id === assessment.studentId,
-                  )
-                  if (!student) return null
+                {eligible.map((student) => {
+                  const requirements = liveRequirements(student)
                   return (
                     <TableRow
                       key={student.id}
@@ -370,60 +398,47 @@ export default function GradingEligibility() {
                         <TableCell>
                           <div className="flex items-center gap-3">
                             <span className="flex size-8 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
-                              {initials(student.firstName, student.lastName)}
+                               {initials(student.first_name, student.last_name)}
                             </span>
                             <div>
-                              <p className="font-medium">{fullName(student)}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {studentAge(student)} years old
+                               <p className="font-medium">{studentName(student)}</p>
+                               <p className="text-xs text-muted-foreground">
+                                 {student.age_years} years old
                               </p>
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {centreNames.get(student.homeCentreId)}
-                        </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            <AdminGradeBadge grade={student.currentGrade} track={studentTrack(student)} />
-                            <ArrowRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                            <AdminGradeBadge grade={assessment.targetGrade} track={studentTrack(student)} />
+                             <LiveGrade label={student.current_grade} track={student.track} />
+                             <ArrowRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                             <LiveGrade label={student.target_grade} track={student.track} />
                           </div>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <span className="font-medium tabular-nums">
-                              {assessment.metCount}/{assessment.total}
+                               {requirements.length}/{requirements.length}
                             </span>
                             <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
                               <div
-                                className={cn(
-                                  'h-full rounded-full',
-                                  assessment.status === 'eligible'
-                                    ? 'bg-success'
-                                    : assessment.status === 'almost'
-                                      ? 'bg-warning'
-                                      : 'bg-destructive',
-                                )}
-                                style={{
-                                  width: `${(assessment.metCount / assessment.total) * 100}%`,
-                                }}
+                                 className="h-full w-full rounded-full bg-success"
                               />
                             </div>
                           </div>
                         </TableCell>
                         <TableCell className="text-muted-foreground">
-                          {student.lastGradedAt ? formatDate(student.lastGradedAt) : 'Never'}
+                           {student.last_graded_at ? formatDate(student.last_graded_at) : 'Never'}
                         </TableCell>
                         <TableCell>
-                          <EligibilityBadge status={assessment.status} />
+                           <EligibilityBadge status="eligible" />
                         </TableCell>
                         <TableCell className="text-right">
                           <Button
                             type="button"
                             variant="ghost"
                             size="sm"
-                            aria-label={`View eligibility details for ${fullName(student)}`}
+                             aria-label={`View eligibility details for ${studentName(student)}`}
                             onClick={(event) => {
                               event.stopPropagation()
                               setSelectedStudentId(student.id)
@@ -440,7 +455,7 @@ export default function GradingEligibility() {
             </Table>
           </CardContent>
         </Card>
-      )}
+       ))}
 
       <Card className="[--card-spacing:--spacing(6)]">
         <CardHeader>

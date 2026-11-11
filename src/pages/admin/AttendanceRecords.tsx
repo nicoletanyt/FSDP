@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Download, Search } from 'lucide-react'
 import EmptyState from '@/components/admin/EmptyState'
+import CentreCombobox from '@/components/admin/CentreCombobox'
 import { AttendanceBadge, StatusBadge } from '@/components/admin/StatusBadge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -14,7 +15,6 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { useAdminData } from '@/lib/admin/admin-data-context'
-import { useAdminFilters } from '@/lib/admin/admin-filters'
 import { downloadCsv } from '@/lib/admin/export'
 import { daysAgoIso, formatDate, fullName } from '@/lib/admin/format'
 import { studentAge } from '@/lib/admin/grading-eligibility'
@@ -22,7 +22,7 @@ import { NativeSelect } from '@/components/admin/form-controls'
 
 export default function AttendanceRecords() {
   const { centres, instructors, students, sessions, attendance } = useAdminData()
-  const { centreId } = useAdminFilters()
+  const [centreId, setCentreId] = useState('all')
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState('all')
   const [days, setDays] = useState(30)
@@ -104,6 +104,10 @@ export default function AttendanceRecords() {
             aria-label="Search attendance by student"
             className="h-10 w-full rounded-lg border border-input bg-background pr-2.5 pl-8 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
           />
+        </div>
+        <div className="w-full sm:w-auto">
+          <CentreCombobox centres={centres} value={centreId} onChange={setCentreId}
+            ariaLabel="Filter attendance records by centre" className="w-full sm:w-56" />
         </div>
         <div className="w-36">
           <NativeSelect

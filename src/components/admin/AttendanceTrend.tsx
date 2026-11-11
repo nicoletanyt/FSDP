@@ -15,7 +15,7 @@ import type { WeeklyTrendPoint } from '@/lib/admin/types'
 
 type Metric = 'rate' | 'sessions'
 
-export default function AttendanceTrend({ data }: { data: WeeklyTrendPoint[] }) {
+export default function AttendanceTrend({ data, compact = false }: { data: WeeklyTrendPoint[]; compact?: boolean }) {
   const [metric, setMetric] = useState<Metric>('rate')
   const [weeks, setWeeks] = useState<4 | 8 | 12>(8)
   const [showTable, setShowTable] = useState(false)
@@ -68,7 +68,7 @@ export default function AttendanceTrend({ data }: { data: WeeklyTrendPoint[] }) 
       </div>
 
       {showTable ? (
-        <div className="h-64 overflow-auto rounded-lg border border-border">
+        <div className={`${compact ? 'h-48 sm:h-52' : 'h-64'} overflow-auto rounded-lg border border-border`}>
           <table className="w-full text-sm">
             <caption className="sr-only">
               Weekly attendance trend as a table
@@ -98,7 +98,7 @@ export default function AttendanceTrend({ data }: { data: WeeklyTrendPoint[] }) 
           </table>
         </div>
       ) : (
-        <div className="h-64 w-full">
+        <div className={`${compact ? 'h-48 sm:h-52' : 'h-64'} w-full`}>
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={visibleData} margin={{ top: 8, right: 8, bottom: 0, left: -18 }}>
               <defs>
