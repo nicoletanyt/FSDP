@@ -1,5 +1,5 @@
 import { Link, NavLink } from 'react-router'
-import { CalendarDays, ClipboardCheck, LayoutDashboard, Presentation, UserCheck } from 'lucide-react'
+import { CalendarDays, ClipboardCheck, CreditCard, LayoutDashboard, Presentation, UserCheck } from 'lucide-react'
 import logo from '@/assets/logo.png'
 import ThemeToggle from '@/components/theme-toggle'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 
 const routes = [
   { label: 'Dashboard', to: '/dashboard', icon: LayoutDashboard },
+  { label: 'Credits', to: '/student/credits', icon: CreditCard },
   { label: 'Timetable', to: '/timetable', icon: CalendarDays },
   { label: 'Attendance', to: '/attendance', icon: UserCheck },
   { label: 'Classes', to: '/classes', icon: Presentation },

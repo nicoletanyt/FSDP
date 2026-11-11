@@ -5,6 +5,13 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { supabase } from '@/lib/supabase'
+import {
+  DATE_OF_BIRTH_STORAGE_KEY,
+  MEMBERSHIP_TYPES,
+  MEMBERSHIP_TYPE_STORAGE_KEY,
+  calculateAge,
+  membershipLabel,
+} from '@/lib/membership'
 import { Check, ChevronDown, ChevronUp, UploadCloud, Info } from 'lucide-react'
 
 const STEPS = [
@@ -67,6 +74,14 @@ export default function ApplyMembership() {
     fetchUserEmail()
   }, [])
 
+  const age = calculateAge(formData.dob)
+  const isMinor = age !== null && age < 18
+
+  // Members under 18 must provide guardian details, so keep the section open for them.
+  useEffect(() => {
+    if (isMinor) setShowGuardian(true)
+  }, [isMinor])
+
   const validateStep = (step: number) => {
     setErrorMsg('')
     
@@ -103,6 +118,11 @@ export default function ApplyMembership() {
       }
       if (formData.emergencyPhone.length !== 8) {
         setErrorMsg('Emergency contact number must be exactly 8 digits.')
+        return false
+      }
+      if (isMinor && (!formData.guardianName || !formData.guardianNric || !formData.guardianRelationship || !formData.guardianPhone)) {
+        setShowGuardian(true)
+        setErrorMsg('Members under 18 must provide complete Guardian Information (name, NRIC / FIN, relationship, and contact number).')
         return false
       }
       if (formData.guardianNric && !isValidNric(formData.guardianNric)) {
@@ -150,8 +170,9 @@ export default function ApplyMembership() {
         // 模拟网络请求
         await new Promise(resolve => setTimeout(resolve, 1000))
         
-        // 将生日存入本地，供 Credits 页面判断成人/儿童
-        localStorage.setItem('user_dob', formData.dob)
+        // 将生日和会员类型存入本地，供 Credits 页面筛选对应课卡
+        localStorage.setItem(DATE_OF_BIRTH_STORAGE_KEY, formData.dob)
+        localStorage.setItem(MEMBERSHIP_TYPE_STORAGE_KEY, formData.membershipType)
         
         navigate('/apply-membership/success', { state: { 
             membershipId: finalDataToSubmit.membership_id,
@@ -329,10 +350,14 @@ export default function ApplyMembership() {
                 <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-sm sm:text-base">Membership Type</Label>
                 <select value={formData.membershipType} onChange={(e) => setFormData({...formData, membershipType: e.target.value})} className="w-full h-11 sm:h-12 bg-gray-200/60 dark:bg-slate-800 rounded-md border-transparent px-3 text-sm focus:ring-[#2c3f67] text-black dark:text-white">
                   <option value="" disabled>Select type</option>
-                  <option value="adult">Adult</option>
-                  <option value="student">Student</option>
-                  <option value="junior">Junior</option>
+                  {MEMBERSHIP_TYPES.map((type) => (
+                    <option key={type.value} value={type.value}>{type.label}</option>
+                  ))}
                 </select>
+                <p className="text-[10px] sm:text-xs text-gray-500">
+                  {MEMBERSHIP_TYPES.find((type) => type.value === formData.membershipType)?.description
+                    ?? 'Your membership type determines which class passes you can purchase and any discounts applied.'}
+                </p>
               </div>
               <div className="space-y-1.5 sm:space-y-2">
                 <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-sm sm:text-base">Current Belt Rank</Label>
@@ -468,7 +493,9 @@ export default function ApplyMembership() {
                 <div className="flex justify-between items-center">
                   <div>
                     <h3 className="text-sm sm:text-base font-bold text-[#2c3f67] dark:text-blue-400">Guardian Information</h3>
-                    <p className="text-xs text-gray-500">Required for members under 18.</p>
+                    <p className={`text-xs ${isMinor ? 'text-[#e62128] dark:text-red-400 font-medium' : 'text-gray-500'}`}>
+                      {isMinor ? 'Required because the member is under 18.' : 'Required for members under 18.'}
+                    </p>
                   </div>
                   <button type="button" onClick={() => setShowGuardian(!showGuardian)} className="text-sm font-semibold text-[#2c3f67] dark:text-blue-400 hover:underline flex items-center gap-1">
                     {showGuardian ? 'Hide' : 'Add Info'}
@@ -479,15 +506,25 @@ export default function ApplyMembership() {
                 {showGuardian && (
                   <div className="mt-4 space-y-4 animate-in fade-in duration-200">
                      <div className="space-y-1.5">
-                        <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-xs">Guardian Name</Label>
+                        <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-xs">Guardian Name {isMinor && <span className="text-[#e62128]">*</span>}</Label>
                         <Input placeholder="Enter name" value={formData.guardianName} onChange={(e) => setFormData({...formData, guardianName: e.target.value})} className="h-10 bg-white dark:bg-slate-900 border-transparent text-sm" />
                      </div>
                      <div className="space-y-1.5">
-                        <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-xs">Guardian NRIC / FIN</Label>
+                        <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-xs">Guardian NRIC / FIN {isMinor && <span className="text-[#e62128]">*</span>}</Label>
                         <Input placeholder="e.g. S1234567A" value={formData.guardianNric} onChange={(e) => setFormData({...formData, guardianNric: e.target.value.toUpperCase()})} className="h-10 bg-white dark:bg-slate-900 border-transparent text-sm uppercase" />
                      </div>
                      <div className="space-y-1.5">
-                        <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-xs">Guardian Contact Number</Label>
+                        <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-xs">Relationship to Member {isMinor && <span className="text-[#e62128]">*</span>}</Label>
+                        <select value={formData.guardianRelationship} onChange={(e) => setFormData({...formData, guardianRelationship: e.target.value})} className="w-full h-10 bg-white dark:bg-slate-900 rounded-md border-transparent px-3 text-sm text-black dark:text-white">
+                          <option value="" disabled>Select relationship</option>
+                          <option value="parent">Parent</option>
+                          <option value="guardian">Legal Guardian</option>
+                          <option value="sibling">Sibling</option>
+                          <option value="other">Other</option>
+                        </select>
+                     </div>
+                     <div className="space-y-1.5">
+                        <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-xs">Guardian Contact Number {isMinor && <span className="text-[#e62128]">*</span>}</Label>
                         <div className="flex gap-2">
                           <div className="w-16 h-10 bg-white dark:bg-slate-900 rounded-md flex items-center justify-center text-sm text-gray-600 shrink-0">+65</div>
                           <Input type="tel" maxLength={8} placeholder="8-digit number" value={formData.guardianPhone} onChange={(e) => setFormData({...formData, guardianPhone: formatPhone(e.target.value)})} className="flex-1 h-10 bg-white dark:bg-slate-900 border-transparent text-sm" />
@@ -527,7 +564,7 @@ export default function ApplyMembership() {
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-2 sm:gap-y-3 text-xs sm:text-sm">
                   <div><span className="text-gray-500 block text-[10px] sm:text-xs">Dojo</span>{formData.principalDojo || '-'}</div>
-                  <div><span className="text-gray-500 block text-[10px] sm:text-xs">Type</span>{formData.membershipType || '-'}</div>
+                  <div><span className="text-gray-500 block text-[10px] sm:text-xs">Type</span>{formData.membershipType ? membershipLabel(formData.membershipType) : '-'}</div>
                   <div><span className="text-gray-500 block text-[10px] sm:text-xs">Belt</span>{formData.currentBelt || '-'}</div>
                   <div><span className="text-gray-500 block text-[10px] sm:text-xs">Emergency Contact</span>{formData.emergencyName || '-'}</div>
                 </div>

@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import {
   CalendarDays,
   ClipboardCheck,
+  CreditCard,
   IdCard,
   QrCode,
   Presentation,
@@ -21,6 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { formatDateTime } from "@/lib/format";
 import { mockStudent, type Student } from "@/lib/student-dashboard";
+import CreditBalanceCard from "@/pages/Student/CreditBalanceCard";
 
 /* ---------- Helpers ---------- */
 function greetingFor(hour: number) {
@@ -113,6 +115,7 @@ export default function StudentDashboard() {
       : "View grading requirements";
 
   const tiles: TileProps[] = [
+    { title: "Class Credits", to: "/student/credits", icon: CreditCard, status: "Top up your balance" },
     { title: "Timetable", to: "/timetable", icon: CalendarDays, status: "View this week's classes" },
     { title: "Attendance History", to: "/attendance", icon: UserCheck, status: `${counts.attendanceRate}% attendance` },
     { title: "Classes", to: "/classes", icon: Presentation, status: `${counts.classesEnrolled} enrolled` },
@@ -150,6 +153,10 @@ export default function StudentDashboard() {
             </Link>
           </div>
         </header>
+
+        <div className="mt-6">
+          <CreditBalanceCard />
+        </div>
 
         {/* Overview */}
         <section aria-label="Overview" className="mt-6 grid gap-4 xl:grid-cols-2">
