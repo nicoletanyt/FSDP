@@ -9,6 +9,15 @@ import { supabase } from '@/lib/supabase'
 
 type Centre = { id: string; name: string }
 
+// Same range the database accepts: not in the future, at most 120 years ago.
+function localDate(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+const today = new Date()
+const MAX_DOB = localDate(today)
+const MIN_DOB = localDate(new Date(today.getFullYear() - 120, today.getMonth(), today.getDate()))
+const validDob = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value) && value >= MIN_DOB && value <= MAX_DOB
+
 const STEPS = [
   { id: 1, title: 'Personal\nInformation' },
   { id: 2, title: 'Training\nInformation' },
@@ -51,6 +60,7 @@ export default function ApplyMembership() {
     const missing: string[] = []
     if (!firstName || rest.length === 0) missing.push('full name (first and last)')
     if (!formData.dob) missing.push('date of birth')
+    else if (!validDob(formData.dob)) missing.push('a valid date of birth (not in the future)')
     if (!formData.principalDojo) missing.push('principal dojo')
     if (!formData.emergencyName.trim() || !formData.emergencyRelationship || !formData.emergencyPhone.trim()) {
       missing.push('emergency contact')
@@ -165,10 +175,16 @@ export default function ApplyMembership() {
                 <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-base transition-colors">Date of Birth</Label>
                 <Input 
                   type="date"
+                  min={MIN_DOB}
+                  max={MAX_DOB}
+                  aria-invalid={!!formData.dob && !validDob(formData.dob)}
                   className="h-12 bg-gray-200/60 dark:bg-slate-800 border-transparent dark:border-slate-700 text-gray-500 dark:text-gray-400 focus-visible:ring-[#2c3f67] dark:focus-visible:ring-blue-500 transition-colors"
                   value={formData.dob}
                   onChange={(e) => setFormData({...formData, dob: e.target.value})}
                 />
+                {formData.dob && !validDob(formData.dob) && (
+                  <p role="alert" className="text-sm text-brand-red-ink">Enter a real date of birth. It can’t be in the future.</p>
+                )}
               </div>
 
               <div className="space-y-2">

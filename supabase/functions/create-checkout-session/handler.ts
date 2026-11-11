@@ -3,6 +3,19 @@ import { getStripe, requireEnv } from '../_shared/stripe.ts'
 
 const uuidPattern = /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i
 
+// Validation messages raised by submit_membership_application, shown to the
+// student as-is. Anything else (database or network errors) stays generic.
+const applicationErrors: Record<string, string> = {
+  'Invalid date of birth': 'Please enter a valid date of birth. It can’t be in the future.',
+  'Invalid date of birth or centre': 'Please check your date of birth and principal dojo.',
+  'Full name is required': 'Please enter your first and last name.',
+  'Select an active centre': 'Please choose your principal dojo again.',
+  'Emergency contact is required': 'Please complete your emergency contact details.',
+  'Only student accounts can apply for membership': 'Only student accounts can apply for a membership.',
+  'This email already belongs to a student record; contact the dojo':
+    'Your email already belongs to a student record. Please contact the dojo.',
+}
+
 function text(value: unknown, max: number) {
   return typeof value === 'string' ? value.trim().slice(0, max) : ''
 }
@@ -78,7 +91,11 @@ export async function handleRequest(request: Request): Promise<Response> {
     })
     if (error || !rows?.length) {
       console.error('Membership application rejected:', error)
-      return Response.json({ error: 'We could not save your application. Check your details.' }, { status: 400, headers })
+      const reason = error?.code === 'P0001' ? applicationErrors[error.message] : undefined
+      return Response.json(
+        { error: reason ?? 'We could not save your application. Check your details.' },
+        { status: 400, headers },
+      )
     }
     const { student_id: studentId, membership_status: status } = rows[0]
     if (status === 'active') {

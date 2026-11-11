@@ -24,6 +24,7 @@ function installFakes(state: {
   status?: string
   price?: Record<string, unknown>
   session?: Record<string, unknown>
+  submitError?: { code: string; message: string }
 }) {
   const calls: Call[] = []
   const originalFetch = globalThis.fetch
@@ -53,6 +54,7 @@ function installFakes(state: {
       if (url.pathname === '/auth/v1/user') return Response.json({ id: userId, aud: 'authenticated' })
       if (url.pathname === '/rest/v1/users') return Response.json({ role: state.role ?? 'student' })
       if (url.pathname === '/rest/v1/rpc/submit_membership_application') {
+        if (state.submitError) return Response.json({ ...state.submitError, details: null, hint: null }, { status: 400 })
         return Response.json([{ student_id: studentId, membership_status: state.status ?? 'pending' }])
       }
       if (url.pathname === '/rest/v1/rpc/finalize_membership_checkout') return new Response(null, { status: 204 })
@@ -145,6 +147,34 @@ Deno.test('membership checkout and activation', async (test) => {
         student_id: studentId, item: 'Membership', description: 'Membership fee',
         amount_cents: 8000, currency: 'sgd', stripe_session_id: 'cs_test_membership',
       })
+    })
+
+    await test.step('Stripe returns the student to the allow-listed site they started from', async () => {
+      reset()
+      Deno.env.set('APP_URL', 'https://fsdp.example.app')
+      Deno.env.set('AUTH_ALLOWED_ORIGINS', 'http://localhost:5173')
+      try {
+        assert.equal((await checkout(checkoutRequest())).status, 200)
+        const body = new URLSearchParams(fakes.calls.find((c) => c.path === '/v1/checkout/sessions')!.body)
+        assert.equal(body.get('success_url'), 'http://localhost:5173/dashboard?checkout=success')
+        assert.equal(body.get('cancel_url'), 'http://localhost:5173/apply-membership?checkout=cancel')
+      } finally {
+        Deno.env.set('APP_URL', environment.APP_URL)
+        Deno.env.delete('AUTH_ALLOWED_ORIGINS')
+      }
+    })
+
+    await test.step('database validation errors reach the student as specific, safe messages', async () => {
+      reset()
+      state.submitError = { code: 'P0001', message: 'Invalid date of birth' }
+      let response = await checkout(checkoutRequest())
+      assert.equal(response.status, 400)
+      assert.match((await response.json()).error, /valid date of birth/)
+      reset()
+      state.submitError = { code: '42P01', message: 'relation "secret_internal_table" does not exist' }
+      response = await checkout(checkoutRequest())
+      assert.equal((await response.json()).error, 'We could not save your application. Check your details.')
+      assert.ok(!fakes.calls.some((c) => c.path === '/v1/checkout/sessions'))
     })
 
     await test.step('active members and misconfigured prices are refused', async () => {
