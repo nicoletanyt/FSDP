@@ -68,7 +68,12 @@ server secrets with `VITE_`.
 - Staff: `/staff/login`; instructor dashboard: `/instructor`; administrator
   dashboard: `/admin`, including instructor account creation.
 - Instructor passwords are generated server-side and displayed to the creating
-  administrator after success. Save them then; they are not saved to browser storage.
+  administrator once after success. The create-instructor function also sends the
+  instructor a plain-text login email (staff login URL, email username, password)
+  through EmailJS. EmailJS acceptance is not a delivery guarantee. If sending
+  fails, the account still exists: do not create it again; use the one-time
+  password shown to the administrator to share credentials securely.
+  The password is not saved to browser storage.
 - After the instructor-availability migration is applied, trusted instructor
   profile creation also inserts a linked `public.instructors` row (`user_id`
   references the account). Existing unlinked instructors can open their calendar;
@@ -303,6 +308,14 @@ npx vercel@latest deploy --prod
 ```
 
 ### Edge Functions — Supabase Cloud
+
+Instructor provisioning requires `EMAILJS_SERVICE_ID`, `EMAILJS_TEMPLATE_ID`,
+and `EMAILJS_PUBLIC_KEY` before an account can be created. The EmailJS template
+must have To `{{to_email}}`, Subject `{{email_subject}}`, and a **plain-text**
+body `{{email_body}}` (no BCC field). `create-instructor` creates the account
+once, then makes one email attempt; if the provider rejects it or the outcome
+is uncertain, the administrator is told that the account exists and must not
+retry creation. Never log or persist the generated password.
 
 Replace `YOUR_PROJECT_REF` with your Supabase project reference. Configure
 `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID`,

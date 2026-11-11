@@ -107,6 +107,13 @@ export async function handleRequest(request: Request): Promise<Response> {
       if (gradeError) return Response.json({ error: 'Unable to verify the grade. Please try again.' }, { status: 500, headers })
       if (!grade) return Response.json({ error: 'Select a valid grade.' }, { status: 400, headers })
     }
+    // Do not create an account if the delivery pipeline cannot even be attempted.
+    const serviceId = Deno.env.get('EMAILJS_SERVICE_ID')?.trim()
+    const templateId = Deno.env.get('EMAILJS_TEMPLATE_ID')?.trim()
+    const publicKey = Deno.env.get('EMAILJS_PUBLIC_KEY')?.trim()
+    if (!serviceId || !templateId || !publicKey) {
+      return Response.json({ error: 'Instructor email delivery is not configured. No account was created.' }, { status: 503, headers })
+    }
     const { data, error } = await admin.auth.admin.createUser({
       email,
       password,
@@ -121,7 +128,32 @@ export async function handleRequest(request: Request): Promise<Response> {
       }, { status: 400, headers })
     }
 
-    return Response.json({ id: data.user.id, email: data.user.email, password }, {
+    // The account already exists at this point. A rejected or ambiguous provider
+    // response must not be presented as a provisioning failure and retried.
+    const instructorEmail = data.user.email ?? email
+    let emailStatus: 'accepted' | 'failed' | 'uncertain' = 'uncertain'
+    try {
+      const response = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(15000),
+        body: JSON.stringify({
+          service_id: serviceId, template_id: templateId, user_id: publicKey,
+          ...(Deno.env.get('EMAILJS_PRIVATE_KEY') ? { accessToken: Deno.env.get('EMAILJS_PRIVATE_KEY') } : {}),
+          template_params: {
+            to_email: instructorEmail,
+            email_subject: 'Your Aikido Shinju-Kai instructor login',
+            email_body: `Hello ${firstName},\n\nYour instructor account has been created.\n\nSign in: ${new URL('/staff/login', requiredEnv('APP_URL')).toString()}\nUsername: ${instructorEmail}\nPassword: ${password}\n\nPlease change your password after you sign in.\n\nAikido Shinju-Kai`,
+          },
+        }),
+      })
+      emailStatus = response.ok ? 'accepted' : 'failed'
+    } catch {
+      // The provider may have received the request; never retry automatically.
+      emailStatus = 'uncertain'
+    }
+
+    return Response.json({ id: data.user.id, email: instructorEmail, password, email_status: emailStatus }, {
       status: 201, headers,
     })
   } catch {

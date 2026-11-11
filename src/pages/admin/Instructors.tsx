@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { CheckCircle2, Mail, Plus, Search, X } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Mail, Plus, Search, X } from 'lucide-react'
 import CreateInstructorForm from '@/components/auth/CreateInstructorForm'
 import PageHeader from '@/components/admin/PageHeader'
 import EmptyState from '@/components/admin/EmptyState'
@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Input } from '@/components/ui/input'
 import type { UserProfile } from '@/lib/auth'
 import { fullName, initials } from '@/lib/admin/format'
+import { instructorEmailMessage } from '@/lib/instructors'
 import type { InstructorAccount } from '@/lib/instructors'
 import { supabase } from '@/lib/supabase'
 import GradeBadge from '@/components/instructor/DatabaseGradeBadge'
@@ -82,7 +83,7 @@ export default function Instructors() {
             <DialogHeader>
               <DialogTitle>Create instructor</DialogTitle>
               <DialogDescription>
-                Enter their details. A secure password will be generated and shown after creation.
+                A password will be generated and emailed with the instructor’s login details. It will also be shown once after creation.
               </DialogDescription>
             </DialogHeader>
             {createOpen && <CreateInstructorForm onCreated={handleCreated} />}
@@ -91,8 +92,10 @@ export default function Instructors() {
       </div>
 
       {createdAccount && (
-        <Alert role="status" className="border-success/30 bg-success/10 p-4">
-          <CheckCircle2 className="size-5 text-success" aria-hidden="true" />
+        <Alert role="status" className={createdAccount.email_status === 'accepted' ? 'border-success/30 bg-success/10 p-4' : 'border-warning/30 bg-warning/10 p-4'}>
+          {createdAccount.email_status === 'accepted'
+            ? <CheckCircle2 className="size-5 text-success" aria-hidden="true" />
+            : <AlertTriangle className="size-5 text-warning-foreground dark:text-warning" aria-hidden="true" />}
           <AlertDescription className="min-w-0 space-y-3 text-foreground">
             <div className="flex items-start justify-between gap-3">
               <p className="font-medium">Instructor account created for {createdAccount.email}.</p>
@@ -107,13 +110,14 @@ export default function Instructors() {
                 <X className="size-4" aria-hidden="true" />
               </Button>
             </div>
+            <p>{instructorEmailMessage(createdAccount.email_status)}</p>
             <div>
               <p className="mb-1 font-medium">Generated password</p>
               <code className="block select-all break-all rounded-md bg-background p-3 text-foreground">
                 {createdAccount.password}
               </code>
             </div>
-            <p>Save and share this password securely. It won’t be shown again after you dismiss this alert or leave the page. The instructor can sign in at /staff/login.</p>
+            <p>Save this password now; it won’t be shown again after you dismiss this alert or leave the page. The instructor can sign in at /staff/login.</p>
           </AlertDescription>
         </Alert>
       )}
