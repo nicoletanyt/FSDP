@@ -7,6 +7,15 @@ import { useAuth } from '@/hooks/use-auth'
 import { dashboardPaths } from '@/lib/auth'
 import type { UserRole } from '@/lib/auth'
 
+function isInstructorReturnPath(value: unknown): value is string {
+  if (typeof value !== 'string') return false
+  if (['/instructor/check-in', '/instructor/nfc_checkin'].includes(value)) return true
+  if (/^\/instructor\/cover\/[0-9a-f-]{36}$/i.test(value)) return true
+  return value.startsWith('/instructor/calendar?') && !value.includes('#')
+    && /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(
+      new URLSearchParams(value.slice('/instructor/calendar?'.length)).get('cover') ?? '')
+}
+
 function AuthStatus() {
   const { loading, error, reloadProfile, signOut } = useAuth()
   const { pathname } = useLocation()
@@ -51,7 +60,12 @@ export function GuestRoute() {
   const { session, profile, loading, error } = useAuth()
   const location = useLocation()
   if (loading || (session && (error || !profile))) return <AuthStatus />
-  if (profile) return <Navigate to={profile.role === 'student' && location.state?.from === '/grading' ? '/grading' : dashboardPaths[profile.role]} replace />
+  if (profile) return <Navigate to={
+    profile.role === 'instructor' && isInstructorReturnPath(location.state?.from)
+      ? location.state.from
+      : profile.role === 'student' && location.state?.from === '/grading'
+        ? '/grading' : dashboardPaths[profile.role]
+  } replace />
   return <Outlet />
 }
 
@@ -60,7 +74,13 @@ export function ProtectedRoute({ role }: { role: UserRole }) {
   const location = useLocation()
   if (loading) return <AuthStatus />
   if (!session) {
-    return <Navigate to={role === 'instructor' ? '/instructor/signin' : role === 'student' ? '/login' : '/staff/login'} state={role === 'student' && location.pathname === '/grading' ? { from: '/grading' } : undefined} replace />
+    const instructorTarget = location.pathname.startsWith('/instructor/calendar')
+      ? location.pathname + location.search : location.pathname
+    return <Navigate to={role === 'instructor' ? '/instructor/signin' : role === 'student' ? '/login' : '/staff/login'} state={
+      role === 'instructor' && isInstructorReturnPath(instructorTarget)
+        ? { from: instructorTarget }
+        : role === 'student' && location.pathname === '/grading' ? { from: '/grading' } : undefined
+    } replace />
   }
   if (error || !profile) return <AuthStatus />
   if (profile.role !== role) return <Navigate to={dashboardPaths[profile.role]} replace />

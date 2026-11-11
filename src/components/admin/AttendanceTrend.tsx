@@ -1,4 +1,5 @@
 import { useId, useState } from 'react'
+import { SlidersHorizontal } from 'lucide-react'
 import {
   Area,
   AreaChart,
@@ -9,52 +10,61 @@ import {
   YAxis,
 } from 'recharts'
 import { Button } from '@/components/ui/button'
+import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from '@/components/ui/popover'
 import type { WeeklyTrendPoint } from '@/lib/admin/types'
 
 type Metric = 'rate' | 'sessions'
 
 export default function AttendanceTrend({ data }: { data: WeeklyTrendPoint[] }) {
   const [metric, setMetric] = useState<Metric>('rate')
+  const [weeks, setWeeks] = useState<4 | 8 | 12>(8)
   const [showTable, setShowTable] = useState(false)
   const gradientId = `attendance-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`
   const metricLabel = metric === 'rate' ? 'Attendance rate' : 'Sessions held'
+  const visibleData = data.slice(-weeks)
 
   return (
     <div>
-      <div className="mb-3 flex flex-wrap items-center justify-end gap-1">
-        <Button
-          type="button"
-          size="xs"
-          variant={metric === 'rate' && !showTable ? 'secondary' : 'ghost'}
-          aria-pressed={metric === 'rate' && !showTable}
-          onClick={() => {
-            setMetric('rate')
-            setShowTable(false)
-          }}
-        >
-          Attendance rate
-        </Button>
-        <Button
-          type="button"
-          size="xs"
-          variant={metric === 'sessions' && !showTable ? 'secondary' : 'ghost'}
-          aria-pressed={metric === 'sessions' && !showTable}
-          onClick={() => {
-            setMetric('sessions')
-            setShowTable(false)
-          }}
-        >
-          Sessions held
-        </Button>
-        <Button
-          type="button"
-          size="xs"
-          variant={showTable ? 'secondary' : 'ghost'}
-          aria-pressed={showTable}
-          onClick={() => setShowTable((current) => !current)}
-        >
-          {showTable ? 'Show chart' : 'View as table'}
-        </Button>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs text-muted-foreground">{metricLabel} · Last {weeks} weeks</p>
+        <div className="flex items-center gap-2">
+          <Popover>
+            <PopoverTrigger render={<Button type="button" variant="outline" size="sm" />}>
+              <SlidersHorizontal className="size-4" aria-hidden="true" />
+              Filter
+            </PopoverTrigger>
+            <PopoverContent className="w-56 gap-3">
+              <PopoverTitle>Attendance trend</PopoverTitle>
+              <fieldset className="space-y-1">
+                <legend className="mb-1 text-xs font-medium text-muted-foreground">Measure</legend>
+                {([['rate', 'Attendance rate'], ['sessions', 'Sessions held']] as const).map(([value, label]) => (
+                  <label key={value} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-accent">
+                    <input type="radio" name={`${gradientId}-metric`} checked={metric === value} onChange={() => setMetric(value)} className="accent-primary" />
+                    {label}
+                  </label>
+                ))}
+              </fieldset>
+              <fieldset className="space-y-1 border-t border-border pt-3">
+                <legend className="text-xs font-medium text-muted-foreground">Period</legend>
+                {([4, 8, 12] as const).map((value) => (
+                  <label key={value} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-accent">
+                    <input type="radio" name={`${gradientId}-weeks`} checked={weeks === value} onChange={() => setWeeks(value)} className="accent-primary" />
+                    Last {value} weeks
+                  </label>
+                ))}
+              </fieldset>
+            </PopoverContent>
+          </Popover>
+          <Button
+            type="button"
+            size="sm"
+            variant={showTable ? 'secondary' : 'ghost'}
+            aria-pressed={showTable}
+            onClick={() => setShowTable((current) => !current)}
+          >
+            {showTable ? 'Show chart' : 'View as table'}
+          </Button>
+        </div>
       </div>
 
       {showTable ? (
@@ -77,7 +87,7 @@ export default function AttendanceTrend({ data }: { data: WeeklyTrendPoint[] }) 
               </tr>
             </thead>
             <tbody>
-              {data.map((point) => (
+              {visibleData.map((point) => (
                 <tr key={point.label} className="border-t border-border/70">
                   <td className="px-3 py-2 text-muted-foreground">{point.label}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{point.rate}%</td>
@@ -90,7 +100,7 @@ export default function AttendanceTrend({ data }: { data: WeeklyTrendPoint[] }) 
       ) : (
         <div className="h-64 w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -18 }}>
+            <AreaChart data={visibleData} margin={{ top: 8, right: 8, bottom: 0, left: -18 }}>
               <defs>
                 <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.35} />

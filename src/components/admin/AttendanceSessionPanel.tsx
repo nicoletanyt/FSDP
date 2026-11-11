@@ -47,9 +47,9 @@ export default function AttendanceSessionPanel({
       <Sheet open onOpenChange={(open) => { if (!open) onClose() }}>
         <SheetContent className="gap-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <SheetHeader>
-            <SheetTitle>Session attendance</SheetTitle>
+            <SheetTitle>{event.liveDetails ? 'Class details' : 'Session attendance'}</SheetTitle>
             <SheetDescription className="sr-only">
-              Session information, student roster, and attendance actions.
+              {event.liveDetails ? 'Class information and assigned instructor.' : 'Session information, student roster, and attendance actions.'}
             </SheetDescription>
           </SheetHeader>
           {details}
@@ -60,7 +60,7 @@ export default function AttendanceSessionPanel({
 
   return (
     <aside
-      aria-label="Session attendance"
+      aria-label={event.liveDetails ? 'Class details' : 'Session attendance'}
       className="flex min-h-0 min-w-0 flex-col overflow-hidden"
     >
       {details}

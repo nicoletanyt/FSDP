@@ -120,5 +120,5 @@ const centreStatusLabels: Record<
 
 export function CentreStatusBadge({ status }: { status: CentreStatus }) {
   const config = centreStatusLabels[status]
-  return <StatusBadge tone={config.tone}>{config.label}</StatusBadge>
+  return <StatusBadge tone={config.tone} className={status === 'under_renovation' ? 'text-amber-800 dark:text-warning' : undefined}>{config.label}</StatusBadge>
 }

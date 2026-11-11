@@ -51,11 +51,12 @@ server secrets with `VITE_`.
 | `npm run build` | Type-check and build to `dist/` |
 | `npm run preview` | Preview the production build |
 | `npm run check:functions` | Type-check Edge Functions |
-| `npm run test:functions` | Run Stripe and instructor-provisioning tests |
+| `npm run test:functions` | Run Edge Function tests, including NFC authorization |
 | `npm run test:auth-db` | Run offline PostgreSQL role/RLS tests |
 | `npm run test:auth-seed` | Test the administrator seed without cloud access |
 | `npm run test:membership-db` | Run offline PostgreSQL tests for membership sign-up and activation |
 | `npm run seed:admin` | Create the development administrator using root `.env` |
+| `npm run seed:instructor-calendar -- --instructor-email EMAIL` | Add marked calendar test classes and event rosters for an existing instructor, in the current Singapore week |
 | `npx shadcn@latest add <component>` | Add a shadcn/ui component |
 
 ## Authentication
@@ -69,8 +70,41 @@ server secrets with `VITE_`.
   dashboard: `/admin`, including instructor account creation.
 - Instructor passwords are generated server-side and displayed to the creating
   administrator after success. Save them then; they are not saved to browser storage.
+- After the instructor-availability migration is applied, trusted instructor
+  profile creation also inserts a linked `public.instructors` row (`user_id`
+  references the account). Existing unlinked instructors can open their calendar;
+  their first successful availability save creates the missing linked row.
 - Sessions persist automatically. Roles come from `public.users`; browser clients
   cannot write profiles or assign privileged roles. Passwords stay in Supabase Auth.
+
+## Instructor calendar test records
+
+To populate an existing instructor's calendar with marked test classes for the
+current Monday–Sunday week in Singapore time:
+
+```sh
+npm run seed:instructor-calendar -- --instructor-email INSTRUCTOR_EMAIL --dry-run
+npm run seed:instructor-calendar -- --instructor-email INSTRUCTOR_EMAIL
+```
+
+The script uses the root `.env` Supabase URL and server-only service-role key.
+It reuses existing active centres, class types and students, and inserts only
+`[Calendar Test]` events, matching `classes` rows and `event_students` rosters.
+Past sessions cover present/late/absent/excused/unmarked attendance; future
+attendance is unmarked, and Sunday has an empty roster. Times avoid the
+instructor's existing timed events and availability.
+
+Use `--week-of YYYY-MM-DD` to select a particular week. Repeating the seed for
+the same instructor/week uses the same UUIDs, preserves existing fixture rows
+and recorded attendance/notes, and fills missing subtype/roster batches. To remove
+only that instructor/week's marked fixtures (with cascading class/roster cleanup):
+
+```sh
+npm run seed:instructor-calendar -- --instructor-email INSTRUCTOR_EMAIL --week-of YYYY-MM-DD --remove
+```
+
+This is a development data script rather than a schema migration. It does not
+create students, centres, instructors, grading events or application records.
 
 ## Administrator console
 
@@ -91,7 +125,6 @@ link, and theme, notification, and profile controls. The logo returns to
 | `/admin/grading/opportunities` | Live adult and children’s grading schedule and reporting times |
 | `/admin/grading/applications` | Read-only view and CSV export of submitted applications |
 | `/admin/notifications` | Review EmailJS grading invitation requests |
-| `/admin/reports` | Consolidated centre reporting and CSV export |
 | `/admin/instructors` | Teaching team and instructor account creation |
 | `/admin/profile` | Administrator account details and sign out |
 
@@ -131,6 +164,125 @@ does not reset passwords or elevate existing non-administrators. Keep seed
 credentials local; do not upload them to Vercel or function secrets.
 
 ## Deployment
+
+### Instructor chatbot — Ollama Cloud
+
+DojoGPT is available only inside authenticated instructor routes. It uses the
+`instructor-chat` Edge Function, not a browser-to-Ollama connection. Its five
+read-only tools cover student search, profile/attendance summaries, past session
+history, the current instructor's assigned schedule, and permitted part-time
+availability. Students and administrators cannot call this function. An unlinked
+instructor can still ask student questions, but their timeline is unavailable.
+
+The chat offers four instructor starter topics (today, this week, attendance
+and session history) and related follow-up questions after
+replies. Full question chips use an outlined, theme-aware style
+and sit directly beneath the greeting or latest assistant answer, before its
+timestamp. The greeting is local UI only; it does not invoke Ollama or become
+database context. Selected chips show a natural question in the transcript while
+the request retains the topic's pagination and student-identity guidance.
+These are shortcuts into the same Ollama/database workflow, not static
+FAQ answers; free-form questions remain available. Student-specific prompts ask
+for a name or membership number when the conversation has no identified student.
+
+Assistant replies render a restricted Markdown subset (emphasis, paragraphs,
+lists, code and scrollable tables). Raw HTML and images are disabled; model-made
+links are shown as plain text. Source links and source/query summaries are not
+displayed. The model prompt prefers stacked schedules and readable Singapore
+dates and times, and omits internal UUIDs and technical query details.
+An explicit source-footer filter runs on both the server and the Markdown
+renderer, so visible source annotations do not depend on model compliance alone.
+Deploy the updated `instructor-chat` function to apply these prompt changes.
+
+Use **Expand chat** to open a larger, focus-trapped modal and **Minimize chat**
+to return to the floating panel. Messages, unfinished drafts and pending replies
+are preserved. Escape or dismissing the modal returns to the floating panel;
+the Close chat button hides the chat entirely.
+
+Create an API key at <https://ollama.com/settings/keys>. Choose a **tool-calling
+cloud model** using its API name from <https://ollama.com/api/tags>, not a local
+CLI `:cloud` alias. Put `OLLAMA_API_KEY` and `OLLAMA_MODEL` in the root `.env`
+for local function development, and add both as **server-only Edge Function
+secrets** in your Supabase project dashboard. Never use a `VITE_` prefix or put
+the API key in Vercel's frontend configuration. `APP_URL` must be your frontend
+origin; `AUTH_ALLOWED_ORIGINS` may add development origins.
+
+After configuring secrets, deploy the backend separately from the frontend:
+
+```sh
+npx supabase@latest functions deploy instructor-chat --project-ref YOUR_PROJECT_REF --use-api
+```
+
+No new migration is required. The existing instructor directory, attendance
+summary/history and calendar RPCs must already be deployed. Do not blindly run
+`db push` against a project whose migration history differs from this checkout.
+For local testing, serve the function with the Supabase CLI against a local
+stack and configure the frontend's Supabase URL/key for that stack.
+
+Database reads carry the caller's JWT and retain RLS; the chatbot never uses a
+service-role key, writes records, or executes model-generated SQL. Only
+allowlisted fields reach Ollama. Medical alerts, contact details, date of birth,
+private addresses and free-text assessment notes are excluded. Relevant student
+records **are processed by Ollama Cloud**; review your organisation's privacy
+requirements before enabling this on real student data. Chat history stays in
+memory and resets on account changes, sign-out, new conversation or reload.
+
+Each reply is bounded to 90 seconds, five model rounds and eight tool calls;
+queries return 20-row pages and date ranges are limited to 62 days in Singapore
+time. The function has a best-effort **per-isolate**, per-account six-message
+minute limit and concurrent-reply guard, not a deployment-wide quota. Configure
+provider usage limits or an authenticated gateway for a hard spending/rate cap.
+
+Verification:
+
+```sh
+node --test tests/instructor-chat.test.mjs
+node --test tests/chat-markdown.test.mjs
+node --test tests/chat-output.test.mjs
+npm run check:functions
+npm run test:functions
+# With Vite and geckodriver running (no cloud calls):
+node --test tests/mobile-responsive/chatbot.test.mjs
+```
+
+### NFC attendance (separate from QR check-in)
+
+The NFC URL opens `/instructor/nfc_checkin?tag=...`. This route is separate from
+`/instructor/check-in`, the existing QR scanner. Tag URLs contain random bearer
+tokens; `public.student_nfc_tags` stores only SHA-256 hashes under the composite
+`(student_id, tag_id)` key with a unique `tag_id`. Deleting a tag row immediately
+invalidates its URL. Only the server-side function can look up tags or mark
+attendance. The instructor must have a linked teaching record assigned to the
+student's booked class today (Singapore time).
+
+A scan marks attendance from 10 minutes before class start through class end.
+Outside the window it shows the next class's start time or **Absent** for the
+latest ended class without writing an absence. Existing recorded attendance
+remains marked. Green **Attendance Marked** feedback lasts two seconds, matching
+the QR scanner. The frontend is not deployed automatically with the function.
+
+The migration `supabase/migrations/20261106132832_student_nfc_attendance.sql`
+and `nfc-check-in` function are deployed to the current test project. Run
+`node --test tests/nfc-db.test.mjs` and `npm run test:functions` before subsequent
+changes. The cloud project contains migrations missing from this checkout, so
+do **not** blindly run `db push`. Keep `verify_jwt = false` as configured;
+the handler verifies the instructor's JWT and role itself.
+
+To write a tag, set `SUPABASE_SERVICE_ROLE_KEY` **only** in the local root `.env`:
+
+```sh
+node --env-file=.env scripts/nfc-tags.mjs issue SK-1006 https://your-frontend.example
+node --env-file=.env scripts/nfc-tags.mjs revoke SK-1006 TAG_TOKEN
+node --env-file=.env scripts/nfc-tags.mjs revoke-all SK-1006
+```
+
+Write the entire printed URL as an NFC URI record. The URL is a credential; do
+not share it or commit it. Issuing another tag does **not** revoke existing tags.
+Use `revoke-all` if the missing tag's token is unknown. For temporary LAN-only
+phone testing, the function also permits exactly `http://192.168.1.13:5173`;
+opt in when issuing with `FSDP_ALLOW_HTTP_NFC_TEST=1` and that origin. This is
+insecure and must be removed from the function and script after testing. If the
+computer's IP changes, use an HTTPS test origin rather than a stale URL.
 
 ### Frontend — Vercel
 

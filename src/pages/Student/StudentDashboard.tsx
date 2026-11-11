@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import {
-  CalendarDays,
   ClipboardCheck,
+  CreditCard,
   IdCard,
   QrCode,
   Presentation,
@@ -23,6 +23,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useMembershipStatus } from "@/hooks/use-membership-status";
 import { formatDateTime, greetingFor } from "@/lib/format";
 import { mockStudent, type Student } from "@/lib/student-dashboard";
+import CreditBalanceCard from "./CreditBalanceCard";
 import NonMemberDashboard from "./NonMemberDashboard";
 
 /* ---------- Helpers ---------- */
@@ -140,8 +141,8 @@ function MemberDashboard({ firstName }: { firstName: string }) {
       : "View grading requirements";
 
   const tiles: TileProps[] = [
-    { title: "Timetable", to: "/timetable", icon: CalendarDays, status: "View this week's classes" },
-    { title: "Attendance History", to: "/attendance", icon: UserCheck, status: `${counts.attendanceRate}% attendance` },
+    { title: "Class Credits", to: "/student/credits", icon: CreditCard, status: "Top up your balance" },
+    { title: "Attendance History", to: "/timetable", icon: UserCheck, status: `${counts.attendanceRate}% attendance` },
     { title: "Classes", to: "/classes", icon: Presentation, status: `${counts.classesEnrolled} enrolled` },
     {
       title: "Grading Applications",
@@ -169,6 +170,10 @@ function MemberDashboard({ firstName }: { firstName: string }) {
             Membership {student.membershipStatus.toLowerCase()}
           </p>
         </header>
+
+        <div className="mt-6">
+          <CreditBalanceCard />
+        </div>
 
         {/* Overview */}
         <section aria-label="Overview" className="mt-6 grid gap-4 xl:grid-cols-2">

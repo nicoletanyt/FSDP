@@ -8,6 +8,7 @@ import {
   Users,
 } from 'lucide-react'
 import AttendanceClassDetails from '@/components/admin/AttendanceClassDetails'
+import LiveClassDetails from '@/components/admin/LiveClassDetails'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import type { AdminCalendarEvent } from '@/lib/admin/attendance-calendar'
@@ -30,6 +31,16 @@ export type CalendarView = 'day' | 'week' | 'month'
 export type CalendarDisplay = 'timeline' | 'list'
 
 type EventLayout = 'day' | 'week' | 'panel'
+
+const coverNeededCardStyle = 'border-red-400 bg-red-100 text-red-950 hover:border-red-400 hover:bg-red-100 hover:text-red-950 dark:border-red-700 dark:bg-red-950 dark:text-red-100 dark:hover:border-red-700 dark:hover:bg-red-950 dark:hover:text-red-100'
+
+function needsCover(event: AdminCalendarEvent) {
+  return event.liveDetails?.unavailability?.status === 'open'
+}
+
+function eventCardStyle(event: AdminCalendarEvent) {
+  return needsCover(event) ? coverNeededCardStyle : getSessionStyle(event.session).card
+}
 
 function SelectedIndicator({ className }: { className?: string }) {
   return (
@@ -61,14 +72,12 @@ export function EventCard({
   focusStudentId?: string
 }) {
   const showSummary = layout !== 'week'
-  const style = getSessionStyle(event.session)
-
   return (
     <Card
       size="sm"
       className={cn(
         'gap-0 rounded-lg border py-0 text-inherit shadow-none ring-0 transition-[border-color,box-shadow] duration-200 hover:border-foreground/25 has-focus-visible:ring-2 has-focus-visible:ring-ring',
-        style.card,
+        eventCardStyle(event),
         layout === 'panel' && 'h-full min-h-0',
         expanded &&
           (detailsInPanel
@@ -86,9 +95,10 @@ export function EventCard({
             ? `attendance-details-${event.id}`
             : undefined
         }
-        aria-label={`${event.name}, ${fullDate(event.date)}, ${formatTime(event.startTime)} to ${formatTime(event.endTime)}, ${event.centreName}, ${event.roster.length} students. ${expanded ? 'Collapse' : 'Expand'} session attendance`}
+        aria-label={`${event.name}, ${fullDate(event.date)}, ${formatTime(event.startTime)} to ${formatTime(event.endTime)}, ${event.centreName}, ${event.rosterCount ?? event.roster.length} students. ${needsCover(event) ? 'Cover needed. ' : ''}${expanded ? 'Collapse' : 'Expand'} session details`}
         className={cn(
-          'h-auto w-full shrink-0 flex-col items-stretch gap-3 rounded-lg p-3 text-left whitespace-normal text-inherit hover:bg-foreground/5 hover:text-inherit aria-expanded:text-inherit focus-visible:-outline-offset-2',
+          'h-auto w-full shrink-0 cursor-pointer flex-col items-stretch gap-3 rounded-lg p-3 text-left whitespace-normal text-inherit hover:bg-foreground/5 hover:text-inherit aria-expanded:text-inherit focus-visible:-outline-offset-2',
+          needsCover(event) && 'hover:bg-transparent dark:hover:bg-transparent',
           showSummary && 'p-4',
           layout === 'day' && 'gap-4 p-5',
         )}
@@ -142,20 +152,22 @@ export function EventCard({
           </span>
         )}
 
+        {needsCover(event) &&
+          <span className="w-fit rounded-md border border-destructive/30 bg-destructive/10 px-2 py-1 text-xs font-medium text-destructive">
+            Cover needed
+          </span>}
+
         <span className="flex items-center gap-1.5 text-2xs font-normal opacity-80">
           <Users aria-hidden="true" className="size-3 shrink-0" />
-          {event.roster.length}{' '}
-          {event.roster.length === 1 ? 'student' : 'students'}
+          {event.rosterCount ?? event.roster.length}{' '}
+          {(event.rosterCount ?? event.roster.length) === 1 ? 'student' : 'students'}
         </span>
       </Button>
 
       {!detailsInPanel &&
         (layout === 'panel' ? (
-          <AttendanceClassDetails
-            event={event}
-            focusStudentId={focusStudentId}
-            fillHeight
-          />
+          event.liveDetails ? <LiveClassDetails event={event} fillHeight /> :
+            <AttendanceClassDetails event={event} focusStudentId={focusStudentId} fillHeight />
         ) : (
           <div
             id={`attendance-details-${event.id}`}
@@ -169,10 +181,8 @@ export function EventCard({
             )}
           >
             <div className="min-h-0 overflow-hidden">
-              <AttendanceClassDetails
-                event={event}
-                focusStudentId={focusStudentId}
-              />
+              {event.liveDetails ? <LiveClassDetails event={event} /> :
+                <AttendanceClassDetails event={event} focusStudentId={focusStudentId} />}
             </div>
           </div>
         ))}
@@ -475,14 +485,14 @@ function CalendarMonth({
                     <Button
                       key={event.id}
                       variant="ghost"
-                      title={`${event.name} · ${formatTime(event.startTime)} · ${event.roster.length} students`}
-                      aria-label={`${event.name}, ${fullDate(day)}, ${formatTime(event.startTime)} to ${formatTime(event.endTime)}. ${selected ? 'Collapse' : 'Expand'} session attendance`}
+                       title={`${event.name} · ${formatTime(event.startTime)} · ${event.rosterCount ?? event.roster.length} students${needsCover(event) ? ' · Cover needed' : ''}`}
+                       aria-label={`${event.name}, ${fullDate(day)}, ${formatTime(event.startTime)} to ${formatTime(event.endTime)}. ${needsCover(event) ? 'Cover needed. ' : ''}${selected ? 'Collapse' : 'Expand'} session attendance`}
                       aria-expanded={selected}
                       aria-pressed={selected}
                       onClick={() => onToggleSession(event)}
                       className={cn(
-                        'h-auto min-h-5 w-full min-w-0 flex-col items-start gap-0 rounded border-0 px-1 py-0.5 text-left text-[11px] leading-tight xl:flex-row xl:items-center xl:gap-1',
-                        getSessionStyle(event.session).card,
+                         'h-auto min-h-5 w-full min-w-0 cursor-pointer flex-col items-start gap-0 rounded border-0 px-1 py-0.5 text-left text-[11px] leading-tight xl:flex-row xl:items-center xl:gap-1',
+                         eventCardStyle(event),
                         selected &&
                           'relative z-[1] pr-5 ring-2 ring-primary ring-offset-1 ring-offset-background',
                       )}
@@ -728,11 +738,11 @@ function CalendarTimeline({
                         key={item.id}
                         type="button"
                         aria-pressed={selected}
-                        aria-label={`${item.name}, ${fullDate(day)}, ${formatTime(item.startTime)} to ${formatTime(item.endTime)}. ${selected ? 'Collapse' : 'Expand'} session attendance`}
+                         aria-label={`${item.name}, ${fullDate(day)}, ${formatTime(item.startTime)} to ${formatTime(item.endTime)}. ${needsCover(item) ? 'Cover needed. ' : ''}${selected ? 'Collapse' : 'Expand'} session attendance`}
                         onClick={() => onToggleSession(item)}
                         className={cn(
-                          'absolute z-10 flex flex-col items-start overflow-hidden rounded-md border border-l-[3px] px-2 py-1 text-left text-xs shadow-xs outline-none transition-shadow hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring',
-                          getSessionStyle(item.session).card,
+                           'absolute z-10 flex cursor-pointer flex-col items-start overflow-hidden rounded-md border border-l-[3px] px-2 py-1 text-left text-xs shadow-xs outline-none transition-shadow hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring',
+                           eventCardStyle(item),
                           selected &&
                             'z-[15] ring-2 ring-primary ring-offset-2 ring-offset-card',
                           isDay && 'rounded-lg px-2.5 py-[3px] text-[12px] leading-tight',
@@ -771,8 +781,8 @@ function CalendarTimeline({
                               {item.instructorName}
                             </span>
                             <span className="min-w-0 truncate">
-                              {item.roster.length}{' '}
-                              {item.roster.length === 1
+                              {item.rosterCount ?? item.roster.length}{' '}
+                              {(item.rosterCount ?? item.roster.length) === 1
                                 ? 'student'
                                 : 'students'}
                             </span>

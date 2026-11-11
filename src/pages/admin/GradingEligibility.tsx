@@ -1,5 +1,6 @@
-import { Fragment, useEffect, useMemo, useState } from 'react'
-import { Bell, CheckCircle2 } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { ArrowRight, Bell, CheckCircle2, ChevronRight } from 'lucide-react'
+import AdminGradeBadge from '@/components/admin/AdminGradeBadge'
 import EmptyState from '@/components/admin/EmptyState'
 import EligibilityChecklist from '@/components/admin/EligibilityChecklist'
 import TechniqueRequirementBreakdown from '@/components/admin/TechniqueRequirementBreakdown'
@@ -69,7 +70,7 @@ export default function GradingEligibility() {
   const { centres, students, attendance, sessions, techniqueSignOffs } =
     useAdminData()
   const { centreId } = useAdminFilters()
-  const [expanded, setExpanded] = useState<string | null>(null)
+  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null)
   const [notice, setNotice] = useState('')
   const [noticeError, setNoticeError] = useState(false)
   const [events, setEvents] = useState<{ id: string; name: string; track: GradeTrack }[]>([])
@@ -134,6 +135,8 @@ export default function GradingEligibility() {
   const selectedTrack = events.find((event) => event.id === eventId)?.track
   const eligible = assessments.filter((assessment) => assessment.status === 'eligible' && (!selectedTrack ||
     scopedStudents.some((student) => student.id === assessment.studentId && studentTrack(student) === selectedTrack)))
+  const selectedStudent = scopedStudents.find((student) => student.id === selectedStudentId)
+  const selectedAssessment = eligible.find((assessment) => assessment.studentId === selectedStudentId)
   const wordingChanged = wording !== null && (subject !== wording.subject || message !== wording.body)
 
   function changeNotifyOpen(open: boolean) {
@@ -206,7 +209,7 @@ export default function GradingEligibility() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {notice && !notifyOpen && (
         <Alert variant={noticeError ? 'destructive' : 'default'}>
           {!noticeError && <CheckCircle2 className="size-4 text-success" aria-hidden="true" />}
@@ -214,14 +217,14 @@ export default function GradingEligibility() {
         </Alert>
       )}
 
-      <Summary label="Eligible now" value={eligible.length} tone="text-success" />
-
-      <div className="flex flex-wrap items-center gap-2">
-        <NativeSelect value={eventId} onChange={(event) => { setEventId(event.target.value); setPreview(null); setExpanded(null) }} aria-label="Select persisted grading event">
-          <option value="">All eligible students</option>
-          {events.map((event) => <option key={event.id} value={event.id}>{event.name}</option>)}
-        </NativeSelect>
-        <Button variant="outline" onClick={() => { setNotice(''); setNotifyOpen(true) }} disabled={!wording || pendingAction !== null || savingWording}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="w-full sm:w-72">
+          <NativeSelect className="h-10" value={eventId} onChange={(event) => { setEventId(event.target.value); setPreview(null); setSelectedStudentId(null) }} aria-label="Select persisted grading event">
+            <option value="">All eligible students</option>
+            {events.map((event) => <option key={event.id} value={event.id}>{event.name}</option>)}
+          </NativeSelect>
+        </div>
+        <Button className="ml-auto" variant="outline" onClick={() => { setNotice(''); setNotifyOpen(true) }} disabled={!wording || pendingAction !== null || savingWording}>
           <Bell />
           Notify Students
         </Button>
@@ -279,6 +282,49 @@ export default function GradingEligibility() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={Boolean(selectedStudent && selectedAssessment)} onOpenChange={(open) => { if (!open) setSelectedStudentId(null) }}>
+        <DialogContent className="gap-6 p-5 sm:max-w-3xl sm:p-6">
+          {selectedStudent && selectedAssessment && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-xl">{fullName(selectedStudent)}</DialogTitle>
+                <DialogDescription>
+                  {studentAge(selectedStudent)} years old · {centreNames.get(selectedStudent.homeCentreId)}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-5">
+                <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-muted/30 p-4">
+                  <span className="text-xs font-medium text-muted-foreground">Grade progression</span>
+                  <AdminGradeBadge grade={selectedStudent.currentGrade} track={studentTrack(selectedStudent)} />
+                  <ArrowRight className="size-4 text-muted-foreground" aria-hidden="true" />
+                  <AdminGradeBadge grade={selectedAssessment.targetGrade} track={studentTrack(selectedStudent)} />
+                  <EligibilityBadge status={selectedAssessment.status} />
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  {selectedAssessment.metCount} of {selectedAssessment.total} requirements met · Last graded{' '}
+                  {selectedStudent.lastGradedAt ? formatDate(selectedStudent.lastGradedAt) : 'never'}
+                </p>
+                <div className={cn(
+                  'grid gap-6',
+                  selectedAssessment.requirements.some((requirement) => requirement.key === 'techniques') && 'lg:grid-cols-2',
+                )}>
+                  <section className="space-y-3">
+                    <h3 className="text-sm font-semibold">Requirements</h3>
+                    <EligibilityChecklist requirements={selectedAssessment.requirements} compact />
+                  </section>
+                  {selectedAssessment.requirements.some((requirement) => requirement.key === 'techniques') && (
+                    <TechniqueRequirementBreakdown
+                      student={selectedStudent}
+                      targetGrade={selectedAssessment.targetGrade}
+                    />
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {eligible.length === 0 ? (
         <EmptyState
           title="No eligible students"
@@ -287,7 +333,7 @@ export default function GradingEligibility() {
       ) : (
         <Card className="overflow-hidden py-0">
           <CardContent className="px-0">
-            <Table>
+            <Table className="[&_th]:px-4 [&_td]:px-4 [&_td]:py-4 [&_th:first-child]:pl-5 [&_td:first-child]:pl-5 [&_th:last-child]:pr-5 [&_td:last-child]:pr-5">
               <TableCaption className="sr-only">
                 Grading eligibility assessments
               </TableCaption>
@@ -298,7 +344,15 @@ export default function GradingEligibility() {
                   <TableHead>Next grade</TableHead>
                   <TableHead>Requirements</TableHead>
                   <TableHead>Last graded</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>
+                    <span className="flex items-center gap-3">
+                      Status
+                      <span className="inline-flex items-center gap-1 rounded-md bg-success/10 px-2 py-1 text-xs font-medium text-success">
+                        Eligible now <span className="tabular-nums">{eligible.length}</span>
+                      </span>
+                    </span>
+                  </TableHead>
+                  <TableHead><span className="sr-only">Details</span></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -307,23 +361,12 @@ export default function GradingEligibility() {
                     (item) => item.id === assessment.studentId,
                   )
                   if (!student) return null
-                  const isExpanded = expanded === student.id
-                  const hasTechniques = assessment.requirements.some(
-                    (requirement) => requirement.key === 'techniques',
-                  )
                   return (
-                    <Fragment key={student.id}>
-                      <TableRow
-                        className="cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50"
-                        tabIndex={0}
-                        aria-expanded={isExpanded}
-                        onClick={() => setExpanded(isExpanded ? null : student.id)}
-                        onKeyDown={(event) => {
-                          if (event.key !== 'Enter' && event.key !== ' ') return
-                          event.preventDefault()
-                          setExpanded(isExpanded ? null : student.id)
-                        }}
-                      >
+                    <TableRow
+                      key={student.id}
+                      className="cursor-pointer"
+                      onClick={() => setSelectedStudentId(student.id)}
+                    >
                         <TableCell>
                           <div className="flex items-center gap-3">
                             <span className="flex size-8 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
@@ -341,8 +384,11 @@ export default function GradingEligibility() {
                           {centreNames.get(student.homeCentreId)}
                         </TableCell>
                         <TableCell>
-                          <span className="text-muted-foreground">{student.currentGrade}</span>{' '}
-                          → <span className="font-medium">{assessment.targetGrade}</span>
+                          <div className="flex items-center gap-2">
+                            <AdminGradeBadge grade={student.currentGrade} track={studentTrack(student)} />
+                            <ArrowRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                            <AdminGradeBadge grade={assessment.targetGrade} track={studentTrack(student)} />
+                          </div>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
@@ -372,41 +418,22 @@ export default function GradingEligibility() {
                         <TableCell>
                           <EligibilityBadge status={assessment.status} />
                         </TableCell>
-                      </TableRow>
-                      {isExpanded && (
-                        <TableRow>
-                          <TableCell colSpan={6} className="bg-muted/30">
-                            <div>
-                              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                Requirement breakdown
-                              </p>
-                              <div
-                                className={cn(
-                                  'grid gap-6',
-                                  hasTechniques && 'lg:grid-cols-2',
-                                )}
-                              >
-                                <div>
-                                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                    Requirements
-                                  </p>
-                                  <EligibilityChecklist
-                                    requirements={assessment.requirements}
-                                    compact
-                                  />
-                                </div>
-                                {hasTechniques && (
-                                  <TechniqueRequirementBreakdown
-                                    student={student}
-                                    targetGrade={assessment.targetGrade}
-                                  />
-                                )}
-                              </div>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </Fragment>
+                        <TableCell className="text-right">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            aria-label={`View eligibility details for ${fullName(student)}`}
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              setSelectedStudentId(student.id)
+                            }}
+                          >
+                            View details
+                            <ChevronRight className="size-4" aria-hidden="true" />
+                          </Button>
+                        </TableCell>
+                    </TableRow>
                   )
                 })}
               </TableBody>
@@ -415,7 +442,7 @@ export default function GradingEligibility() {
         </Card>
       )}
 
-      <Card>
+      <Card className="[--card-spacing:--spacing(6)]">
         <CardHeader>
           <CardTitle>Eligibility rules</CardTitle>
           <CardDescription>
@@ -484,23 +511,6 @@ function RuleList({ title, track }: { title: string; track: GradeTrack }) {
             </div>
           ))}
       </dl>
-    </div>
-  )
-}
-
-function Summary({
-  label,
-  value,
-  tone,
-}: {
-  label: string
-  value: number
-  tone?: string
-}) {
-  return (
-    <div className="rounded-xl bg-card p-3 ring-1 ring-foreground/10">
-      <p className="text-xs font-medium text-muted-foreground">{label}</p>
-      <p className={`mt-1 text-xl font-semibold tabular-nums ${tone ?? ''}`}>{value}</p>
     </div>
   )
 }

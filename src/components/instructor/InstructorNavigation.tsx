@@ -1,16 +1,16 @@
 import { Link, useLocation } from "react-router";
-import { CalendarDays, ScanLine, UserCircle, Users } from "lucide-react";
+import { CalendarDays, Nfc, ScanLine, UserCircle, Users } from "lucide-react";
 import logo from "@/assets/logo.png";
 import ThemeToggle from "@/components/theme-toggle";
-import { InstructorAvatar } from "@/components/ui/avatar";
+import InstructorAccountMenu from "@/components/instructor/InstructorAccountMenu";
 import MobileNavigation from "@/components/MobileNavigation";
-import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 
 const navigation = [
     { label: "Calendar", to: "/instructor/calendar", icon: CalendarDays },
     { label: "Students", to: "/instructor/students", icon: Users },
-    { label: "Check-in", to: "/instructor/check-in", icon: ScanLine },
+    { label: "QR Check-in", to: "/instructor/check-in", icon: ScanLine },
+    { label: "NFC Check-in", to: "/instructor/nfc_checkin", icon: Nfc },
 ];
 
 export default function InstructorNavigation({
@@ -20,15 +20,10 @@ export default function InstructorNavigation({
     calendarTo: string;
     contentWidthClassName?: string;
 }) {
-    const { profile } = useAuth();
     const { pathname } = useLocation();
-    const name =
-        [profile?.first_name, profile?.last_name].filter(Boolean).join(" ") ||
-        "Instructor";
     const isCalendarRelated =
         pathname === "/instructor/dashboard" ||
-        pathname.startsWith("/instructor/assessments/") ||
-        pathname.startsWith("/instructor/reports/");
+        pathname.startsWith("/instructor/assessments/");
 
     return (
         <>
@@ -92,25 +87,7 @@ export default function InstructorNavigation({
                         })}
                     </nav>
                     <ThemeToggle />
-                    <Link
-                        to="/instructor/profile"
-                        aria-label={`View profile for ${name}`}
-                        aria-current={
-                            pathname === "/instructor/profile" ? "page" : undefined
-                        }
-                        className={cn(
-                            "hidden size-10 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring lg:flex",
-                            pathname === "/instructor/profile" && "bg-accent",
-                        )}
-                    >
-                        <InstructorAvatar
-                            profile={{ id: profile?.id ?? "", name, role: "Instructor" }}
-                            interactive={false}
-                            showName={false}
-                            avatarClassName="size-7"
-                            fallbackClassName="text-xs font-semibold"
-                        />
-                    </Link>
+                    <InstructorAccountMenu />
                 </div>
             </div>
         </header>

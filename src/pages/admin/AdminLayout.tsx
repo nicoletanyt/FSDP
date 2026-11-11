@@ -13,7 +13,7 @@ function AdminShell() {
   const isDojosTab =
     pathname === '/admin/centres' && searchParams.get('tab') !== 'students'
   const showFilters =
-    pathname !== '/admin/profile' && !isCalendar && !isDojosTab
+    pathname !== '/admin/profile' && pathname !== '/admin/instructors' && !isCalendar && !isDojosTab
 
   return (
     <div

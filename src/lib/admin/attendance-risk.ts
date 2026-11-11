@@ -103,11 +103,12 @@ function consecutiveAbsences(
   sessionsById: Map<string, Session>,
   studentId: string,
 ): number {
+  const today = todayIso()
   const entries = records
     .filter((record) => record.studentId === studentId)
     .map((record) => ({ record, session: sessionsById.get(record.sessionId) }))
     .filter((entry): entry is { record: AttendanceRecord; session: Session } =>
-      Boolean(entry.session),
+      entry.session !== undefined && entry.session.date <= today,
     )
     .sort((left, right) =>
       `${right.session.date}T${right.session.startTime}`.localeCompare(
@@ -117,8 +118,8 @@ function consecutiveAbsences(
 
   let streak = 0
   for (const entry of entries) {
-    if (entry.record.status === 'present' || entry.record.status === 'late') break
-    if (entry.record.status === 'excused') continue
+    // Only consecutive missed bookings count; excused and unmarked break the streak.
+    if (entry.record.status !== 'absent') break
     streak++
   }
 
@@ -126,14 +127,11 @@ function consecutiveAbsences(
 }
 
 function riskLevelFor(
-  rate30: number,
-  change: number,
+  noRecentBookings: boolean,
   consecutive: number,
-  hasReasons: boolean,
 ): RiskLevel {
-  if (rate30 < 50 || consecutive >= 5) return 'critical'
-  if (hasReasons) return 'at_risk'
-  if (rate30 < 80 || change <= -10) return 'watch'
+  if (consecutive >= 5) return 'critical'
+  if (noRecentBookings || consecutive >= 2) return 'at_risk'
   return 'healthy'
 }
 
@@ -149,23 +147,22 @@ export function getRiskAssessment(
   const previous = statsBetween(records, sessionsById, student.id, previousStart, previousEnd)
   const change = current.rate - previous.rate
   const absenceStreak = consecutiveAbsences(records, sessionsById, student.id)
+  const today = todayIso()
+  const bookingStart = daysAgoIso(29)
+  // An attendance row represents a booked class, even if it was missed or excused.
+  const noRecentBookings = student.joinedAt < bookingStart && !records.some((record) => {
+    if (record.studentId !== student.id) return false
+    const date = sessionsById.get(record.sessionId)?.date
+    return date !== undefined && date >= bookingStart && date <= today
+  })
 
   const reasons: string[] = []
-  if (current.rate < 70) {
-    reasons.push(`30-day attendance is ${Math.round(current.rate)}% (below 70%)`)
-  }
-  if (change <= -15) {
-    reasons.push(
-      `Attendance fell ${Math.abs(Math.round(change))} points vs the previous 30 days`,
-    )
-  }
-  if (absenceStreak >= 3) {
-    reasons.push(`${absenceStreak} consecutive absences`)
-  }
+  if (noRecentBookings) reasons.push('No booked classes in the last 30 days')
+  if (absenceStreak >= 2) reasons.push(`${absenceStreak} consecutive missed booked classes`)
 
   return {
     studentId: student.id,
-    level: riskLevelFor(current.rate, change, absenceStreak, reasons.length > 0),
+    level: riskLevelFor(noRecentBookings, absenceStreak),
     reasons,
     rate30: current.rate,
     previousRate: previous.rate,
