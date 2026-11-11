@@ -82,3 +82,11 @@ test('changing to a grade that disallows the current title resets it to none', a
   await choose(root, 'instructor-grade', '1st-dan')
   assert.equal(select(root, 'instructor-title').props.value, 'none')
 })
+
+test('the examiner checkbox defaults to off and toggles', async () => {
+  const root = await render()
+  const checkbox = () => root.root.find(node => node.type === 'input' && node.props.name === 'is_examiner')
+  assert.equal(checkbox().props.checked, false)
+  await act(async () => { checkbox().props.onChange({ target: { checked: true } }) })
+  assert.equal(checkbox().props.checked, true)
+})

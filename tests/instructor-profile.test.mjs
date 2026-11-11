@@ -17,7 +17,7 @@ function fixture(options = {}) {
         select(columns) { calls.push(['select', table, columns]); return this },
         eq(column, value) { calls.push(['eq', table, column, value]); return this },
         abortSignal() { return this },
-        async single() { return { data: options.row ?? { profile_picture_url: oldPath, employment_type: 'part_time', instructor_title: 'none' }, error: options.readError } },
+        async single() { return { data: options.row ?? { profile_picture_url: oldPath, employment_type: 'part_time', instructor_title: 'none', is_examiner: false }, error: options.readError } },
         async maybeSingle() { return { data: options.noAddress ? null : { address: 'Saved address' }, error: options.readError } },
       }
       return query
@@ -49,13 +49,13 @@ function fixture(options = {}) {
 test('profile loads real private address, employment type and a temporary URL for the saved storage path', async () => {
   const { api, calls } = fixture()
   assert.deepEqual(await api.getProfile(userId), { instructorId, userId, address: 'Saved address',
-    employmentType: 'part_time', photoPath: oldPath, photoUrl: `https://storage.example.test/signed/${oldPath}`, grade: null, instructorTitle: 'none' })
+    employmentType: 'part_time', photoPath: oldPath, photoUrl: `https://storage.example.test/signed/${oldPath}`, grade: null, instructorTitle: 'none', isExaminer: false })
   assert.ok(calls.some(call => call[0] === 'eq' && call[1] === 'instructor_private_details' && call[3] === instructorId))
   assert.deepEqual(calls.find(call => call[0] === 'sign'), ['sign', oldPath, 3600])
 })
 
 test('missing optional profile fields remain empty, not placeholder records', async () => {
-  const { api, calls } = fixture({ row: { profile_picture_url: null, employment_type: null, instructor_title: 'none' }, noAddress: true })
+  const { api, calls } = fixture({ row: { profile_picture_url: null, employment_type: null, instructor_title: 'none', is_examiner: false }, noAddress: true })
   const result = await api.getProfile(userId)
   assert.equal(result.address, null)
   assert.equal(result.photoUrl, null)
@@ -67,16 +67,17 @@ test('missing optional profile fields remain empty, not placeholder records', as
 
 test('profile returns the instructor grade and belt colour', async () => {
   const grade = { id: 'black', label: 'Black belt', colour: 'black', is_ranked: true, sort_order: 10 }
-  const { api } = fixture({ row: { profile_picture_url: null, employment_type: null, instructor_title: 'none', grade } })
+  const { api } = fixture({ row: { profile_picture_url: null, employment_type: null, instructor_title: 'none', is_examiner: false, grade } })
   assert.deepEqual((await api.getProfile(userId)).grade, grade)
 })
 
 test('profile selects and returns the Aikikai title independently of grade', async () => {
   const grade = { id: 'black', label: '1st Dan', colour: 'black', is_ranked: true, sort_order: 10 }
   for (const instructor_title of ['none', 'shihan', 'shidoin', 'fukushidoin']) {
-    const { api, calls } = fixture({ row: { profile_picture_url: null, employment_type: null, instructor_title, grade } })
+    const { api, calls } = fixture({ row: { profile_picture_url: null, employment_type: null, instructor_title, is_examiner: true, grade } })
     const result = await api.getProfile(userId)
     assert.equal(result.instructorTitle, instructor_title)
+    assert.equal(result.isExaminer, true)
     assert.deepEqual(result.grade, grade)
     assert.match(calls.find(call => call[0] === 'select' && call[1] === 'instructors')[2], /\binstructor_title\b/)
   }
@@ -84,7 +85,7 @@ test('profile selects and returns the Aikikai title independently of grade', asy
 
 test('missing or unknown instructor titles are rejected as invalid profile data', async () => {
   for (const instructor_title of [null, undefined, 'dojo-cho', 'Shihan', 'None', '', 1]) {
-    const { api } = fixture({ row: { profile_picture_url: null, employment_type: null, instructor_title } })
+    const { api } = fixture({ row: { profile_picture_url: null, employment_type: null, instructor_title, is_examiner: false } })
     await assert.rejects(() => api.getProfile(userId), error => error.code === 'invalid_data')
   }
 })
@@ -155,4 +156,11 @@ test('invalid prepared images are rejected before accessing the backend', async 
     await assert.rejects(api.uploadProfilePhoto(userId, oldPath, image), { code: 'invalid_request' })
   }
   assert.equal(calls.length, 0)
+})
+
+test('the examiner flag must be a boolean', async () => {
+  for (const is_examiner of [null, undefined, 'true', 1]) {
+    const { api } = fixture({ row: { profile_picture_url: null, employment_type: null, instructor_title: 'none', is_examiner } })
+    await assert.rejects(() => api.getProfile(userId), error => error.code === 'invalid_data')
+  }
 })

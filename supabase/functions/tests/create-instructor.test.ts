@@ -111,7 +111,7 @@ Deno.test('Instructor provisioning authorization', async (test) => {
       const provision = calls.find((call) => call.path === '/auth/v1/admin/users')!
       assert.equal(provision.authorization, `Bearer ${environment.SUPABASE_SERVICE_ROLE_KEY}`)
       const body = provision.body as Record<string, unknown>
-      assert.deepEqual(body.app_metadata, { role: 'instructor', instructor_grade_id: '1st-dan', instructor_title: 'none' })
+      assert.deepEqual(body.app_metadata, { role: 'instructor', instructor_grade_id: '1st-dan', instructor_title: 'none', instructor_is_examiner: false })
       assert.deepEqual(body.user_metadata, { first_name: 'New', last_name: 'Instructor' })
       assert.equal(body.email, 'instructor@example.test')
       assert.equal(body.email_confirm, true)
@@ -151,7 +151,7 @@ Deno.test('Instructor provisioning authorization', async (test) => {
       assert.equal(response.status, 201)
       const provision = calls.find((call) => call.path === '/auth/v1/admin/users')!
       assert.deepEqual((provision.body as Record<string, unknown>).app_metadata,
-        { role: 'instructor', instructor_grade_id: '2nd-dan', instructor_title: 'none' })
+        { role: 'instructor', instructor_grade_id: '2nd-dan', instructor_title: 'none', instructor_is_examiner: false })
       for (const grade_id of [undefined, null, '', '  ', 7]) {
         calls.length = 0
         assert.equal((await handleRequest(request({ body: JSON.stringify({ ...details, grade_id }) }))).status, 400)
@@ -177,7 +177,7 @@ Deno.test('Instructor provisioning authorization', async (test) => {
         assert.equal(response.status, 201, `${grade_id} / ${instructor_title}`)
         const provision = calls.find((call) => call.path === '/auth/v1/admin/users')!
         assert.deepEqual((provision.body as Record<string, unknown>).app_metadata,
-          { role: 'instructor', instructor_grade_id: grade_id, instructor_title })
+          { role: 'instructor', instructor_grade_id: grade_id, instructor_title, instructor_is_examiner: false })
       }
       for (const [grade_id, instructor_title] of [
         ['1st-dan', 'fukushidoin'], ['junior-dan', 'fukushidoin'], ['black-gold-1st-kyu', 'fukushidoin'],
@@ -192,6 +192,21 @@ Deno.test('Instructor provisioning authorization', async (test) => {
       for (const instructor_title of [undefined, null, '', 'Dojo-cho', 'Shihan', 7]) {
         calls.length = 0
         assert.equal((await handleRequest(request({ body: JSON.stringify({ ...details, instructor_title }) }))).status, 400)
+        assert.ok(!calls.some((call) => call.path === '/auth/v1/admin/users'))
+      }
+    })
+
+    await test.step('passes the examiner flag as trusted metadata and rejects non-boolean values', async () => {
+      for (const is_examiner of [true, false]) {
+        calls.length = 0
+        const response = await handleRequest(request({ body: JSON.stringify({ ...details, is_examiner }) }))
+        assert.equal(response.status, 201)
+        const provision = calls.find((call) => call.path === '/auth/v1/admin/users')!
+        assert.equal((provision.body as { app_metadata: Record<string, unknown> }).app_metadata.instructor_is_examiner, is_examiner)
+      }
+      for (const is_examiner of ['true', 1, 'yes', {}]) {
+        calls.length = 0
+        assert.equal((await handleRequest(request({ body: JSON.stringify({ ...details, is_examiner }) }))).status, 400)
         assert.ok(!calls.some((call) => call.path === '/auth/v1/admin/users'))
       }
     })

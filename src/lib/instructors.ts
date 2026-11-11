@@ -8,6 +8,7 @@ interface InstructorDetails {
   email: string
   grade_id: string
   instructor_title: InstructorTitle
+  is_examiner: boolean
 }
 
 export interface InstructorAccount {

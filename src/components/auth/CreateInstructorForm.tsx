@@ -23,6 +23,7 @@ export default function CreateInstructorForm({ onCreated }: { onCreated?: (accou
   const [reloadGrades, setReloadGrades] = useState(0)
   const [gradeId, setGradeId] = useState('')
   const [title, setTitle] = useState<InstructorTitle>('none')
+  const [isExaminer, setIsExaminer] = useState(false)
   const permittedTitles = allowedTitles(gradeId)
   const titleLocked = permittedTitles.length === 1
 
@@ -55,10 +56,12 @@ export default function CreateInstructorForm({ onCreated }: { onCreated?: (accou
         email: String(form.get('email')).trim(),
         grade_id: gradeId,
         instructor_title: title,
+        is_examiner: isExaminer,
       })
       element.reset()
       setGradeId('')
       setTitle('none')
+      setIsExaminer(false)
       if (onCreated) onCreated(account)
       else setCreatedAccount(account)
     } catch (failure) {
@@ -121,6 +124,14 @@ export default function CreateInstructorForm({ onCreated }: { onCreated?: (accou
           </select>
           {titleLocked && <p id="instructor-title-hint" className="text-sm text-muted-foreground">{gradeId ? titleRequirement('fukushidoin') : 'Select a grade first'}</p>}
         </div>
+        <label className="flex items-start gap-3 text-sm">
+          <input type="checkbox" name="is_examiner" className="mt-0.5 size-4 accent-primary" checked={isExaminer}
+            disabled={pending} onChange={event => setIsExaminer(event.target.checked)} aria-describedby="instructor-examiner-hint" />
+          <span>
+            <span className="font-medium">Can examine gradings</span>
+            <span id="instructor-examiner-hint" className="block text-muted-foreground">Examiners can be added to grading panels.</span>
+          </span>
+        </label>
         <Button type="submit" disabled={pending || gradesLoading || gradesError}>
           {pending ? 'Creating instructor…' : 'Create instructor'}
         </Button>

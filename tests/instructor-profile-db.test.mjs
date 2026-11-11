@@ -79,6 +79,24 @@ test('instructor profile fields and private addresses (offline PostgreSQL)', asy
     const legacyTitles = await db.query('select instructor_title from public.instructors where user_id = any($1::uuid[])', [[ids.instructor, ids.other]])
     assert.ok(legacyTitles.rows.every(row => row.instructor_title === null))
     await migrate('20261111120948_required_instructor_title.sql')
+    await migrate('20261111123748_grading_panels.sql')
+
+    await suite.test('examiner flag defaults to false and comes from trusted account metadata', async () => {
+      const existing = await db.query('select is_examiner from public.instructors where user_id = any($1::uuid[])', [[ids.instructor, ids.other]])
+      assert.ok(existing.rows.every(row => row.is_examiner === false))
+      const [examiner, plain] = [uuid(30), uuid(31)]
+      await db.query('insert into auth.users(id,email,raw_app_meta_data) values ($1,$2,$3),($4,$5,$6)', [
+        examiner, 'examiner@example.test', JSON.stringify({ role: 'instructor', instructor_is_examiner: true }),
+        plain, 'plain@example.test', JSON.stringify({ role: 'instructor' })])
+      const { rows } = await db.query('select user_id, is_examiner from public.instructors where user_id = any($1::uuid[]) order by user_id', [[examiner, plain]])
+      assert.deepEqual(rows, [{ user_id: examiner, is_examiner: true }, { user_id: plain, is_examiner: false }])
+      for (const user of [ids.instructor, ids.other]) {
+        const updated = await asAccount(user, () => db.query('update public.instructors set is_examiner=true where user_id=$1 returning id', [user]))
+        assert.equal(updated.rows.length, 0)
+      }
+      await db.query('delete from public.instructors where user_id = any($1::uuid[])', [[examiner, plain]])
+      await db.query('delete from auth.users where id = any($1::uuid[])', [[examiner, plain]])
+    })
 
     await suite.test('existing null titles are backfilled to none and the column is required', async () => {
       const { rows } = await db.query('select instructor_title from public.instructors where user_id = any($1::uuid[])', [[ids.instructor, ids.other]])

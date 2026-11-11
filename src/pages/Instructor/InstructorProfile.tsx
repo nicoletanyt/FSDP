@@ -625,6 +625,22 @@ export default function InstructorProfile() {
                             </dd>
                         </div>
                         <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+                            <dt className="text-muted-foreground">Examiner</dt>
+                            <dd className="min-w-0 sm:text-right">
+                                {details.isPending ? (
+                                    "Loading…"
+                                ) : details.isError ? (
+                                    "Unavailable"
+                                ) : details.data?.isExaminer ? (
+                                    <Badge variant="secondary" className="h-auto px-2.5 py-1">
+                                        Can sit on grading panels
+                                    </Badge>
+                                ) : (
+                                    <span className="text-muted-foreground">No</span>
+                                )}
+                            </dd>
+                        </div>
+                        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
                             <dt className="text-muted-foreground">Employment status</dt>
                             <dd className="min-w-0 sm:text-right">
                                 <Badge variant="secondary" className="h-auto px-2.5 py-1">

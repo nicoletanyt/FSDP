@@ -85,10 +85,12 @@ export async function handleRequest(request: Request): Promise<Response> {
     const email = typeof details.email === 'string' ? details.email.trim().toLowerCase() : ''
     const gradeId = typeof details.grade_id === 'string' ? details.grade_id.trim() : ''
     const title = details.instructor_title
+    // Optional; omitted means not an examiner.
+    const isExaminer = details.is_examiner ?? false
     if (
       !firstName || firstName.length > 100 || !lastName || lastName.length > 100 ||
       email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !gradeId ||
-      !isInstructorTitle(title)
+      !isInstructorTitle(title) || typeof isExaminer !== 'boolean'
     ) {
       return Response.json({
         error: 'Provide both names, a valid email address, a grade and an instructor title.',
@@ -124,6 +126,7 @@ export async function handleRequest(request: Request): Promise<Response> {
         role: 'instructor',
         instructor_grade_id: gradeId,
         instructor_title: title,
+        instructor_is_examiner: isExaminer,
       },
     })
     if (error || !data.user) {
