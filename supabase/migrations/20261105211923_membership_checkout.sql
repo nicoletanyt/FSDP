@@ -103,4 +103,3 @@ end; $$;
 
 revoke all on function public.finalize_membership_checkout(uuid) from public, anon, authenticated;
 grant execute on function public.finalize_membership_checkout(uuid) to service_role;
-;

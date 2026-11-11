@@ -54,6 +54,7 @@ server secrets with `VITE_`.
 | `npm run test:functions` | Run Edge Function tests, including NFC authorization |
 | `npm run test:auth-db` | Run offline PostgreSQL role/RLS tests |
 | `npm run test:auth-seed` | Test the administrator seed without cloud access |
+| `npm run test:membership-db` | Run offline PostgreSQL tests for membership sign-up and activation |
 | `npm run seed:admin` | Create the development administrator using root `.env` |
 | `npm run seed:instructor-calendar -- --instructor-email EMAIL` | Add marked calendar test classes and event rosters for an existing instructor, in the current Singapore week |
 | `npx shadcn@latest add <component>` | Add a shadcn/ui component |
@@ -305,7 +306,7 @@ npx vercel@latest deploy --prod
 ### Edge Functions — Supabase Cloud
 
 Replace `YOUR_PROJECT_REF` with your Supabase project reference. Configure
-`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID`,
+`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_MEMBERSHIP_PRICE_ID`,
 `STRIPE_GRADING_FEE_ID`, `APP_URL`, `AUTH_ALLOWED_ORIGINS`,
 `EMAILJS_SERVICE_ID`, `EMAILJS_PUBLIC_KEY`, and `EMAILJS_EDITABLE_TEMPLATE_ID` in
 **Edge Functions → Secrets**, using the root `.env` as the source. If EmailJS

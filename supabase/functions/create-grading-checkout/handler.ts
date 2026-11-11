@@ -1,5 +1,5 @@
 import { adminClient, authenticate, gradingHeaders } from '../_shared/grading.ts'
-import { getStripe, requireEnv } from '../_shared/stripe.ts'
+import { getStripe } from '../_shared/stripe.ts'
 
 export async function handleRequest(request: Request): Promise<Response> {
   let headers: Record<string, string> = {}
@@ -16,14 +16,13 @@ export async function handleRequest(request: Request): Promise<Response> {
       return Response.json({ error: 'Select a grading event.' }, { status: 400, headers })
     }
     const stripe = getStripe()
-    const price = await stripe.prices.retrieve(requireEnv('STRIPE_GRADING_FEE_ID'))
-    if (!price.active || price.type !== 'one_time' || price.currency !== 'sgd' || price.unit_amount !== 6000 || price.livemode) {
-      throw new Error('Grading price is not an active SGD 60 test-mode one-time price.')
-    }
     const db = adminClient()
     const { data: attempts, error } = await db.rpc('reserve_grading_checkout', { target_event: body.event_id, auth_user: user })
     if (error || !attempts?.length) return Response.json({ error: 'Grading unavailable or you are ineligible.' }, { status: 403, headers })
     const attempt = attempts[0]
+    // The SOP fee for this grade, fixed on the attempt by the database.
+    if (!Number.isInteger(attempt.amount) || attempt.amount <= 0) throw new Error('Grading fee missing for attempt.')
+    const { data: grade } = await db.from('grades').select('label').eq('id', attempt.target_grade).maybeSingle()
     let revision: number = attempt.revision
     if (attempt.checkout_session) {
       const existing = await stripe.checkout.sessions.retrieve(attempt.checkout_session)
@@ -37,7 +36,14 @@ export async function handleRequest(request: Request): Promise<Response> {
       revision = next
     }
     const session = await stripe.checkout.sessions.create({
-      mode: 'payment', line_items: [{ price: price.id, quantity: 1 }],
+      mode: 'payment',
+      line_items: [{
+        quantity: 1,
+        price_data: {
+          currency: 'sgd', unit_amount: attempt.amount,
+          product_data: { name: `Grading fee${grade?.label ? ` — ${grade.label}` : ''}` },
+        },
+      }],
       client_reference_id: attempt.attempt_id,
       metadata: { grading_attempt_id: attempt.attempt_id },
       success_url: `${config.appOrigin}/grading?checkout=success`,

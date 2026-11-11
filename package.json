@@ -12,7 +12,8 @@
     "seed:admin": "node --env-file=.env scripts/seed-admin.mjs",
     "seed:instructor-calendar": "node --env-file=.env scripts/seed-instructor-calendar.mjs",
     "test:auth-db": "node --test tests/auth-db.test.mjs",
-    "test:auth-seed": "node --test tests/seed-admin.test.mjs"
+    "test:auth-seed": "node --test tests/seed-admin.test.mjs",
+    "test:membership-db": "node --test tests/membership-checkout.test.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",

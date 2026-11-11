@@ -5,14 +5,16 @@ import { ArrowLeft } from "lucide-react";
 import { buttonVariants } from "@/components/student/button";
 import { Card } from "@/components/ui/card";
 import PaymentStatusBadge from "@/components/student/PaymentStatusBadge";
+import { useStudentProfile } from "@/hooks/use-student-profile";
 import { formatDate, money } from "@/lib/format";
-import { mockProfile } from "@/lib/student-profile";
+import type { Payment } from "@/lib/student-profile";
 
 const ALL = "All";
+const NO_PAYMENTS: Payment[] = [];
 
 export default function StudentPayments() {
-  // TODO: swap for a Supabase-backed hook, e.g. usePayments()
-  const payments = mockProfile.payments;
+  const { profile, loading, error } = useStudentProfile();
+  const payments = profile?.payments ?? NO_PAYMENTS;
   const [selected, setSelected] = useState<string>(ALL);
 
   const items = useMemo(() => [ALL, ...new Set(payments.map((p) => p.item))], [payments]);
@@ -70,8 +72,12 @@ export default function StudentPayments() {
         </div>
 
         <Card className="mt-4 rounded-2xl p-0">
-          {rows.length === 0 ? (
-            <p className="p-5 text-muted-foreground">No payments yet. Fees for enrolled classes will show up here.</p>
+          {loading ? (
+            <p className="p-5 text-muted-foreground">Loading payments…</p>
+          ) : error ? (
+            <p role="alert" className="p-5 text-brand-red-ink">We couldn't load your payments. Please refresh the page.</p>
+          ) : rows.length === 0 ? (
+            <p className="p-5 text-muted-foreground">No payments yet. Membership and grading fees will show up here.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[40rem] text-left text-sm">

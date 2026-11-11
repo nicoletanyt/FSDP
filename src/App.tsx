@@ -1,6 +1,7 @@
 import { lazy } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router'
 import { GuestRoute, InstructorIndexRedirect, ProtectedRoute } from '@/components/auth/AuthGate'
+import FaqChatbot from '@/components/FaqChatbot'
 import NfcTagCapture from '@/components/instructor/NfcTagCapture'
 import AuthLayout from './layouts/AuthLayout'
 import RootLayout from './layouts/RootLayout'
@@ -41,6 +42,7 @@ const StudentProfile = lazy(() => import('./pages/Student/StudentProfile'))
 const StudentPayments = lazy(() => import('./pages/Student/StudentPayments'))
 const StudentCredits = lazy(() => import('./pages/Student/StudentCredits'))
 const StudentGrading = lazy(() => import('./pages/Student/StudentGrading'))
+const GradingRequirements = lazy(() => import('./pages/Student/GradingRequirements'))
 
 const InstructorDashboard = lazy(() => import('./pages/Instructor/InstructorDashboard'))
 const InstructorStudents = lazy(() => import('./pages/Instructor/InstructorStudents'))
@@ -80,6 +82,7 @@ export default function App() {
               <Route path="payments" element={<StudentPayments />} />
               <Route path="student/credits" element={<StudentCredits />} />
               <Route path="grading" element={<StudentGrading />} />
+              <Route path="grading/requirements" element={<GradingRequirements />} />
             </Route>
           </Route>
           <Route path="instructor" element={<NfcTagCapture />}>
@@ -133,6 +136,7 @@ export default function App() {
           <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>
+      <FaqChatbot />
     </BrowserRouter>
   )
 }

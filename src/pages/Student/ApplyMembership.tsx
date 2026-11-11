@@ -1,11 +1,14 @@
-import { useState, useEffect } from 'react' // 👈 引入 useEffect
-import { useNavigate } from 'react-router' 
+import { useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { supabase } from '@/lib/supabase' // 👈 引入 supabase
+import { startMembershipCheckout } from '@/lib/stripe'
+import { supabase } from '@/lib/supabase'
 import { Check, ChevronDown, ChevronUp, UploadCloud } from 'lucide-react'
+
+type Centre = { id: string; name: string }
 
 const STEPS = [
   { id: 1, title: 'Personal\nInfo' },
@@ -14,29 +17,34 @@ const STEPS = [
   { id: 4, title: 'Review &\nSubmit' },
 ]
 
-const generateMembershipId = () => {
-  const year = new Date().getFullYear();
-  const randomNum = Math.floor(1000 + Math.random() * 9000);
-  return `ASJ${year}${randomNum}`;
-};
-
-const getTodayDate = () => new Date().toISOString().split('T')[0];
+// Same range the database accepts: not in the future, at most 120 years ago.
+function localDate(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+const today = new Date()
+const MAX_DOB = localDate(today)
+const MIN_DOB = localDate(new Date(today.getFullYear() - 120, today.getMonth(), today.getDate()))
+const validDob = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value) && value >= MIN_DOB && value <= MAX_DOB
 
 const isValidNric = (nric: string) => {
   return /^[STFGM]\d{7}[A-Z]$/i.test(nric);
 }
 
 export default function ApplyMembership() {
-  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const cancelled = searchParams.get('checkout') === 'cancel'
   const [currentStep, setCurrentStep] = useState(1)
   const [showGuardian, setShowGuardian] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
   const [isDeclared, setIsDeclared] = useState(false)
+  const [centres, setCentres] = useState<Centre[]>([])
+  // Same key for retries of an unchanged submission; Stripe then returns the same session.
+  const retryKey = useRef(crypto.randomUUID())
 
   const [formData, setFormData] = useState({
     fullName: '', nric: '', nationality: '', dob: '', gender: '',
-    email: '', // 👈 初始为空，靠 useEffect 动态获取
+    email: '', // filled from the signed-in account below
     mobile: '', address: '', photoName: '',
     principalDojo: '', membershipType: '', currentBelt: '', hasExperience: 'no', experienceDetails: '',
     emergencyName: '', emergencyRelationship: '', emergencyPhone: '',
@@ -44,7 +52,7 @@ export default function ApplyMembership() {
     guardianName: '', guardianNric: '', guardianRelationship: '', guardianPhone: '',
   })
 
-  // 👈 自动获取当前登录用户的邮箱
+  // The email field is read-only and comes from the signed-in account.
   useEffect(() => {
     const fetchUserEmail = async () => {
       const { data: { user } } = await supabase.auth.getUser()
@@ -55,12 +63,31 @@ export default function ApplyMembership() {
     fetchUserEmail()
   }, [])
 
+  useEffect(() => {
+    supabase
+      .from('centres')
+      .select('id, name')
+      .eq('status', 'active')
+      .order('name')
+      .then(({ data }) => setCentres(data ?? []))
+  }, [])
+
+  const centreName = centres.find((c) => c.id === formData.principalDojo)?.name
+
   const validateStep = (step: number) => {
     setErrorMsg('')
     
     if (step === 1) {
       if (!formData.fullName || !formData.nric || !formData.nationality || !formData.dob || !formData.gender || !formData.mobile || !formData.address) {
         setErrorMsg('Please fill in all required Personal Information fields.')
+        return false
+      }
+      if (formData.fullName.trim().split(/\s+/).length < 2) {
+        setErrorMsg('Please enter your full name (first and last).')
+        return false
+      }
+      if (!validDob(formData.dob)) {
+        setErrorMsg('Please enter a valid date of birth. It can’t be in the future.')
         return false
       }
       if (!formData.photoName) {
@@ -123,23 +150,25 @@ export default function ApplyMembership() {
     if (currentStep < 4) {
       setCurrentStep(currentStep + 1)
     } else {
+      const [firstName, ...rest] = formData.fullName.trim().split(/\s+/)
       setIsSubmitting(true)
       try {
-        const finalDataToSubmit = {
-          ...formData,
-          membership_id: generateMembershipId(),
-          start_date: getTodayDate(),
-          belt_rank: 'Mukyu (White)',
-        }
-        await new Promise(resolve => setTimeout(resolve, 1000))
-        navigate('/apply-membership/success', { state: { 
-            membershipId: finalDataToSubmit.membership_id,
-            startDate: finalDataToSubmit.start_date,
-            beltRank: finalDataToSubmit.belt_rank
-        }}) 
+        await startMembershipCheckout({
+          first_name: firstName,
+          last_name: rest.join(' '),
+          phone: `+65 ${formData.mobile.trim()}`,
+          date_of_birth: formData.dob,
+          home_centre_id: formData.principalDojo,
+          emergency_contact: {
+            name: formData.emergencyName.trim(),
+            relationship: formData.emergencyRelationship,
+            phone: `+65 ${formData.emergencyPhone.trim()}`,
+          },
+          medical_details: formData.medicalDetails.trim(),
+        }, retryKey.current)
+        // The browser is now leaving for Stripe Checkout, so stay in the submitting state.
       } catch (error) {
-        setErrorMsg("Failed to submit application. Please try again.")
-      } finally {
+        setErrorMsg(error instanceof Error ? error.message : 'Unable to start checkout. Please try again.')
         setIsSubmitting(false)
       }
     }
@@ -184,6 +213,13 @@ export default function ApplyMembership() {
           ))}
         </div>
 
+        {cancelled && (
+          <p role="status" className="mb-6 rounded-lg bg-muted p-4 text-sm text-muted-foreground">
+            Payment was cancelled, so your membership isn't active yet. Submit the form again
+            whenever you're ready to pay.
+          </p>
+        )}
+
         {errorMsg && (
           <div className="mb-6 animate-in slide-in-from-top-2">
             <Alert variant="destructive">
@@ -225,7 +261,18 @@ export default function ApplyMembership() {
               </div>
               <div className="space-y-1.5 sm:space-y-2">
                 <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-sm sm:text-base transition-colors">Date of Birth</Label>
-                <Input type="date" value={formData.dob} onChange={(e) => setFormData({...formData, dob: e.target.value})} className="h-11 sm:h-12 bg-gray-200/60 dark:bg-slate-800 border-transparent focus-visible:ring-[#2c3f67] text-black dark:text-white" />
+                <Input
+                  type="date"
+                  min={MIN_DOB}
+                  max={MAX_DOB}
+                  aria-invalid={!!formData.dob && !validDob(formData.dob)}
+                  value={formData.dob}
+                  onChange={(e) => setFormData({...formData, dob: e.target.value})}
+                  className="h-11 sm:h-12 bg-gray-200/60 dark:bg-slate-800 border-transparent focus-visible:ring-[#2c3f67] text-black dark:text-white"
+                />
+                {formData.dob && !validDob(formData.dob) && (
+                  <p role="alert" className="text-sm text-brand-red-ink">Enter a real date of birth. It can’t be in the future.</p>
+                )}
               </div>
               <div className="space-y-1.5 sm:space-y-2">
                 <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-sm sm:text-base transition-colors">Gender</Label>
@@ -294,9 +341,9 @@ export default function ApplyMembership() {
                 <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-sm sm:text-base">Principal Dojo</Label>
                 <select value={formData.principalDojo} onChange={(e) => setFormData({...formData, principalDojo: e.target.value})} className="w-full h-11 sm:h-12 bg-gray-200/60 dark:bg-slate-800 rounded-md border-transparent px-3 text-sm focus:ring-[#2c3f67] text-black dark:text-white">
                   <option value="" disabled>Select dojo</option>
-                  <option value="central">Central Dojo</option>
-                  <option value="east">East Dojo</option>
-                  <option value="west">West Dojo</option>
+                  {centres.map((centre) => (
+                    <option key={centre.id} value={centre.id}>{centre.name}</option>
+                  ))}
                 </select>
               </div>
               <div className="space-y-1.5 sm:space-y-2">
@@ -448,7 +495,7 @@ export default function ApplyMembership() {
                   <button onClick={() => setCurrentStep(2)} className="text-xs sm:text-sm text-[#e62128] font-semibold hover:underline">Edit</button>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-2 sm:gap-y-3 text-xs sm:text-sm">
-                  <div><span className="text-gray-500 block text-[10px] sm:text-xs">Dojo</span>{formData.principalDojo || '-'}</div>
+                  <div><span className="text-gray-500 block text-[10px] sm:text-xs">Dojo</span>{centreName || '-'}</div>
                   <div><span className="text-gray-500 block text-[10px] sm:text-xs">Type</span>{formData.membershipType || '-'}</div>
                   <div><span className="text-gray-500 block text-[10px] sm:text-xs">Belt</span>{formData.currentBelt || '-'}</div>
                   <div><span className="text-gray-500 block text-[10px] sm:text-xs">Emergency Contact</span>{formData.emergencyName || '-'}</div>
@@ -476,7 +523,7 @@ export default function ApplyMembership() {
           ) : <div />}
           
           <Button onClick={handleNext} disabled={isSubmitting} className="bg-[#2c3f67] hover:bg-[#1f2d4a] text-white px-6 sm:px-10 h-10 sm:h-12 rounded-md text-sm sm:text-base">
-            {isSubmitting ? 'Processing...' : (currentStep === 4 ? 'Submit' : 'Next')}
+            {currentStep < 4 ? 'Next' : isSubmitting ? 'Redirecting to payment…' : 'Submit & Pay'}
           </Button>
         </div>
 

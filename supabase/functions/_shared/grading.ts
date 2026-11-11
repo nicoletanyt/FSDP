@@ -11,15 +11,18 @@ export function gradingHeaders(request: Request) {
   const allowed = [requireEnv('APP_URL'), ...(Deno.env.get('AUTH_ALLOWED_ORIGINS') ?? '').split(',')]
     .filter(Boolean).map((item) => new URL(item.trim()).origin)
   const origin = request.headers.get('origin')
+  const allowedOrigin = origin && allowed.includes(origin) ? origin : null
   return {
-    allowed: !origin || allowed.includes(origin),
+    allowed: !origin || !!allowedOrigin,
     headers: {
-      'Access-Control-Allow-Origin': origin && allowed.includes(origin) ? origin : allowed[0],
+      'Access-Control-Allow-Origin': allowedOrigin ?? allowed[0],
       'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info',
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
       'Cache-Control': 'no-store', 'Vary': 'Origin',
     },
-    appOrigin: new URL(requireEnv('APP_URL')).origin,
+    // Stripe returns the student to the site they started checkout from
+    // (e.g. localhost while developing), but only if that site is allow-listed.
+    appOrigin: allowedOrigin ?? new URL(requireEnv('APP_URL')).origin,
   }
 }
 

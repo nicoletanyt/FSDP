@@ -60,4 +60,3 @@ end; $$;
 
 revoke all on function public.finalize_membership_checkout(uuid, text, integer, text) from public, anon, authenticated;
 grant execute on function public.finalize_membership_checkout(uuid, text, integer, text) to service_role;
-;
