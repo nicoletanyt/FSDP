@@ -1,5 +1,5 @@
 import { Link, NavLink, useLocation } from 'react-router'
-import { ClipboardCheck, LayoutDashboard, Presentation, UserCheck, UserCircle } from 'lucide-react'
+import { ClipboardCheck, CreditCard, LayoutDashboard, Presentation, UserCheck, UserCircle } from 'lucide-react'
 import logo from '@/assets/logo.png'
 import ThemeToggle from '@/components/theme-toggle'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils'
 
 const routes = [
   { label: 'Dashboard', to: '/dashboard', icon: LayoutDashboard },
+  { label: 'Credits', to: '/student/credits', icon: CreditCard },
   { label: 'Timetable', to: '/timetable', icon: UserCheck },
   { label: 'Classes', to: '/classes', icon: Presentation },
   { label: 'Grading', to: '/grading', icon: ClipboardCheck },
