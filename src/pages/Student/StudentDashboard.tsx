@@ -21,8 +21,10 @@ import {
 } from "@/components/ui/dialog";
 import { useAuth } from "@/hooks/use-auth";
 import { useMembershipStatus } from "@/hooks/use-membership-status";
-import { formatDateTime, greetingFor } from "@/lib/format";
-import { mockStudent, type Student } from "@/lib/student-dashboard";
+import { useStudentDashboard } from "@/hooks/use-student-dashboard";
+import { formatDateTime, greetingFor, money } from "@/lib/format";
+import type { DashboardSummary } from "@/lib/student-dashboard";
+import { beltHexFor } from "@/lib/student-profile";
 import CreditBalanceCard from "./CreditBalanceCard";
 import NonMemberDashboard from "./NonMemberDashboard";
 
@@ -32,12 +34,15 @@ function isClassDay(iso: string) {
   return !Number.isNaN(classDate.getTime()) && classDate.toDateString() === new Date().toDateString();
 }
 
-function gradingProgress(r: Student["requirements"]) {
+/** Average of the requirements that apply to the next grade (a minimum of 0 counts as met). */
+function gradingProgress(r: DashboardSummary["requirements"]) {
+  const share = (done: number, required: number | null) =>
+    required === null ? null : required <= 0 ? 1 : Math.min(done / required, 1);
   const parts = [
-    Math.min(r.sessions.done / r.sessions.required, 1),
-    Math.min(r.monthsInRank.done / r.monthsInRank.required, 1),
+    share(r.sessionsDone, r.sessionsRequired),
+    share(r.monthsDone, r.monthsRequired),
     r.feePaid ? 1 : 0,
-  ];
+  ].filter((part): part is number => part !== null);
   return Math.round((parts.reduce((a, b) => a + b, 0) / parts.length) * 100);
 }
 
@@ -123,35 +128,56 @@ export default function StudentDashboard() {
 }
 
 function MemberDashboard({ firstName }: { firstName: string }) {
+  const { summary, loading, error } = useStudentDashboard();
+
+  if (loading) {
+    return <p className="text-sm text-muted-foreground">Loading your dashboard…</p>;
+  }
+  if (error || !summary) {
+    return (
+      <p role="alert" className="text-sm text-brand-red-ink">
+        We couldn't load your training details. Please refresh the page.
+      </p>
+    );
+  }
+  return <MemberDashboardView firstName={firstName} summary={summary} />;
+}
+
+function MemberDashboardView({ firstName, summary }: { firstName: string; summary: DashboardSummary }) {
   const [attendanceQrOpen, setAttendanceQrOpen] = useState(false);
-  // TODO: belt, classes and attendance stay mock until those tables exist.
-  const student: Student = {
-    ...mockStudent,
-    firstName: firstName || mockStudent.firstName,
-    membershipStatus: "Active",
-  };
-  const { belt, nextBelt, requirements: r, counts, nextClass } = student;
+  const { belt, nextBelt, requirements: r, counts, nextClass } = summary;
   const attendanceQrAvailable = nextClass ? isClassDay(nextClass.startsAt) : false;
 
   const pct = gradingProgress(r);
-  const ctaLabel = student.gradingOpen
-    ? "Apply for grading"
-    : pct === 100
-      ? "Choose grading timeslot"
-      : "View grading requirements";
+  // Applying and paying live on /grading; requirements are read-only on their own page.
+  const cta = counts.gradingsOpen
+    ? { label: "Apply for grading", to: "/grading" }
+    : r.feePaid
+      ? { label: "View grading application", to: "/grading" }
+      : { label: "View grading requirements", to: "/grading/requirements" };
+  const feeValue = r.feePaid
+    ? "Paid"
+    : r.feeCents !== null
+      ? `${money.format(r.feeCents / 100)} due`
+      : "Not set";
 
   const tiles: TileProps[] = [
     { title: "Class Credits", to: "/student/credits", icon: CreditCard, status: "Top up your balance" },
-    { title: "Attendance History", to: "/timetable", icon: UserCheck, status: `${counts.attendanceRate}% attendance` },
-    { title: "Classes", to: "/classes", icon: Presentation, status: `${counts.classesEnrolled} enrolled` },
+    {
+      title: "Attendance History",
+      to: "/timetable",
+      icon: UserCheck,
+      status: counts.attendanceRate === null ? "No sessions marked yet" : `${counts.attendanceRate}% attendance`,
+    },
+    { title: "Classes", to: "/classes", icon: Presentation, status: `${counts.classesBooked} booked` },
     {
       title: "Grading Applications",
       to: "/grading",
       icon: ClipboardCheck,
-      status: counts.pendingGrading ? "Action needed" : "No pending actions",
-      badge: counts.pendingGrading,
+      status: counts.gradingsOpen ? "Action needed" : "No pending actions",
+      badge: counts.gradingsOpen,
     },
-    { title: "Membership Profile", to: "/profile", icon: IdCard, status: `Status: ${student.membershipStatus}` },
+    { title: "Membership Profile", to: "/profile", icon: IdCard, status: "Status: Active" },
   ];
 
   return (
@@ -159,7 +185,7 @@ function MemberDashboard({ firstName }: { firstName: string }) {
         <header className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold">
-              {greetingFor(new Date().getHours())}, {student.firstName}
+              {greetingFor(new Date().getHours())}{firstName ? `, ${firstName}` : ""}
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
               Your training progress, upcoming classes and student services.
@@ -167,7 +193,7 @@ function MemberDashboard({ firstName }: { firstName: string }) {
           </div>
           {/* Members are already members; the apply button lives on NonMemberDashboard. */}
           <p className="inline-flex rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
-            Membership {student.membershipStatus.toLowerCase()}
+            Membership active
           </p>
         </header>
 
@@ -181,57 +207,66 @@ function MemberDashboard({ firstName }: { firstName: string }) {
           <Card className="min-w-0 gap-5 p-5">
             <div className="flex items-center gap-4">
               <div className="grid size-16 shrink-0 place-items-center rounded-2xl bg-primary/10">
-                <BeltIcon hex={belt.hex} />
+                <BeltIcon hex={beltHexFor(belt?.colour ?? null)} />
               </div>
               <div className="min-w-0">
-                <h3 className="text-lg font-semibold">
-                  {belt.name} ({belt.colour} belt)
-                </h3>
-                <p className="text-sm text-muted-foreground">Training towards {nextBelt.name}</p>
+                <h3 className="text-lg font-semibold">{belt?.label ?? "Unranked"}</h3>
+                <p className="text-sm text-muted-foreground">
+                  {nextBelt
+                    ? `Training towards ${nextBelt.label}`
+                    : "You've reached the highest grade on your track. Speak to your instructor about further gradings."}
+                </p>
               </div>
             </div>
 
-            <div>
-              <div className="mb-1.5 flex justify-between gap-3 text-sm">
-                <span>Progress to {nextBelt.name} grading</span>
-                <strong className="tabular-nums">{pct}%</strong>
-              </div>
+            {nextBelt && (
+              <>
+                <div>
+                  <div className="mb-1.5 flex justify-between gap-3 text-sm">
+                    <span>Progress to {nextBelt.label} grading</span>
+                    <strong className="tabular-nums">{pct}%</strong>
+                  </div>
 
-              <div
-                role="progressbar"
-                aria-label={`Progress to ${nextBelt.name} grading`}
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={pct}
-                className="h-3 overflow-hidden rounded-full bg-muted"
-              >
-                <div
-                  className="h-full bg-primary transition-all"
-                  style={{ width: `${pct}%` }}
-                />
-              </div>
-            </div>
+                  <div
+                    role="progressbar"
+                    aria-label={`Progress to ${nextBelt.label} grading`}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={pct}
+                    className="h-3 overflow-hidden rounded-full bg-muted"
+                  >
+                    <div
+                      className="h-full bg-primary transition-all"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                </div>
 
-            <ul className="grid gap-2.5 sm:grid-cols-3">
-              <Requirement
-                label="Sessions attended"
-                value={`${r.sessions.done} / ${r.sessions.required}`}
-                done={r.sessions.done >= r.sessions.required}
-              />
-              <Requirement
-                label="Time in rank"
-                value={`${r.monthsInRank.done} / ${r.monthsInRank.required} months`}
-                done={r.monthsInRank.done >= r.monthsInRank.required}
-              />
-              <Requirement label="Grading fee" value={r.feePaid ? "Paid" : "Unpaid"} done={r.feePaid} />
-            </ul>
+                <ul className="grid gap-2.5 sm:grid-cols-3">
+                  {r.sessionsRequired !== null && (
+                    <Requirement
+                      label="Sessions attended"
+                      value={`${r.sessionsDone} / ${r.sessionsRequired}`}
+                      done={r.sessionsDone >= r.sessionsRequired}
+                    />
+                  )}
+                  {r.monthsRequired !== null && (
+                    <Requirement
+                      label="Time in rank"
+                      value={`${r.monthsDone} / ${r.monthsRequired} months`}
+                      done={r.monthsDone >= r.monthsRequired}
+                    />
+                  )}
+                  <Requirement label="Grading fee" value={feeValue} done={r.feePaid} />
+                </ul>
+              </>
+            )}
 
-            {/* Applying (and paying) lives on /grading; requirements are read-only on their own page. */}
             <Link
-              to={ctaLabel === "View grading requirements" ? "/grading/requirements" : "/grading"}
+              to={cta.to}
               className={buttonVariants({ className: "mt-auto w-full self-start whitespace-normal sm:w-auto" })}
             >
-              {ctaLabel}
+              {cta.label}
             </Link>
           </Card>
 
@@ -252,14 +287,9 @@ function MemberDashboard({ firstName }: { firstName: string }) {
                   <div>
                     <dt className="text-xs text-muted-foreground">Where</dt>
                     <dd className="font-semibold">
-                      {nextClass.centre}, {nextClass.instructor}
+                      {[nextClass.centre, nextClass.instructor].filter(Boolean).join(", ")}
                     </dd>
                   </div>
-                  {nextClass.recommended && (
-                    <span className="inline-flex w-fit rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-                      Recommended for your rank
-                    </span>
-                  )}
                 </dl>
                 <Dialog open={attendanceQrOpen} onOpenChange={setAttendanceQrOpen}>
                   <DialogTrigger

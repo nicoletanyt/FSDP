@@ -35,6 +35,11 @@ const beltHex: Record<string, string> = {
   black: "#111111",
 };
 
+/** Single colour for a belt (the main tone of a two-tone belt), e.g. for an SVG fill. */
+export function beltHexFor(colour: string | null) {
+  return beltHex[(colour ?? "").toLowerCase().split("-")[0]] ?? "#e5e7eb";
+}
+
 /** CSS background for a belt colour such as "Blue" or two-tone "Blue-Gold". */
 export function beltBackground(colour: string | null) {
   const tones = (colour ?? "")
