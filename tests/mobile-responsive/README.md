@@ -41,18 +41,56 @@ node --test tests/mobile-responsive/grading-page.test.mjs
 node --test tests/mobile-responsive/attendance.test.mjs
 node --test tests/mobile-responsive/profile.test.mjs
 node --test tests/mobile-responsive/session-saves.test.mjs
+node --test tests/mobile-responsive/chatbot.test.mjs
+node --test tests/mobile-responsive/nfc.test.mjs
 ```
 
 Use `FSDP_BASE_URL` and `WEBDRIVER_URL` if those services run elsewhere. The
 WebDriver service must be free to create a new session. Run the suites
 sequentially when sharing a driver.
 
+The NFC suite simulates Android Chrome 89+, tablets, Edge, missing Web NFC,
+old Chrome, iPhones and insecure contexts without using real NFC hardware or
+calling Supabase. It checks ready/QR-only states, the compatible-device list,
+QR navigation, layout at 320–1280px, and that unsupported devices never submit
+captured tags. Physical NFC hardware and whether it is enabled cannot be reliably
+detected without starting a scan; production checks Android, Web NFC API exposure
+and a secure context before displaying readiness.
+
+The grading-page suite covers per-instructor batch drafts, a complete persisted
+student/technique matrix, automatic resume after reload, editable signed submissions, account
+isolation, version conflicts and exact-request retries after lost responses.
+Only `batch-persistence` mode uses test-scoped session storage. Production batch
+data and signatures are saved through the database RPCs, never browser storage.
+`tests/instructor-grading-batches-db.test.mjs` applies the batch migration to an
+offline PostgreSQL instance and checks constraints, RLS, atomicity and unchanged
+student grades/legacy assessments. Draft and submitted checklists can be edited;
+resubmission requires a new signature and each prior signed receipt is retained.
+Timestamp checks verify "Last saved" / "Last submitted" appears below the table.
+
+The chatbot suite opts into `fixtureChat=true`, mocks the existing Supabase
+session/function methods in the fixture only, and never contacts Ollama or writes
+database records. It covers instructor-only visibility, send/retry/hidden sources,
+Escape/focus return, stop/clear, late replies after account switches, and panel
+bounds at 320px, 390px, short landscape and desktop sizes.
+It also verifies suggested topics, follow-up prompts, native keyboard activation,
+pending/error visibility, draft retention, duplicate-click protection and
+scroll-reachable 44px topic buttons.
+The student-style question-chip checks also verify full-question labels, primary
+outlined styling, placement directly beneath the greeting/latest assistant reply and
+before its timestamp, hiding stale suggestions, and keeping the local greeting
+out of model requests.
+Markdown checks cover emphasis/lists, literal user messages, blocked raw HTML,
+images and model links, horizontally scrollable tables and hidden source links.
+Expand/minimize tests cover modal bounds and focus trapping/return, native Escape,
+single-instance message logs, and draft/pending-reply preservation.
+
 The suite checks 320–430px views, role-based left Sheet navigation, the calendar view popover beside month/year,
 24px instructor main padding, 16px overlay padding, single-line roster alignment, measured touch-target sizes and spacing,
 sticky-header clearance in short landscapes, single-day/two-day timeline positioning,
 second-day class/availability actions, the simplified List header, week paging, synthetic
 day-swipe handlers, Today, UUID drawer/history/focus, recorded attendance and read-only controls,
-availability creation/read-only existing slots, resizing, and short-landscape bounds. Header controls retain
+availability creation/editing/confirmed deletion, resizing, and short-landscape bounds. Header controls retain
 44px targets; the existing seven-column day grids are checked against their
 viewport-relative geometry, including Firefox's reserved scrollbar on narrow frames. Iframes
 provide exact CSS widths below Firefox's minimum headless window size. These
@@ -65,10 +103,16 @@ navigation, and account changes while a selection is open. The calendar follow-u
 also checks full-time/unspecified/unlinked accounts have no availability controls,
 records or reads, part-time availability access, pending availability saves, double-submit
 protection, failed-save draft retention and read-after-save refresh. Existing-slot
-availability edit/delete mutations remain disabled. Phase 10A enables the
+availability checks cover edit/delete persistence across reload at 320/390/1280px,
+deletion confirmation/cancellation, exact-request retries after lost update/delete
+responses, and conflict reload without losing the draft. Production mutations use
+the Supabase RPC; only `availability-persistence` fixture mode uses session storage.
+`tests/instructor-availability.test.mjs` validates API payloads/receipts and
+`tests/instructor-availability-access-db.test.mjs` verifies authorization, snapshots,
+retries and overlap/time rules against offline PostgreSQL. Phase 10A enables the
 existing present/absent/clear and bulk controls for scheduled timed sessions before
 their end. Past/completed/cancelled/untimed sessions and late/excused entries stay
-read-only; the existing-slot availability mutations remain a later checkpoint.
+read-only.
 
 The directory suite checks:
 

@@ -2,11 +2,11 @@ import { useState } from "react";
 import { Link } from "react-router";
 import {
   ClipboardCheck,
+  CreditCard,
   IdCard,
   QrCode,
   Presentation,
   UserCheck,
-  CreditCard, // 👈 新增图标
   type LucideIcon,
 } from "lucide-react";
 
@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { formatDateTime } from "@/lib/format";
 import { mockStudent, type Student } from "@/lib/student-dashboard";
-import CreditBalanceCard from "@/pages/Student/CreditBalanceCard"; // 👈 引入你刚建的卡片
+import CreditBalanceCard from "@/pages/Student/CreditBalanceCard";
 
 /* ---------- Helpers ---------- */
 function greetingFor(hour: number) {
@@ -113,7 +113,6 @@ export default function StudentDashboard() {
       : "View grading requirements";
 
   const tiles: TileProps[] = [
-    // 👇 新增：Credits 充值入口
     { title: "Class Credits", to: "/student/credits", icon: CreditCard, status: "Top up your balance" },
     { title: "Attendance History", to: "/timetable", icon: UserCheck, status: `${counts.attendanceRate}% attendance` },
     { title: "Classes", to: "/classes", icon: Presentation, status: `${counts.classesEnrolled} enrolled` },
@@ -152,7 +151,6 @@ export default function StudentDashboard() {
         </div>
       </header>
 
-      {/* 👇 插入 Credit 余额展示卡片 */}
       <div className="mt-6">
         <CreditBalanceCard />
       </div>

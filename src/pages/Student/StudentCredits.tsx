@@ -1,164 +1,170 @@
-import { useState, useEffect } from 'react'
-import { useNavigate, useOutletContext } from 'react-router'
-import { CreditCard, Sparkles, User, Baby } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import type { StudentContext } from '@/layouts/StudentLayout'
+import { useMemo, useState } from 'react'
+import { Link, useNavigate, useOutletContext } from 'react-router'
+import { BadgeCheck, CreditCard, GraduationCap, ShieldCheck, Sparkles, User } from 'lucide-react'
 
-// 👇 精准还原图一（成人）和图二（儿童）的套餐数据
-const PACKAGES = {
-  adult: [
-    { id: 'adult-10', title: '10 Session Pass', price: 270.00, credits: 10, unitPrice: '$27 / Session', validity: 'Valid for 11 weeks', popular: false },
-    { id: 'adult-25', title: '25 Session Pass', price: 600.00, credits: 25, unitPrice: '$24 / Session', validity: 'Valid for 4 months', popular: true },
-    { id: 'adult-50', title: '50 Session Pass', price: 980.00, credits: 50, unitPrice: '$19.60 / Session', validity: 'Valid for 6 months', popular: false },
-    { id: 'adult-1y', title: '1 Year Unlimited Pass', price: 2246.40, credits: 9999, unitPrice: 'Inclusive 10% Discount', validity: 'Valid for 12 months', popular: false },
-    { id: 'adult-12w', title: "12 Weeks' Unlimited Pass", price: 96.00, credits: 9999, unitPrice: '6 Recurring Payments', validity: 'Billed every 2 weeks', popular: false },
-    { id: 'adult-3m', title: "3 month's Unlimited Sessions", price: 576.00, credits: 9999, unitPrice: 'Unlimited Sessions', validity: 'Valid for 3 months', popular: false }
-  ],
-  children: [
-    { id: 'child-1m', title: '1 Month Pass', price: 150.00, credits: 4, unitPrice: '$37.50 / Session', validity: 'Valid for 5 weeks', popular: false },
-    { id: 'child-6m-24', title: '6 Months Pass', price: 834.00, credits: 24, unitPrice: '24 Sessions', validity: 'Valid for 6 months', popular: true },
-    { id: 'child-6m-50', title: '6 Months Pass', price: 1200.00, credits: 50, unitPrice: '50 Sessions', validity: 'Valid for 6 months', popular: false }
-  ]
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import type { StudentContext } from '@/layouts/StudentLayout'
+import {
+  classPassAudience,
+  isStudentMembership,
+  membershipLabel,
+  resolveMembershipType,
+  type MembershipType,
+} from '@/lib/membership'
+import { money } from '@/lib/format'
+
+const UNLIMITED_CREDITS = 9999
+
+type PassPackage = {
+  id: string
+  title: string
+  price: number
+  credits: number
+  unitPrice: string
+  validity: string
+  popular?: boolean
+  originalPrice?: number
+}
+
+const ADULT_PASSES: PassPackage[] = [
+  { id: 'adult-10', title: '10 Session Pass', price: 270, credits: 10, unitPrice: '$27.00 / Session', validity: 'Valid for 11 weeks' },
+  { id: 'adult-25', title: '25 Session Pass', price: 600, credits: 25, unitPrice: '$24.00 / Session', validity: 'Valid for 4 months', popular: true },
+  { id: 'adult-50', title: '50 Session Pass', price: 980, credits: 50, unitPrice: '$19.60 / Session', validity: 'Valid for 6 months' },
+  { id: 'adult-1y', title: '1 Year Unlimited Pass', price: 2246.4, credits: UNLIMITED_CREDITS, unitPrice: 'Inclusive of 10% discount', validity: 'Valid for 12 months' },
+  { id: 'adult-12w', title: "12 Weeks' Unlimited Pass", price: 96, credits: UNLIMITED_CREDITS, unitPrice: '6 recurring payments', validity: 'Billed every 2 weeks' },
+  { id: 'adult-3m', title: "3 Months' Unlimited Pass", price: 576, credits: UNLIMITED_CREDITS, unitPrice: 'Unlimited sessions', validity: 'Valid for 3 months' },
+]
+
+const JUNIOR_PASSES: PassPackage[] = [
+  { id: 'junior-1m', title: '1 Month Pass', price: 150, credits: 4, unitPrice: '$37.50 / Session', validity: 'Valid for 5 weeks' },
+  { id: 'junior-6m-24', title: '6 Months Pass (24 Sessions)', price: 834, credits: 24, unitPrice: '$34.75 / Session', validity: 'Valid for 6 months', popular: true },
+  { id: 'junior-6m-50', title: '6 Months Pass (50 Sessions)', price: 1200, credits: 50, unitPrice: '$24.00 / Session', validity: 'Valid for 6 months' },
+]
+
+const STUDENT_DISCOUNT = 0.5
+
+function applyStudentDiscount(packages: PassPackage[]): PassPackage[] {
+  return packages.map((pass) => {
+    const price = Math.round(pass.price * STUDENT_DISCOUNT * 100) / 100
+    return {
+      ...pass,
+      price,
+      originalPrice: pass.price,
+      unitPrice: pass.credits === UNLIMITED_CREDITS
+        ? pass.unitPrice
+        : `${money.format(price / pass.credits)} / Session`,
+    }
+  })
 }
 
 export default function StudentCredits() {
   const navigate = useNavigate()
   const { addCredits } = useOutletContext<StudentContext>()
   const [loading, setLoading] = useState<string | null>(null)
-  
-  // 👇 状态：判断当前用户是成人还是儿童
-  const [userType, setUserType] = useState<'adult' | 'children'>('adult')
+  const [membershipType] = useState<MembershipType>(() => resolveMembershipType())
 
-  // 👇 核心逻辑：根据 DOB 计算年龄
-  useEffect(() => {
-    // 1. 尝试从本地存储获取注册时填的生日
-    // 注意：如果你们以后接了数据库，这里应该改成从 useAuth() 获取 profile.dob
-    const savedDob = localStorage.getItem('user_dob') 
-    
-    if (savedDob) {
-      const birthDate = new Date(savedDob)
-      const today = new Date()
-      let age = today.getFullYear() - birthDate.getFullYear()
-      const m = today.getMonth() - birthDate.getMonth()
-      if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-        age--
-      }
-      
-      // 如果年龄小于 13 岁，判定为儿童
-      if (age < 13) {
-        setUserType('children')
-      } else {
-        setUserType('adult')
-      }
-    } else {
-      // 为了演示：如果本地没存 DOB，默认显示成人，但你可以在页面上给个按钮强制切换测试
-      console.log('No DOB found, defaulting to Adult.')
-    }
-  }, [])
+  const audience = classPassAudience(membershipType)
+  const isStudent = isStudentMembership(membershipType)
 
-  const handlePurchase = async (planId: string, creditsToAdd: number) => {
+  const packages = useMemo(() => {
+    const base = audience === 'junior' ? JUNIOR_PASSES : ADULT_PASSES
+    return isStudent ? applyStudentDiscount(base) : base
+  }, [audience, isStudent])
+
+  const handlePurchase = (planId: string, creditsToAdd: number) => {
     setLoading(planId)
-    setTimeout(() => {
+    window.setTimeout(() => {
       addCredits(creditsToAdd)
       setLoading(null)
       navigate('/dashboard')
-    }, 1500)
+    }, 1200)
   }
 
-  const currentPackages = PACKAGES[userType]
+  const heading = audience === 'junior' ? 'Junior Class Passes' : 'Adult Class Passes'
+  const description = isStudent
+    ? 'Student members receive 50% off adult class pass rates. Please bring your full-time student ID when collecting your pass.'
+    : membershipType === 'senior'
+      ? 'You are registered as a Senior member. The adult class passes below apply to your membership.'
+      : membershipType === 'junior'
+        ? 'You are registered as a Junior member. Children class passes are shown below.'
+        : 'You are registered as an Adult member. Purchase your class passes below.'
 
   return (
-    <div className="max-w-4xl mx-auto py-10 px-4 sm:px-6">
-      
-      {/* 👇 开发者测试用按钮（仅为了让你在答辩时随时切换看效果，真实上线可删掉） */}
-      <div className="flex justify-end mb-4">
-        <div className="flex items-center gap-2 bg-gray-100 dark:bg-slate-800 p-1 rounded-lg text-xs">
-          <button 
-            onClick={() => { setUserType('adult'); localStorage.setItem('user_dob', '2000-01-01') }}
-            className={`px-3 py-1 rounded ${userType === 'adult' ? 'bg-white shadow text-black' : 'text-gray-500'}`}
-          >
-            Simulate Adult
-          </button>
-          <button 
-            onClick={() => { setUserType('children'); localStorage.setItem('user_dob', '2018-01-01') }}
-            className={`px-3 py-1 rounded ${userType === 'children' ? 'bg-white shadow text-black' : 'text-gray-500'}`}
-          >
-            Simulate Child
-          </button>
-        </div>
-      </div>
+    <main className="mx-auto w-full max-w-4xl">
+      <header className="text-center">
+        <span className="inline-flex items-center justify-center rounded-full bg-primary/10 p-3 text-primary">
+          <CreditCard className="size-8" aria-hidden="true" />
+        </span>
+        <h1 className="mt-4 text-2xl font-bold tracking-tight sm:text-3xl">{heading}</h1>
+        <p className="mx-auto mt-2 max-w-xl text-sm text-muted-foreground">{description}</p>
 
-      {/* 头部标题区 */}
-      <div className="text-center mb-10">
-        <div className="inline-flex items-center justify-center p-3 bg-blue-100 dark:bg-blue-900/30 rounded-full mb-4">
-          <CreditCard className="w-8 h-8 text-[#2c3f67] dark:text-blue-400" />
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-sm">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 font-semibold text-primary">
+            {isStudent ? <GraduationCap className="size-4" aria-hidden="true" /> : <User className="size-4" aria-hidden="true" />}
+            {membershipLabel(membershipType)}
+          </span>
+          {isStudent && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-red/10 px-3 py-1 font-semibold text-brand-red-ink">
+              <BadgeCheck className="size-4" aria-hidden="true" />
+              50% student discount applied
+            </span>
+          )}
+          <Link to="/apply-membership" className="text-muted-foreground underline-offset-4 hover:underline">
+            Change membership type
+          </Link>
         </div>
-        <h1 className="text-3xl font-extrabold text-[#2c3f67] dark:text-white mb-3">
-          {userType === 'adult' ? 'Adult Class Passes' : 'Children Class Passes'}
-        </h1>
-        <p className="text-gray-500 dark:text-gray-400 text-sm max-w-xl mx-auto flex items-center justify-center gap-2">
-          {userType === 'adult' ? <User className="w-4 h-4" /> : <Baby className="w-4 h-4" />}
-          {userType === 'adult' 
-            ? 'You are registered as an Adult member. Purchase session passes below.' 
-            : 'You are registered as a Children member. Purchase session passes below.'}
-        </p>
-      </div>
+      </header>
 
-      {/* 套餐列表 */}
-      <div className="space-y-4">
-        {currentPackages.map((plan) => (
-          <div 
-            key={plan.id} 
-            className={`relative flex flex-col sm:flex-row sm:items-center justify-between p-5 sm:p-6 rounded-2xl border transition-all ${
-              plan.popular 
-                ? 'bg-[#f0f4f8] dark:bg-slate-800/80 border-[#2c3f67]/30 dark:border-blue-500/30 shadow-md' 
-                : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-800 hover:border-[#2c3f67]/30 dark:hover:border-slate-700 shadow-sm'
+      <section className="mt-8 space-y-4" aria-label="Class passes">
+        {packages.map((pass) => (
+          <Card
+            key={pass.id}
+            className={`relative flex flex-col justify-between gap-4 p-5 sm:flex-row sm:items-center sm:p-6 ${
+              pass.popular ? 'border-primary/40 bg-primary/5' : ''
             }`}
           >
-            {/* 左侧信息 */}
-            <div className="mb-4 sm:mb-0">
-              <div className="flex items-center gap-2 mb-1">
-                <h3 className="text-lg font-bold text-[#2c3f67] dark:text-white">
-                  {plan.title}
-                </h3>
-                {plan.popular && (
-                  <span className="bg-[#e62128] text-white text-[10px] uppercase font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
-                    <Sparkles className="w-3 h-3" /> Popular
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-lg font-bold">{pass.title}</h2>
+                {pass.popular && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-destructive px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-destructive-foreground">
+                    <Sparkles className="size-3" aria-hidden="true" />
+                    Popular
                   </span>
                 )}
               </div>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">
-                {plan.credits === 9999 ? 'Unlimited Credits' : `${plan.credits} Credits`} - {plan.validity}
+              <p className="mt-1 text-sm text-muted-foreground">
+                {pass.credits === UNLIMITED_CREDITS ? 'Unlimited credits' : `${pass.credits} credits`} · {pass.validity}
               </p>
-              <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-extrabold text-gray-900 dark:text-gray-100">
-                  ${plan.price.toFixed(2)}
-                </span>
-                <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
-                  ({plan.unitPrice})
-                </span>
+              <div className="mt-2 flex flex-wrap items-baseline gap-2">
+                <span className="text-2xl font-extrabold tabular-nums">{money.format(pass.price)}</span>
+                {pass.originalPrice !== undefined && (
+                  <span className="text-sm text-muted-foreground line-through tabular-nums">
+                    {money.format(pass.originalPrice)}
+                  </span>
+                )}
+                <span className="text-xs font-medium text-muted-foreground">({pass.unitPrice})</span>
               </div>
             </div>
 
-            {/* 右侧按钮 */}
             <Button
-              onClick={() => handlePurchase(plan.id, plan.credits)}
+              type="button"
+              onClick={() => handlePurchase(pass.id, pass.credits)}
               disabled={loading !== null}
-              className={`w-full sm:w-auto px-8 h-11 rounded-xl font-bold transition-all ${
-                plan.popular
-                  ? 'bg-[#2c3f67] hover:bg-[#1f2d4a] text-white dark:bg-blue-600 dark:hover:bg-blue-700'
-                  : 'bg-gray-900 hover:bg-black text-white dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100'
-              }`}
+              className="w-full shrink-0 px-8 sm:w-auto"
+              size="lg"
             >
-              {loading === plan.id ? 'Processing...' : 'Purchase'}
+              {loading === pass.id ? 'Processing…' : 'Purchase'}
             </Button>
-          </div>
+          </Card>
         ))}
-      </div>
+      </section>
 
-      <p className="text-center text-xs text-gray-400 mt-10">
-        All prices are in SGD. Your pass type is automatically determined by your registered Date of Birth.
+      <p className="mt-8 flex items-center justify-center gap-1.5 text-center text-xs text-muted-foreground">
+        <ShieldCheck className="size-4" aria-hidden="true" />
+        All prices are in SGD. Your pass options are based on your registered membership type.
       </p>
-    </div>
+    </main>
   )
 }

@@ -32,3 +32,7 @@ verify_jwt = false
 # Verifies admin JWT, test-only recipient and RPC eligibility internally.
 [functions.send-class-cover-test-invitation]
 verify_jwt = false
+
+# The handler authenticates the JWT and requires the current instructor role.
+[functions.instructor-chat]
+verify_jwt = false

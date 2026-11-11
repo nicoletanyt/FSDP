@@ -309,7 +309,7 @@ function StudentDetailContent({ detail }: { detail: StudentDetail }) {
                             </p>
                         </div>
                         <StudentInformationCards detail={detail} />
-                        <StudentInformationActions detail={detail} />
+                        <StudentInformationActions detail={detail} showDetailsLink={false} />
                     </section>
                 </aside>
                 <Tabs
@@ -345,7 +345,7 @@ function StudentDetailContent({ detail }: { detail: StudentDetail }) {
                                 {profile.memberNo}
                             </p>
                             <StudentInformationCards detail={detail} />
-                            <StudentInformationActions detail={detail} />
+                            <StudentInformationActions detail={detail} showDetailsLink={false} />
                         </section>
                         <AttendanceSummary studentId={detail.student.id} />
                         <StudentGradingRead title="Next grading" detail={detail} reads={grading} onRetry={grading.retry} onViewGrading={() => selectTab("grading")} />

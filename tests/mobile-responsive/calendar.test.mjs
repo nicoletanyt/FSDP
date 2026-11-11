@@ -497,7 +497,7 @@ test('past classes remain read-only and retain student-details modal triggers', 
     assert.deepEqual(result.duplicateIds, []);
 });
 
-test('recorded availability opens in the same dialog with mutations disabled', async () => {
+test('recorded availability opens in the same dialog with edit and delete enabled', async () => {
     const result = await inCalendar(390, '/instructor/calendar?view=day&date=2026-11-4', async (w, wait) => {
         const d = w.document;
         d.querySelector('[data-mobile-event][aria-label^="Available"]').click(); await wait();
@@ -507,17 +507,136 @@ test('recorded availability opens in the same dialog with mutations disabled', a
             end: d.getElementById('availability-end').value, fieldsDisabled: [...dialog.querySelectorAll('input')].every(input => input.disabled),
             buttonsDisabled: [...dialog.querySelectorAll('button')].filter(button => /Save changes|Delete/.test(button.textContent)).every(button => button.disabled),
             padding: [style.paddingTop, style.paddingRight, style.paddingBottom, style.paddingLeft] };
-        dialog.querySelector('form').requestSubmit(); await wait();
         return { ...result, stillOpen: !!d.querySelector('[data-slot="dialog-content"]'), changed: d.getElementById('availability-start').value !== result.start };
     });
     assert.equal(result.date, '2026-11-04');
     assert.equal(result.start, '09:00');
     assert.equal(result.end, '11:00');
-    assert.equal(result.fieldsDisabled, true);
-    assert.equal(result.buttonsDisabled, true);
+    assert.equal(result.fieldsDisabled, false);
+    assert.equal(result.buttonsDisabled, false);
     assert.equal(result.stillOpen, true);
     assert.equal(result.changed, false);
     assert.deepEqual(result.padding, ['16px', '16px', '16px', '16px']);
+});
+
+test('availability edits and confirmed deletions persist after reload at mobile and desktop sizes', async () => {
+    for (const width of [320, 390, 1280]) {
+        const result = await inCalendar(width, '/instructor/calendar?view=day&date=2026-11-4&fixtureData=availability-persistence', async (w, wait, frame) => {
+            let d = w.document;
+            const open = () => [...d.querySelectorAll('button[aria-label^="Available"]')].find(button => button.getAttribute('aria-label').includes('9:00 AM')).click();
+            const button = text => [...d.querySelector('[data-slot="dialog-content"]').querySelectorAll('button')].find(button => button.textContent.trim() === text);
+            const change = (id, value) => {
+                const field = d.getElementById(id);
+                Object.getOwnPropertyDescriptor(w.HTMLInputElement.prototype, 'value').set.call(field, value);
+                field.dispatchEvent(new w.Event('input', { bubbles: true }));
+            };
+            open(); await wait();
+            change('availability-end', '10:00'); await wait();
+            button('Save changes').click(); button('Saving…')?.click(); await wait(650);
+            const saved = !d.querySelector('[data-slot="dialog-content"]');
+            const writes = w.availabilityWritesFixture;
+            const refresh = async () => {
+                const loaded = new Promise(resolve => { frame.onload = resolve; });
+                frame.src = frame.getAttribute('src'); await loaded; await wait(800);
+                w = frame.contentWindow; d = w.document;
+            };
+            await refresh();
+            open(); await wait();
+            const persistedEnd = d.getElementById('availability-end').value;
+            const bounds = d.querySelector('[data-slot="dialog-content"]').getBoundingClientRect();
+            const fits = bounds.left >= 0 && bounds.right <= w.innerWidth && bounds.top >= 0 && bounds.bottom <= w.innerHeight;
+            change('availability-end', '09:30'); await wait();
+            button('Delete').click(); await wait();
+            const recordedEnd = d.getElementById('availability-end').value;
+            const beforeConfirmation = w.availabilityWritesFixture;
+            button('Keep availability').click(); await wait();
+            const kept = d.getElementById('availability-end').value === '09:30' && !button('Confirm delete');
+            button('Delete').click(); await wait(); button('Confirm delete').click(); await wait(650);
+            const deleted = !d.querySelector('[data-slot="dialog-content"]');
+            await refresh();
+            const remains = [...d.querySelectorAll('button[aria-label^="Available"]')].some(button => button.getAttribute('aria-label').includes('9:00 AM'));
+            w.sessionStorage.removeItem('test-only-availability:audit');
+            return { saved, writes, persistedEnd, recordedEnd, fits, beforeConfirmation, kept, deleted, remains };
+        });
+        assert.deepEqual(result, { saved: true, writes: 1, persistedEnd: '10:00', recordedEnd: '10:00', fits: true, beforeConfirmation: 0, kept: true, deleted: true, remains: false }, String(width));
+    }
+});
+
+test('lost availability update/delete responses retry the exact request without losing the draft', async () => {
+    for (const kind of ['update', 'delete']) {
+        const route = `/instructor/calendar?view=day&date=2026-11-4&fixtureData=availability-lost-response&action=${kind}`;
+        const result = await inCalendar(390, route, async (w, wait) => {
+            const d = w.document;
+            d.querySelector('button[aria-label^="Available"]').click(); await wait();
+            const button = text => [...d.querySelector('[data-slot="dialog-content"]').querySelectorAll('button')].find(button => button.textContent.trim() === text);
+            const kind = new URLSearchParams(w.location.search).get('action') === 'delete' ? 'delete' : 'update';
+            if (kind === 'delete') { button('Delete').click(); await wait(); button('Confirm delete').click(); }
+            else {
+                const field = d.getElementById('availability-end');
+                Object.getOwnPropertyDescriptor(w.HTMLInputElement.prototype, 'value').set.call(field, '10:00');
+                field.dispatchEvent(new w.Event('input', { bubbles: true })); await wait(); button('Save changes').click();
+            }
+            await wait(650);
+            const draft = d.getElementById('availability-end').value;
+            const errorMessage = d.querySelector('[role="alert"]').textContent;
+            const locked = [...d.querySelectorAll('[data-slot="dialog-content"] input')].every(input => input.disabled);
+            button(kind === 'delete' ? 'Retry delete' : 'Retry save').click(); await wait(650);
+            return { draft, errorMessage, locked, closed: !d.querySelector('[data-slot="dialog-content"]'), requests: w.availabilityRequestsFixture };
+        });
+        assert.equal(result.draft, kind === 'update' ? '10:00' : '11:00');
+        assert.match(result.errorMessage, /response was lost/);
+        assert.equal(result.locked, true);
+        assert.equal(result.closed, true);
+        assert.equal(result.requests.length, 2);
+        assert.deepEqual(result.requests[0], result.requests[1]);
+    }
+});
+
+test('availability conflict reload keeps the draft and uses the fresh concurrency snapshot', async () => {
+    const result = await inCalendar(390, '/instructor/calendar?view=day&date=2026-11-4&fixtureData=availability-conflict', async (w, wait) => {
+        const d = w.document;
+        d.querySelector('button[aria-label^="Available"]').click(); await wait();
+        const button = text => [...d.querySelector('[data-slot="dialog-content"]').querySelectorAll('button')].find(button => button.textContent.trim() === text);
+        const field = d.getElementById('availability-end');
+        Object.getOwnPropertyDescriptor(w.HTMLInputElement.prototype, 'value').set.call(field, '10:00');
+        field.dispatchEvent(new w.Event('input', { bubbles: true })); await wait();
+        button('Save changes').click(); await wait(650);
+        const errorMessage = d.querySelector('[role="alert"]').textContent;
+        button('Reload saved record').click(); await wait();
+        const draft = d.getElementById('availability-end').value;
+        const notice = d.querySelector('[role="status"]').textContent;
+        button('Save changes').click(); await wait(650);
+        return { errorMessage, draft, notice, closed: !d.querySelector('[data-slot="dialog-content"]'), requests: w.availabilityRequestsFixture };
+    });
+    assert.match(result.errorMessage, /availability changed/);
+    assert.equal(result.draft, '10:00');
+    assert.match(result.notice, /draft is kept/);
+    assert.equal(result.closed, true);
+    assert.notEqual(result.requests[0].requestId, result.requests[1].requestId);
+    assert.equal(result.requests[1].expected.endTime, '10:30:00');
+});
+
+test('pending availability edit/delete responses cannot affect a replacement account', async () => {
+    for (const kind of ['update', 'delete']) {
+        const result = await inCalendar(390, `/instructor/calendar?view=day&date=2026-11-4&action=${kind}`, async (w, wait) => {
+            const d = w.document;
+            d.querySelector('button[aria-label^="Available"]').click(); await wait();
+            const button = text => [...d.querySelector('[data-slot="dialog-content"]').querySelectorAll('button')].find(button => button.textContent.trim() === text);
+            if (new URLSearchParams(w.location.search).get('action') === 'delete') {
+                button('Delete').click(); await wait(); button('Confirm delete').click();
+            } else button('Save changes').click();
+            w.switchInstructorFixture(); await wait(50);
+            d.querySelector('[aria-label="Next day"]').click(); await wait(1100);
+            return { date: w.location.search, slots: d.querySelectorAll('button[aria-label^="Available"]').length,
+                dialog: !!d.querySelector('[data-slot="dialog-content"]'),
+                events: [...d.querySelectorAll('[data-mobile-event]')].map(event => event.textContent) };
+        });
+        assert.match(result.date, /date=2026-11-0?5/);
+        assert.equal(result.slots, 0);
+        assert.equal(result.dialog, false);
+        assert.ok(result.events.length > 0);
+        assert.ok(result.events.every(name => name.includes('Replacement account class')));
+    }
 });
 
 test('legacy selection, browser history and short landscapes retain a reachable drawer and one roster', async () => {

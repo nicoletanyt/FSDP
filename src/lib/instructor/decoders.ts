@@ -6,6 +6,7 @@ import type {
   InstructorAvailabilityRow, Page, RosterEntry, StudentAttendanceSummary,
   StudentDetail, StudentDirectory, StudentEntry, StudentHistoryEntry, StudentRow,
   SyllabusItemRow, TechniqueSignOffEntry, TechniqueSignOffRow, AssessmentSnapshot, SessionSaveResult,
+  GradingBatch, GradingSignature, AvailabilitySaveResult,
 } from './types'
 
 type Decoder<T> = (value: unknown) => T
@@ -73,6 +74,41 @@ const time: Decoder<string> = value => {
   return /^(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d{1,6})?)?|24:00(?::00(?:\.0{1,6})?)?)$/.test(result) ? result : invalid()
 }
 const track = enumeration('children', 'adult')
+
+export function decodeGradingSignature(value: unknown): GradingSignature {
+  const source = object(value)
+  if (source.version !== 1) return invalid()
+  const strokes = array(source.strokes, stroke => array(stroke, point => {
+    const p = object(point)
+    if (typeof p.x !== 'number' || typeof p.y !== 'number' || !Number.isFinite(p.x) || !Number.isFinite(p.y)
+      || p.x < 0 || p.x > 1 || p.y < 0 || p.y > 1) return invalid()
+    return { x: p.x, y: p.y }
+  }))
+  if (!strokes.length || strokes.some(stroke => !stroke.length)) return invalid()
+  return { version: 1, strokes }
+}
+
+export function decodeGradingBatch(value: unknown): GradingBatch {
+  const source = object(value)
+  const result = row<GradingBatch>({
+    id: uuid, event_id: eventId, instructor_id: instructorId, track, target_grade_id: text,
+    status: enumeration('draft', 'submitted'), version: count,
+    signature: nullable(decodeGradingSignature), submitted_at: nullable(timestamp), updated_at: timestamp,
+    students: v => array(v, row({ student_id: studentId, candidate_number: count, name: text, notes: nullable(text) })),
+    items: v => array(v, row({ syllabus_item_id: text, category: text, label: text, sort_order: count })),
+    results: v => array(v, row({ student_id: studentId, syllabus_item_id: text, checked: boolean })),
+  })(source)
+  const students = new Set(result.students.map(s => s.student_id))
+  const items = new Set(result.items.map(i => i.syllabus_item_id))
+  if (!result.version || !students.size || !items.size || students.size !== result.students.length || items.size !== result.items.length
+    || result.students.some(s => s.candidate_number < 1)
+    || new Set(result.students.map(s => s.candidate_number)).size !== students.size
+    || result.results.length !== students.size * items.size
+    || new Set(result.results.map(r => JSON.stringify([r.student_id, r.syllabus_item_id]))).size !== result.results.length
+    || result.results.some(r => !students.has(r.student_id) || !items.has(r.syllabus_item_id))
+    || (result.status === 'submitted' ? !result.signature || !result.submitted_at : result.signature !== null || result.submitted_at !== null)) return invalid()
+  return result
+}
 const assessment = enumeration('pending', 'completed')
 const attendance = enumeration('present', 'late', 'absent', 'excused')
 
@@ -134,6 +170,7 @@ export const decodeEventStudent = row<EventStudentRow>({
   event_id: eventId, student_id: studentId, attendance_status: nullable(attendance), recorded_at: nullable(timestamp),
   assessment_status: nullable(assessment),
   assessment_notes: nullable(text), checked_in_at: nullable(timestamp),
+  candidate_number: value => value === undefined ? null : nullable(count)(value),
 })
 export const decodeGrading = row<GradingRow>({
   event_id: eventId, track: nullable(track), application_deadline: nullable(dateOnly),
@@ -148,6 +185,15 @@ export const decodeApplication = row<GradingApplicationRow>({
 export const decodeAvailability = row<InstructorAvailabilityRow>({
   id: uuid, instructor_id: instructorId, date: dateOnly, start_time: time, end_time: time,
 })
+export const decodeAvailabilitySnapshot = row({ date: dateOnly, startTime: time, endTime: time })
+
+export function decodeAvailabilitySave(value: unknown): AvailabilitySaveResult {
+  const result = row<AvailabilitySaveResult>({
+    requestId: uuid, slotId: uuid, kind: enumeration('update', 'delete'), slot: nullable(decodeAvailability),
+  })(value)
+  if (result.kind === 'update' ? result.slot?.id !== result.slotId : result.slot !== null) return invalid()
+  return result
+}
 const decodeSignOff = row<TechniqueSignOffRow>({
   id: uuid, student_id: studentId, syllabus_item_id: text, signed_off_at: timestamp,
   signed_off_by: nullable(instructorId), note: nullable(text),

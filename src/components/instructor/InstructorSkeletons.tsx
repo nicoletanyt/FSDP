@@ -41,7 +41,8 @@ function CalendarBody() {
 function GradingBody() {
   return <div aria-hidden="true" className="space-y-6">
     <div className="flex flex-wrap items-center justify-between gap-4">
-      <Bar className="h-10 w-48 max-w-full md:h-11 md:w-80" /><Bar className="h-9 w-33" />
+      <Bar className="h-10 w-48 max-w-full md:h-11 md:w-80" />
+      <div className="flex gap-2"><Bar className="h-10 w-24" /><Bar className="h-10 w-36" /></div>
     </div>
     <div className="flex flex-wrap gap-x-8 gap-y-3">
       <Bar className="h-5 w-44 max-w-full" /><Bar className="h-5 w-96 max-w-full" />

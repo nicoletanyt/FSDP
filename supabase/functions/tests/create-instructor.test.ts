@@ -18,6 +18,7 @@ Deno.test('Instructor provisioning authorization', async (test) => {
   let invalidToken = false
   let missingProfile = false
   let creationFails = false
+  let gradeExists = true
 
   for (const [name, value] of Object.entries(environment)) Deno.env.set(name, value)
 
@@ -45,6 +46,10 @@ Deno.test('Instructor provisioning authorization', async (test) => {
       return missingProfile
         ? Response.json({ message: 'No profile' }, { status: 406 })
         : Response.json({ role })
+    }
+    if (url.pathname === '/rest/v1/grades') {
+      assert.equal(request.headers.get('authorization'), `Bearer ${environment.SUPABASE_SERVICE_ROLE_KEY}`)
+      return Response.json(gradeExists ? { id: 'black' } : null)
     }
     assert.equal(url.pathname, '/auth/v1/admin/users')
     assert.equal(request.method, 'POST')
@@ -136,6 +141,19 @@ Deno.test('Instructor provisioning authorization', async (test) => {
       const provisions = calls.filter((call) => call.path === '/auth/v1/admin/users')
       assert.equal((provisions[0].body as Record<string, unknown>).password, passwords[0])
       assert.equal((provisions[1].body as Record<string, unknown>).password, passwords[1])
+    })
+
+    await test.step('validates the grade before passing it as trusted metadata', async () => {
+      calls.length = 0
+      const response = await handleRequest(request({ body: JSON.stringify({ ...details, grade_id: 'black' }) }))
+      assert.equal(response.status, 201)
+      const provision = calls.find((call) => call.path === '/auth/v1/admin/users')!
+      assert.deepEqual((provision.body as Record<string, unknown>).app_metadata, { role: 'instructor', instructor_grade_id: 'black' })
+      calls.length = 0
+      gradeExists = false
+      assert.equal((await handleRequest(request({ body: JSON.stringify({ ...details, grade_id: 'missing' }) }))).status, 400)
+      assert.ok(!calls.some((call) => call.path === '/auth/v1/admin/users'))
+      gradeExists = true
     })
 
     await test.step('invalid account details and malformed JSON do not reach the privileged API', async () => {

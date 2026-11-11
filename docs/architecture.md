@@ -33,7 +33,7 @@
 | Instructor navigation and kiosk shell | `src/layouts/InstructorLayout.tsx`, `src/components/instructor/InstructorNavigation.tsx` |
 | Calendar, mobile views, dates | `src/pages/Instructor/InstructorDashboard.tsx`, `src/components/instructor/MobileInstructorCalendar.tsx`, `src/components/instructor/CalendarTimeline.tsx`, `src/components/instructor/MobileCalendarTimeline.tsx`, `src/lib/instructor/calendar-view.ts`, `src/lib/instructor-calendar.ts` |
 | Class selection, roster, attendance | `src/components/instructor/ClassSessionDetails.tsx`, `src/hooks/use-instructor-attendance.ts`, `src/lib/instructor/attendance.ts`, `supabase/migrations/20261105160000_instructor_attendance.sql` |
-| Availability | `src/components/instructor/CalendarAvailability.tsx`, `src/lib/instructor-availability.ts`, `supabase/migrations/20261104130000_instructor_availability.sql` |
+| Availability | `src/components/instructor/CalendarAvailability.tsx`, `src/components/instructor/InstructorAvailabilityEditor.tsx`, `src/hooks/use-instructor-availability-save.ts`, `supabase/migrations/20261108074638_part_time_instructor_availability.sql` |
 | Student directory, filters, track | `src/pages/Instructor/InstructorStudents.tsx`, `src/lib/instructor/directory.ts` |
 | Student detail, contacts, history | `src/pages/Instructor/InstructorStudentDetails.tsx`, `src/components/instructor/StudentSessionHistory.tsx`, `src/lib/instructor/student-detail.ts` |
 | Grade badge, eligibility, syllabus | `src/components/instructor/DatabaseGradeBadge.tsx`, `src/components/instructor/StudentGradingRead.tsx`, `src/lib/instructor/grading.ts` |
@@ -44,6 +44,7 @@
 | Request keys / loading | `src/hooks/use-instructor-data.ts` and the calling page; `src/components/instructor/InstructorDataStatus.tsx`, `src/components/instructor/InstructorLoadingBoundary.tsx` |
 | Database shape and instructor contracts | [Database schema](database-schema.md); [instructor data contracts](instructor-data.md); `supabase/migrations/` for actual SQL |
 | Env, deploy, test setup | `.env.example`, `vite.config.ts`, `README.md`, `package.json`, `tests/mobile-responsive/README.md` |
+| Instructor chatbot | `src/components/FloatingChatbot.tsx`, `src/lib/instructor/chat.ts`, `supabase/functions/instructor-chat/` — caller-scoped read tools and Ollama Cloud; see README for secrets/deployment |
 
 ## Key patterns
 
@@ -77,7 +78,7 @@
 
 - Auth user ID and instructor-domain ID are distinct. Instructors can read all students even without a linked instructor row; personal calendar/roster and writes have narrower ownership rules (`docs/instructor-data.md`).
 - Instructor time projections use Singapore time; date-only gradings have no invented start/end (`src/lib/instructor/calendar-view.ts`).
-- Attendance, reports and assessments save through RPCs with snapshots/retry receipts; availability creation persists, but edit/delete and technique sign-off writes are not wired (`docs/instructor-data.md`). QR check-in uses fixture sessions and local state (`src/pages/Instructor/InstructorCheckIn.tsx`); profile photos are browser-local (`src/pages/Instructor/InstructorProfile.tsx`).
+- Attendance, reports and assessments save through RPCs with snapshots/retry receipts. Availability create/edit/delete persist for linked part-time instructors; edits and confirmed deletions use opening snapshots and exact-request retries, and conflict reload keeps the draft. Technique sign-off writes are not wired (`docs/instructor-data.md`). QR check-in uses fixture sessions and local state (`src/pages/Instructor/InstructorCheckIn.tsx`); profile photos are browser-local (`src/pages/Instructor/InstructorProfile.tsx`).
 - Admin is mostly in-memory mock data, but account creation, grading invitations and notification reads are live (`src/pages/admin/Instructors.tsx`, `src/pages/admin/GradingEligibility.tsx`, `src/pages/admin/Notifications.tsx`).
 - Instructor directory navbar overflow at 1024px with enlarged text is recorded in `docs/instructor-data.md`; responsive tests need Firefox and geckodriver (`tests/mobile-responsive/README.md`).
 - Only `VITE_` env variables reach the browser; keep secrets server-side. Vercel deploys frontend separately from Supabase migrations/functions (`README.md`, `.vercelignore`).

@@ -161,12 +161,12 @@ export default function ClassSessionDetails({
     const record = Object.fromEntries(entries.map(entry => [entry.record.student_id, {
         attendance: rosterAttendance(entry.record, startsAt),
     }]));
-    const [, setNow] = useState(() => new Date());
+    const [now, setNow] = useState(() => new Date());
     useEffect(() => {
         const timer = window.setInterval(() => setNow(new Date()), 60_000);
         return () => window.clearInterval(timer);
     }, []);
-    const canEdit = storedEvent ? attendanceEditable(storedEvent) : false;
+    const canEdit = storedEvent ? attendance.data?.canEditAttendance !== false && attendanceEditable(storedEvent) : false;
     const isGrading = event.type === "grading";
     const marked = roster.filter(
         (student) => record[student.id].attendance !== "unmarked",
@@ -210,7 +210,7 @@ export default function ClassSessionDetails({
             >
                 {expanded && profile?.role === "instructor" && query.status === "success" &&
                     storedEvent?.event_type === "class" && storedEvent.status === "scheduled" &&
-                    storedEvent.starts_at && new Date(storedEvent.starts_at).getTime() > Date.now() && (
+                    storedEvent.starts_at && new Date(storedEvent.starts_at).getTime() > now.getTime() && (
                     <div className="shrink-0 px-3 pt-3 pb-2">
                         <ClassUnavailableDialog key={dialogContext} eventId={event.id} />
                     </div>

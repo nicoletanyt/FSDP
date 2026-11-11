@@ -3,12 +3,14 @@ import type { PointerEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { SignaturePoint } from "@/lib/instructor-student-details";
+import type { GradingSignature } from "@/lib/instructor/types";
 
-function SignaturePad() {
+function SignaturePad({ onChange, disabled }: { onChange: (value: GradingSignature | null) => void; disabled: boolean }) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const strokes = useRef<SignaturePoint[][]>([]);
     const pointer = useRef<number | null>(null);
     const [count, setCount] = useState(0);
+    const notify = () => onChange(strokes.current.length ? { version: 1, strokes: strokes.current.map(stroke => stroke.map(point => ({ ...point }))) } : null);
 
     function redraw() {
         const canvas = canvasRef.current;
@@ -55,7 +57,7 @@ function SignaturePad() {
         return { x: Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width)), y: Math.max(0, Math.min(1, (event.clientY - bounds.top) / bounds.height)) };
     }
     function begin(event: PointerEvent<HTMLCanvasElement>) {
-        if (!event.isPrimary || event.button !== 0 || pointer.current !== null) return;
+        if (disabled || !event.isPrimary || event.button !== 0 || pointer.current !== null) return;
         event.preventDefault();
         event.currentTarget.setPointerCapture(event.pointerId);
         pointer.current = event.pointerId;
@@ -64,7 +66,7 @@ function SignaturePad() {
         redraw();
     }
     function move(event: PointerEvent<HTMLCanvasElement>) {
-        if (event.pointerId !== pointer.current) return;
+        if (disabled || event.pointerId !== pointer.current) return;
         event.preventDefault();
         const samples = event.nativeEvent.getCoalescedEvents?.();
         for (const sample of samples?.length ? samples : [event.nativeEvent]) strokes.current[strokes.current.length - 1].push(point(sample));
@@ -74,6 +76,7 @@ function SignaturePad() {
         if (event.pointerId !== pointer.current) return;
         if (event.type === "pointerup") strokes.current[strokes.current.length - 1].push(point(event));
         pointer.current = null;
+        notify();
         if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
         redraw();
     }
@@ -85,20 +88,30 @@ function SignaturePad() {
             {!count && <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-slate-500">Sign here</span>}
         </div>
         <div className="flex gap-2">
-            <Button type="button" variant="outline" disabled={!count} onClick={() => { strokes.current.pop(); setCount(strokes.current.length); redraw(); }}>Undo</Button>
-            <Button type="button" variant="outline" disabled={!count} onClick={() => { strokes.current = []; setCount(0); redraw(); }}>Clear</Button>
+            <Button type="button" variant="outline" disabled={disabled || !count} onClick={() => { strokes.current.pop(); setCount(strokes.current.length); redraw(); notify(); }}>Undo</Button>
+            <Button type="button" variant="outline" disabled={disabled || !count} onClick={() => { strokes.current = []; setCount(0); redraw(); notify(); }}>Clear</Button>
         </div>
     </div>;
 }
 
-export default function GradingSignatureDialog({ open, onOpenChange, name }: { open: boolean; onOpenChange: (open: boolean) => void; name: string }) {
-    return <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-lg">
-            <DialogHeader><DialogTitle>Sign grading</DialogTitle><DialogDescription>Review and sign as the assigned instructor.</DialogDescription></DialogHeader>
+export default function GradingSignatureDialog({ open, onOpenChange, name, pending, error, retrying, onSubmit }: {
+    open: boolean; onOpenChange: (open: boolean) => void; name: string; pending: boolean; error: string; retrying: boolean;
+    onSubmit: (signature: GradingSignature | null) => Promise<boolean>;
+}) {
+    const [signature, setSignature] = useState<GradingSignature | null>(null);
+    useEffect(() => { if (!open) setSignature(null); }, [open]);
+    return <Dialog open={open} onOpenChange={(next) => { if (!pending) onOpenChange(next); }}>
+        <DialogContent className="sm:max-w-lg" showCloseButton={!pending}>
+            <DialogHeader><DialogTitle>Sign and submit grading</DialogTitle><DialogDescription>Sign this version of your checklist. You can edit it later; updated submissions require a new signature. No final grades are assigned.</DialogDescription></DialogHeader>
             <div><p className="text-xs text-muted-foreground">Instructor</p><p className="mt-1 font-medium">{name}</p></div>
-            <SignaturePad />
-            <p role="status" className="text-sm text-muted-foreground">Saving is not available yet. The grading and signature will not be saved.</p>
-            <div className="flex justify-end"><Button disabled className="bg-emerald-700 text-white">Confirm and save</Button></div>
+            <SignaturePad onChange={setSignature} disabled={pending || retrying} />
+            {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+            <div className="flex flex-wrap justify-end gap-2">
+                <Button variant="outline" disabled={pending} onClick={() => onOpenChange(false)}>Cancel</Button>
+                <Button disabled={pending || (!signature && !retrying)} onClick={async () => { if (await onSubmit(signature)) onOpenChange(false); }}>
+                    {pending ? "Submitting…" : retrying ? "Retry submission" : "Confirm and submit"}
+                </Button>
+            </div>
         </DialogContent>
     </Dialog>;
 }
