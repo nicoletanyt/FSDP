@@ -113,9 +113,9 @@ export async function handleRequest(request: Request): Promise<Response> {
       auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
     })
     if (gradeId) {
-      const { data: grade, error: gradeError } = await admin.from('grades').select('id').eq('id', gradeId).maybeSingle()
+      const { data: grade, error: gradeError } = await admin.from('grades').select('id, is_ranked').eq('id', gradeId).maybeSingle()
       if (gradeError) return Response.json({ error: 'Unable to verify the grade. Please try again.' }, { status: 500, headers })
-      if (!grade) return Response.json({ error: 'Select a valid grade.' }, { status: 400, headers })
+      if (!grade || grade.is_ranked !== true) return Response.json({ error: 'Select a valid grade.' }, { status: 400, headers })
     }
     // Do not create an account if the delivery pipeline cannot even be attempted.
     const serviceId = Deno.env.get('EMAILJS_SERVICE_ID')?.trim()
