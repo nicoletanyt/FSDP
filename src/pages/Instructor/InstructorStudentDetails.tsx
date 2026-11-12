@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/popover";
 import { StudentInformationCards, StudentInformationActions } from "@/components/instructor/StudentInformation";
 import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
+import StudentAvatar from "@/components/instructor/StudentAvatar";
 import InstructorLoadingBoundary from "@/components/instructor/InstructorLoadingBoundary";
 import { InstructorSkeleton } from "@/components/instructor/InstructorSkeletons";
 import StudentSessionHistory from "@/components/instructor/StudentSessionHistory";
@@ -304,9 +305,10 @@ function StudentDetailContent({ detail }: { detail: StudentDetail }) {
                         className="hidden space-y-4 md:block"
                     >
                         <div>
+                            <StudentAvatar name={profile.name} className="mb-3" />
                             <h1 className="text-xl font-semibold">{profile.name}</h1>
                             <p className="detail-meta mt-1 text-sm text-muted-foreground">
-                                {profile.memberNo}
+                                {profile.memberNo}{profile.age !== null && ` · Age ${profile.age}`}
                             </p>
                         </div>
                         <StudentInformationCards detail={detail} />
@@ -342,8 +344,9 @@ function StudentDetailContent({ detail }: { detail: StudentDetail }) {
                             <div className="detail-section-header">
                                 <h2>Details</h2>
                             </div>
+                            <StudentAvatar name={profile.name} />
                             <p className="detail-meta text-sm text-muted-foreground">
-                                {profile.memberNo}
+                                {profile.memberNo}{profile.age !== null && ` · Age ${profile.age}`}
                             </p>
                             <StudentInformationCards detail={detail} />
                             <StudentInformationActions detail={detail} showDetailsLink={false} />

@@ -434,3 +434,19 @@ test('grading reads remain isolated across accounts and student changes with lat
   assert.match(race, /New student assessment notes/)
   assert.doesNotMatch(race, /Original student assessment notes/)
 })
+
+test('the student avatar shows initials above the student name', async t => {
+  for (const width of [390, 1280]) await t.test(`${width}px`, async () => {
+    const result = await inDetail(width, async (w) => {
+      const d = w.document
+      const visible = e => e && e.getClientRects().length > 0
+      const avatar = [...d.querySelectorAll('[data-student-avatar]')].find(visible)
+      const name = w.innerWidth >= 768 ? d.querySelector('aside h1') : [...d.querySelectorAll('[aria-label="Student details"]')].find(visible)?.querySelector('.detail-meta')
+      return { initials: avatar?.textContent.trim() ?? null, above: Boolean(avatar && name && avatar.getBoundingClientRect().bottom <= name.getBoundingClientRect().top + 1),
+        fits: d.documentElement.scrollWidth <= d.documentElement.clientWidth }
+    })
+    assert.match(result.initials ?? '', /^[A-Z]{1,2}$/, JSON.stringify(result))
+    assert.equal(result.above, true, JSON.stringify(result))
+    assert.equal(result.fits, true)
+  })
+})

@@ -31,6 +31,7 @@ import {
     getStudentWeeklyTrend,
 } from "@/lib/admin/attendance-risk";
 import {
+    ageFromIso,
     formatDate,
     formatPercent,
     formatSignedPercent,
@@ -140,7 +141,7 @@ export default function StudentDetail() {
 
             <PageHeader
                 title={fullName(student)}
-                description={`${student.memberNo} · ${student.currentGrade} · ${centre?.name ?? "Unknown centre"} · Joined ${formatDate(student.joinedAt)}`}
+                description={`${student.memberNo} · Age ${ageFromIso(student.dateOfBirth)} · ${student.currentGrade} · ${centre?.name ?? "Unknown centre"} · Joined ${formatDate(student.joinedAt)}`}
                 actions={
                     <>
                         <Button
@@ -714,6 +715,10 @@ export default function StudentDetail() {
                                     <Row
                                         label="Member number"
                                         value={student.memberNo}
+                                    />
+                                    <Row
+                                        label="Age"
+                                        value={`${ageFromIso(student.dateOfBirth)} (born ${formatDate(student.dateOfBirth)})`}
                                     />
                                     <Row
                                         label="Home centre"
