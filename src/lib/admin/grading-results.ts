@@ -26,7 +26,7 @@ function sessionError(error: { code?: string; message?: string }, fallback: stri
   return fallback
 }
 
-// Sort every applicant into one session per target grade. Returns the updated day.
+// Generate a draft schedule from the scheduling rules. Returns the updated day.
 export async function sortGradingSessions(eventId: string): Promise<GradingDay> {
   const { data, error } = await supabase.rpc('sort_grading_sessions', { target_event: eventId })
   if (error) throw new Error(sessionError(error, 'Unable to sort candidates into sessions. Try again.'))
@@ -37,6 +37,40 @@ export async function sortGradingSessions(eventId: string): Promise<GradingDay> 
 export async function moveGradingCandidate(applicationId: string, sessionId: string): Promise<GradingDay> {
   const { data, error } = await supabase.rpc('move_grading_candidate', { target_application: applicationId, target_session: sessionId })
   if (error) throw new Error(sessionError(error, 'Unable to move this candidate. Try again.'))
+  return decodeGradingDay(data)
+}
+
+// Move the chosen candidates into a new session straight after theirs.
+export async function splitGradingSession(sessionId: string, applicationIds: string[]): Promise<GradingDay> {
+  const { data, error } = await supabase.rpc('split_grading_session', { target_session: sessionId, applications: applicationIds })
+  if (error) throw new Error(sessionError(error, 'Unable to split this session. Try again.'))
+  return decodeGradingDay(data)
+}
+
+// Move everyone in one session into another and remove the first.
+export async function mergeGradingSessions(sourceId: string, intoId: string): Promise<GradingDay> {
+  const { data, error } = await supabase.rpc('merge_grading_sessions', { source_session: sourceId, into_session: intoId })
+  if (error) throw new Error(sessionError(error, 'Unable to merge these sessions. Try again.'))
+  return decodeGradingDay(data)
+}
+
+// An empty session at the end of the day (private gradings are scheduled by hand).
+export async function addGradingSession(eventId: string): Promise<GradingDay> {
+  const { data, error } = await supabase.rpc('add_grading_session', { target_event: eventId })
+  if (error) throw new Error(sessionError(error, 'Unable to add a session. Try again.'))
+  return decodeGradingDay(data)
+}
+
+// Show the sessions to every examiner and release the reporting time.
+export async function publishGradingSchedule(eventId: string): Promise<GradingDay> {
+  const { data, error } = await supabase.rpc('publish_grading_schedule', { target_event: eventId })
+  if (error) throw new Error(sessionError(error, 'Unable to publish the schedule. Try again.'))
+  return decodeGradingDay(data)
+}
+
+export async function unpublishGradingSchedule(eventId: string): Promise<GradingDay> {
+  const { data, error } = await supabase.rpc('unpublish_grading_schedule', { target_event: eventId })
+  if (error) throw new Error(sessionError(error, 'Unable to return the schedule to draft. Try again.'))
   return decodeGradingDay(data)
 }
 

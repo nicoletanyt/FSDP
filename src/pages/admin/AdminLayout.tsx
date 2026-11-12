@@ -13,7 +13,8 @@ function AdminShell() {
   const isDojosTab =
     pathname === '/admin/centres' && searchParams.get('tab') !== 'students'
   // Centre/date filters and student search don't apply to the grading schedule or a grading's own pages.
-  const isGradingSchedule = pathname === '/admin/grading/opportunities' || pathname.startsWith('/admin/grading/days/')
+  const isGradingSchedule = pathname === '/admin/grading/opportunities' || pathname === '/admin/grading/rules'
+    || pathname.startsWith('/admin/grading/days/')
   const showFilters =
     pathname !== '/admin/profile' && pathname !== '/admin/instructors' && !isCalendar && !isDojosTab && !isGradingSchedule
 

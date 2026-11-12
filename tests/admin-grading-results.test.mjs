@@ -19,7 +19,7 @@ const [ada, ben, cy] = [candidate('s1', 'Ada Tan', '012', 1), candidate('s2', 'B
 const base = {
   event_id: eventId, name: 'Adult grading — 14 Nov 2026', status: 'scheduled', track: 'adult', grading_date: '2999-01-02',
   starts_at: '2026-11-14T02:00:00+00:00', ends_at: '2026-11-14T05:00:00+00:00', reporting_time: null, is_chief: false,
-  application_deadline: '2026-11-10', grading_started: false,
+  application_deadline: '2026-11-10', grading_started: false, is_private: false, published_at: '2026-11-11T00:00:00Z', capacity: 30, warnings: [],
   centre: { name: 'ASK Headquarters Dojo', address: '1 Dojo Road' },
   panel: [{ instructor_id: 'a', name: 'Alex Morgan', is_chief: true }, { instructor_id: 'b', name: 'Hiroshi Sato', is_chief: false }],
 }
@@ -102,7 +102,7 @@ test('the admin grading day shows each session with its candidates, the panel\'s
   const text = textOf(root)
   assert.deepEqual(stub.calls.find(call => call[0] === 'rpc'), ['rpc', 'examiner_grading_day', { target_event: eventId }])
   assert.equal(root.root.find(node => node.type === 'h1').props.children, 'Adult grading')
-  for (const expected of ['Session 1', 'Session 2', 'Ada Tan', 'Cy Ong', 'Alex Morgan', '"Chief"', '1 of 2 examiners submitted', '0 of 2 examiners submitted', 'Sort again', 'Target grade']) {
+  for (const expected of ['Session 1', 'Session 2', 'Ada Tan', 'Cy Ong', 'Alex Morgan', '"Chief"', '1 of 2 examiners submitted', '0 of 2 examiners submitted', 'Generate again', 'Target grade']) {
     assert.ok(text.includes(expected), expected)
   }
   // Admins see the panel, not "(you)", and examiner-only actions are absent.
@@ -121,35 +121,35 @@ test('the admin grading day shows each session with its candidates, the panel\'s
   assert.deepEqual(moveOptions(decoded.sessions, lone).map(({ removesFrom }) => removesFrom), [true])
 })
 
-test('before sorting, the main action is Sort into sessions in the header, and sorting shows the session list', async () => {
+test('before sorting, the main action is Generate draft schedule in the header, and generating shows the session list', async () => {
   const root = await render(`/admin/grading/days/${eventId}`, { dayData: unsorted, responses: { sort_grading_sessions: day } })
   let text = textOf(root)
   assert.ok(text.includes('"Closed"'))
   assert.ok(!text.includes('Not sorted'), 'the student list waits for sorting before showing sessions')
-  const sort = button(root, 'Sort into sessions')
+  const sort = button(root, 'Generate draft schedule')
   assert.equal(sort.props.disabled, false)
   await act(async () => { sort.props.onClick() })
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)) })
   assert.deepEqual(stub.calls.find(call => call[1] === 'sort_grading_sessions'), ['rpc', 'sort_grading_sessions', { target_event: eventId }])
   text = textOf(root)
   assert.ok(text.includes('Session 1') && text.includes('View results'), 'sorting shows the session list')
-  assert.ok(button(root, 'Sort again'), 'the header now offers Sort again')
+  assert.ok(button(root, 'Generate again'), 'the header now offers Generate again')
 })
 
 test('sorting is blocked while applications are open and gone once grading has started, and errors are explained', async () => {
   const open = await render(`/admin/grading/days/${eventId}`, { dayData: { ...unsorted, application_deadline: '2998-12-01' } })
-  assert.equal(button(open, 'Sort into sessions').props.disabled, true)
+  assert.equal(button(open, 'Generate draft schedule').props.disabled, true)
   assert.ok(textOf(open).includes('Applications open'))
   const sortedOpen = await render(`/admin/grading/days/${eventId}`, { dayData: { ...day, application_deadline: '2998-12-01' } })
-  assert.equal(button(sortedOpen, 'Sort again').props.disabled, true)
+  assert.equal(button(sortedOpen, 'Generate again').props.disabled, true)
   const started = await render(`/admin/grading/days/${eventId}`, { dayData: { ...day, grading_started: true } })
   const text = textOf(started)
-  assert.equal(button(started, 'Sort again'), undefined)
+  assert.equal(button(started, 'Generate again'), undefined)
   assert.ok(text.includes('Sessions are locked because grading has started.'))
   assert.equal(started.root.findAll(node => node.type === 'button' && String(node.props['aria-label']).startsWith('Move ')).length, 0)
   const failing = await render(`/admin/grading/days/${eventId}`, { dayData: unsorted,
     errors: { sort_grading_sessions: { code: 'PGS02', message: 'Grading has started, so sessions are locked' } } })
-  await act(async () => { button(failing, 'Sort into sessions').props.onClick() })
+  await act(async () => { button(failing, 'Generate draft schedule').props.onClick() })
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)) })
   assert.ok(textOf(failing).includes('An examiner has started grading'))
 })

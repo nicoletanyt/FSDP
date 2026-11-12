@@ -147,7 +147,7 @@ const sortedStudents = [
 // Before sorting: every applicant, no numbers, no sessions.
 const unsortedStudents = sortedStudents.map(student => ({ ...student, candidate_number: null, session_id: null }))
 // Far-future grading day so the lifecycle stage doesn't depend on today's date.
-const dayRow = (overrides = {}) => ({ ...row(), grading_date: '2999-01-02', application_deadline: '2026-11-10', grading_started: false,
+const dayRow = (overrides = {}) => ({ ...row(), grading_date: '2999-01-02', application_deadline: '2026-11-10', grading_started: false, is_private: false, published_at: '2026-11-11T00:00:00Z', capacity: 30, warnings: [],
   students: sortedStudents, sessions: sortedSessions, ...overrides })
 
 test('grading days decode every applicant and the sorted sessions with the caller\'s batch', () => {

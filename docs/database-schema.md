@@ -263,6 +263,8 @@ Grading-window fields for an event: track, application deadline and window statu
 | `reporting_time`       | `time`                  | yes      | —         |
 | `official_schedule`    | `boolean`               | no       | `false`   |
 
+`20261112150000_grading_scheduler.sql` adds `is_private boolean not null default false` (private gradings are scheduled by hand; the scheduler refuses them) and `schedule_published_at timestamptz` (null while the day's schedule is a draft). Until publishing, only administrators and the chief examiner see the sessions, examiners cannot start checklists, and students do not get the reporting time.
+
 For official schedules, grading/open/close/reporting-release dates are required, opening must not follow closing, closing precedes grading, and reporting release must not follow grading. Source: `20261104055444_official_grading_schedule.sql:10–22`.
 
 ### `grading_target_grades`
@@ -405,6 +407,25 @@ A student's application to a grading event for a target grade.
 | `submitted_at`     | `timestamptz`        | no       | `now()`             |
 | `status`           | `application_status` | no       | `'submitted'`       |
 | `notes`            | `text`               | yes      | —                   |
+
+### Grading-day scheduler
+
+Migration: `20261112150000_grading_scheduler.sql`.
+
+`grading_schedule_rules`: one row per `grade_track` (PK `track`). Columns: `default_capacity` (used only when the centre has no `capacity`), `min_session_size`, `default_session_minutes`, `day_start`, `day_end` (latest finish), `lunch_start`, `lunch_end`, `changeover_minutes`, `updated_at`.
+
+`grading_session_durations`: `id`, `track`, `from_grade_id` (nullable = any current grade), `to_grade_id`, `minutes`; unique per `(track, from, to)`. An exact transition wins over "any", and anything unlisted uses the track default. The adult rows are seeded as placeholders (75 / 90 / 120).
+
+Both tables are administrator-only under RLS.
+
+`sort_grading_sessions(event)` generates a draft:
+1. Group non-withdrawn applications by current grade → target grade.
+2. Split groups over capacity evenly.
+3. Merge groups below the minimum size into an adjacent group of a neighbouring grade, if both sessions are the same length and the combined group fits the capacity.
+4. Order lowest grade first.
+5. Place sessions back to back from `day_start`, never across lunch, with a changeover between sessions. Sessions that run past `day_end` are still placed and reported as a warning.
+
+The edit RPCs are `move_grading_candidate`, `split_grading_session`, `merge_grading_sessions` and `add_grading_session`. Each one re-times the day and turns the schedule back into a draft. `publish_grading_schedule` / `unpublish_grading_schedule` toggle publication; publishing needs every applicant placed and no empty sessions. `examiner_grading_day` adds `is_private`, `published_at`, `capacity`, `warnings` (administrators and the chief only) and, for each session, `transitions` with their lengths.
 
 ### `technique_sign_offs`
 

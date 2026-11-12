@@ -87,12 +87,15 @@ export interface GradeSessionAction {
 }
 
 export type MoveControl = (candidate: GradingCandidate, session: GradingSessionSummary) => ReactNode
+export type SessionControl = (session: GradingSessionSummary) => ReactNode
 
-function SessionCard({ session, action, studentHref, renderMove }: {
+function SessionCard({ session, action, studentHref, renderMove, renderSessionActions }: {
   session: GradingSessionSummary
-  action: GradeSessionAction
+  // Null when the session can't be opened yet (a draft, for the chief examiner).
+  action: GradeSessionAction | null
   studentHref: (studentId: string) => string
   renderMove?: MoveControl
+  renderSessionActions?: SessionControl
 }) {
   const label = sessionLabel(session.position)
   const mixed = session.grades.length > 1
@@ -111,8 +114,11 @@ function SessionCard({ session, action, studentHref, renderMove }: {
               {session.grades.map(group => <li key={group.grade.id}><GradeBadge grade={group.grade} /></li>)}
             </ul>
           </div>
-          <GradingFacts items={[{ key: 'time', icon: Clock3,
-            label: `${gradingTimeLabel(session.startsAt, session.endsAt)}, ${candidateCount(sessionCandidates(session))}` }]} />
+          <div className="flex flex-wrap items-center gap-2">
+            <GradingFacts items={[{ key: 'time', icon: Clock3,
+              label: `${gradingTimeLabel(session.startsAt, session.endsAt)}, ${candidateCount(sessionCandidates(session))}` }]} />
+            {renderSessionActions?.(session)}
+          </div>
         </div>
       </CardHeader>
       <CardContent className="overflow-x-auto px-0">
@@ -144,13 +150,13 @@ function SessionCard({ session, action, studentHref, renderMove }: {
           </tbody>
         </table>
       </CardContent>
-      <GradingCardFooter status={action.status}>
+      {action && <GradingCardFooter status={action.status}>
         <Link to={action.href} className={gradingActionClass}>
           {action.label}
           <span className="sr-only">: {label}</span>
           <ChevronRight className="size-4" aria-hidden="true" />
         </Link>
-      </GradingCardFooter>
+      </GradingCardFooter>}
     </Card>
   )
 }
@@ -159,17 +165,21 @@ function SessionCard({ session, action, studentHref, renderMove }: {
 // (student list) or the sorted sessions (session list).
 export default function GradingDayView({
   day, list, onListChange, viewerIsChief = false, actionFor, studentHref,
-  emptySessions, renderMove, headerActions, panelAction, photos,
+  emptySessions, renderMove, renderSessionActions, headerActions, panelAction, photos, notice,
 }: {
   day: GradingDay
   list: GradingDayList | null
   onListChange: (list: GradingDayList) => void
   viewerIsChief?: boolean
-  actionFor: (session: GradingSessionSummary) => GradeSessionAction
+  actionFor: (session: GradingSessionSummary) => GradeSessionAction | null
   studentHref: (studentId: string) => string
   // Shown in place of the session list before sorting.
   emptySessions: ReactNode
   renderMove?: MoveControl
+  // Per-session controls in the card header (admins: split and merge).
+  renderSessionActions?: SessionControl
+  // Shown above the lists (draft status and schedule warnings).
+  notice?: ReactNode
   // The page's main action (admins: sort into sessions), beside the title.
   headerActions?: ReactNode
   // In the examiner panel card (admins: edit the panel).
@@ -194,6 +204,7 @@ export default function GradingDayView({
           {panelAction}
         </div>
       </Card>
+      {notice}
       <section className="space-y-4" aria-label={shown === 'students' ? 'Student list' : 'Session list'}>
         <Segmented label="Grading day list" value={shown} onChange={onListChange} options={[
           { value: 'students', text: 'Student list' },
@@ -204,7 +215,7 @@ export default function GradingDayView({
             <div className="grid gap-4">
               {day.sessions.map(session => (
                 <SessionCard key={session.id} session={session} action={actionFor(session)}
-                  studentHref={studentHref} renderMove={renderMove} />
+                  studentHref={studentHref} renderMove={renderMove} renderSessionActions={renderSessionActions} />
               ))}
             </div>
           ) : emptySessions}
