@@ -18,13 +18,18 @@ export interface ChecklistItem {
 // Students across, techniques down. Each category is named once above its
 // techniques, and comments are the last row. The technique column stays put
 // while the table scrolls sideways.
-export default function GradingChecklistTable<S extends ChecklistStudent, I extends ChecklistItem>({ students, items, cell, comment, label = 'Grading checklist table' }: {
+export default function GradingChecklistTable<S extends ChecklistStudent, I extends ChecklistItem>({ students, items, cell, comment, headerBadge, columnDisabled, label = 'Grading checklist table' }: {
   label?: string
   students: S[]
   items: I[]
   cell: (student: S, item: I) => ReactNode
   comment: (student: S) => ReactNode
+  /** Optional pill above a student's candidate number (e.g. Absent). */
+  headerBadge?: (student: S) => ReactNode
+  /** Greys out a student's whole column; the cell renderers disable its inputs. */
+  columnDisabled?: (student: S) => boolean
 }) {
+  const muted = (student: S) => columnDisabled?.(student) ? 'bg-muted/40 text-muted-foreground' : ''
   return (
     <div className="overflow-x-auto rounded-lg border" role="region" aria-label={label} tabIndex={0}>
       <table className="w-full border-collapse text-sm">
@@ -34,7 +39,9 @@ export default function GradingChecklistTable<S extends ChecklistStudent, I exte
               Technique
             </th>
             {students.map(student => (
-              <th scope="col" key={student.student_id} className="min-w-36 border-b border-l px-3 py-3 text-center align-bottom font-medium">
+              <th scope="col" key={student.student_id} data-disabled={columnDisabled?.(student) || undefined}
+                className={`min-w-36 border-b border-l px-3 py-3 text-center align-bottom font-medium ${muted(student)}`}>
+                {headerBadge?.(student)}
                 <span className="block text-xs tabular-nums text-muted-foreground" data-candidate-number>{student.candidate_number}</span>
                 {student.name}
               </th>
@@ -55,7 +62,7 @@ export default function GradingChecklistTable<S extends ChecklistStudent, I exte
               <tr className="border-b">
                 <th scope="row" className="sticky left-0 z-10 bg-background px-4 py-3 text-left font-medium">{item.label}</th>
                 {students.map(student => (
-                  <td key={student.student_id} className="border-l text-center">{cell(student, item)}</td>
+                  <td key={student.student_id} className={`border-l text-center ${muted(student)}`}>{cell(student, item)}</td>
                 ))}
               </tr>
             </Fragment>
@@ -63,7 +70,7 @@ export default function GradingChecklistTable<S extends ChecklistStudent, I exte
           <tr>
             <th scope="row" className="sticky left-0 z-10 bg-background px-4 py-3 text-left align-top font-medium">Comments</th>
             {students.map(student => (
-              <td key={student.student_id} className="border-l px-3 py-2 align-top">{comment(student)}</td>
+              <td key={student.student_id} className={`border-l px-3 py-2 align-top ${muted(student)}`}>{comment(student)}</td>
             ))}
           </tr>
         </tbody>

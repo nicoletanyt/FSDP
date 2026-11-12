@@ -1,9 +1,10 @@
 import { useCallback, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useParams, useSearchParams } from "react-router";
-import { CalendarDays, Clock3, MapPin, Users } from "lucide-react";
+import { CalendarDays, Clock3, MapPin, UserX, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import DatabaseGradeBadge from "@/components/instructor/DatabaseGradeBadge";
 import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
 import GradingSignatureDialog from "@/components/instructor/GradingSignatureDialog";
@@ -72,9 +73,15 @@ function GradingTable({
     // One checklist per grade in the session; a grade is only named above its
     // table when the session mixes grades (the header already names a lone grade).
     const mixed = (gradingSession?.grades.length ?? 0) > 1;
+    // Candidates marked absent are hidden by default; their saved ticks and
+    // comments stay in the batch untouched.
+    const absent = new Set(entries.filter((entry) => entry.record.attendance_status === "absent").map((entry) => entry.record.student_id));
+    const absentCount = batch.students.filter((student) => absent.has(student.student_id)).length;
+    const [showAbsent, setShowAbsent] = useState(false);
     const groups = (gradingSession?.grades ?? []).map((group) => ({
         grade: group.grade,
-        students: batch.students.filter((student) => student.target_grade_id === group.grade.id),
+        students: batch.students.filter((student) => student.target_grade_id === group.grade.id
+            && (showAbsent || !absent.has(student.student_id))),
         items: batch.items.filter((item) => item.grade_id === group.grade.id),
     })).filter((group) => group.students.length);
 
@@ -122,6 +129,15 @@ function GradingTable({
                     <GradingNote>No candidates are in this session.</GradingNote>
                 ) : !batch.items.length ? (
                     <GradingNote>No techniques are recorded for this session’s grades.</GradingNote>
+                ) : <>
+                {absentCount > 0 && (
+                    <label className="flex w-fit min-h-11 cursor-pointer items-center gap-2.5 text-sm" data-show-absent>
+                        <Switch checked={showAbsent} onCheckedChange={setShowAbsent} />
+                        Show absent ({absentCount})
+                    </label>
+                )}
+                {!groups.length ? (
+                    <GradingNote>All candidates in this session are marked absent.</GradingNote>
                 ) : groups.map((group) => (
                     <div key={group.grade.id} className="space-y-3">
                         {mixed && (
@@ -140,7 +156,7 @@ function GradingTable({
                                         type="checkbox"
                                         aria-label={`${student.name}: ${item.label}`}
                                         checked={batch.checked(student.student_id, item.syllabus_item_id)}
-                                        disabled={batch.locked}
+                                        disabled={batch.locked || absent.has(student.student_id)}
                                         onChange={(event) => batch.change(student.student_id, item.syllabus_item_id, event.target.checked)}
                                         className="size-5 accent-primary"
                                     />
@@ -151,15 +167,22 @@ function GradingTable({
                                     aria-label={`${student.name}: Comments`}
                                     value={batch.comment(student.student_id)}
                                     onChange={(event) => batch.changeComment(student.student_id, event.target.value)}
-                                    disabled={batch.locked}
+                                    disabled={batch.locked || absent.has(student.student_id)}
                                     maxLength={2000}
                                     rows={3}
                                     className="w-full min-w-40 rounded-md border border-input bg-background px-3 py-2 text-sm disabled:opacity-50 sm:min-w-52"
                                 />
                             )}
+                            columnDisabled={(student) => absent.has(student.student_id)}
+                            headerBadge={(student) => absent.has(student.student_id) && (
+                                <span className="mb-1 inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-2xs font-medium text-destructive" data-absent>
+                                    <UserX aria-hidden="true" className="size-3" />Absent
+                                </span>
+                            )}
                         />
                     </div>
                 ))}
+                </>}
                 {gradingSession && batch.ready && batch.error && !signatureOpen && <p role="alert" className="text-sm text-destructive">{batch.error}</p>}
                 {gradingSession && batch.ready && batch.saved && savedAt && <p role="status" className="text-sm text-muted-foreground" data-grading-timestamp>
                     {batch.saved.status === "submitted" ? "Last submitted: " : "Last saved: "}

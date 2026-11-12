@@ -287,3 +287,35 @@ test('grading conflicts keep local edits and explain page refresh without a relo
   assert.equal(result.locked, true)
   assert.equal(result.reloadButton, false)
 })
+
+test('absent candidates are hidden from the checklist until the "Show absent" switch is on, then shown disabled', async () => {
+  const result = await inPage(390, checklistPath, async (w, wait) => {
+    const d = w.document
+    const columns = () => [...d.querySelectorAll('thead th[scope="col"]')].slice(1).map(cell => {
+      const pill = cell.querySelector('[data-absent]'), id = cell.querySelector('[data-candidate-number]')
+      return { id: id?.textContent.trim(), absent: !!pill, pillIcon: !!pill?.querySelector('svg'),
+        pillAboveId: Boolean(pill && id && (pill.compareDocumentPosition(id) & 4)), disabled: cell.dataset.disabled === 'true' }
+    })
+    const toggle = d.querySelector('[data-show-absent] [role="switch"]')
+    const hidden = { columns: columns(), label: d.querySelector('[data-show-absent]')?.textContent.trim(), checked: toggle?.getAttribute('aria-checked') }
+    toggle.click(); await wait(100)
+    const absentIndex = columns().findIndex(column => column.absent)
+    const body = [...d.querySelector('tbody').rows].filter(row => row.querySelector('input, textarea'))
+    const inputs = body.map(row => row.cells[absentIndex + 1].querySelector('input, textarea'))
+    const shown = { columns: columns(), checked: toggle.getAttribute('aria-checked'), inputsDisabled: inputs.length > 0 && inputs.every(input => input.disabled),
+      othersEnabled: body.every(row => [...row.cells].slice(1).filter((_, index) => index !== absentIndex).every(cell => !cell.querySelector('input, textarea')?.disabled)) }
+    d.querySelector('[data-show-absent]').click(); await wait(100)
+    return { hidden, shown, rehidden: columns().length }
+  })
+  assert.equal(result.hidden.label, 'Show absent (1)')
+  assert.equal(result.hidden.checked, 'false')
+  assert.ok(result.hidden.columns.every(column => !column.absent), JSON.stringify(result.hidden))
+  assert.equal(result.shown.checked, 'true')
+  assert.equal(result.shown.columns.length, result.hidden.columns.length + 1)
+  const absent = result.shown.columns.filter(column => column.absent)
+  assert.deepEqual(absent.map(({ pillIcon, pillAboveId, disabled }) => ({ pillIcon, pillAboveId, disabled })), [{ pillIcon: true, pillAboveId: true, disabled: true }])
+  assert.equal(result.shown.inputsDisabled, true)
+  assert.equal(result.shown.othersEnabled, true)
+  // Clicking the label text toggles the switch off again.
+  assert.equal(result.rehidden, result.hidden.columns.length)
+})
