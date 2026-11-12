@@ -18,12 +18,6 @@ export interface InstructorAccount {
   email_status: 'accepted' | 'failed' | 'uncertain'
 }
 
-export function instructorEmailMessage(status: InstructorAccount['email_status']): string {
-  if (status === 'accepted') return 'EmailJS accepted the login email. This does not confirm delivery to the instructor.'
-  if (status === 'failed') return 'EmailJS rejected the login email. The account already exists—do not create it again. Share the credentials securely.'
-  return 'The email outcome is uncertain. The account already exists—do not create it again. Check EmailJS history and the instructor’s inbox before sharing the credentials.'
-}
-
 export async function createInstructor(details: InstructorDetails) {
   const { data, error } = await supabase.functions.invoke<InstructorAccount>(
     'create-instructor', { body: details },

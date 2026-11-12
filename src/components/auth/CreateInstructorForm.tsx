@@ -3,7 +3,7 @@ import type { SubmitEvent } from 'react'
 import AccountFields from './AccountFields'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { createInstructor, instructorEmailMessage } from '@/lib/instructors'
+import { createInstructor } from '@/lib/instructors'
 import type { InstructorAccount } from '@/lib/instructors'
 import { useEmptyAuthForm } from '@/hooks/use-empty-auth-form'
 import { Label } from '@/components/ui/label'
@@ -16,7 +16,7 @@ export default function CreateInstructorForm({ onCreated }: { onCreated?: (accou
   const formRef = useEmptyAuthForm()
   const [pending, setPending] = useState(false)
   const [error, setError] = useState('')
-  const [createdAccount, setCreatedAccount] = useState<InstructorAccount | null>(null)
+  const [createdEmail, setCreatedEmail] = useState<string | null>(null)
   const [grades, setGrades] = useState<GradeRow[]>([])
   const [gradesLoading, setGradesLoading] = useState(true)
   const [gradesError, setGradesError] = useState(false)
@@ -48,7 +48,7 @@ export default function CreateInstructorForm({ onCreated }: { onCreated?: (accou
     const form = new FormData(element)
     setPending(true)
     setError('')
-    setCreatedAccount(null)
+    setCreatedEmail(null)
     try {
       const account = await createInstructor({
         first_name: String(form.get('first_name')).trim(),
@@ -63,7 +63,7 @@ export default function CreateInstructorForm({ onCreated }: { onCreated?: (accou
       setTitle('none')
       setIsExaminer(false)
       if (onCreated) onCreated(account)
-      else setCreatedAccount(account)
+      else setCreatedEmail(account.email)
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : 'Unable to create the instructor.')
     } finally {
@@ -73,20 +73,9 @@ export default function CreateInstructorForm({ onCreated }: { onCreated?: (accou
 
   return (
     <div className="space-y-4">
-      {createdAccount && (
-        <Alert role="status" className={createdAccount.email_status === 'accepted' ? 'border-success/30 bg-success/10' : 'border-warning/30 bg-warning/10'}>
-          <AlertDescription className="space-y-3 text-foreground">
-            <p>Instructor account created for {createdAccount.email}.</p>
-            <p>{instructorEmailMessage(createdAccount.email_status)}</p>
-            <div>
-              <p className="mb-1 font-medium">Generated password</p>
-              <code className="block select-all break-all rounded-md bg-background p-3 text-foreground">
-                {createdAccount.password}
-              </code>
-            </div>
-            <p>Save this password; it is only shown after creation.
-              The instructor can sign in at /staff/login.</p>
-          </AlertDescription>
+      {createdEmail && (
+        <Alert role="status" className="border-success/30 bg-success/10">
+          <AlertDescription className="text-foreground">Instructor account created for {createdEmail}.</AlertDescription>
         </Alert>
       )}
       <form ref={formRef} autoComplete="off" onSubmit={handleSubmit} className="space-y-5" aria-busy={pending}>

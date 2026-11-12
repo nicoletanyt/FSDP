@@ -12,7 +12,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { useAuth } from '@/hooks/use-auth'
 import { supabase } from '@/lib/supabase'
 
-type TemplateId = 'grading_invitation' | 'attendance_notice'
+type TemplateId = 'grading_invitation' | 'attendance_notice' | 'instructor_account'
 type EmailTemplate = { id: TemplateId; subject: string; body: string; updated_at: string }
 
 const templates: { id: TemplateId; title: string; description: string; placeholders: string[] }[] = [
@@ -20,6 +20,8 @@ const templates: { id: TemplateId; title: string; description: string; placehold
     placeholders: ['{{children_grading_date}}', '{{children_application_close_date}}', '{{adult_grading_date}}', '{{adult_application_close_date}}'] },
   { id: 'attendance_notice', title: 'Attendance notice', description: 'A supportive check-in for students who need attendance follow-up.',
     placeholders: ['{{student_name}}'] },
+  { id: 'instructor_account', title: 'Instructor account creation', description: 'Sent after an administrator creates an instructor account.',
+    placeholders: ['{{first_name}}', '{{login_url}}', '{{email}}', '{{password}}'] },
 ]
 const gradingLink = 'https://fsdp-kappa.vercel.app/grading'
 
@@ -91,7 +93,7 @@ export default function EmailTemplates() {
   }
 
   return <div className="space-y-6">
-    <PageHeader title="Email templates" description="Edit the saved wording used when administrators send grading invitations or attendance notices. Saving a template does not send email." />
+    <PageHeader title="Email templates" description="Edit the saved wording for grading invitations, attendance notices, and instructor account emails. Saving a template does not send email." />
     {directory.isPending && <p role="status" className="text-sm text-muted-foreground">Loading email templates…</p>}
     {directory.isError && <Alert variant="destructive" role="alert"><AlertDescription className="flex items-center gap-3">
       Unable to load email templates. <Button variant="outline" size="sm" onClick={() => void directory.refetch()}>Retry</Button>
@@ -123,6 +125,7 @@ export default function EmailTemplates() {
               onChange={event => { setSubject(event.target.value); setError(''); setNotice('') }} /></div>
           <div className="text-xs text-muted-foreground">Required placeholders: {selected?.placeholders.join(', ')}.
             {editing?.id === 'grading_invitation' && <span className="block">Keep exactly one {gradingLink} link.</span>}
+            {editing?.id === 'instructor_account' && <span className="block">The login link, email address, and generated password are filled in when the account is created. Do not remove these placeholders.</span>}
           </div>
           <div className="space-y-2"><Label htmlFor="template-body">Message</Label>
             <Textarea id="template-body" value={body} rows={10} maxLength={5000} disabled={saving}

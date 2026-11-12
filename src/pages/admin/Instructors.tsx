@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { AlertTriangle, CheckCircle2, Mail, Plus, Search, X } from 'lucide-react'
+import { CheckCircle2, Mail, Plus, Search, X } from 'lucide-react'
 import CreateInstructorForm from '@/components/auth/CreateInstructorForm'
 import PageHeader from '@/components/admin/PageHeader'
 import EmptyState from '@/components/admin/EmptyState'
@@ -9,7 +9,6 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Input } from '@/components/ui/input'
 import type { UserProfile } from '@/lib/auth'
 import { fullName, initials } from '@/lib/admin/format'
-import { instructorEmailMessage } from '@/lib/instructors'
 import type { InstructorAccount } from '@/lib/instructors'
 import { supabase } from '@/lib/supabase'
 import GradeBadge from '@/components/instructor/DatabaseGradeBadge'
@@ -50,7 +49,7 @@ export default function Instructors() {
   const [error, setError] = useState('')
   const [query, setQuery] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
-  const [createdAccount, setCreatedAccount] = useState<InstructorAccount | null>(null)
+  const [createdEmail, setCreatedEmail] = useState<string | null>(null)
 
   const reload = useCallback(async () => {
     setLoading(true)
@@ -78,7 +77,7 @@ export default function Instructors() {
   )
 
   function handleCreated(account: InstructorAccount) {
-    setCreatedAccount(account)
+    setCreatedEmail(account.email)
     setCreateOpen(false)
     void reload()
   }
@@ -108,7 +107,7 @@ export default function Instructors() {
             <DialogHeader>
               <DialogTitle>Create instructor</DialogTitle>
               <DialogDescription>
-                A password will be generated and emailed with the instructor’s login details. It will also be shown once after creation.
+                An email with the instructor’s login details will be attempted after account creation.
               </DialogDescription>
             </DialogHeader>
             {createOpen && <CreateInstructorForm onCreated={handleCreated} />}
@@ -116,34 +115,24 @@ export default function Instructors() {
         </Dialog>
       </div>
 
-      {createdAccount && (
-        <Alert role="status" className={createdAccount.email_status === 'accepted' ? 'border-success/30 bg-success/10 p-4' : 'border-warning/30 bg-warning/10 p-4'}>
-          {createdAccount.email_status === 'accepted'
-            ? <CheckCircle2 className="size-5 text-success" aria-hidden="true" />
-            : <AlertTriangle className="size-5 text-warning-foreground dark:text-warning" aria-hidden="true" />}
-          <AlertDescription className="min-w-0 space-y-3 text-foreground">
-            <div className="flex items-start justify-between gap-3">
-              <p className="font-medium">Instructor account created for {createdAccount.email}.</p>
-              <Button
-                type="button"
-                size="icon-sm"
-                variant="ghost"
-                className="-m-2 shrink-0"
-                aria-label="Dismiss generated password"
-                onClick={() => setCreatedAccount(null)}
-              >
-                <X className="size-4" aria-hidden="true" />
-              </Button>
-            </div>
-            <p>{instructorEmailMessage(createdAccount.email_status)}</p>
-            <div>
-              <p className="mb-1 font-medium">Generated password</p>
-              <code className="block select-all break-all rounded-md bg-background p-3 text-foreground">
-                {createdAccount.password}
-              </code>
-            </div>
-            <p>Save this password now; it won’t be shown again after you dismiss this alert or leave the page. The instructor can sign in at /staff/login.</p>
+      {createdEmail && (
+        <Alert role="status" className="flex min-h-12 items-center gap-2 border-success/30 bg-success/10 px-3 py-2 text-left">
+          <span className="flex shrink-0 items-center" aria-hidden="true">
+            <CheckCircle2 className="size-5 text-success" />
+          </span>
+          <AlertDescription className="min-w-0 flex-1 text-left text-foreground">
+            <p className="font-medium">Instructor account created for {createdEmail}.</p>
           </AlertDescription>
+          <Button
+            type="button"
+            size="icon-sm"
+            variant="ghost"
+            className="shrink-0"
+            aria-label="Dismiss account creation notice"
+            onClick={() => setCreatedEmail(null)}
+          >
+            <X className="size-4" aria-hidden="true" />
+          </Button>
         </Alert>
       )}
 

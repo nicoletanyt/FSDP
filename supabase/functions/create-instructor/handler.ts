@@ -7,6 +7,16 @@ function requiredEnv(name: string) {
   return value
 }
 
+const instructorPlaceholders = ['first_name', 'login_url', 'email', 'password'] as const
+
+function validInstructorTemplate(template: { subject: string; body: string } | null): template is { subject: string; body: string } {
+  if (!template || typeof template.subject !== 'string' || typeof template.body !== 'string' ||
+    !template.subject.trim() || template.subject.length > 150 || /[\r\n]/.test(template.subject) ||
+    !template.body.trim() || template.body.length > 5000) return false
+  return instructorPlaceholders.every(key => template.body.includes(`{{${key}}}`)) &&
+    !template.body.replace(/\{\{(first_name|login_url|email|password)\}\}/g, '').match(/\{\{[^}]*\}\}/)
+}
+
 export async function handleRequest(request: Request): Promise<Response> {
   let headers: Record<string, string> = {}
 
@@ -124,6 +134,11 @@ export async function handleRequest(request: Request): Promise<Response> {
     if (!serviceId || !templateId || !publicKey) {
       return Response.json({ error: 'Instructor email delivery is not configured. No account was created.' }, { status: 503, headers })
     }
+    const { data: template, error: templateError } = await admin.from('admin_email_templates')
+      .select('subject,body').eq('id', 'instructor_account').single()
+    if (templateError || !validInstructorTemplate(template)) {
+      return Response.json({ error: 'Instructor login email template is unavailable. No account was created.' }, { status: 503, headers })
+    }
     const { data, error } = await admin.auth.admin.createUser({
       email,
       password,
@@ -146,6 +161,14 @@ export async function handleRequest(request: Request): Promise<Response> {
     // The account already exists at this point. A rejected or ambiguous provider
     // response must not be presented as a provisioning failure and retried.
     const instructorEmail = data.user.email ?? email
+    const values: Record<(typeof instructorPlaceholders)[number], string> = {
+      first_name: firstName,
+      login_url: new URL('/staff/login', requiredEnv('APP_URL')).toString(),
+      email: instructorEmail,
+      password,
+    }
+    const emailBody = template.body.replace(/\{\{(first_name|login_url|email|password)\}\}/g,
+      (_, key: (typeof instructorPlaceholders)[number]) => values[key])
     let emailStatus: 'accepted' | 'failed' | 'uncertain' = 'uncertain'
     try {
       const response = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
@@ -157,8 +180,8 @@ export async function handleRequest(request: Request): Promise<Response> {
           ...(Deno.env.get('EMAILJS_PRIVATE_KEY') ? { accessToken: Deno.env.get('EMAILJS_PRIVATE_KEY') } : {}),
           template_params: {
             to_email: instructorEmail,
-            email_subject: 'Your Aikido Shinju-Kai instructor login',
-            email_body: `Hello ${firstName},\n\nYour instructor account has been created.\n\nSign in: ${new URL('/staff/login', requiredEnv('APP_URL')).toString()}\nUsername: ${instructorEmail}\nPassword: ${password}\n\nPlease change your password after you sign in.\n\nAikido Shinju-Kai`,
+            email_subject: template.subject,
+            email_body: emailBody,
           },
         }),
       })
