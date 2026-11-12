@@ -1,8 +1,10 @@
-import { useCallback, useMemo, useState } from "react";
+import { Fragment, useCallback, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useParams, useSearchParams } from "react-router";
 import { CalendarDays, ChevronLeft, MapPin } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import DatabaseGradeBadge from "@/components/instructor/DatabaseGradeBadge";
 import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
 import GradingSignatureDialog from "@/components/instructor/GradingSignatureDialog";
 import { useInstructorApi } from "@/lib/instructor/data-context";
@@ -14,6 +16,7 @@ import {
     instructorQueryTimes as times,
 } from "@/lib/instructor/query-keys";
 import { sessionDateLabel } from "@/lib/instructor/session-reads";
+import { gradingTitle } from "@/lib/instructor/grading-panels";
 import type { GradingDay } from "@/lib/instructor/grading-panels";
 import type {
     CalendarEntry,
@@ -40,25 +43,27 @@ function GradingTable({
     day: GradingDay;
     requestedGrade: string | null;
 }) {
+    // The grade comes from the grading day's link (?grade=), else the batch
+    // last worked on, else the only grade with candidates.
     const requested = requestedGrade && day.grades.some((item) => item.grade.id === requestedGrade) ? requestedGrade : null;
-    const [track, setTrack] = useState<"" | "children" | "adult">(
-        requested ? (session.grading?.track ?? initialBatch?.track ?? "") : (initialBatch?.track ?? session.grading?.track ?? ""));
-    const [grade, setGrade] = useState(requested ?? initialBatch?.target_grade_id ?? "");
+    const active = day.grades.filter((item) => item.candidates.length);
+    const grade = requested ?? initialBatch?.target_grade_id ?? (active.length === 1 ? active[0].grade.id : "");
+    // The track is the grading's own; untracked gradings fall back to the
+    // saved batch, or the grade's only track.
+    const gradeTracks = reference.gradeTracks.filter((item) => item.grade_id === grade);
+    const track: "" | "children" | "adult" = day.track ?? session.grading?.track
+        ?? (initialBatch?.target_grade_id === grade ? initialBatch.track : null)
+        ?? (gradeTracks.length === 1 ? gradeTracks[0].track : "");
+    const gradeRow = reference.grades.find((item) => item.id === grade) ?? null;
+    // The title names the grading's track, so the track badge is only for
+    // untracked gradings whose title is their own name.
+    const trackBadge = track && !day.track;
     // Each target grade is its own session: only its applicants are graded.
-    const candidateCounts = new Map(day.grades.map((item) => [item.grade.id, item.candidates.length]));
     const gradeEntries = useMemo(() => {
         const ids = new Set(day.grades.find((item) => item.grade.id === grade)?.candidates.map((candidate) => candidate.studentId) ?? []);
         return entries.filter((entry) => ids.has(entry.record.student_id));
     }, [day, entries, grade]);
     const [signatureOpen, setSignatureOpen] = useState(false);
-    const grades = reference.grades
-        .filter((item) =>
-            (initialBatch?.track === track && initialBatch.target_grade_id === item.id) || (!session.targetGrades.length || session.targetGrades.some(target => target.id === item.id)) && reference.gradeTracks.some(
-                (gradeTrack) =>
-                    gradeTrack.track === track && gradeTrack.grade_id === item.id,
-            ),
-        )
-        .sort((a, b) => a.sort_order - b.sort_order);
     const techniques = reference.syllabusItems
         .filter((item) => item.track === track && item.grade_id === grade)
         .sort(
@@ -76,14 +81,26 @@ function GradingTable({
     return (
         <div className="space-y-6">
             <header className="flex flex-wrap items-center justify-between gap-4">
-                <h1 className="min-w-0 text-3xl font-semibold tracking-tight [overflow-wrap:anywhere]">
-                    {session.event.name}
-                </h1>
+                <div className="min-w-0 space-y-2">
+                    <h1 className="min-w-0 text-3xl font-semibold tracking-tight [overflow-wrap:anywhere]">
+                        {gradingTitle(day)}
+                    </h1>
+                    {(trackBadge || gradeRow) && (
+                        <div className="flex flex-wrap items-center gap-2" data-grading-group>
+                            {trackBadge && <Badge variant="secondary" data-track={track}>{track === "adult" ? "Adult" : "Children"}</Badge>}
+                            {gradeRow && <DatabaseGradeBadge grade={gradeRow} showBeltLabel />}
+                        </div>
+                    )}
+                </div>
                 <div className="flex flex-wrap gap-2">
-                    <Button variant="outline" disabled={!canSave || batch.retryMode === "submit"} onClick={() => void batch.save(false)}>
-                        {batch.pending && batch.retryMode !== "submit" ? "Saving…" : batch.retryMode === "draft" ? "Retry draft save" : "Save draft"}
-                    </Button>
-                    <Button disabled={!canSave || batch.retryMode === "draft"} onClick={() => setSignatureOpen(true)}>
+                    {/* Only offered once there is something new to save (or a failed save to retry). */}
+                    {(batch.dirty || batch.retryMode === "draft") && (
+                        <Button variant="outline" disabled={!canSave || batch.retryMode === "submit"} onClick={() => void batch.save(false)}>
+                            {batch.pending && batch.retryMode !== "submit" ? "Saving…" : batch.retryMode === "draft" ? "Retry draft save" : "Save draft"}
+                        </Button>
+                    )}
+                    <Button disabled={!canSave || batch.retryMode === "draft"} onClick={() => setSignatureOpen(true)}
+                        className="bg-success text-success-foreground hover:bg-success/85" data-submit-grading>
                         {batch.retryMode === "submit" ? "Retry submission" : "Submit grading"}
                     </Button>
                 </div>
@@ -111,50 +128,17 @@ function GradingTable({
                 className="space-y-4"
                 aria-label="Grading assessment"
             >
-                <div className="flex flex-wrap gap-4">
-                    <label className="flex min-w-44 flex-col gap-1.5 text-sm font-medium">
-                        Grading track
-                        <select
-                            value={track}
-                            disabled={batch.groupLocked}
-                            onChange={(event) => {
-                                if (batch.groupLocked) return;
-                                setTrack(event.target.value as typeof track);
-                                setGrade("");
-                            }}
-                            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-                        >
-                            <option value="">Select track</option>
-                            <option value="children" disabled={session.grading?.track === "adult"}>Children</option>
-                            <option value="adult" disabled={session.grading?.track === "children"}>Adult</option>
-                        </select>
-                    </label>
-                    <label className="flex min-w-44 flex-col gap-1.5 text-sm font-medium">
-                        Target grade
-                        <select
-                            value={grade}
-                            disabled={!track || batch.groupLocked}
-                            onChange={(event) => {
-                                if (batch.groupLocked) return;
-                                setGrade(event.target.value);
-                            }}
-                            className="h-10 rounded-md border border-input bg-background px-3 text-sm disabled:opacity-50"
-                        >
-                            <option value="">Select grade</option>
-                            {grades.map((item) => {
-                                const count = candidateCounts.get(item.id) ?? 0;
-                                return (
-                                    <option key={item.id} value={item.id} disabled={!count && item.id !== grade}>
-                                        {item.label} ({count === 1 ? "1 candidate" : `${count} candidates`})
-                                    </option>
-                                );
-                            })}
-                        </select>
-                    </label>
-                </div>
                 {!grade ? (
                     <p className="rounded-lg border p-4 text-sm text-muted-foreground">
-                        Choose a track and target grade to view the checklist.
+                        Choose a grade from the{" "}
+                        <Link to={`/instructor/gradings/${session.event.id}`} className="font-medium text-foreground underline-offset-4 hover:underline">
+                            grading day
+                        </Link>{" "}
+                        to view its checklist.
+                    </p>
+                ) : !track ? (
+                    <p className="rounded-lg border p-4 text-sm text-muted-foreground">
+                        This grading has no track recorded, so its checklist cannot be shown.
                     </p>
                 ) : batch.query.status !== "success" || !batch.ready ? (
                     <InstructorDataStatus loading={batch.query.status !== "error"} error={batch.query.error} onRetry={batch.query.retry} variant="roster" />
@@ -178,83 +162,89 @@ function GradingTable({
                                 <tr className="bg-muted/50">
                                     <th
                                         scope="col"
-                                        className="sticky left-0 z-10 w-16 min-w-16 border-b bg-muted px-4 py-3 text-center font-semibold"
+                                        className="sticky left-0 z-10 min-w-44 border-b bg-muted px-4 py-3 text-left align-bottom font-semibold"
                                     >
-                                        ID
+                                        Technique
                                     </th>
-                                    <th
-                                        scope="col"
-                                        className="min-w-44 border-b border-l px-4 py-3 text-left font-semibold"
-                                    >
-                                        Student
-                                    </th>
-                                    {batch.items.map((item) => (
+                                    {batch.students.map((student) => (
                                         <th
                                             scope="col"
-                                            key={item.syllabus_item_id}
-                                            className="min-w-36 border-b border-l px-3 py-3 text-left align-bottom font-medium"
+                                            key={student.student_id}
+                                            className="min-w-36 border-b border-l px-3 py-3 text-center align-bottom font-medium"
                                         >
-                                            <span className="block text-xs text-muted-foreground">
-                                                {item.category}
+                                            <span className="block text-xs tabular-nums text-muted-foreground" data-candidate-number>
+                                                {student.candidate_number}
                                             </span>
-                                            {item.label}
+                                            {student.name}
                                         </th>
                                     ))}
-                                    <th scope="col" className="min-w-60 border-b border-l px-3 py-3 text-left align-bottom font-medium">Comments</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {batch.students.map((student) => {
-                                    const name = student.name;
-                                    return (
-                                        <tr
-                                            key={student.student_id}
-                                            className="border-b last:border-0"
-                                        >
-                                            <td className="sticky left-0 z-10 bg-background px-4 py-3 text-center tabular-nums">
-                                                {student.candidate_number}
-                                            </td>
+                                {batch.items.map((item, index) => (
+                                    <Fragment key={item.syllabus_item_id}>
+                                    {/* Each category is named once, above its techniques. */}
+                                    {item.category !== batch.items[index - 1]?.category && (
+                                        <tr className="border-b bg-muted/30" data-category-row>
                                             <th
-                                                scope="row"
-                                                className="border-l px-4 py-3 text-left font-medium"
+                                                scope="rowgroup"
+                                                className="sticky left-0 z-10 bg-muted px-4 py-2 text-left text-xs font-semibold text-muted-foreground"
                                             >
-                                                {name}
+                                                {item.category}
                                             </th>
-                                            {batch.items.map((item) => {
-                                                return (
-                                                    <td
-                                                        key={item.syllabus_item_id}
-                                                        className="border-l text-center"
-                                                    >
-                                                        <label className="inline-flex min-h-11 min-w-11 items-center justify-center">
-                                                            <input
-                                                                type="checkbox"
-                                                                aria-label={`${name}: ${item.label}`}
-                                                                checked={
-                                                                    batch.checked(student.student_id, item.syllabus_item_id)
-                                                                }
-                                                                disabled={batch.locked}
-                                                                onChange={(event) => batch.change(student.student_id, item.syllabus_item_id, event.target.checked)}
-                                                                className="size-5 accent-primary"
-                                                            />
-                                                        </label>
-                                                    </td>
-                                                );
-                                            })}
-                                            <td className="border-l px-3 py-2">
-                                                <textarea
-                                                    aria-label={`${name}: Comments`}
-                                                    value={batch.comment(student.student_id)}
-                                                    onChange={(event) => batch.changeComment(student.student_id, event.target.value)}
-                                                    disabled={batch.locked}
-                                                    maxLength={2000}
-                                                    rows={2}
-                                                    className="w-full min-w-52 rounded-md border border-input bg-background px-3 py-2 text-sm disabled:opacity-50"
-                                                />
-                                            </td>
+                                            <td colSpan={batch.students.length} />
                                         </tr>
-                                    );
-                                })}
+                                    )}
+                                    <tr className="border-b">
+                                        <th
+                                            scope="row"
+                                            className="sticky left-0 z-10 bg-background px-4 py-3 text-left font-medium"
+                                        >
+                                            {item.label}
+                                        </th>
+                                        {batch.students.map((student) => (
+                                            <td
+                                                key={student.student_id}
+                                                className="border-l text-center"
+                                            >
+                                                <label className="inline-flex min-h-11 min-w-11 items-center justify-center">
+                                                    <input
+                                                        type="checkbox"
+                                                        aria-label={`${student.name}: ${item.label}`}
+                                                        checked={
+                                                            batch.checked(student.student_id, item.syllabus_item_id)
+                                                        }
+                                                        disabled={batch.locked}
+                                                        onChange={(event) => batch.change(student.student_id, item.syllabus_item_id, event.target.checked)}
+                                                        className="size-5 accent-primary"
+                                                    />
+                                                </label>
+                                            </td>
+                                        ))}
+                                    </tr>
+                                    </Fragment>
+                                ))}
+                                <tr>
+                                    <th
+                                        scope="row"
+                                        className="sticky left-0 z-10 bg-background px-4 py-3 text-left align-top font-medium"
+                                    >
+                                        Comments
+                                    </th>
+                                    {batch.students.map((student) => (
+                                        <td key={student.student_id} className="border-l px-3 py-2 align-top">
+                                            <textarea
+                                                aria-label={`${student.name}: Comments`}
+                                                value={batch.comment(student.student_id)}
+                                                onChange={(event) => batch.changeComment(student.student_id, event.target.value)}
+                                                disabled={batch.locked}
+                                                maxLength={2000}
+                                                rows={3}
+                                                className="w-full min-w-52 rounded-md border border-input bg-background px-3 py-2 text-sm disabled:opacity-50"
+                                            />
+                                        </td>
+                                    ))}
+                                </tr>
                             </tbody>
                         </table>
                     </div>

@@ -197,7 +197,7 @@ test('grading days with no applicants, and non-examiners, get clear messages', a
   assert.ok(!blocked.includes('Grading sessions'))
 })
 
-test('the checklist preselects the requested grade and lists only that grade\'s candidates', async () => {
+test('the checklist shows the requested grade and track as badges and lists only that grade\'s candidates', async () => {
   const { default: InstructorGradingSession } = await server.ssrLoadModule('/src/pages/Instructor/InstructorGradingSession.tsx')
   const eventId = row().event_id
   const blue = grade('blue-6th-kyu', 'Blue (6th Kyu)', 7)
@@ -238,14 +238,17 @@ test('the checklist preselects the requested grade and lists only that grade\'s 
     await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)) })
   }
   const text = textOf(root)
-  const gradeSelect = root.root.findAll(node => node.type === 'select')[1]
-  assert.equal(gradeSelect.props.value, 'brown-4th-kyu')
+  // Track and grade are shown as badges, not filters.
+  assert.equal(root.root.findAll(node => node.type === 'select').length, 0)
+  // The title names the track, so there is no separate track badge, and no date.
+  assert.equal(root.root.find(node => node.type === 'h1').props.children, 'Adult grading')
+  assert.equal(root.root.findAll(node => node.props?.['data-slot'] === 'badge' && typeof node.type === 'string').length, 0)
+  const grades = root.root.findAll(node => node.props?.['data-slot'] === 'grade-badge')
+  assert.deepEqual(grades.map(node => node.props['data-grade-id']), ['brown-4th-kyu'])
   assert.ok(text.includes('Brown technique'))
+  assert.ok(!text.includes('Blue technique'))
   assert.ok(text.includes('Cy Student'), 'brown candidate listed')
   assert.ok(!text.includes('Ada Student'), 'blue candidate not listed')
-  const optionText = value => [gradeSelect.findAll(node => node.type === 'option' && node.props.value === value)[0].props.children].flat(Infinity).join('')
-  assert.equal(optionText('brown-4th-kyu'), 'Brown (4th Kyu) (1 candidate)')
-  assert.equal(optionText('blue-6th-kyu'), 'Blue (6th Kyu) (1 candidate)')
   assert.ok(root.root.findAll(node => node.type === 'a').some(node => node.props.href === `/instructor/gradings/${eventId}`))
 })
 

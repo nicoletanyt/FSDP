@@ -16,6 +16,7 @@ export function createGradingBatchFixture(account: string, mode: string | null, 
   return {
     // Fixture gradings have no applications: every rostered student is a
     // candidate for every grade, matching how fixture saves snapshot the roster.
+    // They also have no track, so the grading day grades the children's track.
     async getGradingDay(eventId, signal) {
       const api = getApi()
       const controller = signal ?? new AbortController().signal
@@ -25,7 +26,7 @@ export function createGradingBatchFixture(account: string, mode: string | null, 
       const candidates = roster.entries.map(({ record, student }) => ({ studentId: student.student.id,
         name: [student.student.first_name, student.student.last_name].filter(Boolean).join(' ') || student.student.email,
         memberNo: null, candidateNumber: record.candidate_number ?? null, currentGrade: null }))
-      return { eventId: event.id, name: event.name, status: event.status, track: roster.session.grading?.track ?? null,
+      return { eventId: event.id, name: event.name, status: event.status, track: roster.session.grading?.track ?? 'children',
         gradingDate: (event.starts_at ?? '2026-01-01').slice(0, 10),
         startsAt: event.starts_at, endsAt: event.ends_at, reportingTime: null, isChief: true,
         centre: { name: roster.session.centre?.name ?? 'Centre', address: '' },
