@@ -396,6 +396,25 @@ policies or grants. Authenticated RPCs derive/check the actual linked instructor
 
 A student's application to a grading event for a target grade.
 
+The student portal records a confirmed (currently simulated) card payment with
+`record_grading_payment(p_grading_event_id, p_target_grade_id)`. The RPC resolves
+the signed-in student and, when IDs are omitted, their next eligible grading
+opportunity, then inserts the application as `submitted` (the enum has no `paid`
+value). Production payment confirmation should come from the Stripe webhook.
+
+The grading checkout now calculates the displayed base fee by target grade using
+`src/lib/grading-fees.ts`, transcribed from the user-supplied ASK grading SOP.
+It adds S$22 after the application's closing day ends in Singapore. The current
+official grading page confirms a late administrative charge but does not publish
+the SOP amounts or payment methods. Card, PayNow and bank transfer are explicitly
+simulated UI methods; no recipient details/QR are fabricated. The receipt's fee
+breakdown/method are not persisted as verified payment data. Direct `/grading`
+fee previews do not call the application-write RPC; only an application carrying
+an event ID can save, with the existing server eligibility checks unchanged.
+Late pricing does not bypass those checks or automatically reopen an event.
+The separate legacy Stripe checkout still uses its fixed SGD 60 test price and
+must be migrated to authoritative per-grade pricing before any live use.
+
 | Column             | Type                 | Nullable | Default             |
 | ------------------ | -------------------- | -------- | ------------------- |
 | `id`               | `uuid`               | no       | `gen_random_uuid()` |

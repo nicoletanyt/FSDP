@@ -16,6 +16,7 @@ export default function RootLayout() {
   const { pathname } = useLocation()
   const isAdmin = pathname === '/admin' || pathname.startsWith('/admin/')
   const isAdminCalendar = pathname === '/admin/calendar'
+  const isGradingPayment = pathname === '/grading' || pathname === '/grading/payment'
   const isInstructorPortal = useMatch('/instructor/*')
   const isStudent = Boolean(session && profile?.role === 'student')
   const homePath =
@@ -184,8 +185,9 @@ export default function RootLayout() {
       ) : (
         <main
           className={cn(
-            'mx-auto w-full p-6 lg:w-[70%] lg:px-0',
-            isStudent ? 'lg:py-8' : 'lg:py-12',
+            'mx-auto w-full',
+            isGradingPayment ? 'p-0' : 'p-6 lg:w-[70%] lg:px-0',
+            !isGradingPayment && (isStudent ? 'lg:py-8' : 'lg:py-12'),
           )}
         >
           <Suspense
