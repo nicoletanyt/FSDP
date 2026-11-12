@@ -49,6 +49,8 @@ const InstructorCheckIn = lazy(() => import('./pages/Instructor/InstructorCheckI
 const NfcCheckIn = lazy(() => import('./pages/Instructor/NfcCheckIn'))
 const InstructorStudentDetails = lazy(() => import('./pages/Instructor/InstructorStudentDetails'))
 const InstructorGradingSession = lazy(() => import('./pages/Instructor/InstructorGradingSession'))
+const InstructorGradings = lazy(() => import('./pages/Instructor/InstructorGradings'))
+const InstructorGradingDay = lazy(() => import('./pages/Instructor/InstructorGradingDay'))
 
 function LegacyCoverInvitationRedirect() {
   const { invitationId } = useParams()
@@ -99,6 +101,8 @@ export default function App() {
                 <Route path="nfc_checkin" element={<NfcCheckIn />} />
                 <Route path="students/:studentId" element={<InstructorStudentDetails />} />
                 <Route path="reports/:eventId" element={<Navigate to="/instructor/calendar" replace />} />
+                <Route path="gradings" element={<InstructorGradings />} />
+                <Route path="gradings/:eventId" element={<InstructorGradingDay />} />
                 <Route path="grading/:eventId" element={<InstructorGradingSession />} />
                 <Route path="profile" element={<InstructorProfile />} />
               </Route>

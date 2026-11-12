@@ -49,7 +49,8 @@ Deno.test('Instructor provisioning authorization', async (test) => {
     }
     if (url.pathname === '/rest/v1/grades') {
       assert.equal(request.headers.get('authorization'), `Bearer ${environment.SUPABASE_SERVICE_ROLE_KEY}`)
-      return Response.json(gradeExists ? { id: 'black' } : null)
+      const id = url.searchParams.get('id')?.replace(/^eq\./, '')
+      return Response.json(gradeExists ? { id, is_ranked: id !== 'unranked' } : null)
     }
     assert.equal(url.pathname, '/auth/v1/admin/users')
     assert.equal(request.method, 'POST')
@@ -61,6 +62,7 @@ Deno.test('Instructor provisioning authorization', async (test) => {
   const details = {
     first_name: ' New ', last_name: ' Instructor ',
     email: 'INSTRUCTOR@example.test',
+    grade_id: '1st-dan', instructor_title: 'none',
     role: 'administrator',
   }
   function request(options: RequestInit = {}) {
@@ -109,7 +111,7 @@ Deno.test('Instructor provisioning authorization', async (test) => {
       const provision = calls.find((call) => call.path === '/auth/v1/admin/users')!
       assert.equal(provision.authorization, `Bearer ${environment.SUPABASE_SERVICE_ROLE_KEY}`)
       const body = provision.body as Record<string, unknown>
-      assert.deepEqual(body.app_metadata, { role: 'instructor' })
+      assert.deepEqual(body.app_metadata, { role: 'instructor', instructor_grade_id: '1st-dan', instructor_title: 'none', instructor_is_examiner: false })
       assert.deepEqual(body.user_metadata, { first_name: 'New', last_name: 'Instructor' })
       assert.equal(body.email, 'instructor@example.test')
       assert.equal(body.email_confirm, true)
@@ -143,17 +145,70 @@ Deno.test('Instructor provisioning authorization', async (test) => {
       assert.equal((provisions[1].body as Record<string, unknown>).password, passwords[1])
     })
 
-    await test.step('validates the grade before passing it as trusted metadata', async () => {
+    await test.step('requires an existing ranked grade before passing it as trusted metadata', async () => {
       calls.length = 0
-      const response = await handleRequest(request({ body: JSON.stringify({ ...details, grade_id: 'black' }) }))
+      const response = await handleRequest(request({ body: JSON.stringify({ ...details, grade_id: '2nd-dan' }) }))
       assert.equal(response.status, 201)
       const provision = calls.find((call) => call.path === '/auth/v1/admin/users')!
-      assert.deepEqual((provision.body as Record<string, unknown>).app_metadata, { role: 'instructor', instructor_grade_id: 'black' })
+      assert.deepEqual((provision.body as Record<string, unknown>).app_metadata,
+        { role: 'instructor', instructor_grade_id: '2nd-dan', instructor_title: 'none', instructor_is_examiner: false })
+      for (const grade_id of [undefined, null, '', '  ', 7]) {
+        calls.length = 0
+        assert.equal((await handleRequest(request({ body: JSON.stringify({ ...details, grade_id }) }))).status, 400)
+        assert.ok(!calls.some((call) => call.path === '/auth/v1/admin/users'))
+      }
+      calls.length = 0
+      assert.equal((await handleRequest(request({ body: JSON.stringify({ ...details, grade_id: 'unranked' }) }))).status, 400)
+      assert.ok(!calls.some((call) => call.path === '/auth/v1/admin/users'))
       calls.length = 0
       gradeExists = false
       assert.equal((await handleRequest(request({ body: JSON.stringify({ ...details, grade_id: 'missing' }) }))).status, 400)
       assert.ok(!calls.some((call) => call.path === '/auth/v1/admin/users'))
       gradeExists = true
+    })
+
+    await test.step('requires a title and rejects grade/title pairs the shared rules do not allow', async () => {
+      for (const [grade_id, instructor_title] of [
+        ['2nd-dan', 'fukushidoin'], ['4th-dan', 'shidoin'], ['4th-dan', 'fukushidoin'], ['5th-dan', 'shidoin'],
+        ['6th-dan', 'shihan'], ['6th-dan', 'fukushidoin'], ['black-2nd-kyu', 'none'],
+      ]) {
+        calls.length = 0
+        const response = await handleRequest(request({ body: JSON.stringify({ ...details, grade_id, instructor_title }) }))
+        assert.equal(response.status, 201, `${grade_id} / ${instructor_title}`)
+        const provision = calls.find((call) => call.path === '/auth/v1/admin/users')!
+        assert.deepEqual((provision.body as Record<string, unknown>).app_metadata,
+          { role: 'instructor', instructor_grade_id: grade_id, instructor_title, instructor_is_examiner: false })
+      }
+      for (const [grade_id, instructor_title] of [
+        ['1st-dan', 'fukushidoin'], ['junior-dan', 'fukushidoin'], ['black-gold-1st-kyu', 'fukushidoin'],
+        ['black-2nd-kyu', 'fukushidoin'], ['3rd-dan', 'shidoin'], ['4th-dan', 'shihan'], ['5th-dan', 'shihan'],
+      ]) {
+        calls.length = 0
+        const response = await handleRequest(request({ body: JSON.stringify({ ...details, grade_id, instructor_title }) }))
+        assert.equal(response.status, 400, `${grade_id} / ${instructor_title}`)
+        assert.match((await response.json()).error, /requires \d+(st|nd|rd|th) dan or above/)
+        assert.ok(!calls.some((call) => call.path === '/auth/v1/admin/users'))
+      }
+      for (const instructor_title of [undefined, null, '', 'Dojo-cho', 'Shihan', 7]) {
+        calls.length = 0
+        assert.equal((await handleRequest(request({ body: JSON.stringify({ ...details, instructor_title }) }))).status, 400)
+        assert.ok(!calls.some((call) => call.path === '/auth/v1/admin/users'))
+      }
+    })
+
+    await test.step('passes the examiner flag as trusted metadata and rejects non-boolean values', async () => {
+      for (const is_examiner of [true, false]) {
+        calls.length = 0
+        const response = await handleRequest(request({ body: JSON.stringify({ ...details, is_examiner }) }))
+        assert.equal(response.status, 201)
+        const provision = calls.find((call) => call.path === '/auth/v1/admin/users')!
+        assert.equal((provision.body as { app_metadata: Record<string, unknown> }).app_metadata.instructor_is_examiner, is_examiner)
+      }
+      for (const is_examiner of ['true', 1, 'yes', {}]) {
+        calls.length = 0
+        assert.equal((await handleRequest(request({ body: JSON.stringify({ ...details, is_examiner }) }))).status, 400)
+        assert.ok(!calls.some((call) => call.path === '/auth/v1/admin/users'))
+      }
     })
 
     await test.step('invalid account details and malformed JSON do not reach the privileged API', async () => {

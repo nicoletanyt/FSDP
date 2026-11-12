@@ -15,6 +15,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import GradeBadge from "@/components/instructor/DatabaseGradeBadge";
+import TitleBadge from "@/components/instructor/TitleBadge";
 import { InstructorAvatar } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -608,6 +609,36 @@ export default function InstructorProfile() {
                         <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
                             <dt className="text-muted-foreground">Grade</dt>
                             <dd>{details.isPending ? "Loading…" : details.isError ? "Unavailable" : <GradeBadge grade={details.data?.grade ?? null} />}</dd>
+                        </div>
+                        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+                            <dt className="text-muted-foreground">Instructor title</dt>
+                            <dd>
+                                {details.isPending ? (
+                                    "Loading…"
+                                ) : details.isError ? (
+                                    "Unavailable"
+                                ) : details.data && details.data.instructorTitle !== "none" ? (
+                                    <TitleBadge title={details.data.instructorTitle} />
+                                ) : (
+                                    <span className="text-muted-foreground">None</span>
+                                )}
+                            </dd>
+                        </div>
+                        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+                            <dt className="text-muted-foreground">Examiner</dt>
+                            <dd className="min-w-0 sm:text-right">
+                                {details.isPending ? (
+                                    "Loading…"
+                                ) : details.isError ? (
+                                    "Unavailable"
+                                ) : details.data?.isExaminer ? (
+                                    <Badge variant="secondary" className="h-auto px-2.5 py-1">
+                                        Can sit on grading panels
+                                    </Badge>
+                                ) : (
+                                    <span className="text-muted-foreground">No</span>
+                                )}
+                            </dd>
                         </div>
                         <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
                             <dt className="text-muted-foreground">Employment status</dt>

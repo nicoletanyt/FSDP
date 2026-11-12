@@ -255,8 +255,19 @@ export function decodeCalendarEntry(value: unknown): CalendarEntry {
   }
   const classType = classRow ? nullable(decodeClassType)(classRow.class_type) : null
   if (classRow && classType && classRow.class_type_id !== classType.id) return invalid()
-  const targets = source.grading === null ? [] : array(object(source.grading).target_grades, item => nullable(decodeGrade)(object(item).grade))
-  return { event, centre, classType, grading, targetGrades: targets.filter(grade => grade !== null), seminar, workshop, rosterCount: participants[0] }
+  const sessions = source.grading === null ? [] : array(object(source.grading).target_grades, item => {
+    const target = object(item)
+    const grade = nullable(decodeGrade)(target.grade)
+    if (!grade) return null
+    // Older responses carry only the grade; times and counts are optional.
+    const startsAt = target.starts_at == null ? null : timestamp(target.starts_at)
+    const endsAt = target.ends_at == null ? null : timestamp(target.ends_at)
+    if ((startsAt === null) !== (endsAt === null)) return invalid()
+    return { grade, startsAt, endsAt, candidates: target.candidates == null ? 0 : count(target.candidates) }
+  }).filter(session => session !== null)
+  if (source.on_panel != null && typeof source.on_panel !== 'boolean') return invalid()
+  return { event, centre, classType, grading, targetGrades: sessions.map(session => session.grade),
+    gradeSessions: sessions, onPanel: source.on_panel === true, seminar, workshop, rosterCount: participants[0] }
 }
 
 export function decodeRosterEntry(value: unknown): RosterEntry {

@@ -23,6 +23,8 @@ export interface CalendarViewEvent {
   reportingTime: string | null
   reportingReleaseOn: string | null
   status: CalendarEntry['event']['status']
+  // Set on a per-grade block: opens that grade's checklist instead of the event panel.
+  gradeSession?: { eventId: string; gradeId: string }
 }
 
 export type CalendarEventsForDate = (date: Date) => CalendarViewEvent[]
@@ -66,6 +68,27 @@ export function toCalendarViewEvent(entry: CalendarEntry): CalendarViewEvent {
     startsAt: entry.event.starts_at, endsAt: entry.event.ends_at, status: entry.event.status,
     dateOnly, reportingTime, reportingReleaseOn: entry.grading?.reporting_release_on ?? null,
   }
+}
+
+// Gradings the caller examines become one block per timed grade session, each
+// at its own time. Everything else (and gradings without session times, or
+// that the caller doesn't examine) stays a single block.
+export function toCalendarViewEvents(entry: CalendarEntry): CalendarViewEvent[] {
+  const event = toCalendarViewEvent(entry)
+  const timed = entry.onPanel && entry.event.event_type === 'grading'
+    ? entry.gradeSessions.filter(session => session.startsAt && session.endsAt && session.candidates > 0) : []
+  if (!timed.length) return [event]
+  const track = entry.grading?.track === 'adult' ? 'Adult grading' : entry.grading?.track === 'children' ? "Children's grading" : entry.event.name
+  return timed.map(session => {
+    const start = toSingaporeDateTime(session.startsAt!)
+    const end = toSingaporeDateTime(session.endsAt!)
+    return {
+      ...event, id: `${entry.event.id}:${session.grade.id}`, name: `${session.grade.label} · ${track}`,
+      date: parseCalendarDate(start.date)!, startTime: start.time, endTime: start.date === end.date ? end.time : '24:00',
+      startsAt: session.startsAt, endsAt: session.endsAt, dateOnly: false, rosterCount: session.candidates,
+      gradeSession: { eventId: entry.event.id, gradeId: session.grade.id },
+    }
+  })
 }
 
 export function calendarEventsForDate(events: CalendarViewEvent[], day: Date): CalendarViewEvent[] {
