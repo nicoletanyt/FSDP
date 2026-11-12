@@ -179,7 +179,7 @@ export function gradeTrackForAge(age: number): GradeTrack {
 
 export type MembershipStatus = 'active' | 'expired' | 'pending'
 export type AttendanceStatus = 'present' | 'late' | 'absent' | 'excused'
-export type RiskLevel = 'healthy' | 'watch' | 'at_risk' | 'critical'
+export type RiskLevel = 'healthy' | 'at_risk'
 export type FollowUpStatus = 'none' | 'flagged' | 'contacted' | 'resolved'
 export type ApplicationStatus = 'submitted' | 'under_review' | 'withdrawn'
 export type SessionType = 'regular' | 'weapons' | 'kids' | 'seminar' | 'external'

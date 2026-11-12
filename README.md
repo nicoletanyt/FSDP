@@ -68,8 +68,13 @@ server secrets with `VITE_`.
   keep their current passwords. Email/password fields start empty on reload.
 - Staff: `/staff/login`; instructor dashboard: `/instructor`; administrator
   dashboard: `/admin`, including instructor account creation.
-- Instructor passwords are generated server-side and displayed to the creating
-  administrator after success. Save them then; they are not saved to browser storage.
+- Instructor passwords are generated server-side and sent in a plain-text login
+  email (staff login URL, email username, password) through EmailJS. The admin
+  page shows only that the account was created; it does not display the password
+  or email-delivery status. EmailJS acceptance is not a delivery guarantee. If
+  sending fails, the account still exists: do not create it again. An account
+  created with a non-deliverable email needs an authorized Auth password reset
+  before its owner can sign in. The password is not saved to browser storage.
 - After the instructor-availability migration is applied, trusted instructor
   profile creation also inserts a linked `public.instructors` row (`user_id`
   references the account). Existing unlinked instructors can open their calendar;
@@ -326,6 +331,20 @@ npx vercel@latest deploy --prod
 ```
 
 ### Edge Functions — Supabase Cloud
+
+Instructor provisioning requires `EMAILJS_SERVICE_ID`, `EMAILJS_TEMPLATE_ID`,
+and `EMAILJS_PUBLIC_KEY` before an account can be created. The EmailJS template
+must have To `{{to_email}}`, Subject `{{email_subject}}`, and a **plain-text**
+body `{{email_body}}` (no BCC field). `create-instructor` creates the account
+once, then makes one email attempt; if the provider rejects it or the outcome
+is uncertain, the account still exists and must not be created again. Apply
+`20261112114518_instructor_account_email_template.sql`
+before deploying the updated function. Administrators can then edit the
+**Instructor account creation** subject and body on `/admin/email-templates`.
+Keep `{{first_name}}`, `{{login_url}}`, `{{email}}`, and `{{password}}` in the body;
+the function resolves them only when creating an account. This saved copy is
+separate from the EmailJS transport template. A missing or invalid saved
+template blocks account creation. Never log or persist the generated password.
 
 Replace `YOUR_PROJECT_REF` with your Supabase project reference. Configure
 `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID`,

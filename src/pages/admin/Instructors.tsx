@@ -49,7 +49,7 @@ export default function Instructors() {
   const [error, setError] = useState('')
   const [query, setQuery] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
-  const [createdAccount, setCreatedAccount] = useState<InstructorAccount | null>(null)
+  const [createdEmail, setCreatedEmail] = useState<string | null>(null)
 
   const reload = useCallback(async () => {
     setLoading(true)
@@ -77,7 +77,7 @@ export default function Instructors() {
   )
 
   function handleCreated(account: InstructorAccount) {
-    setCreatedAccount(account)
+    setCreatedEmail(account.email)
     setCreateOpen(false)
     void reload()
   }
@@ -107,7 +107,7 @@ export default function Instructors() {
             <DialogHeader>
               <DialogTitle>Create instructor</DialogTitle>
               <DialogDescription>
-                Enter their details. A secure password will be generated and shown after creation.
+                An email with the instructor’s login details will be attempted after account creation.
               </DialogDescription>
             </DialogHeader>
             {createOpen && <CreateInstructorForm onCreated={handleCreated} />}
@@ -115,31 +115,24 @@ export default function Instructors() {
         </Dialog>
       </div>
 
-      {createdAccount && (
-        <Alert role="status" className="border-success/30 bg-success/10 p-4">
-          <CheckCircle2 className="size-5 text-success" aria-hidden="true" />
-          <AlertDescription className="min-w-0 space-y-3 text-foreground">
-            <div className="flex items-start justify-between gap-3">
-              <p className="font-medium">Instructor account created for {createdAccount.email}.</p>
-              <Button
-                type="button"
-                size="icon-sm"
-                variant="ghost"
-                className="-m-2 shrink-0"
-                aria-label="Dismiss generated password"
-                onClick={() => setCreatedAccount(null)}
-              >
-                <X className="size-4" aria-hidden="true" />
-              </Button>
-            </div>
-            <div>
-              <p className="mb-1 font-medium">Generated password</p>
-              <code className="block select-all break-all rounded-md bg-background p-3 text-foreground">
-                {createdAccount.password}
-              </code>
-            </div>
-            <p>Save and share this password securely. It won’t be shown again after you dismiss this alert or leave the page. The instructor can sign in at /staff/login.</p>
+      {createdEmail && (
+        <Alert role="status" className="flex min-h-12 items-center gap-2 border-success/30 bg-success/10 px-3 py-2 text-left">
+          <span className="flex shrink-0 items-center" aria-hidden="true">
+            <CheckCircle2 className="size-5 text-success" />
+          </span>
+          <AlertDescription className="min-w-0 flex-1 text-left text-foreground">
+            <p className="font-medium">Instructor account created for {createdEmail}.</p>
           </AlertDescription>
+          <Button
+            type="button"
+            size="icon-sm"
+            variant="ghost"
+            className="shrink-0"
+            aria-label="Dismiss account creation notice"
+            onClick={() => setCreatedEmail(null)}
+          >
+            <X className="size-4" aria-hidden="true" />
+          </Button>
         </Alert>
       )}
 

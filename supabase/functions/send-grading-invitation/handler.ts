@@ -81,7 +81,7 @@ export async function handleRequest(request: Request): Promise<Response> {
     const [{ data: schedule, error: scheduleError }, { data: wording, error: wordingError }] = await Promise.all([
       db.from('gradings').select('event_id,track,grading_date,application_opens_on,application_deadline,events!inner(name,status,centres(name,address))')
         .eq('official_schedule', true).eq('application_status', 'open').eq('events.status', 'scheduled'),
-      db.from('grading_invitation_settings').select('subject,body').eq('id', true).single(),
+      db.from('admin_email_templates').select('subject,body').eq('id', 'grading_invitation').single(),
     ])
     if (scheduleError || wordingError || !wording) throw scheduleError ?? wordingError ?? new Error('Invitation wording unavailable')
     const today = singaporeToday()

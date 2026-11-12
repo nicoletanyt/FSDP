@@ -153,7 +153,7 @@ Deno.test('admin grading preview does not send; confirmation sends one email wit
       application_deadline: '2026-11-29', reporting_release_on: '2026-12-06', reporting_time: null,
       events: { name: 'Adult grading', centres: { name: 'ASK Headquarters Dojo', address: '9 Sin Ming Road' } },
     }] : [])])
-    if (url.pathname === '/rest/v1/grading_invitation_settings') return Response.json({
+    if (url.pathname === '/rest/v1/admin_email_templates') return Response.json({
       subject: savedSubject,
       body: invitationBody,
     })

@@ -15,6 +15,9 @@ verify_jwt = false
 [functions.send-grading-invitation]
 verify_jwt = false
 
+[functions.send-attendance-notice]
+verify_jwt = false
+
 [functions.create-grading-checkout]
 verify_jwt = false
 

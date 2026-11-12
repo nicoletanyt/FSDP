@@ -42,9 +42,7 @@ export function StatusBadge({
 
 const riskLabels: Record<RiskLevel, { label: string; tone: BadgeTone }> = {
   healthy: { label: 'Healthy', tone: 'success' },
-  watch: { label: 'Watch', tone: 'warning' },
   at_risk: { label: 'At risk', tone: 'danger' },
-  critical: { label: 'Critical', tone: 'danger' },
 }
 
 export function RiskBadge({ level }: { level: RiskLevel }) {

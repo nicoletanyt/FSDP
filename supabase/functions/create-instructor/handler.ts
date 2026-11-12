@@ -7,6 +7,16 @@ function requiredEnv(name: string) {
   return value
 }
 
+const instructorPlaceholders = ['first_name', 'login_url', 'email', 'password'] as const
+
+function validInstructorTemplate(template: { subject: string; body: string } | null): template is { subject: string; body: string } {
+  if (!template || typeof template.subject !== 'string' || typeof template.body !== 'string' ||
+    !template.subject.trim() || template.subject.length > 150 || /[\r\n]/.test(template.subject) ||
+    !template.body.trim() || template.body.length > 5000) return false
+  return instructorPlaceholders.every(key => template.body.includes(`{{${key}}}`)) &&
+    !template.body.replace(/\{\{(first_name|login_url|email|password)\}\}/g, '').match(/\{\{[^}]*\}\}/)
+}
+
 export async function handleRequest(request: Request): Promise<Response> {
   let headers: Record<string, string> = {}
 
@@ -112,10 +122,23 @@ export async function handleRequest(request: Request): Promise<Response> {
     const admin = createClient(url, requiredEnv('SUPABASE_SERVICE_ROLE_KEY'), {
       auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
     })
-    const { data: grade, error: gradeError } = await admin.from('grades').select('id, is_ranked').eq('id', gradeId).maybeSingle()
-    if (gradeError) return Response.json({ error: 'Unable to verify the grade. Please try again.' }, { status: 500, headers })
-    // Instructors must hold a ranked grade; 'Unranked' is not an instructor grade.
-    if (!grade || grade.is_ranked !== true) return Response.json({ error: 'Select a valid grade.' }, { status: 400, headers })
+    if (gradeId) {
+      const { data: grade, error: gradeError } = await admin.from('grades').select('id, is_ranked').eq('id', gradeId).maybeSingle()
+      if (gradeError) return Response.json({ error: 'Unable to verify the grade. Please try again.' }, { status: 500, headers })
+      if (!grade || grade.is_ranked !== true) return Response.json({ error: 'Select a valid grade.' }, { status: 400, headers })
+    }
+    // Do not create an account if the delivery pipeline cannot even be attempted.
+    const serviceId = Deno.env.get('EMAILJS_SERVICE_ID')?.trim()
+    const templateId = Deno.env.get('EMAILJS_TEMPLATE_ID')?.trim()
+    const publicKey = Deno.env.get('EMAILJS_PUBLIC_KEY')?.trim()
+    if (!serviceId || !templateId || !publicKey) {
+      return Response.json({ error: 'Instructor email delivery is not configured. No account was created.' }, { status: 503, headers })
+    }
+    const { data: template, error: templateError } = await admin.from('admin_email_templates')
+      .select('subject,body').eq('id', 'instructor_account').single()
+    if (templateError || !validInstructorTemplate(template)) {
+      return Response.json({ error: 'Instructor login email template is unavailable. No account was created.' }, { status: 503, headers })
+    }
     const { data, error } = await admin.auth.admin.createUser({
       email,
       password,
@@ -135,7 +158,40 @@ export async function handleRequest(request: Request): Promise<Response> {
       }, { status: 400, headers })
     }
 
-    return Response.json({ id: data.user.id, email: data.user.email, password }, {
+    // The account already exists at this point. A rejected or ambiguous provider
+    // response must not be presented as a provisioning failure and retried.
+    const instructorEmail = data.user.email ?? email
+    const values: Record<(typeof instructorPlaceholders)[number], string> = {
+      first_name: firstName,
+      login_url: new URL('/staff/login', requiredEnv('APP_URL')).toString(),
+      email: instructorEmail,
+      password,
+    }
+    const emailBody = template.body.replace(/\{\{(first_name|login_url|email|password)\}\}/g,
+      (_, key: (typeof instructorPlaceholders)[number]) => values[key])
+    let emailStatus: 'accepted' | 'failed' | 'uncertain' = 'uncertain'
+    try {
+      const response = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(15000),
+        body: JSON.stringify({
+          service_id: serviceId, template_id: templateId, user_id: publicKey,
+          ...(Deno.env.get('EMAILJS_PRIVATE_KEY') ? { accessToken: Deno.env.get('EMAILJS_PRIVATE_KEY') } : {}),
+          template_params: {
+            to_email: instructorEmail,
+            email_subject: template.subject,
+            email_body: emailBody,
+          },
+        }),
+      })
+      emailStatus = response.ok ? 'accepted' : 'failed'
+    } catch {
+      // The provider may have received the request; never retry automatically.
+      emailStatus = 'uncertain'
+    }
+
+    return Response.json({ id: data.user.id, email: instructorEmail, password, email_status: emailStatus }, {
       status: 201, headers,
     })
   } catch {

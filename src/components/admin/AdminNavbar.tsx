@@ -67,6 +67,7 @@ export default function AdminNavbar() {
   const { profile } = useAuth()
   const gradingActive = isActive(pathname, '/admin/grading')
   const instructorsActive = isActive(pathname, '/admin/instructors')
+  const templatesActive = isActive(pathname, '/admin/email-templates')
 
   return (
     <header className="sticky top-0 z-40 shrink-0 border-b border-border bg-background/90 backdrop-blur">
@@ -182,6 +183,13 @@ export default function AdminNavbar() {
                 )}
               >
                 Instructors
+              </NavigationMenuLink>
+            </NavigationMenuItem>
+
+            <NavigationMenuItem>
+              <NavigationMenuLink render={<Link to="/admin/email-templates" />} active={templatesActive} closeOnClick
+                className={cn(navigationMenuTriggerStyle(), 'data-active:bg-primary/10 data-active:text-primary data-active:hover:bg-primary/10 data-active:focus:bg-primary/10')}>
+                Email templates
               </NavigationMenuLink>
             </NavigationMenuItem>
           </NavigationMenuList>

@@ -8,6 +8,9 @@ Deno.test('Instructor provisioning authorization', async (test) => {
     SUPABASE_URL: 'https://project.supabase.co',
     SUPABASE_ANON_KEY: 'unit-test-public-key',
     SUPABASE_SERVICE_ROLE_KEY: 'unit-test-service-role-key',
+    EMAILJS_SERVICE_ID: 'test-service',
+    EMAILJS_TEMPLATE_ID: 'test-template',
+    EMAILJS_PUBLIC_KEY: 'test-public-key',
   }
   const originalEnvironment = new Map(
     Object.keys(environment).map((name) => [name, Deno.env.get(name)]),
@@ -19,14 +22,26 @@ Deno.test('Instructor provisioning authorization', async (test) => {
   let missingProfile = false
   let creationFails = false
   let gradeExists = true
+  let mailStatus = 200
+  let mailUnavailable = false
+  let templateAvailable = true
+  let template = {
+    subject: 'Your Aikido Shinju-Kai instructor login',
+    body: 'Hello {{first_name}},\nSign in: {{login_url}}\nUsername: {{email}}\nPassword: {{password}}',
+  }
 
   for (const [name, value] of Object.entries(environment)) Deno.env.set(name, value)
 
   globalThis.fetch = async (input, init) => {
     const request = new Request(input, init)
     const url = new URL(request.url)
-    assert.equal(url.origin, environment.SUPABASE_URL)
     const text = await request.text()
+    if (url.hostname === 'api.emailjs.com') {
+      calls.push({ path: url.pathname, authorization: null, body: text ? JSON.parse(text) : null })
+      if (mailUnavailable) throw new Error('EmailJS outcome unavailable')
+      return new Response(mailStatus === 200 ? 'OK' : 'Rejected', { status: mailStatus })
+    }
+    assert.equal(url.origin, environment.SUPABASE_URL)
     calls.push({
       path: url.pathname,
       authorization: request.headers.get('authorization'),
@@ -51,6 +66,11 @@ Deno.test('Instructor provisioning authorization', async (test) => {
       assert.equal(request.headers.get('authorization'), `Bearer ${environment.SUPABASE_SERVICE_ROLE_KEY}`)
       const id = url.searchParams.get('id')?.replace(/^eq\./, '')
       return Response.json(gradeExists ? { id, is_ranked: id !== 'unranked' } : null)
+    }
+    if (url.pathname === '/rest/v1/admin_email_templates') {
+      assert.equal(request.headers.get('authorization'), `Bearer ${environment.SUPABASE_SERVICE_ROLE_KEY}`)
+      assert.equal(url.searchParams.get('id'), 'eq.instructor_account')
+      return templateAvailable ? Response.json(template) : Response.json({ message: 'Missing template' }, { status: 406 })
     }
     assert.equal(url.pathname, '/auth/v1/admin/users')
     assert.equal(request.method, 'POST')
@@ -115,6 +135,13 @@ Deno.test('Instructor provisioning authorization', async (test) => {
       assert.deepEqual(body.user_metadata, { first_name: 'New', last_name: 'Instructor' })
       assert.equal(body.email, 'instructor@example.test')
       assert.equal(body.email_confirm, true)
+      const mail = calls.find((call) => call.path === '/api/v1.0/email/send')!
+      const payload = mail.body as Record<string, unknown>
+      const params = payload.template_params as Record<string, string>
+      assert.equal(payload.template_id, environment.EMAILJS_TEMPLATE_ID)
+      assert.equal(params.to_email, 'instructor@example.test')
+      assert.equal(params.email_subject, 'Your Aikido Shinju-Kai instructor login')
+      assert.ok(!('bcc_emails' in params))
       const result = await response.json()
       assert.equal(result.id, 'instructor-id')
       assert.equal(result.email, 'instructor@example.test')
@@ -124,7 +151,74 @@ Deno.test('Instructor provisioning authorization', async (test) => {
       assert.match(result.password, /[A-Z]/)
       assert.match(result.password, /\d/)
       assert.match(result.password, /[^a-zA-Z0-9]/)
+      assert.equal(result.email_status, 'accepted')
+      assert.ok(params.email_body.includes('https://app.example.test/staff/login'))
+      assert.ok(params.email_body.includes('Username: instructor@example.test'))
+      assert.ok(params.email_body.includes(`Password: ${result.password}`))
       assert.equal(response.headers.get('cache-control'), 'no-store')
+    })
+
+    await test.step('uses edited administrator wording and substitutes account details once', async () => {
+      calls.length = 0
+      template = {
+        subject: 'Your new staff access',
+        body: 'Hi {{first_name}} — {{login_url}} | {{email}} | {{password}}',
+      }
+      const response = await handleRequest(request())
+      assert.equal(response.status, 201)
+      const { password } = await response.json()
+      const mail = calls.find(call => call.path === '/api/v1.0/email/send')!
+      const params = (mail.body as { template_params: { email_subject: string; email_body: string } }).template_params
+      assert.equal(params.email_subject, template.subject)
+      assert.equal(params.email_body, `Hi New — https://app.example.test/staff/login | instructor@example.test | ${password}`)
+      template = {
+        subject: 'Your Aikido Shinju-Kai instructor login',
+        body: 'Hello {{first_name}},\nSign in: {{login_url}}\nUsername: {{email}}\nPassword: {{password}}',
+      }
+    })
+
+    await test.step('does not create an account when the instructor template is missing or invalid', async () => {
+      calls.length = 0
+      templateAvailable = false
+      const missing = await handleRequest(request())
+      assert.equal(missing.status, 503)
+      assert.ok(!calls.some(call => call.path === '/auth/v1/admin/users'))
+      templateAvailable = true
+      template = { subject: 'Missing password', body: 'Hello {{first_name}} {{login_url}} {{email}}' }
+      calls.length = 0
+      const invalid = await handleRequest(request())
+      assert.equal(invalid.status, 503)
+      assert.ok(!calls.some(call => call.path === '/auth/v1/admin/users'))
+      template = {
+        subject: 'Your Aikido Shinju-Kai instructor login',
+        body: 'Hello {{first_name}},\nSign in: {{login_url}}\nUsername: {{email}}\nPassword: {{password}}',
+      }
+    })
+
+    await test.step('reports rejection or uncertain delivery without hiding the created account', async () => {
+      calls.length = 0
+      mailStatus = 422
+      const rejected = await handleRequest(request())
+      assert.equal(rejected.status, 201)
+      assert.equal((await rejected.json()).email_status, 'failed')
+      assert.equal(calls.filter(call => call.path === '/auth/v1/admin/users').length, 1)
+      mailStatus = 200
+      calls.length = 0
+      mailUnavailable = true
+      const uncertain = await handleRequest(request())
+      assert.equal(uncertain.status, 201)
+      assert.equal((await uncertain.json()).email_status, 'uncertain')
+      assert.equal(calls.filter(call => call.path === '/auth/v1/admin/users').length, 1)
+      mailUnavailable = false
+    })
+
+    await test.step('does not create an account without email delivery configuration', async () => {
+      calls.length = 0
+      Deno.env.delete('EMAILJS_TEMPLATE_ID')
+      const response = await handleRequest(request())
+      assert.equal(response.status, 503)
+      assert.ok(!calls.some(call => call.path === '/auth/v1/admin/users'))
+      Deno.env.set('EMAILJS_TEMPLATE_ID', environment.EMAILJS_TEMPLATE_ID)
     })
 
     await test.step('generates distinct passwords server-side and ignores supplied passwords', async () => {
@@ -237,6 +331,7 @@ Deno.test('Instructor provisioning authorization', async (test) => {
       const errorBody = await response.text()
       assert.ok(!errorBody.includes(String(failedPassword)))
       assert.ok(!('password' in JSON.parse(errorBody)))
+      assert.ok(!calls.some(call => call.path === '/api/v1.0/email/send'))
       creationFails = false
     })
 
