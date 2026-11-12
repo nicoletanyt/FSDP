@@ -26,6 +26,8 @@ const AdminGradingEligibility = lazy(() => import('./pages/admin/GradingEligibil
 const AdminGradingOpportunities = lazy(() => import('./pages/admin/GradingOpportunities'))
 const AdminGradingApplications = lazy(() => import('./pages/admin/GradingApplications'))
 const AdminGradingSyllabus = lazy(() => import('./pages/admin/Syllabus'))
+const AdminGradingDay = lazy(() => import('./pages/admin/GradingDay'))
+const AdminGradingResults = lazy(() => import('./pages/admin/GradingResults'))
 const AdminNotifications = lazy(() => import('./pages/admin/Notifications'))
 const AdminInstructors = lazy(() => import('./pages/admin/Instructors'))
 const AdminProfile = lazy(() => import('./pages/admin/Profile'))
@@ -127,6 +129,9 @@ export default function App() {
                 <Route path="applications" element={<AdminGradingApplications />} />
                 <Route path="syllabus" element={<AdminGradingSyllabus />} />
               </Route>
+              {/* A grading's own pages sit outside the section tabs. */}
+              <Route path="grading/days/:eventId" element={<AdminGradingDay />} />
+              <Route path="grading/days/:eventId/:sessionId" element={<AdminGradingResults />} />
               <Route path="notifications" element={<AdminNotifications />} />
               <Route path="instructors" element={<AdminInstructors />} />
               <Route path="profile" element={<AdminProfile />} />

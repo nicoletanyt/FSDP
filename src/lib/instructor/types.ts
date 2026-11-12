@@ -199,17 +199,18 @@ export interface GradingBatch {
   event_id: EventId
   instructor_id: InstructorId
   track: GradeTrack
-  target_grade_id: string
+  session_id: string
   status: 'draft' | 'submitted'
   version: number
   signature: GradingSignature | null
   submitted_at: Timestamp | null
   updated_at: Timestamp
-  students: { student_id: StudentId; candidate_number: number; name: string; notes: string | null }[]
-  items: { syllabus_item_id: string; category: string; label: string; sort_order: number }[]
+  // Each candidate is graded on their own target grade's techniques only.
+  students: { student_id: StudentId; candidate_number: number; name: string; notes: string | null; target_grade_id: string }[]
+  items: { syllabus_item_id: string; category: string; label: string; sort_order: number; grade_id: string }[]
   results: GradingBatchCell[]
 }
-export interface GradingBatchKey { eventId: EventId; track: GradeTrack; gradeId: string }
+export interface GradingBatchKey { eventId: EventId; sessionId: string }
 export interface GradingBatchSaveInput extends GradingBatchKey {
   requestId: string
   expectedUserId: AuthUserId
@@ -400,8 +401,11 @@ export interface InstructorReferenceData {
 }
 
 // One target grade's own grading session within a grading event.
+// A sorted grading session (time slot) on the calendar; it may hold several grades.
 export interface GradeSessionTime {
-  grade: GradeRow
+  id: string
+  position: number
+  grades: GradeRow[]
   startsAt: Timestamp | null
   endsAt: Timestamp | null
   candidates: number

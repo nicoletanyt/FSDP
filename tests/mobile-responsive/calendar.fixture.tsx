@@ -11,6 +11,7 @@ import InstructorStudents from '../../src/pages/Instructor/InstructorStudents'
 import InstructorStudentDetails from '../../src/pages/Instructor/InstructorStudentDetails'
 import InstructorGradingAssessment from '../../src/pages/Instructor/InstructorGradingAssessment'
 import InstructorGradingSession from '../../src/pages/Instructor/InstructorGradingSession'
+import InstructorGradingDay from '../../src/pages/Instructor/InstructorGradingDay'
 import InstructorProfile from '../../src/pages/Instructor/InstructorProfile'
 import RootLayout from '../../src/layouts/RootLayout'
 import type { Session } from '@supabase/supabase-js'
@@ -95,6 +96,7 @@ function FixtureApp() {
           <Route path="/instructor/assessments/:assessmentId" element={<InstructorGradingAssessment />} />
           <Route path="/instructor/assessments/:eventId/:studentId" element={<InstructorGradingAssessment />} />
           <Route path="/instructor/grading/:eventId" element={<InstructorGradingSession />} />
+          <Route path="/instructor/gradings/:eventId" element={<InstructorGradingDay />} />
           <Route path="/instructor/profile" element={<InstructorProfile />} />
         </Route>
         <Route element={<RootLayout />}><Route path="*" element={<p>Navigation fixture page</p>} /></Route>

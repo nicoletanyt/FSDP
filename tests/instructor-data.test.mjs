@@ -207,25 +207,30 @@ function httpClient(handler, { instructorRecord = instructor } = {}) {
 }
 
 const eventId = '00000000-0000-4000-8000-000000000006'
+const gradingSessionId = '00000000-0000-4000-8000-000000000098'
 const batchExample = {
   id: '00000000-0000-4000-8000-000000000099', event_id: eventId, instructor_id: instructorId,
-  track: 'adult', target_grade_id: 'database-grade', status: 'draft', version: 1,
+  track: 'adult', session_id: gradingSessionId, status: 'draft', version: 1,
   signature: null, submitted_at: null, updated_at: '2026-11-08T00:00:00Z',
-  students: [{ student_id: studentId, candidate_number: 1, name: 'Stored student', notes: null }],
-  items: [{ syllabus_item_id: 'stored-technique', category: 'Basics', label: 'Stored technique', sort_order: 1 }],
+  students: [{ student_id: studentId, candidate_number: 1, name: 'Stored student', notes: null, target_grade_id: 'database-grade' }],
+  items: [{ syllabus_item_id: 'stored-technique', category: 'Basics', label: 'Stored technique', sort_order: 1, grade_id: 'database-grade' }],
   results: [{ student_id: studentId, syllabus_item_id: 'stored-technique', checked: false }],
 }
 
 test('batch reads are account scoped and validate a complete normalized matrix', async () => {
-  const group = { eventId, track: 'adult', gradeId: 'database-grade' }
+  const group = { eventId, sessionId: gradingSessionId }
   const client = httpClient(async (request,url) => {
     assert.equal(url.pathname, '/rest/v1/rpc/get_instructor_grading_batch')
-    assert.deepEqual(await request.json(), { target_event: eventId, target_track: 'adult', target_grade: 'database-grade' })
+    assert.deepEqual(await request.json(), { target_session: gradingSessionId })
     return Response.json(batchExample)
   })
   assert.equal((await client.api.getGradingBatch(group)).results[0].checked, false)
   assert.equal(await httpClient(async () => Response.json(null)).api.getGradingBatch(group),null)
-  for (const value of [{ ...batchExample,instructor_id:otherUserId },{ ...batchExample,results:[] },{ ...batchExample,status:'voided' }]) {
+  // Wrong owner, missing or extra cells, a cell outside the student's grade, another session, an unknown status.
+  const otherGrade = { ...batchExample, items: [...batchExample.items, { syllabus_item_id: 'other', category: 'Basics', label: 'Other', sort_order: 1, grade_id: 'other-grade' }],
+    results: [...batchExample.results, { student_id: studentId, syllabus_item_id: 'other', checked: true }] }
+  for (const value of [{ ...batchExample,instructor_id:otherUserId },{ ...batchExample,results:[] },{ ...batchExample,status:'voided' },
+    otherGrade, { ...batchExample, session_id: otherUserId }]) {
     await assert.rejects(httpClient(async () => Response.json(value)).api.getGradingBatch(group),{code:'invalid_data'})
   }
 })
@@ -244,11 +249,12 @@ test('latest grading lookup is scoped to the instructor and event before restori
 })
 
 test('batch saves send exact versions, signatures and immutable cell payloads and reject mismatched responses', async () => {
-  const input = { eventId, track:'adult', gradeId:'database-grade', requestId:batchExample.id,
-    expectedUserId:userId, expectedVersion:0, cells:batchExample.results, submit:false, signature:null }
+  const input = { eventId, sessionId:gradingSessionId, requestId:batchExample.id,
+    expectedUserId:userId, expectedVersion:0, cells:batchExample.results, comments:[{ student_id:studentId, notes:null }], submit:false, signature:null }
   const client = httpClient(async (request,url) => {
-    assert.equal(url.pathname,'/rest/v1/rpc/save_instructor_grading_batch')
+    assert.equal(url.pathname,'/rest/v1/rpc/save_instructor_grading_batch_with_comments')
     const body=await request.json()
+    assert.equal(body.target_session,gradingSessionId); assert.equal('target_event' in body,false)
     assert.equal(body.expected_user,userId); assert.equal(body.expected_version,0)
     assert.deepEqual(body.cells,batchExample.results); assert.equal(body.examiner_signature,null)
     return Response.json(batchExample)

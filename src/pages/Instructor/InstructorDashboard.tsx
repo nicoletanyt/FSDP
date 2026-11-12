@@ -738,10 +738,10 @@ export default function InstructorDashboard() {
         expandedClassId,
         onSelectDate: selectDay,
         onToggleClass: (event) => {
-            // A grade session block opens that grade's grading checklist.
+            // A session block opens that session's grading checklist.
             const gradeSession = event.gradeSession;
             if (gradeSession) {
-                void navigate(`/instructor/grading/${gradeSession.eventId}?grade=${encodeURIComponent(gradeSession.gradeId)}`);
+                void navigate(`/instructor/grading/${gradeSession.eventId}?session=${encodeURIComponent(gradeSession.sessionId)}`);
                 return;
             }
             if (document.activeElement instanceof HTMLElement) classTriggerRef.current = document.activeElement;

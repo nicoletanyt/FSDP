@@ -35,7 +35,11 @@ export function gradingSessionDates(today = singaporeDate()) {
 
 // Name-based UUID v5, so rerunning for the same date and track reuses the ID.
 export function gradingSessionId(date, track) {
-  const bytes = createHash('sha1').update(uuidNamespace).update(`fsdp/grading-session/v1/${date}/${track}`).digest().subarray(0, 16)
+  return nameUuid(`fsdp/grading-session/v1/${date}/${track}`)
+}
+
+function nameUuid(name) {
+  const bytes = createHash('sha1').update(uuidNamespace).update(name).digest().subarray(0, 16)
   bytes[6] = (bytes[6] & 0x0f) | 0x50
   bytes[8] = (bytes[8] & 0x3f) | 0x80
   const hex = bytes.toString('hex')
@@ -125,9 +129,9 @@ export function buildCandidatePlan({ sessions, students, grades, gradeTracks, pe
   return { roster, applications }
 }
 
-// Give each grade with candidates its own back-to-back slot, in grade order,
-// starting at the session start; the event then spans exactly those slots.
-// Grades without candidates stay unscheduled.
+// Preview how sort_grading_sessions() will sort the applicants once
+// applications close: one back-to-back session per grade with candidates, in
+// grade order, from the event start. The event is sized to span them.
 export function scheduleGradeSessions(sessions, applications, grades, slotMinutes = 30) {
   const order = new Map(grades.map(grade => [grade.id, grade.sort_order]))
   return sessions.map(session => {
@@ -137,14 +141,17 @@ export function scheduleGradeSessions(sessions, applications, grades, slotMinute
     if (!timed.length) return session
     const start = Date.parse(session.event.starts_at)
     const slot = index => new Date(start + index * slotMinutes * 60_000).toISOString()
-    const times = new Map(timed.map((row, index) => [row.grade_id, { starts_at: slot(index), ends_at: slot(index + 1) }]))
     return {
       ...session,
       event: { ...session.event, ends_at: slot(timed.length) },
-      targets: session.targets.map(row => ({ ...row, starts_at: null, ends_at: null, ...times.get(row.grade_id) })),
+      slots: timed.map((row, index) => ({
+        id: nameUuid(`fsdp/grading-session-slot/v1/${session.event.id}/${row.grade_id}`), grading_event_id: session.event.id,
+        position: index + 1, starts_at: slot(index), ends_at: slot(index + 1), grade_id: row.grade_id,
+      })),
     }
   })
 }
+
 
 function requiredEnv(name) {
   const value = process.env[name]?.trim()
@@ -199,9 +206,10 @@ export async function seedGradingSessions({ today = singaporeDate(), yes = false
     examiners: examiners.map(row => `${row.first_name} ${row.last_name}`.trim()),
     ...(skippedExaminers.length ? { skippedExaminersWithoutLogin: skippedExaminers } : {}),
     willDelete: { gradingSessions: existing.length, gradingBatches: batchIds.length, ...affected },
-    willCreate: sessions.map(({ event, grading, targets, panel }) => ({
+    willCreate: sessions.map(({ event, grading, targets, panel, slots }) => ({
       name: event.name, date: grading.grading_date, track: grading.track, startsAt: event.starts_at, endsAt: event.ends_at,
-      gradeSessions: targets.filter(row => row.starts_at).map(row => `${row.grade_id} ${singaporeTime(row.starts_at)}–${singaporeTime(row.ends_at)}`),
+      // What sorting will produce once applications close; nothing is sorted yet.
+      sessionsAfterSorting: (slots ?? []).map(row => `Session ${row.position}: ${row.grade_id} ${singaporeTime(row.starts_at)}–${singaporeTime(row.ends_at)}`),
       targetGrades: targets.length, panel: panel.length,
       candidates: Object.fromEntries(Object.entries(Object.groupBy(
         candidates.applications.filter(row => row.grading_event_id === event.id), row => row.target_grade_id))
@@ -229,6 +237,8 @@ export async function seedGradingSessions({ today = singaporeDate(), yes = false
   checked(await db.from('gradings').insert(sessions.map(row => row.grading)), 'Grading insertion')
   checked(await db.from('grading_target_grades').insert(sessions.flatMap(row => row.targets)), 'Target-grade insertion')
   checked(await db.from('grading_panel_members').insert(sessions.flatMap(row => row.panel)), 'Panel insertion')
+  // Seeded gradings are still open for applications, so they have no sessions:
+  // an administrator sorts candidates into sessions once applications close.
   if (candidates.roster.length) {
     checked(await db.from('event_students').insert(candidates.roster), 'Roster insertion')
     checked(await db.from('grading_applications').insert(candidates.applications), 'Application insertion')

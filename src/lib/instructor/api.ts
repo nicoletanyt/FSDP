@@ -250,15 +250,14 @@ export function createInstructorApi(client: InstructorClient) {
     async getGradingBatch(key: GradingBatchKey, signal?: AbortSignal) {
       const identity = await getCurrentInstructor(signal)
       const eventId = parseEntityId(key.eventId, 'event')
-      if (!['children', 'adult'].includes(key.track) || !key.gradeId) invalidRequest('Choose a grading track and target grade.')
+      const sessionId = parseEntityId(key.sessionId, 'record')
       const value = await requestInstructorData(
-        () => cancellable(client.rpc('get_instructor_grading_batch', {
-          target_event: eventId, target_track: key.track, target_grade: key.gradeId,
-        }), signal), 'Unable to load your grading draft. Please retry.', signal,
+        () => cancellable(client.rpc('get_instructor_grading_batch', { target_session: sessionId }), signal),
+        'Unable to load your grading draft. Please retry.', signal,
       )
       if (value === null) return null
       const batch = decodeGradingBatch(value)
-      if (batch.event_id !== eventId || batch.instructor_id !== identity.instructorId || batch.track !== key.track || batch.target_grade_id !== key.gradeId) {
+      if (batch.event_id !== eventId || batch.instructor_id !== identity.instructorId || batch.session_id !== sessionId) {
         throw new InstructorDataError('invalid_data', 'The grading batch does not match your account or selected group.')
       }
       return batch
@@ -267,7 +266,7 @@ export function createInstructorApi(client: InstructorClient) {
     async saveGradingBatch(input: GradingBatchSaveInput) {
       const identity = await getCurrentInstructor()
       if (identity.userId !== input.expectedUserId) throw new InstructorDataError('forbidden', 'Your account changed. Reopen the grading session.')
-      if (!['children', 'adult'].includes(input.track) || !input.gradeId || !Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 0
+      if (!input.sessionId || !Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 0
         || typeof input.submit !== 'boolean' || !Array.isArray(input.cells) || !input.cells.length
         || input.cells.some(c => typeof c.checked !== 'boolean' || !c.syllabus_item_id)
         || new Set(input.cells.map(c => JSON.stringify([c.student_id, c.syllabus_item_id]))).size !== input.cells.length
@@ -275,16 +274,15 @@ export function createInstructorApi(client: InstructorClient) {
         || new Set(input.comments.map(c => c.student_id)).size !== input.comments.length) invalidRequest('Enter a complete grading checklist.')
       const result = decodeGradingBatch(await rpc('save_instructor_grading_batch_with_comments', {
         request_id: parseEntityId(input.requestId, 'grading-request'), expected_user: input.expectedUserId,
-        target_event: parseEntityId(input.eventId, 'event'), target_track: input.track, target_grade: input.gradeId,
-        expected_version: input.expectedVersion,
+        target_session: parseEntityId(input.sessionId, 'record'), expected_version: input.expectedVersion,
         cells: input.cells.map(c => ({ ...c, student_id: parseEntityId(c.student_id, 'student') })),
         comments: input.comments.map(c => ({ ...c, student_id: parseEntityId(c.student_id, 'student') })),
         submit: input.submit, examiner_signature: input.signature === null ? null : decodeGradingSignature(input.signature),
       }, undefined, 'Unable to save your grading batch. Please retry.'))
       const expected = new Map(input.cells.map(c => [JSON.stringify([c.student_id, c.syllabus_item_id]), c.checked]))
       const expectedComments = new Map(input.comments.map(c => [c.student_id, c.notes]))
-      if (result.event_id !== input.eventId || result.instructor_id !== identity.instructorId || result.track !== input.track
-        || result.target_grade_id !== input.gradeId || result.version !== input.expectedVersion + 1
+      if (result.event_id !== input.eventId || result.instructor_id !== identity.instructorId
+        || result.session_id !== input.sessionId || result.version !== input.expectedVersion + 1
         || result.status !== (input.submit ? 'submitted' : 'draft') || result.results.length !== expected.size
         || result.results.some(c => expected.get(JSON.stringify([c.student_id, c.syllabus_item_id])) !== c.checked)
         || result.students.length !== expectedComments.size || result.students.some(s => !expectedComments.has(s.student_id) || expectedComments.get(s.student_id) !== s.notes)) {

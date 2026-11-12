@@ -91,21 +91,25 @@ export function decodeGradingSignature(value: unknown): GradingSignature {
 export function decodeGradingBatch(value: unknown): GradingBatch {
   const source = object(value)
   const result = row<GradingBatch>({
-    id: uuid, event_id: eventId, instructor_id: instructorId, track, target_grade_id: text,
+    id: uuid, event_id: eventId, instructor_id: instructorId, track, session_id: uuid,
     status: enumeration('draft', 'submitted'), version: count,
     signature: nullable(decodeGradingSignature), submitted_at: nullable(timestamp), updated_at: timestamp,
-    students: v => array(v, row({ student_id: studentId, candidate_number: count, name: text, notes: nullable(text) })),
-    items: v => array(v, row({ syllabus_item_id: text, category: text, label: text, sort_order: count })),
+    students: v => array(v, row({ student_id: studentId, candidate_number: count, name: text, notes: nullable(text), target_grade_id: text })),
+    items: v => array(v, row({ syllabus_item_id: text, category: text, label: text, sort_order: count, grade_id: text })),
     results: v => array(v, row({ student_id: studentId, syllabus_item_id: text, checked: boolean })),
   })(source)
   const students = new Set(result.students.map(s => s.student_id))
   const items = new Set(result.items.map(i => i.syllabus_item_id))
+  // One cell per candidate per technique of their own grade.
+  const itemGrade = new Map(result.items.map(i => [i.syllabus_item_id, i.grade_id]))
+  const studentGrade = new Map(result.students.map(s => [s.student_id, s.target_grade_id]))
+  const expectedCells = result.students.reduce((sum, s) => sum + result.items.filter(i => i.grade_id === s.target_grade_id).length, 0)
   if (!result.version || !students.size || !items.size || students.size !== result.students.length || items.size !== result.items.length
     || result.students.some(s => s.candidate_number < 1)
     || new Set(result.students.map(s => s.candidate_number)).size !== students.size
-    || result.results.length !== students.size * items.size
+    || result.results.length !== expectedCells
     || new Set(result.results.map(r => JSON.stringify([r.student_id, r.syllabus_item_id]))).size !== result.results.length
-    || result.results.some(r => !students.has(r.student_id) || !items.has(r.syllabus_item_id))
+    || result.results.some(r => !students.has(r.student_id) || !items.has(r.syllabus_item_id) || itemGrade.get(r.syllabus_item_id) !== studentGrade.get(r.student_id))
     || (result.status === 'submitted' ? !result.signature || !result.submitted_at : result.signature !== null || result.submitted_at !== null)) return invalid()
   return result
 }
@@ -255,18 +259,20 @@ export function decodeCalendarEntry(value: unknown): CalendarEntry {
   }
   const classType = classRow ? nullable(decodeClassType)(classRow.class_type) : null
   if (classRow && classType && classRow.class_type_id !== classType.id) return invalid()
-  const sessions = source.grading === null ? [] : array(object(source.grading).target_grades, item => {
-    const target = object(item)
-    const grade = nullable(decodeGrade)(target.grade)
-    if (!grade) return null
-    // Older responses carry only the grade; times and counts are optional.
-    const startsAt = target.starts_at == null ? null : timestamp(target.starts_at)
-    const endsAt = target.ends_at == null ? null : timestamp(target.ends_at)
+  const targetGrades = source.grading === null ? [] : array(object(source.grading).target_grades,
+    item => nullable(decodeGrade)(object(item).grade)).filter(grade => grade !== null)
+  // Sorted sessions come only from the calendar function; table reads have none.
+  const sessionSource = source.grading === null ? undefined : object(source.grading).sessions
+  const sessions = sessionSource == null ? [] : array(sessionSource, item => {
+    const session = object(item)
+    const startsAt = session.starts_at == null ? null : timestamp(session.starts_at)
+    const endsAt = session.ends_at == null ? null : timestamp(session.ends_at)
     if ((startsAt === null) !== (endsAt === null)) return invalid()
-    return { grade, startsAt, endsAt, candidates: target.candidates == null ? 0 : count(target.candidates) }
-  }).filter(session => session !== null)
+    return { id: uuid(session.id), position: count(session.position), grades: array(session.grades, decodeGrade),
+      startsAt, endsAt, candidates: count(session.candidates) }
+  })
   if (source.on_panel != null && typeof source.on_panel !== 'boolean') return invalid()
-  return { event, centre, classType, grading, targetGrades: sessions.map(session => session.grade),
+  return { event, centre, classType, grading, targetGrades,
     gradeSessions: sessions, onPanel: source.on_panel === true, seminar, workshop, rosterCount: participants[0] }
 }
 

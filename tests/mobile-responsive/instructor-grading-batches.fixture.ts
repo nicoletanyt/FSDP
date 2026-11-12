@@ -5,6 +5,9 @@ import { InstructorDataError } from '../../src/lib/instructor/errors'
 
 declare global { interface Window { gradingBatchRequestsFixture: GradingBatchSaveInput[] } }
 const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
+// The one sorted session every fixture grading has, for the stored target grade.
+export const fixtureSessionId = uuid(901)
+const fixtureGradeId = 'stored-target-grade'
 
 export function createGradingBatchFixture(account: string, mode: string | null, getApi: () => InstructorApi): Pick<InstructorApi, 'getGradingBatch' | 'getLatestGradingBatch' | 'saveGradingBatch' | 'getGradingDay'> {
   const key = `test-only-grading-batches:${account}`
@@ -14,16 +17,17 @@ export function createGradingBatchFixture(account: string, mode: string | null, 
   const instructorId = uuid(account === 'audit' ? 1 : 2) as InstructorId
   window.gradingBatchRequestsFixture = []
   return {
-    // Fixture gradings have no applications: every rostered student is a
-    // candidate for every grade, matching how fixture saves snapshot the roster.
-    // They also have no track, so the grading day grades the children's track.
+    // Fixture gradings have no applications: every rostered student applies for
+    // the stored target grade and has already been sorted into one session. They
+    // also have no track, so the grading day grades the children's track.
     async getGradingDay(eventId, signal) {
       const api = getApi()
       const controller = signal ?? new AbortController().signal
       const roster = await api.getAttendanceRoster(eventId as Parameters<InstructorApi['getAttendanceRoster']>[0], controller)
       const reference = await api.getReferenceData(controller)
       const event = roster.session.event
-      const candidates = roster.entries.map(({ record, student }) => ({ studentId: student.student.id,
+      const target = reference.grades.find(grade => grade.id === fixtureGradeId) ?? reference.grades[0]
+      const candidates = roster.entries.map(({ record, student }) => ({ applicationId: `application-${student.student.id}`, studentId: student.student.id,
         name: [student.student.first_name, student.student.last_name].filter(Boolean).join(' ') || student.student.email,
         memberNo: null, candidateNumber: record.candidate_number ?? null, currentGrade: null }))
       return { eventId: event.id, name: event.name, status: event.status, track: roster.session.grading?.track ?? 'children',
@@ -31,7 +35,9 @@ export function createGradingBatchFixture(account: string, mode: string | null, 
         startsAt: event.starts_at, endsAt: event.ends_at, reportingTime: null, isChief: true,
         centre: { name: roster.session.centre?.name ?? 'Centre', address: '' },
         panel: [{ instructorId, name: 'Fixture examiner', isChief: true }],
-        grades: reference.grades.map(grade => ({ grade, candidates, myBatch: null })) }
+        applicationDeadline: '2026-11-01', gradingStarted: false,
+        students: candidates.map(candidate => ({ ...candidate, targetGrade: target, sessionId: fixtureSessionId })),
+        sessions: [{ id: fixtureSessionId, position: 1, startsAt: null, endsAt: null, grades: [{ grade: target, candidates }], myBatch: null }] }
     },
     async getLatestGradingBatch(eventId, signal) {
       await new Promise(resolve => setTimeout(resolve, 30))
@@ -42,7 +48,7 @@ export function createGradingBatchFixture(account: string, mode: string | null, 
     async getGradingBatch(group, signal) {
       await new Promise(resolve => setTimeout(resolve, mode === 'batch-loading' ? 1500 : 30))
       signal?.throwIfAborted()
-      return structuredClone(batches.get(JSON.stringify([group.eventId, group.track, group.gradeId])) ?? null)
+      return structuredClone(batches.get(JSON.stringify([group.eventId, group.sessionId])) ?? null)
     },
     async saveGradingBatch(input) {
       window.gradingBatchRequestsFixture.push(structuredClone(input))
@@ -53,7 +59,7 @@ export function createGradingBatchFixture(account: string, mode: string | null, 
         if (receipt.input !== JSON.stringify(input)) throw new InstructorDataError('conflict', 'Request changed.')
         return structuredClone(receipt.result)
       }
-      const batchKey = JSON.stringify([input.eventId, input.track, input.gradeId]), existing = batches.get(batchKey)
+      const batchKey = JSON.stringify([input.eventId, input.sessionId]), existing = batches.get(batchKey)
       if (mode === 'batch-error' && !failed) { failed = true; throw new InstructorDataError('request_failed', 'Grading could not be saved. Please retry.') }
       if (mode === 'batch-conflict' && !failed && existing) {
         failed = true; batches.set(batchKey, { ...existing, version: existing.version + 1 })
@@ -64,14 +70,15 @@ export function createGradingBatchFixture(account: string, mode: string | null, 
       const reference = await getApi().getReferenceData()
       const batch: GradingBatch = {
         id: existing?.id ?? crypto.randomUUID(), event_id: input.eventId, instructor_id: instructorId,
-        track: input.track, target_grade_id: input.gradeId, version: input.expectedVersion + 1,
+        track: 'children', session_id: input.sessionId, version: input.expectedVersion + 1,
         status: input.submit ? 'submitted' : 'draft', signature: input.signature, submitted_at: input.submit ? new Date().toISOString() : null,
         updated_at: new Date().toISOString(),
         students: (existing?.students ?? roster.entries.map(({ student, record }, index) => ({ student_id: student.student.id,
-          name: [student.student.first_name, student.student.last_name].join(' '), candidate_number: record.candidate_number ?? index + 1, notes: null })))
+          name: [student.student.first_name, student.student.last_name].join(' '), candidate_number: record.candidate_number ?? index + 1, notes: null,
+          target_grade_id: fixtureGradeId })))
           .map(student => ({ ...student, notes: input.comments.find(comment => comment.student_id === student.student_id)?.notes ?? null })),
-        items: existing?.items ?? reference.syllabusItems.filter(i => i.track === input.track && i.grade_id === input.gradeId).map(i => ({
-          syllabus_item_id: i.id, category: i.category, label: i.label, sort_order: i.sort_order,
+        items: existing?.items ?? reference.syllabusItems.filter(i => i.track === 'children' && i.grade_id === fixtureGradeId).map(i => ({
+          syllabus_item_id: i.id, category: i.category, label: i.label, sort_order: i.sort_order, grade_id: i.grade_id,
         })),
         results: structuredClone(input.cells),
       }

@@ -102,7 +102,7 @@ test('each session takes at most four grades, preferring those with the most eli
   assert.deepEqual([...new Set(plan.applications.map(row => row.target_grade_id))].sort(), ['g1', 'g2', 'g5', 'g6'])
 })
 
-test('grade sessions get back-to-back 30-minute slots in grade order and the event spans them', async () => {
+test('sorting gives each grade a back-to-back 30-minute session in grade order and the event spans them', async () => {
   const { scheduleGradeSessions } = await import('../scripts/seed-grading-sessions.mjs')
   const { sessions } = buildGradingSessionPlan(options)
   const [first] = sessions
@@ -112,13 +112,18 @@ test('grade sessions get back-to-back 30-minute slots in grade order and the eve
     { grading_event_id: first.event.id, target_grade_id: 'blue-6th-kyu' },
   ]
   const grades = [{ id: 'blue-6th-kyu', sort_order: 7 }, { id: '1st-dan', sort_order: 17 }]
-  const [scheduled, untouched] = scheduleGradeSessions(sessions, applications, grades)
-  const slot = id => scheduled.targets.find(row => row.grade_id === id)
-  assert.equal(Date.parse(slot('blue-6th-kyu').starts_at), Date.parse('2026-11-14T10:00:00+08:00'))
-  assert.equal(Date.parse(slot('blue-6th-kyu').ends_at), Date.parse('2026-11-14T10:30:00+08:00'))
-  assert.equal(Date.parse(slot('1st-dan').starts_at), Date.parse('2026-11-14T10:30:00+08:00'))
+  const scheduledSessions = scheduleGradeSessions(sessions, applications, grades)
+  const [scheduled, untouched] = scheduledSessions
+  assert.deepEqual(scheduled.slots.map(row => [row.position, row.grade_id, Date.parse(row.starts_at), Date.parse(row.ends_at)]), [
+    [1, 'blue-6th-kyu', Date.parse('2026-11-14T10:00:00+08:00'), Date.parse('2026-11-14T10:30:00+08:00')],
+    [2, '1st-dan', Date.parse('2026-11-14T10:30:00+08:00'), Date.parse('2026-11-14T11:00:00+08:00')],
+  ])
   assert.equal(Date.parse(scheduled.event.ends_at), Date.parse('2026-11-14T11:00:00+08:00'))
   assert.equal(scheduled.event.starts_at, first.event.starts_at)
-  // Sessions without candidates keep their original event window and no slots.
+  // Target grades no longer carry times; the sessions do.
+  assert.ok(scheduled.targets.every(row => !('starts_at' in row)))
+  // Rerunning reuses the same session IDs.
+  assert.deepEqual(scheduleGradeSessions(sessions, applications, grades)[0].slots.map(row => row.id), scheduled.slots.map(row => row.id))
+  // Sessions without candidates keep their original event window and get no sessions.
   assert.equal(untouched, sessions[1])
 })

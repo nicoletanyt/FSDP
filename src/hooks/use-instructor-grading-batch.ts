@@ -4,20 +4,23 @@ import { useInstructorApi } from '@/lib/instructor/data-context'
 import { useInstructorQuery } from './use-instructor-data'
 import { instructorQueryKeys as keys } from '@/lib/instructor/query-keys'
 import { toInstructorDataError } from '@/lib/instructor/errors'
-import type { CalendarEntry, GradeTrack, GradingBatch, GradingBatchSaveInput, GradingSignature, InstructorIdentity, RosterEntry, SyllabusItemRow } from '@/lib/instructor/types'
+import type { CalendarEntry, GradingBatch, GradingBatchSaveInput, GradingSignature, InstructorIdentity, RosterEntry, SyllabusItemRow } from '@/lib/instructor/types'
 
 export const gradingCellKey = (student: string, item: string) => JSON.stringify([student, item])
 const uncheckedCells = (batch: GradingBatch | null) => new Set(batch?.results.filter(cell => !cell.checked).map(cell => gradingCellKey(cell.student_id, cell.syllabus_item_id)) ?? [])
 
-export function useInstructorGradingBatch({ session, entries, identity, track, grade, techniques }: {
-  session: CalendarEntry; entries: RosterEntry[]; identity: InstructorIdentity; track: '' | GradeTrack; grade: string; techniques: SyllabusItemRow[]
+// One examiner's checklist for one grading session. A session can hold several
+// target grades; each candidate is graded on their own grade's techniques.
+export function useInstructorGradingBatch({ session, entries, identity, sessionId, candidateGrades, techniques }: {
+  session: CalendarEntry; entries: RosterEntry[]; identity: InstructorIdentity; sessionId: string
+  candidateGrades: Map<string, string>; techniques: SyllabusItemRow[]
 }) {
   const api = useInstructorApi()
   const client = useQueryClient()
-  const key = JSON.stringify([identity.userId, session.event.id, track, grade])
-  const queryKey = keys.gradingBatch(identity.userId, session.event.id, track, grade)
-  const load = useCallback((signal: AbortSignal) => api.getGradingBatch({ eventId: session.event.id, track: track as GradeTrack, gradeId: grade }, signal), [api, session.event.id, track, grade])
-  const query = useInstructorQuery(() => queryKey, load, { enabled: Boolean(track && grade), staleTime: Infinity, gcTime: 10 * 60_000 })
+  const key = JSON.stringify([identity.userId, session.event.id, sessionId])
+  const queryKey = keys.gradingBatch(identity.userId, session.event.id, sessionId)
+  const load = useCallback((signal: AbortSignal) => api.getGradingBatch({ eventId: session.event.id, sessionId }, signal), [api, session.event.id, sessionId])
+  const query = useInstructorQuery(() => queryKey, load, { enabled: Boolean(sessionId), staleTime: Infinity, gcTime: 10 * 60_000 })
   const [draft, setDraft] = useState<{ key: string; saved: GradingBatch | null; unchecked: Set<string>; comments: Record<string, string>; dirty: boolean }>({ key: '', saved: null, unchecked: new Set(), comments: {}, dirty: false })
   const [pending, setPending] = useState(false)
   const [retryMode, setRetryMode] = useState<'draft' | 'submit' | null>(null)
@@ -44,23 +47,25 @@ export function useInstructorGradingBatch({ session, entries, identity, track, g
   }, [draft.dirty, pending, retryMode])
 
   const saved = draft.key === key ? draft.saved : null
-  const students = saved?.students ?? entries.map(({ record, student }, index) => ({
+  const students = saved?.students ?? entries.filter(({ student }) => candidateGrades.has(student.student.id)).map(({ record, student }, index) => ({
     student_id: student.student.id, candidate_number: record.candidate_number ?? index + 1,
     name: [student.student.first_name, student.student.last_name].filter(Boolean).join(' ') || student.student.email, notes: null,
+    target_grade_id: candidateGrades.get(student.student.id)!,
   })).sort((a, b) => a.candidate_number - b.candidate_number)
-  const items = saved?.items ?? techniques.map(item => ({ syllabus_item_id: item.id, category: item.category, label: item.label, sort_order: item.sort_order }))
+  const items = saved?.items ?? techniques.map(item => ({ syllabus_item_id: item.id, category: item.category, label: item.label, sort_order: item.sort_order, grade_id: item.grade_id }))
   const ready = query.status === 'success' && draft.key === key
   const readOnly = session.event.status === 'cancelled'
   const locked = readOnly || pending || retryMode !== null || needsReload || !ready
 
   async function save(submit: boolean, signature: GradingSignature | null = null) {
-    if (inFlight.current || !ready || readOnly || needsReload || !track || !grade || !students.length || !items.length) return false
+    if (inFlight.current || !ready || readOnly || needsReload || !sessionId || !students.length || !items.length) return false
     if (!intent.current) {
       if (submit && !signature) return false
       intent.current = {
         requestId: crypto.randomUUID(), expectedUserId: identity.userId, eventId: session.event.id,
-        track, gradeId: grade, expectedVersion: saved?.version ?? 0, submit, signature,
-        cells: students.flatMap(student => items.map(item => ({ student_id: student.student_id, syllabus_item_id: item.syllabus_item_id,
+        sessionId, expectedVersion: saved?.version ?? 0, submit, signature,
+        cells: students.flatMap(student => items.filter(item => item.grade_id === student.target_grade_id).map(item => ({
+          student_id: student.student_id, syllabus_item_id: item.syllabus_item_id,
           checked: !draft.unchecked.has(gradingCellKey(student.student_id, item.syllabus_item_id)) }))),
         comments: students.map(student => ({ student_id: student.student_id, notes: draft.comments[student.student_id] || null })),
       }

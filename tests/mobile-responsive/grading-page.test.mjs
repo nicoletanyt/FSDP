@@ -5,8 +5,8 @@ const origin = process.env.FSDP_BASE_URL ?? 'http://127.0.0.1:5173'
 const driver = process.env.WEBDRIVER_URL ?? 'http://127.0.0.1:4444'
 const gradingId = '00000000-0000-4000-8000-202611070008'
 const gradingPath = `/instructor/grading/${gradingId}`
-// The grading day links each grade's checklist with ?grade=.
-const checklistPath = `${gradingPath}?grade=stored-target-grade`
+// The grading day links each session's checklist with ?session= (the fixture's one sorted session).
+const checklistPath = `${gradingPath}?session=00000000-0000-4000-8000-000000000901`
 let session
 
 async function request(path, body, method = 'POST') {
@@ -140,16 +140,15 @@ test('grading lists students as columns with sequential roster IDs and only the 
   })
 })
 
-test('grading without a chosen grade points back to the grading day instead of showing filters', async () => {
+test('a checklist link without a session opens the day\'s only session, with no filters', async () => {
   const result = await inPage(390, gradingPath, async (w) => {
     const d = w.document, main = d.querySelector('main')
-    return { selects: main.querySelectorAll('select').length, table: !!main.querySelector('table'), text: main.textContent,
-      link: [...main.querySelectorAll('a')].find(node => node.textContent.trim() === 'grading day')?.getAttribute('href') }
+    return { selects: main.querySelectorAll('select').length, table: !!main.querySelector('table'),
+      session: main.querySelector('[data-session-label]')?.textContent }
   })
   assert.equal(result.selects, 0)
-  assert.equal(result.table, false)
-  assert.match(result.text, /Choose a grade from the grading day/)
-  assert.equal(result.link, `/instructor/gradings/${gradingId}`)
+  assert.equal(result.table, true)
+  assert.equal(result.session, 'Session 1')
 })
 
 test('grading drafts save the complete matrix and survive a document reload', async () => {

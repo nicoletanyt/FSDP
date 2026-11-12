@@ -24,7 +24,7 @@ export interface CalendarViewEvent {
   reportingReleaseOn: string | null
   status: CalendarEntry['event']['status']
   // Set on a per-grade block: opens that grade's checklist instead of the event panel.
-  gradeSession?: { eventId: string; gradeId: string }
+  gradeSession?: { eventId: string; sessionId: string }
 }
 
 export type CalendarEventsForDate = (date: Date) => CalendarViewEvent[]
@@ -70,9 +70,9 @@ export function toCalendarViewEvent(entry: CalendarEntry): CalendarViewEvent {
   }
 }
 
-// Gradings the caller examines become one block per timed grade session, each
-// at its own time. Everything else (and gradings without session times, or
-// that the caller doesn't examine) stays a single block.
+// Gradings the caller examines become one block per sorted session, each at
+// its own time. Everything else (and unsorted gradings, or ones the caller
+// doesn't examine) stays a single block.
 export function toCalendarViewEvents(entry: CalendarEntry): CalendarViewEvent[] {
   const event = toCalendarViewEvent(entry)
   const timed = entry.onPanel && entry.event.event_type === 'grading'
@@ -83,10 +83,10 @@ export function toCalendarViewEvents(entry: CalendarEntry): CalendarViewEvent[] 
     const start = toSingaporeDateTime(session.startsAt!)
     const end = toSingaporeDateTime(session.endsAt!)
     return {
-      ...event, id: `${entry.event.id}:${session.grade.id}`, name: `${session.grade.label} · ${track}`,
+      ...event, id: `${entry.event.id}:${session.id}`, name: `Session ${session.position} · ${track}`,
       date: parseCalendarDate(start.date)!, startTime: start.time, endTime: start.date === end.date ? end.time : '24:00',
       startsAt: session.startsAt, endsAt: session.endsAt, dateOnly: false, rosterCount: session.candidates,
-      gradeSession: { eventId: entry.event.id, gradeId: session.grade.id },
+      gradeSession: { eventId: entry.event.id, sessionId: session.id },
     }
   })
 }
