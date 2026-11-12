@@ -82,7 +82,7 @@ export function filterDirectorySnapshot(snapshot: DirectorySnapshot, params: URL
     scopeTotal: snapshot.items.length, offset, limit, facets: snapshot.facets }
 }
 
-export function changeDirectoryFilter(params: URLSearchParams, name: 'q' | 'rank' | 'belt' | 'dojo', value: string) {
+export function changeDirectoryFilter(params: URLSearchParams, name: 'q' | 'rank' | 'dojo', value: string) {
   const next = new URLSearchParams(params)
   if (value) next.set(name, value)
   else next.delete(name)

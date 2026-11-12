@@ -161,10 +161,10 @@ test('a directory-backed detail preview shows known identity while sensitive sec
     const d = w.document
     w.history.pushState(null, '', '/instructor/students?fixtureData=detail-loading')
     w.dispatchEvent(new w.PopStateEvent('popstate')); await wait(500)
-    const row = d.querySelector('[aria-label="Student directory"] a[data-member-no="STU-0001"]')
+    const row = d.querySelector('[aria-label="Student directory"] [data-member-no="STU-0001"]')
     const name = row.querySelector('.directory-name').textContent.trim()
     const grade = row.querySelector('[data-slot="grade-badge"]').textContent.trim()
-    row.click(); await wait(150)
+    row.querySelector('a').click(); await wait(150)
     const placeholder = d.querySelector('[data-instructor-skeleton="student-detail"]')
     const pending = { text: placeholder?.textContent, sensitive: placeholder?.querySelectorAll('[aria-label="Emergency contacts and medical alerts loading"] [data-slot="skeleton"]').length,
       hasRealDetail: !!d.querySelector('[aria-label="Contact and medical actions"]'), fits: d.documentElement.scrollWidth <= d.documentElement.clientWidth }
