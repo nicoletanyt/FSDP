@@ -59,12 +59,35 @@ Instructor record. Optionally linked to an auth user and used as the owner of cl
 | `created_at` | `timestamptz` | no       | `now()`             |
 | `profile_picture_url` | `text` | yes | — |
 | `employment_type` | `text` | yes | — |
+| `instructor_title` | `text` | no | `'none'` |
+| `is_examiner` | `boolean` | no | `false` |
 
 Provisioning: `20261104130000_instructor_availability.sql` creates a linked instructor row when a trusted `users` profile is inserted or assigned the `instructor` role. The existing administrator `create-instructor` function already uses that trusted Auth role path. Availability now requires an existing linked instructor explicitly marked `part_time`; it no longer creates an unclassified instructor on first save. No row is claimed by matching an email or display name.
 
 `employment_type` is constrained to `part_time` / `full_time`; null is unspecified. Instructors cannot edit it. `updated_at` and the instructor-specific timestamp trigger were removed in `20261108062206_instructor_profile_fields.sql`.
 
+`instructor_title` is the required Aikikai title: `none` / `fukushidoin` / `shidoin` / `shihan` (CHECK `instructors_instructor_title_check`, `not null`, default `none`). It is stored separately from `grade_id`, but the grade limits which title is allowed: Fuku-shidōin needs 2nd dan or above, Shidōin 4th dan or above, Shihan 6th dan or above. Kyu grades, Junior Dan and 1st Dan allow only `none`. The dan is read from the grade id (`2nd-dan`), never from the belt colour, because 2nd and 1st Kyu also wear black. These rules live in `allowedTitles()` in `supabase/functions/_shared/instructor-titles.ts`, which both the Create Instructor form and the `create-instructor` Edge Function use. The function returns 400 for a missing or unranked grade, a missing title, or a disallowed grade/title pair. Only administrators can write the column, through the existing "Admins manage instructors" policy, and instructors cannot edit it themselves. The database checks only the title value, not the grade/title pair, so a direct admin write can bypass the grade rules. Provisioning reads trusted `app_metadata.instructor_title` and falls back to `none`; an unknown value rolls back the auth-user creation (`20261111100917_instructor_titles.sql`, `20261111120948_required_instructor_title.sql`). `5th-dan` and `6th-dan` (`20261111120934_instructor_dan_grades.sql`) are instructor-only grades: they have no `grade_tracks`, requirements or syllabus rows, so student grading ladders never offer them. 6th Dan is the minimum for Shihan. `grade_id` stays nullable until the existing instructors without a grade are assigned one. The migration lists them in a notice; after that, add `not null` in a follow-up migration.
+
 New photos are uploaded to the private `instructor-photos` Storage bucket as `<auth-user-id>/<random-uuid>.jpg`. `profile_picture_url` stores that object path, not an expiring signed URL. The UI converts JPG/PNG/WebP device files (up to 5 MB) to a 512px JPEG and generates one-hour signed URLs on reads. Authenticated users may view photos; only linked instructors may upload/delete files in their own folder. Photo updates go through the account-fenced `save_instructor_profile_photo` RPC, which checks the uploaded object and rejects a stale previous path. Employment and identity fields remain protected.
+
+`is_examiner` marks instructors who can sit on grading panels. Administrators set it, either on Create Instructor (through trusted `app_metadata.instructor_is_examiner`) or with the toggle on the admin Instructors page. It does not depend on grade or title. The flag cannot be removed while the instructor sits on the panel of a grading whose event is still `scheduled` (`PGP03`).
+
+### `grading_panel_members`
+
+| Column | Type | Nullable | Default |
+| --- | --- | --- | --- |
+| `grading_event_id` | `uuid` | no | — |
+| `instructor_id` | `uuid` | no | — |
+| `is_chief` | `boolean` | no | `false` |
+| `added_at` | `timestamptz` | no | `now()` |
+
+The examiners assigned to one grading event. The primary key is (`grading_event_id`, `instructor_id`), and a partial unique index allows at most one chief examiner per grading. Members must have `is_examiner = true` (`PGP02`). Rows cascade when the grading or the instructor is deleted.
+
+Administrators and linked instructors can read panels; students and anonymous users cannot. Only administrators can write them. The admin UI replaces a whole panel with `set_grading_panel(target_event, examiner_ids, chief_id)`, which runs as the caller under RLS, so it is limited to administrators.
+
+**Who can grade:** the trigger function `enforce_grading_panel()` requires the acting instructor to be on the grading's panel (`PGP01`). It runs before every insert or update on `grading_batches` and `instructor_grading_reviews` (`instructor_id`), and on `technique_sign_offs` (`signed_off_by`) when the row has an `event_id`. Class-time sign-offs have no `event_id` and are not affected. Because the check is on the tables, every grading RPC is covered without changing it. Removing an examiner from a panel also locks their unsubmitted drafts.
+
+**Backfill** (`20261111123748_grading_panels.sql`): each existing grading's assessing instructor (`events.instructor_id`) became its chief examiner. Anyone who had already graded it (batches, reviews or sign-offs) became a member. Everyone backfilled was flagged as an examiner.
 
 ### `instructor_private_details`
 

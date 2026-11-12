@@ -56,6 +56,7 @@ server secrets with `VITE_`.
 | `npm run test:auth-seed` | Test the administrator seed without cloud access |
 | `npm run seed:admin` | Create the development administrator using root `.env` |
 | `npm run seed:instructor-calendar -- --instructor-email EMAIL` | Add marked calendar test classes and event rosters for an existing instructor, in the current Singapore week |
+| `npm run seed:grading-sessions -- --yes` | **Delete every grading session** and create three upcoming ones (this week and next) with examiner panels |
 | `npx shadcn@latest add <component>` | Add a shadcn/ui component |
 
 ## Authentication
@@ -109,6 +110,28 @@ npm run seed:instructor-calendar -- --instructor-email INSTRUCTOR_EMAIL --week-o
 
 This is a development data script rather than a schema migration. It does not
 create students, centres, instructors, grading events or application records.
+
+To reset grading sessions for development, preview first and then run:
+
+```sh
+npm run seed:grading-sessions
+npm run seed:grading-sessions -- --yes
+```
+
+Without `--yes`, the script only prints what it would delete and create.
+`--yes` **deletes every grading session**, along with its applications,
+checkout attempts, rosters, grading batches, reviews, technique sign-offs and
+panels. It then creates three official gradings in the current or next
+Monday–Sunday Singapore week: an adult session this Saturday, then a children's
+session and an adult session next week, skipping dates that have already
+passed. Each session targets every grade on its track. Every instructor marked
+as an examiner who has an instructor login sits on each panel, and the chief examiner rotates between
+sessions. The new sessions have no candidates. Use `--today YYYY-MM-DD` to plan
+from another date.
+
+The deletes run one request at a time, starting with dependent rows. If one
+fails, the database is left with fewer rows but no broken references, and
+rerunning the script finishes the reset.
 
 ## Administrator console
 

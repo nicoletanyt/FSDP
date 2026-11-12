@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0'
+import { instructorTitleLabels, isInstructorTitle, isTitleAllowed, titleRequirement } from '../_shared/instructor-titles.ts'
 
 function requiredEnv(name: string) {
   const value = Deno.env.get(name)?.trim()
@@ -82,13 +83,22 @@ export async function handleRequest(request: Request): Promise<Response> {
     const firstName = typeof details.first_name === 'string' ? details.first_name.trim() : ''
     const lastName = typeof details.last_name === 'string' ? details.last_name.trim() : ''
     const email = typeof details.email === 'string' ? details.email.trim().toLowerCase() : ''
-    const gradeId = details.grade_id == null ? null : typeof details.grade_id === 'string' ? details.grade_id.trim() : ''
+    const gradeId = typeof details.grade_id === 'string' ? details.grade_id.trim() : ''
+    const title = details.instructor_title
+    // Optional; omitted means not an examiner.
+    const isExaminer = details.is_examiner ?? false
     if (
       !firstName || firstName.length > 100 || !lastName || lastName.length > 100 ||
-      email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || gradeId === ''
+      email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !gradeId ||
+      !isInstructorTitle(title) || typeof isExaminer !== 'boolean'
     ) {
       return Response.json({
-        error: 'Provide both names, a valid email address and a valid grade.',
+        error: 'Provide both names, a valid email address, a grade and an instructor title.',
+      }, { status: 400, headers })
+    }
+    if (title !== 'none' && !isTitleAllowed(gradeId, title)) {
+      return Response.json({
+        error: `${instructorTitleLabels[title]} ${titleRequirement(title).replace(/^Requires/, 'requires')}.`,
       }, { status: 400, headers })
     }
 
@@ -120,7 +130,12 @@ export async function handleRequest(request: Request): Promise<Response> {
       email_confirm: true,
       user_metadata: { first_name: firstName, last_name: lastName },
       // Never accept a role from the request body.
-      app_metadata: { role: 'instructor', ...(gradeId ? { instructor_grade_id: gradeId } : {}) },
+      app_metadata: {
+        role: 'instructor',
+        instructor_grade_id: gradeId,
+        instructor_title: title,
+        instructor_is_examiner: isExaminer,
+      },
     })
     if (error || !data.user) {
       return Response.json({

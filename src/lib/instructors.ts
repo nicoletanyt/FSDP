@@ -1,11 +1,14 @@
 import { FunctionsHttpError } from '@supabase/supabase-js'
 import { supabase } from './supabase'
+import type { InstructorTitle } from './instructor/titles'
 
 interface InstructorDetails {
   first_name: string
   last_name: string
   email: string
-  grade_id: string | null
+  grade_id: string
+  instructor_title: InstructorTitle
+  is_examiner: boolean
 }
 
 export interface InstructorAccount {

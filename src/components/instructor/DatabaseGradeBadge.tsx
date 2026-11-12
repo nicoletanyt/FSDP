@@ -2,13 +2,18 @@ import { belts } from '@/lib/student-grades'
 import type { GradeRow } from '@/lib/instructor/types'
 import { cn } from 'cn'
 
+// The belt swatch for a database grade, from its colour. Null when unknown.
+export function beltFor(grade: Pick<GradeRow, 'colour'> | null) {
+  const colour = grade?.colour?.toLowerCase()
+  return colour && Object.hasOwn(belts, colour) ? belts[colour as keyof typeof belts] : null
+}
+
 export default function DatabaseGradeBadge({ grade, showBeltLabel = false, className }: {
   grade: GradeRow | null
   showBeltLabel?: boolean
   className?: string
 }) {
-  const colour = grade?.colour?.toLowerCase()
-  const belt = colour && Object.hasOwn(belts, colour) ? belts[colour as keyof typeof belts] : null
+  const belt = beltFor(grade)
   const label = grade?.label ?? 'Grade not recorded'
   const rank = belt ? label.match(/\(([^()]*(?:Kyu|Dan)[^()]*)\)$/i)?.[1] ?? label : label
   return <span data-slot="grade-badge" data-grade-id={grade?.id} title={`${label}${grade?.colour ? ` · ${grade.colour}` : ''}`}
