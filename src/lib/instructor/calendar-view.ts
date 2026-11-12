@@ -23,11 +23,17 @@ export interface CalendarViewEvent {
   reportingTime: string | null
   reportingReleaseOn: string | null
   status: CalendarEntry['event']['status']
-  // Set on a per-grade block: opens that grade's checklist instead of the event panel.
+  // Set on a grading session block: the panel shows only that session's candidates.
   gradeSession?: { eventId: string; sessionId: string }
 }
 
 export type CalendarEventsForDate = (date: Date) => CalendarViewEvent[]
+
+// A grading session block's id is `${eventId}:${sessionId}`; every event read
+// (roster, attendance, student context) uses the event part.
+export function calendarEventId(id: string) {
+  return id.split(':')[0]
+}
 
 export function calendarClassStyle(id: string) {
   return getEventStyle({ type: 'training', classType: Object.hasOwn(classTypes, id) ? id as ClassType : undefined })

@@ -139,6 +139,9 @@ test('gradings the caller examines split into one calendar block per sorted sess
   ])
   assert.deepEqual(blocks.map(block => block.gradeSession), [{ eventId, sessionId: first }, { eventId, sessionId: second }])
   assert.equal(new Set(blocks.map(block => block.id)).size, 2)
+  // Session blocks keep a distinct id; every event read uses its event part.
+  assert.deepEqual(blocks.map(block => calendarView.calendarEventId(block.id)), [eventId, eventId])
+  assert.equal(calendarView.calendarEventId(eventId), eventId)
   assert.equal(calendarView.calendarEventsForDate(blocks, new Date(2026, 10, 14)).length, 2)
   // Not on the panel, not yet sorted, or a table read without sessions: one grading block as before.
   for (const other of [raw({ on_panel: false }), (() => { const item = raw(); item.grading.sessions = []; return item })(),

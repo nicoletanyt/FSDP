@@ -832,3 +832,48 @@ test('an old availability response cannot navigate or populate the replacement a
     assert.ok(result.events.length > 0);
     assert.ok(result.events.every(name => name.includes('Replacement account class')));
 });
+
+test('clicking a grading session opens the side panel with that session\'s details, students and attendance', async () => {
+    const sessionId = '00000000-0000-4000-8000-000000000901';
+    for (const width of [1280, 390]) {
+        const result = await inCalendar(width, '/instructor/calendar?view=day&date=2026-11-7&fixtureData=grading-sessions', async (w, wait) => {
+            const d = w.document;
+            const block = [...d.querySelectorAll('button[aria-label]')]
+                .find(element => element.getAttribute('aria-label').startsWith('Session 1 · Children Grading') && element.getAttribute('aria-label').endsWith('View details'));
+            if (!block) return { error: 'session block not found' };
+            block.click(); await wait(900);
+            const panel = d.querySelector('aside[aria-label="Calendar selection details"]') ?? d.querySelector('[data-slot="drawer-content"]') ?? d.querySelector('[data-slot="sheet-content"]');
+            const roster = panel?.querySelector('[aria-label="Student roster"]');
+            const link = [...(panel?.querySelectorAll('a') ?? [])].find(element => element.textContent.trim() === 'View Grading');
+            return {
+                path: w.location.pathname,
+                selected: new URLSearchParams(w.location.search).get('session'),
+                title: panel?.querySelector('h2, [data-slot="sheet-title"]')?.textContent.trim() ?? null,
+                panelKind: panel?.getAttribute('data-slot') ?? panel?.tagName ?? null,
+                text: panel?.textContent ?? '',
+                students: roster ? roster.querySelectorAll(':scope > li').length : null,
+                attendance: panel?.querySelectorAll('[aria-label^="Attendance for"]').length ?? 0,
+                gradingHref: link?.getAttribute('href') ?? null,
+                // Per student: current GradeBadge → target GradeBadge.
+                rosterBadges: roster ? [...roster.querySelectorAll(':scope > li')].map(li => [...li.querySelectorAll('[data-grade-id]')].map(e => e.dataset.gradeId)) : [],
+                targetsList: !!panel?.querySelector('[aria-label="Target grades"]'),
+                linkAfterRoster: Boolean(roster && link && (roster.compareDocumentPosition(link) & 4)),
+                fits: d.documentElement.scrollWidth <= d.documentElement.clientWidth,
+            };
+        }, 800);
+        assert.equal(result.path, '/instructor/calendar', JSON.stringify(result));
+        assert.match(result.selected, new RegExp(`:${sessionId}$`));
+        assert.match(result.text, /Session 1 · Children Grading/);
+        assert.equal(result.students, 2, JSON.stringify(result));
+        assert.equal(result.attendance, 2);
+        // Each student shows current → target; the target is the session's grade.
+        assert.ok(result.rosterBadges.length === 2 && result.rosterBadges.every(ids => ids.length === 2), JSON.stringify(result.rosterBadges));
+        assert.equal(new Set(result.rosterBadges.map(ids => ids[1])).size, 1);
+        assert.equal(result.targetsList, false);
+        // View Grading sits at the bottom of the card.
+        assert.equal(result.linkAfterRoster, true);
+        assert.match(result.gradingHref, new RegExp(`^/instructor/grading/[0-9a-f-]{36}\\?session=${sessionId}$`));
+        if (width < 1024) assert.equal(result.title, 'Grading session details');
+        assert.equal(result.fits, true);
+    }
+});

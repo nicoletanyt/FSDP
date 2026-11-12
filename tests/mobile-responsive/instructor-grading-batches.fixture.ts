@@ -8,6 +8,19 @@ const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0
 // The one sorted session every fixture grading has, for the stored target grade.
 export const fixtureSessionId = uuid(901)
 const fixtureGradeId = 'stored-target-grade'
+export const fixtureSecondSessionId = uuid(902)
+
+// fixtureData=grading-sessions: each grading is sorted into two timed sessions,
+// first half of the roster then the second half. Calendar and grading day agree.
+export function fixtureGradingSessions(startsAt: string, endsAt: string, studentIds: string[]) {
+  const start = new Date(startsAt).getTime()
+  const middle = new Date(start + (new Date(endsAt).getTime() - start) / 2).toISOString()
+  const split = Math.ceil(studentIds.length / 2)
+  return [
+    { id: fixtureSessionId, position: 1, startsAt: new Date(start).toISOString(), endsAt: middle, studentIds: studentIds.slice(0, split) },
+    { id: fixtureSecondSessionId, position: 2, startsAt: middle, endsAt: new Date(endsAt).toISOString(), studentIds: studentIds.slice(split) },
+  ]
+}
 
 export function createGradingBatchFixture(account: string, mode: string | null, getApi: () => InstructorApi): Pick<InstructorApi, 'getGradingBatch' | 'getLatestGradingBatch' | 'saveGradingBatch' | 'getGradingDay'> {
   const key = `test-only-grading-batches:${account}`
@@ -30,14 +43,19 @@ export function createGradingBatchFixture(account: string, mode: string | null, 
       const candidates = roster.entries.map(({ record, student }) => ({ applicationId: `application-${student.student.id}`, studentId: student.student.id,
         name: [student.student.first_name, student.student.last_name].filter(Boolean).join(' ') || student.student.email,
         memberNo: null, candidateNumber: record.candidate_number ?? null, currentGrade: null }))
+      const timed = mode === 'grading-sessions' && event.starts_at && event.ends_at
+        ? fixtureGradingSessions(event.starts_at, event.ends_at, candidates.map(candidate => candidate.studentId)) : null
+      const sessionOf = (studentId: string) => timed?.find(item => item.studentIds.includes(studentId))?.id ?? fixtureSessionId
       return { eventId: event.id, name: event.name, status: event.status, track: roster.session.grading?.track ?? 'children',
         gradingDate: (event.starts_at ?? '2026-01-01').slice(0, 10),
         startsAt: event.starts_at, endsAt: event.ends_at, reportingTime: null, isChief: true,
         centre: { name: roster.session.centre?.name ?? 'Centre', address: '' },
         panel: [{ instructorId, name: 'Fixture examiner', isChief: true }],
         applicationDeadline: '2026-11-01', gradingStarted: false,
-        students: candidates.map(candidate => ({ ...candidate, targetGrade: target, sessionId: fixtureSessionId })),
-        sessions: [{ id: fixtureSessionId, position: 1, startsAt: null, endsAt: null, grades: [{ grade: target, candidates }], myBatch: null }] }
+        students: candidates.map(candidate => ({ ...candidate, targetGrade: target, sessionId: sessionOf(candidate.studentId) })),
+        sessions: timed ? timed.map(item => ({ id: item.id, position: item.position, startsAt: item.startsAt, endsAt: item.endsAt,
+          grades: [{ grade: target, candidates: candidates.filter(candidate => item.studentIds.includes(candidate.studentId)) }], myBatch: null }))
+          : [{ id: fixtureSessionId, position: 1, startsAt: null, endsAt: null, grades: [{ grade: target, candidates }], myBatch: null }] }
     },
     async getLatestGradingBatch(eventId, signal) {
       await new Promise(resolve => setTimeout(resolve, 30))

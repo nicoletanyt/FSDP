@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 
-export default function DayClassDetails({ children, onClose }: { children: ReactNode; onClose: () => void }) {
+export default function DayClassDetails({ children, onClose, title = "Class details" }: { children: ReactNode; onClose: () => void; title?: string }) {
     const [desktop, setDesktop] = useState(() => window.matchMedia("(min-width: 1024px)").matches);
 
     useEffect(() => {
@@ -25,7 +25,7 @@ export default function DayClassDetails({ children, onClose }: { children: React
         <Sheet open onOpenChange={(open) => { if (!open) onClose(); }}>
             <SheetContent className="gap-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
                 <SheetHeader>
-                    <SheetTitle>Class details</SheetTitle>
+                    <SheetTitle>{title}</SheetTitle>
                     <SheetDescription className="sr-only">Class information, student roster, and attendance actions.</SheetDescription>
                 </SheetHeader>
                 {children}

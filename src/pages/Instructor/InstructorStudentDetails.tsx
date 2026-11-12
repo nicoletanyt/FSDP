@@ -27,6 +27,7 @@ import { useInstructorQuery } from "@/hooks/use-instructor-data";
 import { instructorQueryKeys as queryKeys, instructorQueryTimes as queryTimes } from "@/lib/instructor/query-keys";
 import { useInstructorApi } from "@/lib/instructor/data-context";
 import { gradingEventDate, parseEntityId } from "@/lib/instructor/adapters";
+import { calendarEventId } from "@/lib/instructor/calendar-view";
 import { loadStudentGrading } from "@/lib/instructor/grading";
 import { directoryStudent, singaporeToday } from "@/lib/instructor/directory";
 import { cachedStudentPreview } from "@/lib/instructor/student-preview";
@@ -149,7 +150,7 @@ function StudentDetailContent({ detail }: { detail: StudentDetail }) {
     const requestedContext = params.get("session") ?? params.get("class");
     const loadContext = useCallback(
         (signal: AbortSignal) =>
-            loadStudentContext(api, parseEntityId(requestedContext, "event"), signal),
+            loadStudentContext(api, parseEntityId(requestedContext && calendarEventId(requestedContext), "event"), signal),
         [api, requestedContext],
     );
     const context = useInstructorQuery(
