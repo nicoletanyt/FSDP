@@ -13,9 +13,34 @@ import type { InstructorAccount } from '@/lib/instructors'
 import { supabase } from '@/lib/supabase'
 import GradeBadge from '@/components/instructor/DatabaseGradeBadge'
 import type { GradeRow } from '@/lib/instructor/types'
+import { setExaminer } from '@/lib/admin/grading-panels'
 
 type InstructorProfile = Pick<UserProfile, 'id' | 'first_name' | 'last_name' | 'email'> & {
-  instructors: { grade: GradeRow | null } | null
+  instructors: { id: string; is_examiner: boolean; grade: GradeRow | null } | null
+}
+
+function ExaminerToggle({ instructorId, name, initial }: { instructorId: string; name: string; initial: boolean }) {
+  const [checked, setChecked] = useState(initial)
+  const [pending, setPending] = useState(false)
+  const [error, setError] = useState('')
+  useEffect(() => { setChecked(initial) }, [initial])
+
+  async function change(next: boolean) {
+    setPending(true)
+    setError('')
+    try { setChecked(await setExaminer(supabase, instructorId, next)) }
+    catch (failure) { setError(failure instanceof Error ? failure.message : 'Unable to update the examiner status. Try again.') }
+    finally { setPending(false) }
+  }
+
+  return <div className="flex shrink-0 flex-col items-end gap-1">
+    <label className="flex min-h-11 items-center gap-2 text-sm has-disabled:opacity-50">
+      <input type="checkbox" className="size-4 accent-primary" checked={checked} disabled={pending}
+        aria-label={`${name} can examine gradings`} onChange={event => void change(event.target.checked)} />
+      Examiner
+    </label>
+    {error && <p role="alert" className="max-w-56 text-right text-xs text-destructive">{error}</p>}
+  </div>
 }
 
 export default function Instructors() {
@@ -24,12 +49,12 @@ export default function Instructors() {
   const [error, setError] = useState('')
   const [query, setQuery] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
-  const [createdAccount, setCreatedAccount] = useState<InstructorAccount | null>(null)
+  const [createdEmail, setCreatedEmail] = useState<string | null>(null)
 
   const reload = useCallback(async () => {
     setLoading(true)
     const { data, error: queryError } = await supabase.from('users')
-      .select('id, first_name, last_name, email, instructors(grade:grades(id, label, colour, is_ranked, sort_order))')
+      .select('id, first_name, last_name, email, instructors(id, is_examiner, grade:grades(id, label, colour, is_ranked, sort_order))')
       .eq('role', 'instructor')
       .order('first_name')
       .order('last_name')
@@ -52,7 +77,7 @@ export default function Instructors() {
   )
 
   function handleCreated(account: InstructorAccount) {
-    setCreatedAccount(account)
+    setCreatedEmail(account.email)
     setCreateOpen(false)
     void reload()
   }
@@ -82,7 +107,7 @@ export default function Instructors() {
             <DialogHeader>
               <DialogTitle>Create instructor</DialogTitle>
               <DialogDescription>
-                Enter their details. A secure password will be generated and shown after creation.
+                An email with the instructor’s login details will be attempted after account creation.
               </DialogDescription>
             </DialogHeader>
             {createOpen && <CreateInstructorForm onCreated={handleCreated} />}
@@ -90,31 +115,24 @@ export default function Instructors() {
         </Dialog>
       </div>
 
-      {createdAccount && (
-        <Alert role="status" className="border-success/30 bg-success/10 p-4">
-          <CheckCircle2 className="size-5 text-success" aria-hidden="true" />
-          <AlertDescription className="min-w-0 space-y-3 text-foreground">
-            <div className="flex items-start justify-between gap-3">
-              <p className="font-medium">Instructor account created for {createdAccount.email}.</p>
-              <Button
-                type="button"
-                size="icon-sm"
-                variant="ghost"
-                className="-m-2 shrink-0"
-                aria-label="Dismiss generated password"
-                onClick={() => setCreatedAccount(null)}
-              >
-                <X className="size-4" aria-hidden="true" />
-              </Button>
-            </div>
-            <div>
-              <p className="mb-1 font-medium">Generated password</p>
-              <code className="block select-all break-all rounded-md bg-background p-3 text-foreground">
-                {createdAccount.password}
-              </code>
-            </div>
-            <p>Save and share this password securely. It won’t be shown again after you dismiss this alert or leave the page. The instructor can sign in at /staff/login.</p>
+      {createdEmail && (
+        <Alert role="status" className="flex min-h-12 items-center gap-2 border-success/30 bg-success/10 px-3 py-2 text-left">
+          <span className="flex shrink-0 items-center" aria-hidden="true">
+            <CheckCircle2 className="size-5 text-success" />
+          </span>
+          <AlertDescription className="min-w-0 flex-1 text-left text-foreground">
+            <p className="font-medium">Instructor account created for {createdEmail}.</p>
           </AlertDescription>
+          <Button
+            type="button"
+            size="icon-sm"
+            variant="ghost"
+            className="shrink-0"
+            aria-label="Dismiss account creation notice"
+            onClick={() => setCreatedEmail(null)}
+          >
+            <X className="size-4" aria-hidden="true" />
+          </Button>
         </Alert>
       )}
 
@@ -150,7 +168,7 @@ export default function Instructors() {
                   <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
                     {initials(instructor.first_name, instructor.last_name)}
                   </span>
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <p className="truncate font-medium">
                       {fullName({ firstName: instructor.first_name, lastName: instructor.last_name }) ||
                         instructor.email}
@@ -161,6 +179,9 @@ export default function Instructors() {
                     </p>
                     <div className="mt-1"><GradeBadge grade={instructor.instructors?.grade ?? null} /></div>
                   </div>
+                  {instructor.instructors && <ExaminerToggle instructorId={instructor.instructors.id}
+                    name={fullName({ firstName: instructor.first_name, lastName: instructor.last_name }) || instructor.email}
+                    initial={instructor.instructors.is_examiner} />}
                 </li>
               ))}
             </ul>

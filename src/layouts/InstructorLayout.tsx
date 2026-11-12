@@ -32,8 +32,12 @@ export default function InstructorLayout() {
   const isStudentDirectory = /^\/instructor\/students\/?$/.test(pathname)
   const isStudentDetails = /^\/instructor\/students\/[^/]+\/?$/.test(pathname)
   const isStudentPage = isStudentDirectory || isStudentDetails
+  // Grading pages hold wide tables and card grids, so they share the student pages' width.
+  const isGradingPage = /^\/instructor\/(gradings|grading)(\/|$)/.test(pathname)
+  const isWidePage = isStudentPage || isGradingPage
   const routeSkeleton = isCalendar ? 'calendar-page' : isStudentDirectory ? 'directory-page' : isStudentDetails ? 'student-detail'
     : pathname.startsWith('/instructor/grading/') ? 'grading-page'
+    : pathname.startsWith('/instructor/gradings') ? 'directory-page'
     : pathname.startsWith('/instructor/assessments/') ? 'assessment'
       : isCheckIn ? 'check-in' : 'profile'
   const [stationKiosk, setIsKiosk] = useState(false)
@@ -41,7 +45,7 @@ export default function InstructorLayout() {
   const stationWidth = 'w-[calc(100%-2rem)] max-w-[1440px] lg:w-[94%]'
   const calendarWidth = 'w-[calc(100%-2rem)] max-w-[1600px] lg:w-[94%]'
   const studentNavigationWidth = 'w-full max-w-[1248px] lg:w-[calc(92%+3rem)]'
-  const contentWidthClassName = isCheckIn ? 'w-full max-w-[1440px] lg:w-[94%]' : isCalendar ? 'w-full max-w-[1600px] lg:w-[94%]' : isStudentPage ? 'w-full max-w-[1200px] lg:w-[92%]' : 'w-full lg:w-[70%]'
+  const contentWidthClassName = isCheckIn ? 'w-full max-w-[1440px] lg:w-[94%]' : isCalendar ? 'w-full max-w-[1600px] lg:w-[94%]' : isWidePage ? 'w-full max-w-[1200px] lg:w-[92%]' : 'w-full lg:w-[70%]'
   const [calendarSearch, setCalendarSearch] = useState('')
   const contextSession = params.get('session') ?? params.get('class')
   const contextParams = new URLSearchParams()
@@ -61,7 +65,7 @@ export default function InstructorLayout() {
   return (
     <InstructorApiContext.Provider value={injectedApi ?? instructorApi}>
     <div className={cn('flex flex-col bg-muted/30 text-foreground', isCalendar ? 'min-h-dvh lg:h-dvh lg:overflow-hidden' : isCheckIn ? 'min-h-dvh md:h-dvh md:overflow-hidden' : 'min-h-dvh', isKiosk && 'h-dvh min-h-0 overflow-hidden')}>
-      {!isKiosk && <InstructorNavigation calendarTo={calendarTo} contentWidthClassName={isCheckIn ? stationWidth : isCalendar ? calendarWidth : isStudentPage ? studentNavigationWidth : undefined} />}
+      {!isKiosk && <InstructorNavigation calendarTo={calendarTo} contentWidthClassName={isCheckIn ? stationWidth : isCalendar ? calendarWidth : isWidePage ? studentNavigationWidth : undefined} />}
       <main className={cn('mx-auto p-6 max-lg:p-6 lg:px-0 lg:py-6', contentWidthClassName, isCalendar ? 'flex flex-col lg:min-h-0 lg:flex-1' : isCheckIn ? 'flex min-h-0 flex-1 flex-col lg:py-3' : 'lg:py-8', isKiosk && 'w-full max-w-none p-0 lg:p-0')}>
         <Suspense fallback={<InstructorSkeleton variant={routeSkeleton} />}>
           <Outlet key={session?.user.id} context={{ isKiosk, setIsKiosk } satisfies InstructorOutletContext} />

@@ -4,7 +4,7 @@ import { cn } from 'cn'
 const tabs = [
   { to: '/admin/calendar', label: 'Calendar' },
   { to: 'records', label: 'Records' },
-  { to: 'monitoring', label: 'Monitoring' },
+  { to: 'monitoring', label: 'Students' },
 ]
 
 export default function Attendance() {

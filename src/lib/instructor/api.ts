@@ -10,6 +10,7 @@ import {
 } from './decoders'
 import { InstructorDataError, toInstructorDataError } from './errors'
 import { createInstructorProfileApi } from './profile'
+import { decodeExaminerSessions, decodeGradingDay } from './grading-panels'
 import { collectCalendarPages } from './page-collector'
 import type {
   AssessmentDetail, AssessmentKey, AttendanceSaveInput, AvailabilityInput, CalendarOptions, DirectoryOptions, EventId, HistoryOptions,
@@ -474,6 +475,21 @@ export function createInstructorApi(client: InstructorClient) {
 
     getRecordedAssessments(id: StudentId, options: PageOptions = {}) {
       return getStudentHistory(id, { ...options, eventType: 'grading', recordedAssessmentsOnly: true })
+    },
+
+    // Grading sessions whose examiner panel includes the signed-in instructor.
+    async getMyGradingPanels(signal?: AbortSignal) {
+      await getCurrentInstructor(signal)
+      return decodeExaminerSessions(await rpc('my_grading_panels', {}, signal,
+        'Unable to load your grading sessions. Please try again.'))
+    },
+
+    // One grading day with a session per target grade. Panel members and admins only.
+    async getGradingDay(id: string, signal?: AbortSignal) {
+      const eventId = parseEntityId(id, 'event')
+      await getCurrentInstructor(signal)
+      return decodeGradingDay(await rpc('examiner_grading_day', { target_event: eventId }, signal,
+        'Unable to load this grading. Please try again.'))
     },
 
     async getStudentSummary(id: StudentId, signal?: AbortSignal) {

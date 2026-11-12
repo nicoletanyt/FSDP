@@ -1,17 +1,21 @@
 import { FunctionsHttpError } from '@supabase/supabase-js'
 import { supabase } from './supabase'
+import type { InstructorTitle } from './instructor/titles'
 
 interface InstructorDetails {
   first_name: string
   last_name: string
   email: string
-  grade_id: string | null
+  grade_id: string
+  instructor_title: InstructorTitle
+  is_examiner: boolean
 }
 
 export interface InstructorAccount {
   id: string
   email: string
   password: string
+  email_status: 'accepted' | 'failed' | 'uncertain'
 }
 
 export async function createInstructor(details: InstructorDetails) {
@@ -27,7 +31,8 @@ export async function createInstructor(details: InstructorDetails) {
     }
     throw new Error('Unable to create the instructor. Please try again.')
   }
-  if (!data?.id || typeof data.email !== 'string' || typeof data.password !== 'string' || !data.password) {
+  if (!data?.id || typeof data.email !== 'string' || typeof data.password !== 'string' || !data.password ||
+    !['accepted', 'failed', 'uncertain'].includes(data.email_status)) {
     throw new Error('The instructor account credentials could not be confirmed.')
   }
   return data

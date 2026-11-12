@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
-import { CalendarDays, Clock3, MapPin } from 'lucide-react'
+import { CalendarDays, Clock3, MapPin, Users } from 'lucide-react'
 import EmptyState from '@/components/admin/EmptyState'
+import GradingPanelDialog from '@/components/admin/GradingPanelDialog'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { supabase } from '@/lib/supabase'
+import { panelSelect, toPanel } from '@/lib/admin/grading-panels'
 
 interface Schedule {
   event_id: string
@@ -15,6 +17,7 @@ interface Schedule {
   reporting_time: string | null
   events: { name: string; centres: { name: string; address: string } | { name: string; address: string }[] } |
     { name: string; centres: { name: string; address: string } | { name: string; address: string }[] }[]
+  grading_panel_members: Parameters<typeof toPanel>[0]
 }
 
 function related<T>(value: T | T[] | null | undefined): T | undefined {
@@ -41,7 +44,7 @@ export default function GradingOpportunities() {
 
   const reload = useCallback(async () => {
     const { data, error: queryError } = await supabase.from('gradings')
-      .select('event_id,track,grading_date,application_opens_on,application_deadline,reporting_release_on,reporting_time,events!inner(name,centres(name,address))')
+      .select(`event_id,track,grading_date,application_opens_on,application_deadline,reporting_release_on,reporting_time,events!inner(name,centres(name,address)),${panelSelect}`)
       .eq('official_schedule', true).gte('grading_date', today()).order('grading_date')
     if (queryError) setError('Unable to load the official grading schedule.')
     else {
@@ -72,6 +75,7 @@ export default function GradingOpportunities() {
           <div className="grid gap-4">
             {upcoming.map((item, index) => {
               const venue = related(related(item.events)?.centres)
+              const panel = toPanel(item.grading_panel_members)
               return <Card key={item.event_id} className={index === 0 ? 'gap-0 overflow-hidden ring-primary/30' : 'gap-0 overflow-hidden'}>
                 <CardHeader className="gap-2 border-b bg-muted/30 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                   <div>
@@ -85,11 +89,27 @@ export default function GradingOpportunities() {
                 </CardHeader>
                 <CardContent className="space-y-4 p-5">
                   <dl className="grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
-                    <div><dt className="text-muted-foreground">Grading date</dt><dd className="mt-1 font-semibold">{showDate(item.grading_date)}</dd></div>
                     <div><dt className="text-muted-foreground">Applications open</dt><dd className="mt-1 font-semibold">{showDate(item.application_opens_on)}</dd></div>
+                    <div><dt className="text-muted-foreground">Grading date</dt><dd className="mt-1 font-semibold">{showDate(item.grading_date)}</dd></div>
                     <div><dt className="text-muted-foreground">Closing date</dt><dd className="mt-1 font-semibold">{showDate(item.application_deadline)}</dd></div>
                     <div><dt className="text-muted-foreground">Reporting time released</dt><dd className="mt-1 font-semibold">{showDate(item.reporting_release_on)}</dd></div>
                   </dl>
+                  <div className="flex flex-wrap items-start justify-between gap-3 border-t pt-4 text-sm">
+                    <div className="min-w-0 space-y-1">
+                      <p className="flex items-center gap-2 font-medium"><Users className="size-4 text-primary" aria-hidden="true" />Grading panel</p>
+                      {panel.length === 0
+                        ? <p className="text-muted-foreground">No examiners assigned. Nobody can grade this session yet.</p>
+                        : <ul className="flex flex-wrap gap-1.5" aria-label="Examiners">
+                          {panel.map(member => <li key={member.instructorId}
+                            className="rounded-md border bg-background px-2 py-0.5 text-xs">
+                            <span className="font-semibold">{member.name}</span>
+                            {member.isChief && <span className="text-muted-foreground"> · Chief examiner</span>}
+                          </li>)}
+                        </ul>}
+                    </div>
+                    <GradingPanelDialog eventId={item.event_id} gradingLabel={showDate(item.grading_date)}
+                      panel={panel} onSaved={() => void reload()} />
+                  </div>
                   <div className="flex flex-wrap items-start gap-4 border-t pt-4 text-sm">
                     <p className="flex flex-1 items-start gap-2 text-muted-foreground"><MapPin className="mt-0.5 size-4 shrink-0" />{venue ? `${venue.name} · ${venue.address}` : 'Aikido Shinju-Kai Headquarters'}</p>
                     <p className="flex items-center gap-2"><Clock3 className="size-4 text-primary" />Reporting time: <strong>{item.reporting_time ? showTime(item.reporting_time) : 'To be confirmed'}</strong></p>

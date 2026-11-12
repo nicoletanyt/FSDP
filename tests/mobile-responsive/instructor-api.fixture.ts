@@ -48,7 +48,7 @@ function entry(templateId: string, date: Date): CalendarEntry | null {
     centre: dojo, classType: catalogue.find(type => type.id === source.classType) ?? null,
     grading: source.type === 'grading' ? { event_id: id, track: null, application_deadline: null, application_status: 'closed',
       grading_date: null, application_opens_on: null, reporting_release_on: null, reporting_time: null, official_schedule: false } : null,
-    targetGrades: [], seminar: null, workshop: null, rosterCount: source.studentIds.length,
+    targetGrades: [], gradeSessions: [], onPanel: false, seminar: null, workshop: null, rosterCount: source.studentIds.length,
   }
 }
 
@@ -67,7 +67,7 @@ function dateOnlyGrading(released: boolean): CalendarEntry {
     starts_at: null, ends_at: null, status: 'scheduled', ...metadata }, centre: dojo, classType: null,
     grading: { event_id: id, track: 'adult', application_deadline: '2026-10-20', application_status: 'closed',
       grading_date: '2026-11-03', application_opens_on: '2026-10-01', reporting_release_on: released ? '2026-11-02' : '2026-11-04', reporting_time: '10:30:00', official_schedule: true },
-    targetGrades: [], seminar: null, workshop: null, rosterCount: 0 }
+    targetGrades: [], gradeSessions: [], onPanel: false, seminar: null, workshop: null, rosterCount: 0 }
 }
 
 function page<T>(items: T[], { offset = 0, limit = 50 }: PageOptions = {}): Page<T> {
@@ -106,6 +106,7 @@ export function createCalendarFixtureApi(account = 'audit'): InstructorApi {
     instructorId: uuid(account === 'audit' ? 1 : 2), userId: uuid(account === 'audit' ? 90001 : 90002),
     address: account === 'audit' && mode !== 'profile-empty' ? '18 Sin Ming Lane\nSingapore 573960' : null,
     employmentType: mode === 'full-time' ? 'full_time' : account === 'audit' && !['profile-empty', 'employment-unset', 'unlinked'].includes(mode ?? '') ? 'part_time' : null, photoPath: null, photoUrl: null,
+    grade: null, instructorTitle: 'none', isExaminer: false,
   }
   window.profileWriteRequestsFixture = []
   window.availabilityReadsFixture = 0
@@ -119,6 +120,11 @@ export function createCalendarFixtureApi(account = 'audit'): InstructorApi {
     if (expected !== profileDetails.userId) throw new Error('The signed-in account changed.')
   }
   const api: InstructorApi = {
+    // Fixture instructors sit on no grading panel, so the Gradings link stays hidden.
+    async getMyGradingPanels(signal) {
+      signal?.throwIfAborted()
+      return []
+    },
     async getAvailabilityAccess(signal) {
       await new Promise(resolve => setTimeout(resolve, 80))
       signal?.throwIfAborted()

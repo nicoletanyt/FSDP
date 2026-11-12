@@ -6,14 +6,19 @@ import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { startMembershipCheckout } from '@/lib/stripe'
 import { supabase } from '@/lib/supabase'
-import { Check, ChevronDown, ChevronUp, UploadCloud } from 'lucide-react'
+import {
+  MEMBERSHIP_TYPES,
+  calculateAge,
+  membershipLabel,
+} from '@/lib/membership'
+import { Check, ChevronDown, ChevronUp, UploadCloud, Info } from 'lucide-react'
 
 type Centre = { id: string; name: string }
 
 const STEPS = [
   { id: 1, title: 'Personal\nInfo' },
   { id: 2, title: 'Training\nInfo' },
-  { id: 3, title: 'Emergency\nContact' },
+  { id: 3, title: 'Emergency\n& Medical' },
   { id: 4, title: 'Review &\nSubmit' },
 ]
 
@@ -25,6 +30,12 @@ const today = new Date()
 const MAX_DOB = localDate(today)
 const MIN_DOB = localDate(new Date(today.getFullYear() - 120, today.getMonth(), today.getDate()))
 const validDob = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value) && value >= MIN_DOB && value <= MAX_DOB
+
+const PARQ_QUESTIONS = [
+  { key: 'heart', label: 'Has a doctor ever said you have a heart condition and should only do physical activity recommended by a doctor?' },
+  { key: 'dizziness', label: 'Do you lose your balance because of dizziness, or do you ever lose consciousness?' },
+  { key: 'joint', label: 'Do you have a bone or joint problem that could be made worse by a change in your physical activity?' },
+]
 
 const isValidNric = (nric: string) => {
   return /^[STFGM]\d{7}[A-Z]$/i.test(nric);
@@ -39,20 +50,26 @@ export default function ApplyMembership() {
   const [errorMsg, setErrorMsg] = useState('')
   const [isDeclared, setIsDeclared] = useState(false)
   const [centres, setCentres] = useState<Centre[]>([])
+  const [waiverSigned, setWaiverSigned] = useState(false)
   // Same key for retries of an unchanged submission; Stripe then returns the same session.
   const retryKey = useRef(crypto.randomUUID())
 
   const [formData, setFormData] = useState({
     fullName: '', nric: '', nationality: '', dob: '', gender: '',
-    email: '', // filled from the signed-in account below
-    mobile: '', address: '', photoName: '',
+    email: '', mobile: '', address: '', photoName: '',
     principalDojo: '', membershipType: '', currentBelt: '', hasExperience: 'no', experienceDetails: '',
     emergencyName: '', emergencyRelationship: '', emergencyPhone: '',
-    medicalDetails: '', medicalConfirm: false,
+    medicalDetails: '', 
     guardianName: '', guardianNric: '', guardianRelationship: '', guardianPhone: '',
   })
 
-  // The email field is read-only and comes from the signed-in account.
+  // PAR-Q 医疗问卷状态 (默认全选 No)
+  const [parqAnswers, setParqAnswers] = useState<Record<string, boolean>>({
+    heart: false,
+    dizziness: false,
+    joint: false,
+  })
+
   useEffect(() => {
     const fetchUserEmail = async () => {
       const { data: { user } } = await supabase.auth.getUser()
@@ -72,7 +89,13 @@ export default function ApplyMembership() {
       .then(({ data }) => setCentres(data ?? []))
   }, [])
 
-  const centreName = centres.find((c) => c.id === formData.principalDojo)?.name
+  const age = calculateAge(formData.dob)
+  const isMinor = age !== null && age < 18
+
+  // Members under 18 must provide guardian details, so keep the section open for them.
+  useEffect(() => {
+    if (isMinor) setShowGuardian(true)
+  }, [isMinor])
 
   const validateStep = (step: number) => {
     setErrorMsg('')
@@ -120,6 +143,11 @@ export default function ApplyMembership() {
         setErrorMsg('Emergency contact number must be exactly 8 digits.')
         return false
       }
+      if (isMinor && (!formData.guardianName || !formData.guardianNric || !formData.guardianRelationship || !formData.guardianPhone)) {
+        setShowGuardian(true)
+        setErrorMsg('Members under 18 must provide complete Guardian Information (name, NRIC / FIN, relationship, and contact number).')
+        return false
+      }
       if (formData.guardianNric && !isValidNric(formData.guardianNric)) {
         setErrorMsg('Invalid Guardian NRIC / FIN format.')
         return false
@@ -128,8 +156,9 @@ export default function ApplyMembership() {
         setErrorMsg('Guardian contact number must be exactly 8 digits.')
         return false
       }
-      if (!formData.medicalConfirm) {
-        setErrorMsg('You must confirm the medical declaration.')
+      // 强制检查免责声明
+      if (!waiverSigned) {
+        setErrorMsg('You must sign the Deed of Waiver & Indemnity to proceed.')
         return false
       }
     }
@@ -283,14 +312,13 @@ export default function ApplyMembership() {
                 </select>
               </div>
               
-              {/* 👈 锁定的 Email 输入框 */}
               <div className="space-y-1.5 sm:space-y-2">
                 <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-sm sm:text-base transition-colors">Email Address</Label>
                 <Input 
                   type="email" 
                   value={formData.email} 
-                  readOnly // 👈 设为只读
-                  disabled // 👈 设为禁用
+                  readOnly 
+                  disabled 
                   className="h-11 sm:h-12 bg-gray-200/60 dark:bg-slate-800 border-transparent opacity-70 cursor-not-allowed text-black dark:text-white" 
                 />
                 <p className="text-[10px] sm:text-xs text-gray-500">Linked to your login account.</p>
@@ -325,6 +353,9 @@ export default function ApplyMembership() {
                   </div>
                   <input type="file" className="hidden" accept="image/*" onChange={handlePhotoUpload} required aria-required="true" />
                 </label>
+                <p className="text-xs text-gray-500 flex items-center gap-1 mt-1">
+                  <Info className="w-3 h-3" /> Please bring 2 physical photos to your Principal Dojo for your membership booklet.
+                </p>
               </div>
             </div>
           </div>
@@ -345,15 +376,22 @@ export default function ApplyMembership() {
                     <option key={centre.id} value={centre.id}>{centre.name}</option>
                   ))}
                 </select>
+                <p className="text-[10px] sm:text-xs text-[#e62128] dark:text-red-400 mt-1">
+                  Your Principal Dojo training fees must be paid before the start of each term.
+                </p>
               </div>
               <div className="space-y-1.5 sm:space-y-2">
                 <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-sm sm:text-base">Membership Type</Label>
                 <select value={formData.membershipType} onChange={(e) => setFormData({...formData, membershipType: e.target.value})} className="w-full h-11 sm:h-12 bg-gray-200/60 dark:bg-slate-800 rounded-md border-transparent px-3 text-sm focus:ring-[#2c3f67] text-black dark:text-white">
                   <option value="" disabled>Select type</option>
-                  <option value="adult">Adult</option>
-                  <option value="student">Student</option>
-                  <option value="junior">Junior</option>
+                  {MEMBERSHIP_TYPES.map((type) => (
+                    <option key={type.value} value={type.value}>{type.label}</option>
+                  ))}
                 </select>
+                <p className="text-[10px] sm:text-xs text-gray-500">
+                  {MEMBERSHIP_TYPES.find((type) => type.value === formData.membershipType)?.description
+                    ?? 'Your membership type determines which class passes you can purchase and any discounts applied.'}
+                </p>
               </div>
               <div className="space-y-1.5 sm:space-y-2">
                 <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-sm sm:text-base">Current Belt Rank</Label>
@@ -396,6 +434,7 @@ export default function ApplyMembership() {
               <h2 className="text-xl sm:text-2xl font-bold text-[#2c3f67] dark:text-white mb-1 sm:mb-2">Emergency & Medical</h2>
             </div>
             <div className="grid grid-cols-1 gap-4 sm:gap-6">
+              {/* 紧急联系人 */}
               <div className="bg-[#f4f5f7] dark:bg-slate-800/50 p-4 sm:p-6 rounded-xl space-y-4 sm:space-y-5">
                 <h3 className="text-base sm:text-lg font-bold text-[#2c3f67] dark:text-blue-400 mb-2">Emergency Contact</h3>
                 <div className="space-y-1.5 sm:space-y-2">
@@ -428,42 +467,105 @@ export default function ApplyMembership() {
                 </div>
               </div>
 
-              <div className="bg-[#f4f5f7] dark:bg-slate-800/50 p-4 sm:p-6 rounded-xl space-y-4 sm:space-y-5 flex flex-col">
-                <div>
-                  <h3 className="text-base sm:text-lg font-bold text-[#2c3f67] dark:text-blue-400 mb-1">Medical Declaration</h3>
-                  <textarea placeholder="Enter details (optional)" value={formData.medicalDetails} onChange={(e) => setFormData({...formData, medicalDetails: e.target.value})} className="w-full min-h-[80px] sm:min-h-[100px] bg-white dark:bg-slate-900 rounded-md p-3 text-sm border-transparent resize-none text-black dark:text-white" />
-                </div>
-                <label className="flex items-start gap-3 cursor-pointer">
-                  <input type="checkbox" checked={formData.medicalConfirm} onChange={(e) => setFormData({...formData, medicalConfirm: e.target.checked})} className="mt-0.5 w-4 h-4 sm:w-5 sm:h-5 rounded border-gray-300 text-[#2c3f67]" />
-                  <span className="text-xs sm:text-sm text-gray-700 dark:text-gray-300 leading-tight">I confirm that the information provided is true.</span>
-                </label>
+              {/* 医疗声明 (PAR-Q) */}
+              <div className="bg-[#f4f5f7] dark:bg-slate-800/50 p-4 sm:p-6 rounded-xl space-y-4 sm:space-y-5">
+                <h3 className="text-base sm:text-lg font-bold text-[#2c3f67] dark:text-blue-400 mb-2">Medical Declaration (PAR-Q)</h3>
+                <p className="text-xs text-gray-500 mb-3">Please answer the following questions to the best of your knowledge.</p>
                 
-                <div className="mt-auto pt-4 bg-[#e9ecef] dark:bg-slate-900 rounded-lg p-3 sm:p-4">
-                  <p className="text-[10px] sm:text-xs font-bold text-[#2c3f67] dark:text-gray-400 mb-2">Guardian information (under 18)</p>
-                  <button type="button" onClick={() => setShowGuardian(!showGuardian)} className="w-full h-9 sm:h-10 bg-gray-500 hover:bg-gray-600 text-white rounded-md text-xs sm:text-sm font-medium flex items-center justify-between px-3 sm:px-4">
-                    <span>{showGuardian ? 'Hide' : 'Add Guardian Info'}</span>
-                    {showGuardian ? <ChevronUp className="w-3 h-3 sm:w-4 sm:h-4" /> : <ChevronDown className="w-3 h-3 sm:w-4 sm:h-4" />}
-                  </button>
-                  {showGuardian && (
-                    <div className="mt-3 sm:mt-4 space-y-3 sm:space-y-4">
-                       <Input placeholder="Guardian Name" value={formData.guardianName} onChange={(e) => setFormData({...formData, guardianName: e.target.value})} className="h-9 sm:h-10 bg-white border-transparent text-sm" />
-                       <Input 
-                         placeholder="Guardian NRIC / FIN" 
-                         value={formData.guardianNric} 
-                         onChange={(e) => setFormData({...formData, guardianNric: e.target.value.toUpperCase()})} 
-                         className="h-9 sm:h-10 bg-white border-transparent text-sm uppercase" 
-                       />
-                       <Input 
-                         type="tel" 
-                         maxLength={8}
-                         placeholder="Guardian Phone (8 digits)" 
-                         value={formData.guardianPhone} 
-                         onChange={(e) => setFormData({...formData, guardianPhone: formatPhone(e.target.value)})} 
-                         className="h-9 sm:h-10 bg-white border-transparent text-sm" 
-                       />
+                {PARQ_QUESTIONS.map((q) => (
+                  <div key={q.key} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-3 border-b border-gray-200 dark:border-slate-700 last:border-0">
+                    <span className="text-sm text-gray-700 dark:text-gray-300 flex-1">{q.label}</span>
+                    <div className="flex items-center gap-4 shrink-0">
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input 
+                          type="radio" 
+                          name={`parq-${q.key}`}
+                          checked={parqAnswers[q.key] === true} 
+                          onChange={() => setParqAnswers(prev => ({...prev, [q.key]: true}))}
+                          className="w-4 h-4 text-[#2c3f67]" 
+                        /> 
+                        <span className="text-sm">Yes</span>
+                      </label>
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input 
+                          type="radio" 
+                          name={`parq-${q.key}`}
+                          checked={parqAnswers[q.key] === false} 
+                          onChange={() => setParqAnswers(prev => ({...prev, [q.key]: false}))}
+                          className="w-4 h-4 text-[#2c3f67]" 
+                        /> 
+                        <span className="text-sm">No</span>
+                      </label>
                     </div>
-                  )}
+                  </div>
+                ))}
+                
+                <div className="pt-2">
+                  <Label className="text-gray-700 dark:text-gray-400 text-xs font-medium">Additional medical details (optional)</Label>
+                  <textarea placeholder="E.g. Allergies, asthma, past surgeries..." value={formData.medicalDetails} onChange={(e) => setFormData({...formData, medicalDetails: e.target.value})} className="w-full min-h-[80px] bg-white dark:bg-slate-900 rounded-md p-3 text-sm border-transparent resize-none text-black dark:text-white mt-1" />
                 </div>
+              </div>
+
+              {/* 免责声明 */}
+              <div className="bg-red-50 dark:bg-red-900/20 p-4 sm:p-6 rounded-xl border border-red-200 dark:border-red-900/50">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    checked={waiverSigned} 
+                    onChange={(e) => setWaiverSigned(e.target.checked)}
+                    className="mt-1 w-5 h-5 rounded border-red-400 text-[#2c3f67] focus:ring-[#2c3f67]" 
+                  />
+                  <span className="text-sm text-red-700 dark:text-red-400 leading-relaxed">
+                    <b>Deed of Waiver & Indemnity (Mandatory)</b><br/>
+                    I have read and agree to the Deed of Waiver & Indemnity. I understand that <b>no training is allowed</b> without signing this form.
+                  </span>
+                </label>
+              </div>
+
+              {/* 监护人信息 */}
+              <div className="bg-[#f4f5f7] dark:bg-slate-800/50 p-4 sm:p-6 rounded-xl">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h3 className="text-sm sm:text-base font-bold text-[#2c3f67] dark:text-blue-400">Guardian Information</h3>
+                    <p className={`text-xs ${isMinor ? 'text-[#e62128] dark:text-red-400 font-medium' : 'text-gray-500'}`}>
+                      {isMinor ? 'Required because the member is under 18.' : 'Required for members under 18.'}
+                    </p>
+                  </div>
+                  <button type="button" onClick={() => setShowGuardian(!showGuardian)} className="text-sm font-semibold text-[#2c3f67] dark:text-blue-400 hover:underline flex items-center gap-1">
+                    {showGuardian ? 'Hide' : 'Add Info'}
+                    {showGuardian ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </button>
+                </div>
+                
+                {showGuardian && (
+                  <div className="mt-4 space-y-4 animate-in fade-in duration-200">
+                     <div className="space-y-1.5">
+                        <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-xs">Guardian Name {isMinor && <span className="text-[#e62128]">*</span>}</Label>
+                        <Input placeholder="Enter name" value={formData.guardianName} onChange={(e) => setFormData({...formData, guardianName: e.target.value})} className="h-10 bg-white dark:bg-slate-900 border-transparent text-sm" />
+                     </div>
+                     <div className="space-y-1.5">
+                        <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-xs">Guardian NRIC / FIN {isMinor && <span className="text-[#e62128]">*</span>}</Label>
+                        <Input placeholder="e.g. S1234567A" value={formData.guardianNric} onChange={(e) => setFormData({...formData, guardianNric: e.target.value.toUpperCase()})} className="h-10 bg-white dark:bg-slate-900 border-transparent text-sm uppercase" />
+                     </div>
+                     <div className="space-y-1.5">
+                        <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-xs">Relationship to Member {isMinor && <span className="text-[#e62128]">*</span>}</Label>
+                        <select value={formData.guardianRelationship} onChange={(e) => setFormData({...formData, guardianRelationship: e.target.value})} className="w-full h-10 bg-white dark:bg-slate-900 rounded-md border-transparent px-3 text-sm text-black dark:text-white">
+                          <option value="" disabled>Select relationship</option>
+                          <option value="parent">Parent</option>
+                          <option value="guardian">Legal Guardian</option>
+                          <option value="sibling">Sibling</option>
+                          <option value="other">Other</option>
+                        </select>
+                     </div>
+                     <div className="space-y-1.5">
+                        <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-xs">Guardian Contact Number {isMinor && <span className="text-[#e62128]">*</span>}</Label>
+                        <div className="flex gap-2">
+                          <div className="w-16 h-10 bg-white dark:bg-slate-900 rounded-md flex items-center justify-center text-sm text-gray-600 shrink-0">+65</div>
+                          <Input type="tel" maxLength={8} placeholder="8-digit number" value={formData.guardianPhone} onChange={(e) => setFormData({...formData, guardianPhone: formatPhone(e.target.value)})} className="flex-1 h-10 bg-white dark:bg-slate-900 border-transparent text-sm" />
+                        </div>
+                     </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -495,10 +597,28 @@ export default function ApplyMembership() {
                   <button onClick={() => setCurrentStep(2)} className="text-xs sm:text-sm text-[#e62128] font-semibold hover:underline">Edit</button>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-2 sm:gap-y-3 text-xs sm:text-sm">
-                  <div><span className="text-gray-500 block text-[10px] sm:text-xs">Dojo</span>{centreName || '-'}</div>
-                  <div><span className="text-gray-500 block text-[10px] sm:text-xs">Type</span>{formData.membershipType || '-'}</div>
+                  <div><span className="text-gray-500 block text-[10px] sm:text-xs">Dojo</span>{formData.principalDojo || '-'}</div>
+                  <div><span className="text-gray-500 block text-[10px] sm:text-xs">Type</span>{formData.membershipType ? membershipLabel(formData.membershipType) : '-'}</div>
                   <div><span className="text-gray-500 block text-[10px] sm:text-xs">Belt</span>{formData.currentBelt || '-'}</div>
                   <div><span className="text-gray-500 block text-[10px] sm:text-xs">Emergency Contact</span>{formData.emergencyName || '-'}</div>
+                </div>
+              </div>
+
+              {/* 👇 费用摘要与照片提醒 */}
+              <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800/50 rounded-xl p-4 sm:p-6 mb-6">
+                <h4 className="font-bold text-[#2c3f67] dark:text-yellow-500 mb-3 text-sm sm:text-base">Registration Fee Summary</h4>
+                <div className="flex justify-between items-center text-sm py-2 border-b border-yellow-200/50 dark:border-yellow-800/50">
+                  <span className="text-gray-700 dark:text-gray-300">Membership Application Fee</span>
+                  <span className="font-bold text-lg text-[#2c3f67] dark:text-yellow-500">$60.00</span>
+                </div>
+                <p className="text-xs text-gray-600 dark:text-gray-400 mt-2">
+                  Includes current year membership fee, student handbook, and membership booklet.
+                </p>
+                <div className="flex items-start gap-2 mt-3 text-[#e62128] dark:text-red-400">
+                  <Info className="w-4 h-4 mt-0.5 shrink-0" />
+                  <p className="text-xs font-medium">
+                    Please remember to bring <b>2 current physical photos</b> to your Principal Dojo for your membership booklet.
+                  </p>
                 </div>
               </div>
             </div>
@@ -507,7 +627,7 @@ export default function ApplyMembership() {
               <label className="flex items-start gap-2 sm:gap-3 cursor-pointer">
                 <input type="checkbox" checked={isDeclared} onChange={(e) => setIsDeclared(e.target.checked)} className="mt-0.5 w-4 h-4 sm:w-5 sm:h-5 rounded border-gray-300 text-[#2c3f67]" />
                 <span className="text-xs sm:text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
-                  I declare that all the information provided is true.
+                  I declare that all the information provided is true and accurate.
                 </span>
               </label>
             </div>
@@ -523,7 +643,7 @@ export default function ApplyMembership() {
           ) : <div />}
           
           <Button onClick={handleNext} disabled={isSubmitting} className="bg-[#2c3f67] hover:bg-[#1f2d4a] text-white px-6 sm:px-10 h-10 sm:h-12 rounded-md text-sm sm:text-base">
-            {currentStep < 4 ? 'Next' : isSubmitting ? 'Redirecting to payment…' : 'Submit & Pay'}
+            {isSubmitting ? 'Processing...' : (currentStep === 4 ? 'Submit Application' : 'Next')}
           </Button>
         </div>
 

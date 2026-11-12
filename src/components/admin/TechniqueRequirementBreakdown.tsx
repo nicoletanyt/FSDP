@@ -7,8 +7,7 @@ import { cn } from 'cn'
 
 /**
  * Read-only view of the target grade's technique row, grouped by syllabus
- * column. Used beside the eligibility checklist so staff can see which
- * categories still have unsigned items.
+ * column. Shown under the techniques requirement when expanded.
  */
 export default function TechniqueRequirementBreakdown({
   student,
@@ -28,8 +27,6 @@ export default function TechniqueRequirementBreakdown({
       .filter((signOff) => signOff.studentId === student.id)
       .map((signOff) => signOff.itemId),
   )
-  const signedCount = items.filter((item) => signedIds.has(item.id)).length
-
   const columns = getSyllabusPart(row.part).columns
   const columnOrder = new Map(
     columns.map((column, index) => [column.id, index]),
@@ -41,14 +38,6 @@ export default function TechniqueRequirementBreakdown({
 
   return (
     <div>
-      <div className="mb-2 flex items-baseline justify-between gap-3">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Target-grade techniques
-        </p>
-        <span className="text-xs tabular-nums text-muted-foreground">
-          {signedCount}/{items.length}
-        </span>
-      </div>
       <div className="grid gap-2">
         {orderedCells.map((cell) => {
           const column = columns.find((entry) => entry.id === cell.column)

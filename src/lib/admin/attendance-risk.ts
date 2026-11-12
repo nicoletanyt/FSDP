@@ -130,7 +130,6 @@ function riskLevelFor(
   noRecentBookings: boolean,
   consecutive: number,
 ): RiskLevel {
-  if (consecutive >= 5) return 'critical'
   if (noRecentBookings || consecutive >= 2) return 'at_risk'
   return 'healthy'
 }
@@ -176,10 +175,8 @@ export function getRiskAssessment(
 }
 
 const riskOrder: Record<RiskLevel, number> = {
-  critical: 0,
-  at_risk: 1,
-  watch: 2,
-  healthy: 3,
+  at_risk: 0,
+  healthy: 1,
 }
 
 export function getRiskAssessments(
@@ -202,7 +199,7 @@ export function getDecliningAssessments(
 ): RiskAssessment[] {
   return getRiskAssessments(students, records, sessions).filter(
     (assessment) =>
-      assessment.level === 'at_risk' || assessment.level === 'critical',
+      assessment.level === 'at_risk',
   )
 }
 
