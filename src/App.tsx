@@ -41,6 +41,7 @@ const StudentProfile = lazy(() => import('./pages/Student/StudentProfile'))
 const StudentPayments = lazy(() => import('./pages/Student/StudentPayments'))
 const StudentCredits = lazy(() => import('./pages/Student/StudentCredits'))
 const StudentGrading = lazy(() => import('./pages/Student/StudentGrading'))
+const GradingPayment = lazy(() => import('./pages/Student/GradingPayment'))
 
 const InstructorDashboard = lazy(() => import('./pages/Instructor/InstructorDashboard'))
 const InstructorStudents = lazy(() => import('./pages/Instructor/InstructorStudents'))
@@ -79,7 +80,9 @@ export default function App() {
               <Route path="profile" element={<StudentProfile />} />
               <Route path="payments" element={<StudentPayments />} />
               <Route path="student/credits" element={<StudentCredits />} />
-              <Route path="grading" element={<StudentGrading />} />
+              <Route path="grading" element={<GradingPayment />} />
+              <Route path="grading/applications" element={<StudentGrading />} />
+              <Route path="grading/payment" element={<GradingPayment />} />
             </Route>
           </Route>
           <Route path="instructor" element={<NfcTagCapture />}>

@@ -16,6 +16,10 @@ function isInstructorReturnPath(value: unknown): value is string {
       new URLSearchParams(value.slice('/instructor/calendar?'.length)).get('cover') ?? '')
 }
 
+function isStudentGradingPath(value: unknown): value is string {
+  return value === '/grading' || value === '/grading/payment' || value === '/grading/applications'
+}
+
 function AuthStatus() {
   const { loading, error, reloadProfile, signOut } = useAuth()
   const { pathname } = useLocation()
@@ -63,8 +67,8 @@ export function GuestRoute() {
   if (profile) return <Navigate to={
     profile.role === 'instructor' && isInstructorReturnPath(location.state?.from)
       ? location.state.from
-      : profile.role === 'student' && location.state?.from === '/grading'
-        ? '/grading' : dashboardPaths[profile.role]
+      : profile.role === 'student' && isStudentGradingPath(location.state?.from)
+        ? location.state.from : dashboardPaths[profile.role]
   } replace />
   return <Outlet />
 }
@@ -79,7 +83,7 @@ export function ProtectedRoute({ role }: { role: UserRole }) {
     return <Navigate to={role === 'instructor' ? '/instructor/signin' : role === 'student' ? '/login' : '/staff/login'} state={
       role === 'instructor' && isInstructorReturnPath(instructorTarget)
         ? { from: instructorTarget }
-        : role === 'student' && location.pathname === '/grading' ? { from: '/grading' } : undefined
+        : role === 'student' && isStudentGradingPath(location.pathname) ? { from: location.pathname } : undefined
     } replace />
   }
   if (error || !profile) return <AuthStatus />

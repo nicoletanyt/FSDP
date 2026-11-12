@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react'
-import { Link, useSearchParams } from 'react-router'
+import { Link, useNavigate, useSearchParams } from 'react-router'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/hooks/use-auth'
+import { formatRank, type RankId } from '@/lib/student-grades'
+import { calculateGradingFee } from '@/lib/grading-fees'
+import { money } from '@/lib/format'
 
 type Grading = {
   id: string
@@ -18,18 +22,32 @@ type Grading = {
   applied: boolean
 }
 
+function rankLabel(rank: string) {
+  if (rank === 'unranked') return 'Unranked'
+  const label = formatRank(rank as RankId)
+  return label === 'Rank not recorded' ? rank : label
+}
+
 export default function StudentGrading() {
   const [params] = useSearchParams()
+  const navigate = useNavigate()
+  const { profile } = useAuth()
   const [gradings, setGradings] = useState<Grading[]>([])
+  const [currentRank, setCurrentRank] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [pending, setPending] = useState<string | null>(null)
 
   useEffect(() => {
     let active = true
     async function load() {
       try {
-        const { data: events, error: eventsError } = await supabase.rpc('my_grading_opportunities')
+        const [opportunities, student] = await Promise.all([
+          supabase.rpc('my_grading_opportunities'),
+          profile?.id
+            ? supabase.from('students').select('current_grade_id').eq('user_id', profile.id).maybeSingle()
+            : Promise.resolve({ data: null, error: null }),
+        ])
+        const { data: events, error: eventsError } = opportunities
         if (eventsError) throw eventsError
         const mapped = (events ?? []).map((event: { id: string; name: string; grading_date: string; application_deadline: string; reporting_release_on: string | null; reporting_time: string | null; centre_name: string; venue_address: string; target_grade: string; applied: boolean }) => ({
           id: event.id, name: event.name, gradingDate: event.grading_date,
@@ -37,7 +55,10 @@ export default function StudentGrading() {
           reportingTime: event.reporting_time, centre: event.centre_name, venueAddress: event.venue_address,
           target: event.target_grade, applied: event.applied,
         }))
-        if (active) setGradings(mapped)
+        if (active) {
+          setGradings(mapped)
+          if (student.data?.current_grade_id) setCurrentRank(rankLabel(student.data.current_grade_id))
+        }
       } catch (failure) {
         if (active) setError(failure instanceof Error ? failure.message : 'Unable to load gradings.')
       } finally {
@@ -46,25 +67,21 @@ export default function StudentGrading() {
     }
     void load()
     return () => { active = false }
-  }, [])
+  }, [profile?.id])
 
-  async function apply(eventId: string) {
-    setPending(eventId)
-    setError('')
-    try {
-      const { data, error: invokeError } = await supabase.functions.invoke('create-grading-checkout', {
-        body: { event_id: eventId },
-      })
-      if (invokeError) {
-        const details = await invokeError.context?.json?.().catch(() => null)
-        throw new Error(details?.error ?? invokeError.message)
-      }
-      if (!data?.url) throw new Error('Checkout URL unavailable.')
-      window.location.assign(data.url)
-    } catch (failure) {
-      setError(failure instanceof Error ? failure.message : 'Unable to start checkout.')
-      setPending(null)
-    }
+  function startPayment(grading: Grading) {
+    if (!grading.target) return
+    navigate('/grading/payment', {
+      state: {
+        studentName: [profile?.first_name, profile?.last_name].filter(Boolean).join(' '),
+        currentBelt: currentRank,
+        targetBelt: rankLabel(grading.target),
+        applicationDeadline: grading.deadline,
+        gradingDate: grading.gradingDate,
+        gradingEventId: grading.id,
+        targetGradeId: grading.target,
+      },
+    })
   }
 
   return <main className="mx-auto w-full max-w-2xl space-y-5">
@@ -80,12 +97,15 @@ export default function StudentGrading() {
           <div><dt className="text-muted-foreground">Location</dt><dd>{grading.centre} · {grading.venueAddress}</dd></div>
           <div><dt className="text-muted-foreground">Reporting time</dt><dd>{grading.reportingTime ? new Date(`2026-01-01T${grading.reportingTime.slice(0, 5)}:00+08:00`).toLocaleTimeString('en-SG', { timeZone: 'Asia/Singapore', timeStyle: 'short' }) : 'To be confirmed'}{!grading.reportingTime && grading.reportingRelease && ` · released ${grading.reportingRelease}`}</dd></div>
           <div><dt className="text-muted-foreground">Apply by</dt><dd>{grading.deadline}</dd></div>
-          <div><dt className="text-muted-foreground">Fee</dt><dd>SGD 60.00</dd></div>
-          <div><dt className="text-muted-foreground">Target grade</dt><dd>{grading.target}</dd></div>
+          <div><dt className="text-muted-foreground">Fee</dt><dd>{(() => {
+            const price = calculateGradingFee(grading.target, grading.deadline)
+            return price ? `${money.format(price.total)}${price.late ? ' (includes S$22 late charge)' : ''}` : 'Contact dojo for pricing'
+          })()}</dd></div>
+          <div><dt className="text-muted-foreground">Target grade</dt><dd>{rankLabel(grading.target)}</dd></div>
         </dl>
         {grading.applied ? <p className="font-medium text-primary">Application submitted after payment.</p> : <>
           <p className="text-sm text-muted-foreground">Your eligibility and target grade are checked again when you proceed. Your application is submitted only after payment is confirmed.</p>
-          <Button disabled={pending !== null} onClick={() => void apply(grading.id)}>{pending === grading.id ? 'Opening checkout…' : 'Submit application — pay SGD 60.00'}</Button>
+          <Button disabled={!calculateGradingFee(grading.target, grading.deadline)} onClick={() => startPayment(grading)}>Continue to payment</Button>
         </>}
       </Card>)}
   </main>
