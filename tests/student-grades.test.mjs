@@ -159,9 +159,21 @@ test('eligibility counts only target techniques and leaves missing facts unverif
   })
   assert.equal(requirements.find(item => item.key === 'techniques').actual, '0')
   assert.equal(requirements.find(item => item.key === 'techniques').required, '22')
-  for (const key of ['membership-length', 'age', 'fees', 'sessions']) {
+  for (const key of ['membership-length', 'fees', 'sessions']) {
     assert.equal(requirements.find(item => item.key === key).met, null)
   }
+  // The adult sheet has no age rule for 2nd Kyu; the 12+ gate is children's only.
+  assert.equal(requirements.some(item => item.key === 'age'), false)
+  const dan = getGradingRequirements({
+    syllabus: getGradingSyllabus('adults', '1-dan'), membershipStatus: 'Active', rankAwardedOn: new Date(2025, 0, 1),
+    sessions: [], now: new Date(2026, 10, 2), signOffs: [],
+  })
+  assert.equal(dan.find(item => item.key === 'age').met, null)
+  const junior = getGradingRequirements({
+    syllabus: getGradingSyllabus('adults', 'junior-dan'), membershipStatus: 'Active', rankAwardedOn: new Date(2025, 0, 1),
+    sessions: [], now: new Date(2026, 10, 2), signOffs: [],
+  })
+  assert.equal(junior.find(item => item.key === 'max-age').required, '14 years')
 })
 
 test('examiner signatures preserve strokes and attribution and are scoped to student, track and grade', () => {

@@ -528,7 +528,7 @@ test('reference data follows every server-capped page instead of silently trunca
   const { api } = httpClient(async (_request, url) => {
     const table = url.pathname.split('/').at(-1)
     const source = { centres: [centre], grades: [grade], grade_tracks: [{ grade_id: 'unranked', track: 'adult' }],
-      grade_requirements: [{ grade_id: 'unranked', track: 'adult', min_months: 3, max_months: null, min_sessions: 20, min_age_years: null }],
+      grade_requirements: [{ grade_id: 'unranked', track: 'adult', min_months: 3, max_months: null, min_sessions: 20, min_age_years: null, max_age_years: null }],
       class_types: [], syllabus_items: syllabus }[table]
     assert.ok(source, `Unexpected table ${table}`)
     const offset = Number(url.searchParams.get('offset'))

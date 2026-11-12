@@ -152,7 +152,7 @@ export const decodeGrade = row<GradeRow>({ id: text, label: text, colour: nullab
 export const decodeGradeTrack = row<GradeTrackRow>({ grade_id: text, track })
 export const decodeGradeRequirement = row<GradeRequirementRow>({
   grade_id: text, track, min_months: count, max_months: nullable(count),
-  min_sessions: nullable(count), min_age_years: nullable(count),
+  min_sessions: nullable(count), min_age_years: nullable(count), max_age_years: nullable(count),
 })
 export const decodeSyllabusItem = row<SyllabusItemRow>({
   id: text, grade_id: text, track, category: text, sort_order: integer, label: text, note: nullable(text),

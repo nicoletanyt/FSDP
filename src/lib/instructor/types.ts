@@ -118,6 +118,7 @@ export interface GradeRequirementRow {
   max_months: number | null
   min_sessions: number | null
   min_age_years: number | null
+  max_age_years: number | null
 }
 
 export interface SyllabusItemRow {
@@ -346,7 +347,7 @@ export interface StudentSummary {
 }
 
 // Readiness means ready to START an assessment. Techniques belong to assessment.
-export type ReadinessRequirementKey = 'membership' | 'membership-length' | 'age' | 'time' | 'sessions' | 'fees'
+export type ReadinessRequirementKey = 'membership' | 'membership-length' | 'adult-age' | 'age' | 'max-age' | 'direct-entry' | 'time' | 'sessions' | 'fees'
 
 export interface ReadinessRequirement {
   key: ReadinessRequirementKey

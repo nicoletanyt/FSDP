@@ -6,7 +6,7 @@ import {
   getGradeSyllabus,
   getSyllabusPart,
 } from '@/lib/admin/syllabus'
-import { nextGrade } from '@/lib/admin/types'
+import { nextGrade, targetGradeTrack } from '@/lib/admin/types'
 import type { Student } from '@/lib/admin/types'
 import { cn } from 'cn'
 
@@ -21,15 +21,13 @@ export default function TechniqueChecklist({ student }: { student: Student }) {
       <div className="rounded-lg border border-border/70 bg-muted/30 px-3 py-4 text-sm">
         <p className="font-medium">No further grading on this ladder</p>
         <p className="mt-1 text-muted-foreground">
-          {track === 'children'
-            ? 'Children’s grading ends at 2nd Kyu (Black-Silver). The student moves to the adult syllabus at 13 (by year).'
-            : 'This student has reached the highest published grade (4th Dan).'}
+          This student has reached the highest published grade (4th Dan).
         </p>
       </div>
     )
   }
 
-  const row = getGradeSyllabus(target, track)
+  const row = getGradeSyllabus(target, targetGradeTrack(track, target))
   const items = row?.cells.flatMap((cell) => cell.items) ?? []
   if (!row || items.length === 0) {
     return (

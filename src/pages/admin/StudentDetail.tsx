@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { ArrowLeft, Bell, CalendarCheck, Mail, Phone } from "lucide-react";
 import { Link, useParams, useSearchParams } from "react-router";
 import AttendanceTrend from "@/components/admin/AttendanceTrend";
-import EligibilityChecklist from "@/components/admin/EligibilityChecklist";
+import EligibilityChecklist from "@/components/grading/EligibilityChecklist";
 import EmptyState from "@/components/admin/EmptyState";
 import PageHeader from "@/components/admin/PageHeader";
 import Sparkline from "@/components/admin/Sparkline";

@@ -9,7 +9,7 @@ const item = { id: 'database/adult/target/basics/one', grade_id: target.id, trac
 const detail = { student: { id: 'student', date_of_birth: '2000-12-31', joined_at: '2020-01-01', last_graded_at: '2026-01-01',
   current_grade_id: current.id, membership_status: 'active', outstanding_fees: false }, grade: current }
 const reads = { reference: { grades: [target, current], gradeTracks: [{ grade_id: current.id, track: 'adult' }, { grade_id: target.id, track: 'adult' }],
-  gradeRequirements: [{ grade_id: target.id, track: 'adult', min_months: 3, max_months: 6, min_age_years: 15, min_sessions: 20 }], syllabusItems: [item] },
+  gradeRequirements: [{ grade_id: target.id, track: 'adult', min_months: 3, max_months: 6, min_age_years: 15, max_age_years: null, min_sessions: 20 }], syllabusItems: [item] },
   summary: { cycleStart: '2026-01-01', cycleAttended: 20 }, signOffs: [], assessments: [] }
 
 test('readiness uses stored grade ordering, published requirements and complete cycle attendance, excluding all technique sign-offs', () => {
@@ -152,4 +152,52 @@ test('gradings the caller examines split into one calendar block per sorted sess
     (() => { const item = raw(); item.grading.sessions[0].id = 'not-a-uuid'; return item })()]) {
     assert.throws(() => decoders.decodeCalendarEntry(bad), { code: 'invalid_data' })
   }
+})
+
+test('a grade with a maximum age (Junior Dan) is skipped once the student is older', () => {
+  const junior = { ...current, id: 'junior-dan', label: 'Junior Dan', sort_order: 20 }
+  const data = { ...reads, reference: { ...reads.reference, grades: [current, junior, target],
+    gradeTracks: [...reads.reference.gradeTracks, { grade_id: junior.id, track: 'adult' }],
+    gradeRequirements: [...reads.reference.gradeRequirements,
+      { grade_id: junior.id, track: 'adult', min_months: 9, max_months: null, min_age_years: null, max_age_years: 14, min_sessions: 62 }] } }
+  assert.equal(studentGrading(detail, data, '2026-11-05').target.id, target.id, 'aged 26 by year: straight to the next Dan grade')
+  const young = studentGrading({ ...detail, student: { ...detail.student, date_of_birth: '2012-03-01' } }, data, '2026-11-05')
+  assert.equal(young.target.id, junior.id)
+  assert.deepEqual(young.requirements.find(row => row.key === 'max-age'), { key: 'max-age', actual: 14, required: 14, met: true })
+  assert.deepEqual(readinessRequirementText(young.requirements.find(row => row.key === 'max-age'), false),
+    { label: 'Maximum age (by calendar year)', actual: '14 years', required: '14 years' })
+})
+
+test('a child at the top of the children ladder is shown the next adult grade, gated on turning 13', () => {
+  const silver = { ...current, id: 'black-silver', label: 'Black-Silver (2nd Kyu)', sort_order: 14 }
+  const blackGold = { ...current, id: 'black-gold', label: 'Black-Gold (1st Kyu)', sort_order: 15 }
+  const adultItem = { ...item, id: 'adult/black-gold/one', grade_id: blackGold.id, track: 'adult' }
+  const data = { ...reads, reference: { grades: [silver, blackGold],
+    gradeTracks: [{ grade_id: silver.id, track: 'children' }, { grade_id: blackGold.id, track: 'adult' }],
+    gradeRequirements: [{ grade_id: blackGold.id, track: 'adult', min_months: 9, max_months: null, min_age_years: null, max_age_years: null, min_sessions: 62 }],
+    syllabusItems: [adultItem] } }
+  const child = { ...detail, student: { ...detail.student, date_of_birth: '2016-05-01', current_grade_id: silver.id } }
+  const result = studentGrading(child, data, '2026-11-05')
+  assert.equal(result.track, 'children')
+  assert.equal(result.targetTrack, 'adult')
+  assert.equal(result.target.id, blackGold.id)
+  assert.deepEqual(result.requirements.find(row => row.key === 'adult-age'), { key: 'adult-age', actual: 10, required: 13, met: false })
+  assert.deepEqual(result.syllabus.map(row => row.id), [adultItem.id])
+  assert.equal(result.ready, false)
+})
+
+test('an intermediate grade from an adult grading submits directly; one from a children grading does not', () => {
+  const silver = { ...current, id: 'black-silver-2nd-kyu', label: 'Black-Silver (2nd Kyu)', sort_order: 14 }
+  const blackGold = { ...current, id: 'black-gold', label: 'Black-Gold (1st Kyu)', sort_order: 15 }
+  const data = { ...reads, reference: { grades: [silver, blackGold],
+    gradeTracks: [{ grade_id: silver.id, track: 'children' }, { grade_id: blackGold.id, track: 'adult' }],
+    gradeRequirements: [{ grade_id: blackGold.id, track: 'adult', min_months: 9, max_months: null, min_age_years: null, max_age_years: null, min_sessions: 62 }],
+    syllabusItems: [] } }
+  const adultAward = studentGrading({ ...detail, student: { ...detail.student, current_grade_id: silver.id, last_graded_at: '2026-10-01' } }, data, '2026-11-05')
+  assert.deepEqual(adultAward.requirements.map(row => row.key), ['membership', 'membership-length', 'direct-entry', 'fees'])
+  assert.equal(adultAward.ready, true)
+  assert.equal(readinessRequirementText(adultAward.requirements[2], false).actual, 'Submit directly')
+  const childAward = studentGrading({ ...detail, student: { ...detail.student, date_of_birth: '2012-01-01', current_grade_id: silver.id,
+    last_graded_at: '2024-06-01' } }, { ...data, summary: { cycleStart: '2024-06-01', cycleAttended: 70 } }, '2026-11-05')
+  assert.deepEqual(childAward.requirements.map(row => row.key), ['membership', 'membership-length', 'time', 'sessions', 'fees'])
 })
