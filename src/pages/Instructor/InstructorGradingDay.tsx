@@ -4,30 +4,27 @@ import GradingDayView from "@/components/grading/GradingDayView";
 import { GradingBackLink, GradingNote } from "@/components/grading/GradingParts";
 import { useGradingDayLayout } from "@/hooks/use-grading-day-layout";
 import { useGradingDay } from "@/hooks/use-grading-day";
-import { gradingDate, gradingStamp, singaporeToday } from "@/lib/grading/format";
-import type { GradingDay, GradingSessionSummary } from "@/lib/instructor/grading-panels";
+import { useExaminerPhotos } from "@/hooks/use-examiner-photos";
+import { useInstructorApi } from "@/lib/instructor/data-context";
+import { gradingStamp } from "@/lib/grading/format";
+import type { GradingSessionSummary } from "@/lib/instructor/grading-panels";
 
-// The signed-in examiner's own progress on one session's checklist.
+// The signed-in examiner's own progress, only once there is some (the button already says "Start grading").
 const myStatus = (session: GradingSessionSummary) => !session.myBatch
-    ? "Not started"
-    : `${session.myBatch.status === "submitted" ? "Submitted" : "Draft saved"} · ${gradingStamp(session.myBatch.submittedAt ?? session.myBatch.updatedAt)}`;
+    ? undefined
+    : `${session.myBatch.status === "submitted" ? "Submitted" : "Draft saved"} ${gradingStamp(session.myBatch.submittedAt ?? session.myBatch.updatedAt)}`;
 
-// Examiners can't sort; tell them when the sessions will appear.
-function UnsortedNote({ day }: { day: GradingDay }) {
-    const open = day.applicationDeadline !== null && singaporeToday() <= day.applicationDeadline;
-    return (
-        <GradingNote>
-            {open
-                ? `Applications close on ${gradingDate(day.applicationDeadline!)}. An administrator sorts candidates into sessions after that.`
-                : "Candidates haven’t been sorted into sessions yet. An administrator will sort them before the grading."}
-        </GradingNote>
-    );
+// Examiners can't sort; an administrator does once applications close.
+function UnsortedNote() {
+    return <GradingNote>No sessions yet.</GradingNote>;
 }
 
 export default function InstructorGradingDay() {
     const { eventId } = useParams();
     const day = useGradingDay(eventId);
     const view = useGradingDayLayout();
+    const api = useInstructorApi();
+    const photos = useExaminerPhotos(day.data?.panel.map((member) => member.instructorId) ?? [], api.getInstructorPhotos);
     return (
         <section className="w-full space-y-4">
             <GradingBackLink to="/instructor/gradings">Back to gradings</GradingBackLink>
@@ -36,10 +33,9 @@ export default function InstructorGradingDay() {
             ) : day.isError ? (
                 <InstructorDataStatus error={day.error.message} onRetry={() => void day.refetch()} />
             ) : (
-                <GradingDayView day={day.data} list={view.list} layout={view.layout}
-                    onListChange={view.setList} onLayoutChange={view.setLayout} viewerIsChief={day.data.isChief}
+                <GradingDayView day={day.data} list={view.list} onListChange={view.setList} viewerIsChief={day.data.isChief} photos={photos}
                     studentHref={(studentId) => `/instructor/students/${studentId}`}
-                    emptySessions={<UnsortedNote day={day.data} />}
+                    emptySessions={<UnsortedNote />}
                     actionFor={(session) => ({
                         href: `/instructor/grading/${day.data.eventId}?session=${encodeURIComponent(session.id)}`,
                         label: session.myBatch ? "Continue grading" : "Start grading",

@@ -1,9 +1,12 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router'
-import { ChevronLeft, ShieldCheck } from 'lucide-react'
+import { ChevronLeft, ShieldCheck, TriangleAlert } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
+import { InstructorAvatar } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { CardFooter } from '@/components/ui/card'
+import { singaporeToday } from '@/lib/grading/format'
 import { cn } from 'cn'
 
 // Building blocks shared by the instructor and admin grading pages, so both
@@ -36,6 +39,23 @@ export function GradingFacts({ items, className }: { items: GradingFact[]; class
       ))}
     </ul>
   )
+}
+
+// One status pill for a grading, used on the schedule and the grading day:
+// Not open yet → Applications open → Closed → Completed (or Cancelled).
+export function GradingStatusPill({ status = 'scheduled', opensOn = null, closesOn, gradingDate, today = singaporeToday() }: {
+  status?: 'scheduled' | 'completed' | 'cancelled'
+  opensOn?: string | null
+  closesOn: string | null
+  gradingDate: string
+  today?: string
+}) {
+  const pill = status === 'cancelled' ? { text: 'Cancelled', className: 'bg-destructive/10 text-destructive' }
+    : status === 'completed' || gradingDate < today ? { text: 'Completed', className: 'bg-muted text-muted-foreground' }
+    : opensOn && today < opensOn ? { text: 'Not open yet', className: 'border-border bg-background text-muted-foreground' }
+    : closesOn && today <= closesOn ? { text: 'Applications open', className: 'bg-success text-success-foreground' }
+    : { text: 'Closed', className: 'bg-secondary text-secondary-foreground' }
+  return <Badge className={pill.className} data-status-pill>{pill.text}</Badge>
 }
 
 export function GradingStatusBadge({ status }: { status: 'scheduled' | 'completed' | 'cancelled' }) {
@@ -72,31 +92,76 @@ export interface PanelExaminer {
   isChief: boolean
 }
 
-// The examiner panel as name chips; the chief is marked once.
-export function ExaminerPanel({ panel, viewerIsChief = false, label }: {
+// The examiner panel: one chip per examiner with their photo (initials when
+// none), the same padding everywhere it appears. The chief is marked once.
+export function ExaminerPanel({ panel, viewerIsChief = false, label, photos = {}, heading = true }: {
   panel: PanelExaminer[]
   viewerIsChief?: boolean
   label: string
+  photos?: Record<string, string>
+  // Compact cards drop the "Examiner panel" heading; the chips speak for themselves.
+  heading?: boolean
 }) {
   return (
     <div className="space-y-2">
-      <p className="flex items-center gap-2 text-sm font-medium">
+      {heading && <p className="flex items-center gap-2 text-sm font-medium">
         <ShieldCheck className="size-4 text-primary" aria-hidden="true" />
         Examiner panel
-      </p>
+      </p>}
       {panel.length ? (
-        <ul className="flex flex-wrap gap-1.5" aria-label={label}>
+        <ul className="flex flex-wrap gap-2" aria-label={label}>
           {panel.map(member => (
-            <li key={member.instructorId} className="rounded-md border bg-background px-2 py-0.5 text-xs">
-              <span className="font-semibold">{member.name}</span>
-              {member.isChief && <span className="text-muted-foreground">{viewerIsChief ? ' · Chief (you)' : ' · Chief'}</span>}
+            <li key={member.instructorId} data-examiner
+              className="inline-flex max-w-full items-center gap-2 rounded-full border bg-background py-1 pr-3 pl-1">
+              <InstructorAvatar interactive={false} avatarClassName="size-7" fallbackClassName="text-[11px]"
+                profile={{ id: member.instructorId, name: member.name, role: 'Examiner', avatarUrl: photos[member.instructorId] }} />
+              {member.isChief && (
+                <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                  {viewerIsChief ? 'Chief, you' : 'Chief'}
+                </span>
+              )}
             </li>
           ))}
         </ul>
       ) : (
-        <p className="text-sm text-muted-foreground">No examiners assigned yet, so nobody can grade this session.</p>
+        <p className="text-sm text-muted-foreground">No examiners assigned yet. Add some so this grading can be marked.</p>
       )}
     </div>
+  )
+}
+
+// Two or more mutually exclusive views (pressed buttons in one outlined group).
+export function Segmented<T extends string>({ label, value, options, onChange }: {
+  label: string
+  value: T
+  options: { value: T; text: string; icon?: LucideIcon }[]
+  onChange: (value: T) => void
+}) {
+  return (
+    <div role="group" aria-label={label} className="inline-flex rounded-lg border bg-background p-0.5">
+      {options.map(({ value: option, text, icon: Icon }) => (
+        <Button key={option} type="button" size="sm" variant={value === option ? 'secondary' : 'ghost'}
+          aria-pressed={value === option} onClick={() => onChange(option)} className="h-9 gap-1.5 px-3">
+          {Icon && <Icon className="size-4" aria-hidden="true" />}
+          <span className={cn(Icon && 'max-sm:sr-only')}>{text}</span>
+        </Button>
+      ))}
+    </div>
+  )
+}
+
+// Things on a grading that need an administrator's attention.
+export function GradingWarnings({ warnings, quiet = false }: { warnings: string[]; quiet?: boolean }) {
+  // Quiet cards say nothing when nothing is wrong.
+  if (!warnings.length) return quiet ? null : <span className="text-muted-foreground">Nothing needs attention</span>
+  return (
+    <ul className="flex flex-wrap gap-2" aria-label="Needs attention">
+      {warnings.map(warning => (
+        <li key={warning} className="inline-flex items-center gap-1.5 rounded-md bg-warning px-2 py-1 text-xs font-medium text-warning-foreground">
+          <TriangleAlert className="size-3.5 shrink-0" aria-hidden="true" />{warning}
+        </li>
+      ))}
+    </ul>
   )
 }
 
@@ -113,7 +178,7 @@ export const gradingActionClass =
 export function GradingCardFooter({ status, children }: { status: ReactNode; children: ReactNode }) {
   return (
     <CardFooter className="flex-wrap justify-between gap-3 py-3">
-      <p className="text-muted-foreground">{status}</p>
+      <div className="min-w-0 text-muted-foreground">{status}</div>
       {children}
     </CardFooter>
   )

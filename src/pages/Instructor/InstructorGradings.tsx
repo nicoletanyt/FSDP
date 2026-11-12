@@ -1,16 +1,18 @@
 import { Link } from "react-router";
-import { CalendarDays, ChevronRight, Clock3, MapPin } from "lucide-react";
+import { CalendarDays, ChevronRight, Clock3, MapPin, Users } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
 import {
     ExaminerPanel, GradingCardFooter, GradingFacts, GradingNote, GradingStatusBadge, gradingActionClass,
 } from "@/components/grading/GradingParts";
 import { useMyGradingPanels } from "@/hooks/use-my-grading-panels";
+import { useExaminerPhotos } from "@/hooks/use-examiner-photos";
+import { useInstructorApi } from "@/lib/instructor/data-context";
 import { candidateCount, gradingDate, gradingTimeLabel, singaporeToday } from "@/lib/grading/format";
 import { gradingTitle, groupExaminerSessions } from "@/lib/instructor/grading-panels";
 import type { ExaminerSession } from "@/lib/instructor/grading-panels";
 
-function SessionCard({ session }: { session: ExaminerSession }) {
+function SessionCard({ session, photos }: { session: ExaminerSession; photos: Record<string, string> }) {
     return (
         <Card className="relative transition-shadow hover:ring-primary/40 focus-within:ring-2 focus-within:ring-ring">
             <CardHeader className="border-b">
@@ -27,12 +29,13 @@ function SessionCard({ session }: { session: ExaminerSession }) {
                     { key: "date", icon: CalendarDays, label: gradingDate(session.gradingDate) },
                     { key: "time", icon: Clock3, label: gradingTimeLabel(session.startsAt, session.endsAt, session.reportingTime) },
                     { key: "centre", icon: MapPin, label: session.centre.name },
+                    { key: "candidates", icon: Users, label: candidateCount(session.candidates) },
                 ]} />
             </CardHeader>
             <CardContent>
-                <ExaminerPanel panel={session.panel} viewerIsChief={session.isChief} label={`Examiners for ${gradingTitle(session)}`} />
+                <ExaminerPanel panel={session.panel} viewerIsChief={session.isChief} label={`Examiners for ${gradingTitle(session)}`} photos={photos} />
             </CardContent>
-            <GradingCardFooter status={candidateCount(session.candidates)}>
+            <GradingCardFooter status={null}>
                 <span aria-hidden="true" className={gradingActionClass}>
                     View grading day
                     <ChevronRight className="size-4" />
@@ -42,14 +45,14 @@ function SessionCard({ session }: { session: ExaminerSession }) {
     );
 }
 
-function SessionList({ id, title, sessions, empty }: { id: string; title: string; sessions: ExaminerSession[]; empty?: string }) {
+function SessionList({ id, title, sessions, empty, photos }: { id: string; title: string; sessions: ExaminerSession[]; empty?: string; photos: Record<string, string> }) {
     if (!sessions.length && !empty) return null;
     return (
         <section className="space-y-4" aria-labelledby={id}>
             <h2 id={id} className="text-xl font-semibold">{title}</h2>
             {sessions.length ? (
                 <div className="grid gap-4">
-                    {sessions.map((session) => <SessionCard key={session.eventId} session={session} />)}
+                    {sessions.map((session) => <SessionCard key={session.eventId} session={session} photos={photos} />)}
                 </div>
             ) : <GradingNote>{empty}</GradingNote>}
         </section>
@@ -59,6 +62,8 @@ function SessionList({ id, title, sessions, empty }: { id: string; title: string
 export default function InstructorGradings() {
     const sessions = useMyGradingPanels();
     const { upcoming, past } = groupExaminerSessions(sessions.data ?? [], singaporeToday());
+    const api = useInstructorApi();
+    const photos = useExaminerPhotos((sessions.data ?? []).flatMap((session) => session.panel.map((member) => member.instructorId)), api.getInstructorPhotos);
 
     return (
         <section className="w-full space-y-8">
@@ -76,8 +81,8 @@ export default function InstructorGradings() {
                 </GradingNote>
             ) : (
                 <>
-                    <SessionList id="upcoming-gradings" title="Upcoming" sessions={upcoming} empty="No upcoming gradings on your panels." />
-                    <SessionList id="past-gradings" title="Past" sessions={past} />
+                    <SessionList id="upcoming-gradings" title="Upcoming" sessions={upcoming} empty="No upcoming gradings on your panels." photos={photos} />
+                    <SessionList id="past-gradings" title="Past" sessions={past} photos={photos} />
                 </>
             )}
         </section>

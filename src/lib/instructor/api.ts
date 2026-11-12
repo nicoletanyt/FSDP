@@ -75,6 +75,23 @@ export async function requestInstructorData<T>(
   }
 }
 
+// Signed links to instructors' profile photos, by instructor ID, for avatars.
+// Photos are a nicety: anything that fails falls back to initials.
+export async function loadInstructorPhotos(client: Pick<SupabaseClient, 'from'> & Partial<Pick<SupabaseClient, 'storage'>>, ids: string[]) {
+  const photos: Record<string, string> = {}
+  if (!ids.length) return photos
+  const { data, error } = await client.from('instructors').select('id,profile_picture_url').in('id', ids)
+  if (error || !data) return photos
+  const rows = (data as { id: string; profile_picture_url: string | null }[]).filter(row => row.profile_picture_url)
+  const stored = rows.filter(row => !row.profile_picture_url!.startsWith('https://'))
+  for (const row of rows) if (row.profile_picture_url!.startsWith('https://')) photos[row.id] = row.profile_picture_url!
+  if (stored.length && client.storage) {
+    const { data: signed } = await client.storage.from('instructor-photos').createSignedUrls(stored.map(row => row.profile_picture_url!), 3600)
+    signed?.forEach((item, index) => { if (item.signedUrl) photos[stored[index].id] = item.signedUrl })
+  }
+  return photos
+}
+
 export function createInstructorApi(client: InstructorClient) {
   async function getInstructorAccount(signal?: AbortSignal) {
     try {
@@ -480,6 +497,11 @@ export function createInstructorApi(client: InstructorClient) {
       await getCurrentInstructor(signal)
       return decodeExaminerSessions(await rpc('my_grading_panels', {}, signal,
         'Unable to load your grading sessions. Please try again.'))
+    },
+
+    // Avatars for examiner panels.
+    getInstructorPhotos(ids: string[]) {
+      return loadInstructorPhotos(client, ids)
     },
 
     // One grading day with a session per target grade. Panel members and admins only.

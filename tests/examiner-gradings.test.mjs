@@ -101,7 +101,7 @@ const textOf = root => JSON.stringify(root.toJSON())
 test('the gradings page lists the examiner\'s sessions with their panel and a link into grading', async () => {
   const root = await render(React.createElement(InstructorGradings), [row({ grading_date: '2999-01-01' })])
   const text = textOf(root)
-  for (const expected of ['Alex Morgan', 'Chief (you)', 'Hiroshi Sato', '3 candidates', 'ASK Headquarters Dojo']) {
+  for (const expected of ['Alex Morgan', '"Chief, you"', 'Hiroshi Sato', '3 candidates', 'ASK Headquarters Dojo']) {
     assert.ok(text.includes(expected), expected)
   }
   const link = root.root.find(node => node.type === 'a' && node.props.href === `/instructor/gradings/${row().event_id}`)
@@ -146,7 +146,8 @@ const sortedStudents = [
 ]
 // Before sorting: every applicant, no numbers, no sessions.
 const unsortedStudents = sortedStudents.map(student => ({ ...student, candidate_number: null, session_id: null }))
-const dayRow = (overrides = {}) => ({ ...row(), application_deadline: '2026-11-10', grading_started: false,
+// Far-future grading day so the lifecycle stage doesn't depend on today's date.
+const dayRow = (overrides = {}) => ({ ...row(), grading_date: '2999-01-02', application_deadline: '2026-11-10', grading_started: false,
   students: sortedStudents, sessions: sortedSessions, ...overrides })
 
 test('grading days decode every applicant and the sorted sessions with the caller\'s batch', () => {
@@ -188,21 +189,26 @@ test('once sorted, the grading day opens on the session list with each session\'
   const text = textOf(root)
   assert.deepEqual(pressed(root, 'Grading day list'), [['Student list', false], ['Session list', true]])
   for (const expected of ['Session 1', 'Session 2', 'Ada Tan', 'Ben Lim', 'Cy Ong', 'Continue grading', 'Start grading',
-    '3 candidates', 'Alex Morgan', 'Chief (you)', 'Not started']) {
+    'Alex Morgan', '"Chief, you"', '2 candidates', '1 candidate']) {
     assert.ok(text.includes(expected), expected)
   }
   assert.equal(root.root.find(node => node.type === 'h1').props.children, 'Adult grading')
   assert.ok(!text.includes('Chief examiner'))
   // Status shows once, in the footer.
   assert.equal(text.match(/Draft saved/g).length, 1)
-  assert.match(text, /Draft saved · /)
+  assert.match(text, /Draft saved \d/)
+  // A status pill instead of a stepper, the examiners in their own card, and no "Not started" next to "Start grading".
+  assert.deepEqual(root.root.findAll(node => node.props?.['data-status-pill'] !== undefined && typeof node.type === 'string').map(node => node.props.children), ['Closed'])
+  assert.equal(root.root.findAll(node => node.props?.['data-examiner-panel'] !== undefined && typeof node.type === 'string').length, 1)
+  assert.ok(!text.includes('Not started') && !text.includes('Grading progress'))
   // Each session names its grades once; each candidate's current grade is a badge.
   const badges = root.root.findAll(node => node.props?.['data-slot'] === 'grade-badge')
   assert.deepEqual(badges.map(badge => badge.props['data-grade-id']), ['blue-6th-kyu', 'unranked', undefined, 'brown-4th-kyu', 'blue-gold-5th-kyu'])
   assert.ok(text.includes('Grade not recorded'), 'missing grade shows the badge fallback')
   // Single-grade sessions don't repeat the grade on every row.
   assert.ok(!text.includes('Target grade'))
-  assert.equal(root.root.findAll(node => node.props?.['data-slot'] === 'badge').length, 0)
+  // The only badge is the status pill.
+  assert.equal(root.root.findAll(node => node.props?.['data-slot'] === 'badge' && typeof node.type === 'string').length, 1)
   // Examiners can't sort or move students.
   assert.ok(!text.includes('Sort into sessions') && !text.includes('Sort again') && !text.includes('Move to'))
   const hrefs = hrefsOf(root)
@@ -224,17 +230,19 @@ test('before sorting, the grading day opens on the student list and explains the
   const root = await render(dayPage(), [], { day: before, path: dayPath })
   let text = textOf(root)
   assert.deepEqual(pressed(root, 'Grading day list'), [['Student list', true], ['Session list', false]])
-  for (const expected of ['Ada Tan', 'Ben Lim', 'Cy Ong', 'Target grade', 'Not sorted', 'Current grade']) assert.ok(text.includes(expected), expected)
-  assert.equal(text.match(/Not sorted/g).length, 3)
-  // Target grades as badges, after each current grade.
+  for (const expected of ['Ada Tan', 'Ben Lim', 'Cy Ong', 'Current grade']) assert.ok(text.includes(expected), expected)
+  // Grouped by target grade; numbers and sessions wait until sorting.
+  assert.equal(root.root.findAll(node => node.type === 'tr' && node.props['data-grade-group'] !== undefined).length, 2)
+  assert.ok(!text.includes('Not sorted') && !text.includes('"No."'))
   assert.deepEqual(root.root.findAll(node => node.props?.['data-slot'] === 'grade-badge').map(node => node.props['data-grade-id']),
-    ['unranked', 'blue-6th-kyu', undefined, 'blue-6th-kyu', 'blue-gold-5th-kyu', 'brown-4th-kyu'])
+    ['blue-6th-kyu', 'unranked', undefined, 'brown-4th-kyu', 'blue-gold-5th-kyu'])
+  assert.ok(text.includes('Applications open'), 'the pill says applications are open')
   await act(async () => { root.root.find(node => node.type === 'button' && node.props.children.at?.(-1)?.props?.children === 'Session list').props.onClick() })
   text = textOf(root)
-  assert.ok(text.includes('Applications close on'), 'open applications say when sorting can happen')
+  assert.ok(text.includes('No sessions yet'))
   assert.ok(!text.includes('Sort into sessions'))
   const closed = textOf(await render(dayPage(), [], { day: dayRow({ students: unsortedStudents, sessions: [] }), path: `${dayPath}?list=sessions` }))
-  assert.ok(closed.includes('haven’t been sorted into sessions yet'))
+  assert.ok(closed.includes('"Closed"') && closed.includes('No sessions yet'))
 })
 
 test('grading days with no applicants, and non-examiners, get clear messages', async () => {
@@ -318,22 +326,14 @@ test('completed sessions keep their status badge', async () => {
   assert.ok(textOf(root).includes('Completed'))
 })
 
-test('sessions show their own time, and the list/grid toggle switches the layout', async () => {
+test('sessions show their own time with their candidate count, in a single list', async () => {
   const root = await render(dayPage(), [], { day: dayRow(), path: dayPath })
   const text = textOf(root)
-  assert.match(text, /10:00.{0,12}–.{0,12}10:30/)
-  assert.ok(text.includes('Time to be confirmed'), 'untimed session says so')
-  const sessions = () => root.root.find(node => node.type === 'section' && node.props['aria-label'] === 'Session list')
-  const container = () => sessions().findAll(node => node.type === 'div' && String(node.props.className).startsWith('grid gap-4'))[0]
-  const toggle = label => root.root.find(node => node.props?.role === 'group' && node.props['aria-label'] === 'Grading session layout')
-    .findAll(node => node.type === 'button')[label === 'List' ? 0 : 1]
-  assert.ok(!container().props.className.includes('md:grid-cols-2'))
-  assert.equal(toggle('List').props['aria-pressed'], true)
-  await act(async () => { toggle('Grid').props.onClick() })
-  assert.match(container().props.className, /md:grid-cols-2 xl:grid-cols-3/)
-  assert.equal(toggle('Grid').props['aria-pressed'], true)
-  // Grid cards are narrower, so they drop the member number column.
-  assert.ok(!textOf(root).includes('Member no.'))
-  const grid = await render(dayPage(), [], { day: dayRow(), path: `${dayPath}?view=grid` })
-  assert.ok(!textOf(grid).includes('Member no.'))
+  assert.match(text, /10:00.{0,12}–.{0,12}10:30.{0,12}, 2 candidates/)
+  assert.ok(text.includes('Time to be confirmed, 1 candidate'), 'untimed session says so')
+  assert.equal(root.root.findAll(node => node.props?.role === 'group' && node.props['aria-label'] === 'Grading session layout').length, 0)
+  // Member numbers show because some candidates have one; nobody's number is a dash.
+  assert.ok(text.includes('Member no.'))
+  const empty = textOf(await render(dayPage(), [], { day: dayRow({ sessions: [{ ...sortedSessions[1], grades: [{ grade: brown, candidates: [{ ...cy, member_no: null }] }] }] }), path: dayPath }))
+  assert.ok(!empty.includes('Member no.'))
 })

@@ -1,79 +1,78 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router'
-import { CalendarDays, ChevronRight, Clock3, LayoutGrid, List, MapPin, Users } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { CalendarDays, ChevronRight, Clock3, MapPin } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import GradeBadge from '@/components/instructor/DatabaseGradeBadge'
 import {
-  ExaminerPanel, GradingCardFooter, GradingFacts, GradingNote, GradingPageHeader, GradingStatusBadge, gradingActionClass,
+  ExaminerPanel, GradingCardFooter, GradingFacts, GradingNote, GradingPageHeader, GradingStatusPill, Segmented, gradingActionClass,
 } from '@/components/grading/GradingParts'
 import { gradingTitle, sessionCandidates, sessionLabel } from '@/lib/instructor/grading-panels'
 import type { DayStudent, GradingCandidate, GradingDay, GradingSessionSummary } from '@/lib/instructor/grading-panels'
 import { candidateCount, gradingDate, gradingTimeLabel } from '@/lib/grading/format'
 import { cn } from 'cn'
 
-export type GradingDayLayout = 'list' | 'grid'
 export type GradingDayList = 'students' | 'sessions'
-
-function Segmented<T extends string>({ label, value, options, onChange }: {
-  label: string
-  value: T
-  options: { value: T; text: string; icon?: typeof List }[]
-  onChange: (value: T) => void
-}) {
-  return (
-    <div role="group" aria-label={label} className="inline-flex rounded-lg border bg-background p-0.5">
-      {options.map(({ value: option, text, icon: Icon }) => (
-        <Button key={option} type="button" size="sm" variant={value === option ? 'secondary' : 'ghost'}
-          aria-pressed={value === option} onClick={() => onChange(option)} className="h-9 gap-1.5 px-3">
-          {Icon && <Icon className="size-4" aria-hidden="true" />}
-          <span className={cn(Icon && 'max-sm:sr-only')}>{text}</span>
-        </Button>
-      ))}
-    </div>
-  )
-}
 
 const cellClass = 'px-3 py-3'
 const headClass = 'px-3 pb-2 font-medium'
 
-// Every applicant, whether or not they have been sorted into a session yet.
+// Columns of placeholders are noise: only show numbers and member numbers when someone has one.
+const anyNumber = (people: GradingCandidate[]) => people.some(person => person.candidateNumber !== null)
+const anyMemberNo = (people: GradingCandidate[]) => people.some(person => person.memberNo)
+
+// Every applicant, grouped by the grade they are attempting.
 function StudentList({ day, studentHref }: { day: GradingDay; studentHref: (studentId: string) => string }) {
+  const sorted = day.sessions.length > 0
+  const numbered = sorted && anyNumber(day.students)
+  const members = anyMemberNo(day.students)
   const position = new Map(day.sessions.map(session => [session.id, session.position]))
-  const students = [...day.students].sort((a, b) =>
-    (a.candidateNumber ?? Infinity) - (b.candidateNumber ?? Infinity) || a.name.localeCompare(b.name))
-  if (!students.length) return <GradingNote>No candidates have applied for this grading yet.</GradingNote>
+  const byGrade = new Map<string, DayStudent[]>()
+  for (const student of day.students) byGrade.set(student.targetGrade.id, [...(byGrade.get(student.targetGrade.id) ?? []), student])
+  const groups = [...byGrade.values()]
+    .map(students => ({ grade: students[0].targetGrade, students: [...students].sort((a, b) =>
+      (a.candidateNumber ?? Infinity) - (b.candidateNumber ?? Infinity) || a.name.localeCompare(b.name)) }))
+    .sort((a, b) => a.grade.sort_order - b.grade.sort_order)
+  if (!groups.length) return <GradingNote>No candidates have applied for this grading yet.</GradingNote>
+  const columns = 2 + (numbered ? 1 : 0) + (members ? 1 : 0) + (sorted ? 1 : 0)
   return (
     <Card className="py-0">
       <CardContent className="overflow-x-auto px-0">
         <table className="w-full border-collapse text-sm">
-          <caption className="sr-only">Applicants for {gradingTitle(day)}</caption>
+          <caption className="sr-only">Applicants for {gradingTitle(day)}, by target grade</caption>
           <thead>
             <tr className="border-b text-left text-muted-foreground">
-              <th scope="col" className="w-14 px-4 pt-3 pb-2 text-center font-medium">No.</th>
-              <th scope="col" className={cn(headClass, 'pt-3')}>Student</th>
-              <th scope="col" className={cn(headClass, 'hidden pt-3 md:table-cell')}>Member no.</th>
-              <th scope="col" className={cn(headClass, 'pt-3')}>Current grade</th>
-              <th scope="col" className={cn(headClass, 'pt-3')}>Target grade</th>
-              <th scope="col" className={cn(headClass, 'pt-3 pr-4')}>Session</th>
+              {numbered && <th scope="col" className="w-14 px-4 pt-3 pb-2 text-center font-medium">No.</th>}
+              <th scope="col" className={cn(headClass, 'pt-3', !numbered && 'pl-4')}>Student</th>
+              {members && <th scope="col" className={cn(headClass, 'hidden pt-3 md:table-cell')}>Member no.</th>}
+              <th scope="col" className={cn(headClass, 'pt-3', !sorted && 'pr-4')}>Current grade</th>
+              {sorted && <th scope="col" className={cn(headClass, 'pt-3 pr-4')}>Session</th>}
             </tr>
           </thead>
-          <tbody>
-            {students.map((student: DayStudent) => (
-              <tr key={student.applicationId} className="border-b last:border-0">
-                <td className="px-4 py-3 text-center tabular-nums">{student.candidateNumber ?? '—'}</td>
-                <th scope="row" className={cn(cellClass, 'text-left font-medium')}>
-                  <Link to={studentHref(student.studentId)} className="hover:underline focus-visible:outline-2 focus-visible:outline-ring">{student.name}</Link>
+          {groups.map(group => (
+            <tbody key={group.grade.id}>
+              <tr className="border-b" data-grade-group>
+                <th scope="rowgroup" colSpan={columns} className="px-4 pt-4 pb-2 text-left font-normal">
+                  <span className="flex flex-wrap items-center gap-2">
+                    <GradeBadge grade={group.grade} showBeltLabel />
+                    <span className="text-xs text-muted-foreground">{candidateCount(group.students.length)}</span>
+                  </span>
                 </th>
-                <td className={cn(cellClass, 'hidden tabular-nums text-muted-foreground md:table-cell')}>{student.memberNo ?? '—'}</td>
-                <td className={cellClass}><GradeBadge grade={student.currentGrade} /></td>
-                <td className={cellClass}><GradeBadge grade={student.targetGrade} /></td>
-                <td className={cn(cellClass, 'whitespace-nowrap pr-4 text-muted-foreground')}>
-                  {student.sessionId && position.has(student.sessionId) ? sessionLabel(position.get(student.sessionId)!) : 'Not sorted'}
-                </td>
               </tr>
-            ))}
-          </tbody>
+              {group.students.map(student => (
+                <tr key={student.applicationId} className="border-b last:border-0">
+                  {numbered && <td className="px-4 py-3 text-center tabular-nums">{student.candidateNumber ?? ''}</td>}
+                  <th scope="row" className={cn(cellClass, 'text-left font-medium', !numbered && 'pl-4')}>
+                    <Link to={studentHref(student.studentId)} className="hover:underline focus-visible:outline-2 focus-visible:outline-ring">{student.name}</Link>
+                  </th>
+                  {members && <td className={cn(cellClass, 'hidden tabular-nums text-muted-foreground md:table-cell')}>{student.memberNo ?? ''}</td>}
+                  <td className={cn(cellClass, !sorted && 'pr-4')}><GradeBadge grade={student.currentGrade} /></td>
+                  {sorted && <td className={cn(cellClass, 'whitespace-nowrap pr-4 text-muted-foreground')}>
+                    {student.sessionId && position.has(student.sessionId) ? sessionLabel(position.get(student.sessionId)!) : 'Not sorted'}
+                  </td>}
+                </tr>
+              ))}
+            </tbody>
+          ))}
         </table>
       </CardContent>
     </Card>
@@ -83,15 +82,15 @@ function StudentList({ day, studentHref }: { day: GradingDay; studentHref: (stud
 export interface GradeSessionAction {
   href: string
   label: string
-  status: string
+  // Shown beside the action only when it adds something (a saved draft, submissions so far).
+  status?: string
 }
 
 export type MoveControl = (candidate: GradingCandidate, session: GradingSessionSummary) => ReactNode
 
-function SessionCard({ session, action, compact, studentHref, renderMove }: {
+function SessionCard({ session, action, studentHref, renderMove }: {
   session: GradingSessionSummary
   action: GradeSessionAction
-  compact: boolean
   studentHref: (studentId: string) => string
   renderMove?: MoveControl
 }) {
@@ -99,44 +98,47 @@ function SessionCard({ session, action, compact, studentHref, renderMove }: {
   const mixed = session.grades.length > 1
   const rows = session.grades.flatMap(group => group.candidates.map(candidate => ({ candidate, grade: group.grade })))
     .sort((a, b) => (a.candidate.candidateNumber ?? Infinity) - (b.candidate.candidateNumber ?? Infinity))
+  const people = rows.map(row => row.candidate)
+  const numbered = anyNumber(people)
+  const members = anyMemberNo(people)
   return (
-    <Card className="h-full">
+    <Card>
       <CardHeader className="border-b">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-          <CardTitle className="text-lg font-semibold">{label}</CardTitle>
-          <ul className="flex flex-wrap gap-1.5" aria-label={`Grades in ${label}`}>
-            {session.grades.map(group => <li key={group.grade.id}><GradeBadge grade={group.grade} /></li>)}
-          </ul>
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <CardTitle className="text-lg font-semibold">{label}</CardTitle>
+            <ul className="flex flex-wrap gap-1.5" aria-label={`Grades in ${label}`}>
+              {session.grades.map(group => <li key={group.grade.id}><GradeBadge grade={group.grade} /></li>)}
+            </ul>
+          </div>
+          <GradingFacts items={[{ key: 'time', icon: Clock3,
+            label: `${gradingTimeLabel(session.startsAt, session.endsAt)}, ${candidateCount(sessionCandidates(session))}` }]} />
         </div>
-        <GradingFacts items={[
-          { key: 'time', icon: Clock3, label: gradingTimeLabel(session.startsAt, session.endsAt) },
-          { key: 'candidates', icon: Users, label: candidateCount(sessionCandidates(session)) },
-        ]} />
       </CardHeader>
-      <CardContent className="flex-1 overflow-x-auto px-0">
+      <CardContent className="overflow-x-auto px-0">
         <table className="w-full border-collapse text-sm">
           <caption className="sr-only">Candidates in {label}</caption>
           <thead>
             <tr className="border-b text-left text-muted-foreground">
-              <th scope="col" className="w-14 px-4 pb-2 text-center font-medium">No.</th>
-              <th scope="col" className={headClass}>Student</th>
-              {!compact && <th scope="col" className={cn(headClass, 'hidden sm:table-cell')}>Member no.</th>}
+              {numbered && <th scope="col" className="w-14 px-4 pb-2 text-center font-medium">No.</th>}
+              <th scope="col" className={cn(headClass, !numbered && 'pl-4')}>Student</th>
+              {members && <th scope="col" className={cn(headClass, 'hidden sm:table-cell')}>Member no.</th>}
               {mixed && <th scope="col" className={headClass}>Target grade</th>}
               <th scope="col" className={cn(headClass, !renderMove && 'pr-4')}>Current grade</th>
-              {renderMove && <th scope="col" className={cn(headClass, 'pr-4')}>Move to</th>}
+              {renderMove && <th scope="col" className="w-14 pr-2 pb-2"><span className="sr-only">Move</span></th>}
             </tr>
           </thead>
           <tbody>
             {rows.map(({ candidate, grade }) => (
               <tr key={candidate.applicationId} className="border-b last:border-0">
-                <td className="px-4 py-3 text-center tabular-nums">{candidate.candidateNumber ?? '—'}</td>
-                <th scope="row" className={cn(cellClass, 'text-left font-medium')}>
+                {numbered && <td className="px-4 py-3 text-center tabular-nums">{candidate.candidateNumber ?? ''}</td>}
+                <th scope="row" className={cn(cellClass, 'text-left font-medium', !numbered && 'pl-4')}>
                   <Link to={studentHref(candidate.studentId)} className="hover:underline focus-visible:outline-2 focus-visible:outline-ring">{candidate.name}</Link>
                 </th>
-                {!compact && <td className={cn(cellClass, 'hidden tabular-nums text-muted-foreground sm:table-cell')}>{candidate.memberNo ?? '—'}</td>}
+                {members && <td className={cn(cellClass, 'hidden tabular-nums text-muted-foreground sm:table-cell')}>{candidate.memberNo ?? ''}</td>}
                 {mixed && <td className={cellClass}><GradeBadge grade={grade} /></td>}
                 <td className={cn(cellClass, !renderMove && 'pr-4')}><GradeBadge grade={candidate.currentGrade} /></td>
-                {renderMove && <td className={cn(cellClass, 'pr-4')}>{renderMove(candidate, session)}</td>}
+                {renderMove && <td className="w-14 py-1 pr-2 text-right">{renderMove(candidate, session)}</td>}
               </tr>
             ))}
           </tbody>
@@ -153,60 +155,55 @@ function SessionCard({ session, action, compact, studentHref, renderMove }: {
   )
 }
 
-// A grading day: its details and panel, then either every applicant (student
-// list) or the sorted sessions (session list).
+// A grading day: its details and examiner panel, then either every applicant
+// (student list) or the sorted sessions (session list).
 export default function GradingDayView({
-  day, list, layout, onListChange, onLayoutChange, viewerIsChief = false, actionFor, studentHref,
-  emptySessions, sessionActions, renderMove,
+  day, list, onListChange, viewerIsChief = false, actionFor, studentHref,
+  emptySessions, renderMove, headerActions, panelAction, photos,
 }: {
   day: GradingDay
   list: GradingDayList | null
-  layout: GradingDayLayout
   onListChange: (list: GradingDayList) => void
-  onLayoutChange: (layout: GradingDayLayout) => void
   viewerIsChief?: boolean
   actionFor: (session: GradingSessionSummary) => GradeSessionAction
   studentHref: (studentId: string) => string
-  // Shown in place of the session list before sorting (a note, plus the sort button for admins).
+  // Shown in place of the session list before sorting.
   emptySessions: ReactNode
-  // Extra controls beside the session list (e.g. "Sort again").
-  sessionActions?: ReactNode
   renderMove?: MoveControl
+  // The page's main action (admins: sort into sessions), beside the title.
+  headerActions?: ReactNode
+  // In the examiner panel card (admins: edit the panel).
+  panelAction?: ReactNode
+  // Examiner photo links by instructor ID.
+  photos?: Record<string, string>
 }) {
   // Until candidates are sorted there are no sessions to show.
   const shown: GradingDayList = list ?? (day.sessions.length ? 'sessions' : 'students')
-  const grades = new Set(day.students.map(student => student.targetGrade.id)).size
   return (
-    <div className="space-y-8">
-      <GradingPageHeader title={gradingTitle(day)} badges={<GradingStatusBadge status={day.status} />} facts={[
-        { key: 'date', icon: CalendarDays, label: gradingDate(day.gradingDate, 'long') },
-        { key: 'time', icon: Clock3, label: gradingTimeLabel(day.startsAt, day.endsAt, day.reportingTime) },
-        { key: 'centre', icon: MapPin, label: day.centre.address ? `${day.centre.name} · ${day.centre.address}` : day.centre.name },
-        { key: 'candidates', icon: Users, label: `${candidateCount(day.students.length)} across ${grades === 1 ? '1 grade' : `${grades} grades`}` },
-      ]}>
-        <ExaminerPanel panel={day.panel} viewerIsChief={viewerIsChief} label={`Examiners for ${gradingTitle(day)}`} />
-      </GradingPageHeader>
-      <section className="space-y-4" aria-label={shown === 'students' ? 'Student list' : 'Session list'}>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <Segmented label="Grading day list" value={shown} onChange={onListChange} options={[
-            { value: 'students', text: 'Student list' },
-            { value: 'sessions', text: 'Session list' },
-          ]} />
-          {shown === 'sessions' && day.sessions.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2">
-              {sessionActions}
-              {day.sessions.length > 1 && <Segmented label="Grading session layout" value={layout} onChange={onLayoutChange} options={[
-                { value: 'list', text: 'List', icon: List },
-                { value: 'grid', text: 'Grid', icon: LayoutGrid },
-              ]} />}
-            </div>
-          )}
+    <div className="space-y-6">
+      <GradingPageHeader title={gradingTitle(day)} actions={headerActions}
+        badges={<GradingStatusPill status={day.status} closesOn={day.applicationDeadline} gradingDate={day.gradingDate} />}
+        facts={[
+          { key: 'date', icon: CalendarDays, label: gradingDate(day.gradingDate, 'long') },
+          { key: 'time', icon: Clock3, label: gradingTimeLabel(day.startsAt, day.endsAt, day.reportingTime) },
+          { key: 'centre', icon: MapPin, label: day.centre.address ? `${day.centre.name}, ${day.centre.address}` : day.centre.name },
+        ]} />
+      <Card className="px-5 py-4" data-examiner-panel>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <ExaminerPanel panel={day.panel} viewerIsChief={viewerIsChief} label={`Examiners for ${gradingTitle(day)}`} photos={photos} />
+          {panelAction}
         </div>
+      </Card>
+      <section className="space-y-4" aria-label={shown === 'students' ? 'Student list' : 'Session list'}>
+        <Segmented label="Grading day list" value={shown} onChange={onListChange} options={[
+          { value: 'students', text: 'Student list' },
+          { value: 'sessions', text: 'Session list' },
+        ]} />
         {shown === 'students' ? <StudentList day={day} studentHref={studentHref} />
           : day.sessions.length ? (
-            <div className={cn('grid gap-4', layout === 'grid' && 'md:grid-cols-2 xl:grid-cols-3')}>
+            <div className="grid gap-4">
               {day.sessions.map(session => (
-                <SessionCard key={session.id} session={session} action={actionFor(session)} compact={layout === 'grid'}
+                <SessionCard key={session.id} session={session} action={actionFor(session)}
                   studentHref={studentHref} renderMove={renderMove} />
               ))}
             </div>

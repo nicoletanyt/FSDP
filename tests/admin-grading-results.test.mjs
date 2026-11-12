@@ -7,6 +7,8 @@ import { MemoryRouter, Route, Routes } from 'react-router'
 import { createServer } from 'vite'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
+// The move menu's trigger looks up its document in an effect; the renderer has none.
+globalThis.document ??= { addEventListener() {}, removeEventListener() {} }
 const eventId = '00000000-0000-4000-8000-000000000100'
 const grade = (id, label, sort_order) => ({ id, label, colour: 'Blue', is_ranked: true, sort_order })
 const blue = grade('blue-6th-kyu', 'Blue (6th Kyu)', 7)
@@ -15,7 +17,7 @@ const candidate = (student_id, name, member_no, candidate_number) =>
   ({ application_id: `app-${student_id}`, student_id, name, member_no, candidate_number, current_grade: null })
 const [ada, ben, cy] = [candidate('s1', 'Ada Tan', '012', 1), candidate('s2', 'Ben Lim', null, 2), candidate('s3', 'Cy Ong', '044', 3)]
 const base = {
-  event_id: eventId, name: 'Adult grading — 14 Nov 2026', status: 'scheduled', track: 'adult', grading_date: '2026-11-14',
+  event_id: eventId, name: 'Adult grading — 14 Nov 2026', status: 'scheduled', track: 'adult', grading_date: '2999-01-02',
   starts_at: '2026-11-14T02:00:00+00:00', ends_at: '2026-11-14T05:00:00+00:00', reporting_time: null, is_chief: false,
   application_deadline: '2026-11-10', grading_started: false,
   centre: { name: 'ASK Headquarters Dojo', address: '1 Dojo Road' },
@@ -53,7 +55,7 @@ const batches = [
     instructors: person('Hiroshi', 'Sato'), grading_batch_students: [], grading_batch_items: [] },
 ]
 
-let server, stub, AdminGradingDay, AdminGradingResults
+let server, stub, AdminGradingDay, AdminGradingResults, AdminSchedule, moveOptions
 before(async () => {
   server = await createServer({ configFile: false, appType: 'custom', logLevel: 'silent', server: { middlewareMode: true },
     resolve: { alias: [
@@ -61,8 +63,9 @@ before(async () => {
       { find: '@', replacement: new URL('../src', import.meta.url).pathname },
     ] } })
   stub = await server.ssrLoadModule(new URL('./helpers/supabase-grading-stub.ts', import.meta.url).pathname)
-  ;({ default: AdminGradingDay } = await server.ssrLoadModule('/src/pages/admin/GradingDay.tsx'))
+  ;({ default: AdminGradingDay, moveOptions } = await server.ssrLoadModule('/src/pages/admin/GradingDay.tsx'))
   ;({ default: AdminGradingResults } = await server.ssrLoadModule('/src/pages/admin/GradingResults.tsx'))
+  ;({ default: AdminSchedule } = await server.ssrLoadModule('/src/pages/admin/GradingOpportunities.tsx'))
 })
 after(async () => { await server?.close() })
 const mounted = []
@@ -99,7 +102,7 @@ test('the admin grading day shows each session with its candidates, the panel\'s
   const text = textOf(root)
   assert.deepEqual(stub.calls.find(call => call[0] === 'rpc'), ['rpc', 'examiner_grading_day', { target_event: eventId }])
   assert.equal(root.root.find(node => node.type === 'h1').props.children, 'Adult grading')
-  for (const expected of ['Session 1', 'Session 2', 'Ada Tan', 'Cy Ong', 'Alex Morgan', ' · Chief', '1 of 2 examiners submitted', '0 of 2 examiners submitted', 'Sort again', 'Target grade']) {
+  for (const expected of ['Session 1', 'Session 2', 'Ada Tan', 'Cy Ong', 'Alex Morgan', '"Chief"', '1 of 2 examiners submitted', '0 of 2 examiners submitted', 'Sort again', 'Target grade']) {
     assert.ok(text.includes(expected), expected)
   }
   // Admins see the panel, not "(you)", and examiner-only actions are absent.
@@ -108,23 +111,21 @@ test('the admin grading day shows each session with its candidates, the panel\'s
   assert.ok(hrefs(root).includes(`/admin/grading/days/${eventId}/session-1`))
   assert.ok(hrefs(root).includes('/admin/students/s1'))
   assert.ok(hrefs(root).includes('/admin/grading/opportunities'))
-  // Moving Cy into session 2 sends the application and the target session.
-  const moved = { ...day, sessions: [day.sessions[0]] }
-  stub.data.responses = { move_grading_candidate: moved }
-  const select = root.root.find(node => node.type === 'select' && node.props['aria-label'] === 'Move Cy Ong to another session')
-  assert.deepEqual(select.findAllByType('option').map(option => option.props.children), ['Session 1', 'Session 2'])
-  await act(async () => { select.props.onChange({ target: { value: 'session-2' } }) })
-  await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)) })
-  assert.deepEqual(stub.calls.find(call => call[1] === 'move_grading_candidate'), ['rpc', 'move_grading_candidate', { target_application: 'app-s3', target_session: 'session-2' }])
-  assert.ok(!textOf(root).includes('Session 2'), 'the returned day replaces the page')
+  // Moving is a row action, not an always-on select.
+  assert.equal(root.root.findAll(node => node.type === 'select').length, 0)
+  assert.ok(root.root.findAll(node => node.type === 'button' && node.props['aria-label'] === 'Move Cy Ong to another session').length)
+  // The menu offers only the other sessions, and warns when the move empties a session.
+  const decoded = (await import('./helpers/instructor-modules.mjs')).gradingPanels.decodeGradingDay(day)
+  assert.deepEqual(moveOptions(decoded.sessions, decoded.sessions[0]).map(({ option, removesFrom }) => [option.id, removesFrom]), [['session-2', false]])
+  const lone = { ...decoded.sessions[0], grades: [{ grade: blue, candidates: [decoded.sessions[0].grades[0].candidates[0]] }] }
+  assert.deepEqual(moveOptions(decoded.sessions, lone).map(({ removesFrom }) => removesFrom), [true])
 })
 
-test('before sorting, admins see the student list and can sort once applications close', async () => {
+test('before sorting, the main action is Sort into sessions in the header, and sorting shows the session list', async () => {
   const root = await render(`/admin/grading/days/${eventId}`, { dayData: unsorted, responses: { sort_grading_sessions: day } })
   let text = textOf(root)
-  assert.ok(text.includes('Not sorted'))
-  assert.ok(!text.includes('Sort into sessions'), 'the student list comes first')
-  await act(async () => { button(root, 'Session list').props.onClick() })
+  assert.ok(text.includes('"Closed"'))
+  assert.ok(!text.includes('Not sorted'), 'the student list waits for sorting before showing sessions')
   const sort = button(root, 'Sort into sessions')
   assert.equal(sort.props.disabled, false)
   await act(async () => { sort.props.onClick() })
@@ -132,22 +133,21 @@ test('before sorting, admins see the student list and can sort once applications
   assert.deepEqual(stub.calls.find(call => call[1] === 'sort_grading_sessions'), ['rpc', 'sort_grading_sessions', { target_event: eventId }])
   text = textOf(root)
   assert.ok(text.includes('Session 1') && text.includes('View results'), 'sorting shows the session list')
+  assert.ok(button(root, 'Sort again'), 'the header now offers Sort again')
 })
 
-test('sorting is blocked while applications are open or once grading has started, and errors are explained', async () => {
-  const open = await render(`/admin/grading/days/${eventId}?list=sessions`, { dayData: { ...unsorted, application_deadline: '2999-01-01' } })
+test('sorting is blocked while applications are open and gone once grading has started, and errors are explained', async () => {
+  const open = await render(`/admin/grading/days/${eventId}`, { dayData: { ...unsorted, application_deadline: '2998-12-01' } })
   assert.equal(button(open, 'Sort into sessions').props.disabled, true)
-  assert.ok(textOf(open).includes('Applications close on'))
-  const sortedOpen = await render(`/admin/grading/days/${eventId}`, { dayData: { ...day, application_deadline: '2999-01-01' } })
+  assert.ok(textOf(open).includes('Applications open'))
+  const sortedOpen = await render(`/admin/grading/days/${eventId}`, { dayData: { ...day, application_deadline: '2998-12-01' } })
   assert.equal(button(sortedOpen, 'Sort again').props.disabled, true)
-  assert.ok(textOf(sortedOpen).includes('Applications close on'))
   const started = await render(`/admin/grading/days/${eventId}`, { dayData: { ...day, grading_started: true } })
   const text = textOf(started)
-  // Sort again stays visible but disabled, with the reason beside it.
-  assert.equal(button(started, 'Sort again').props.disabled, true)
-  assert.ok(text.includes('An examiner has started grading, so sessions can no longer change.'))
-  assert.equal(started.root.findAll(node => node.type === 'select').length, 0)
-  const failing = await render(`/admin/grading/days/${eventId}?list=sessions`, { dayData: unsorted,
+  assert.equal(button(started, 'Sort again'), undefined)
+  assert.ok(text.includes('Sessions are locked because grading has started.'))
+  assert.equal(started.root.findAll(node => node.type === 'button' && String(node.props['aria-label']).startsWith('Move ')).length, 0)
+  const failing = await render(`/admin/grading/days/${eventId}`, { dayData: unsorted,
     errors: { sort_grading_sessions: { code: 'PGS02', message: 'Grading has started, so sessions are locked' } } })
   await act(async () => { button(failing, 'Sort into sessions').props.onClick() })
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)) })
@@ -182,4 +182,55 @@ test('admin results show one examiner\'s submitted session checklist at a time, 
 test('admin results explain an unknown session', async () => {
   const text = textOf(await render(`/admin/grading/days/${eventId}/re-sorted`))
   assert.ok(text.includes('This session isn’t part of this grading.'))
+})
+
+test('the schedule shows each grading\'s lifecycle, its next action and warnings, with past gradings on their own tab', async () => {
+  const grading = (id, date, deadline, overrides = {}) => ({ event_id: id, track: 'adult', grading_date: date,
+    application_opens_on: '2026-10-01', application_deadline: deadline, reporting_release_on: date, reporting_time: '10:00:00',
+    events: { name: `Adult grading — ${date}`, starts_at: `${date}T02:00:00Z`, ends_at: `${date}T04:00:00Z`, centres: { name: 'Central Dojo', address: '' } },
+    grading_panel_members: [{ instructor_id: 'a', is_chief: true, added_at: '2026-01-01', instructors: { first_name: 'Alex', last_name: 'Morgan' } }],
+    grading_applications: [{ status: 'submitted' }, { status: 'submitted' }, { status: 'withdrawn' }], grading_sessions: [], ...overrides })
+  stub.data.gradings = [
+    // Closed and unsorted, with a review pending and sessions running late.
+    grading('up', '2999-01-02', '2026-11-01', { grading_applications: [{ status: 'submitted' }, { status: 'under_review' }],
+      events: { name: 'Adult grading', starts_at: '2999-01-02T12:00:00Z', ends_at: '2999-01-02T14:00:00Z', centres: { name: 'Central Dojo', address: '' } } }),
+    // Still open, and nobody on the panel.
+    grading('later', '2999-02-01', '2998-12-01', { grading_panel_members: [] }),
+    grading('past', '2000-01-01', '1999-12-01', { grading_sessions: [{ id: 's1', ends_at: null }, { id: 's2', ends_at: null }] })]
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  let root
+  await act(async () => {
+    root = create(React.createElement(QueryClientProvider, { client },
+      React.createElement(MemoryRouter, null, React.createElement(Routes, null,
+        React.createElement(Route, { path: '*', element: React.createElement(AdminSchedule) })))))
+  })
+  mounted.push({ root, client })
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 30)) })
+  let text = textOf(root)
+  assert.match(text, /Next grading, in \d+ days/)
+  // The same candidate wording and count as the instructor side: active applications.
+  assert.equal(text.match(/"2 candidates"/g).length, 2)
+  // Light cards: no stepper; a status pill says where each grading is.
+  assert.equal(root.root.findAll(node => node.type === 'ol' && node.props['aria-label'] === 'Grading progress').length, 0)
+  assert.deepEqual(root.root.findAll(node => node.props?.['data-status-pill'] !== undefined && typeof node.type === 'string')
+    .map(node => node.props.children), ['Closed', 'Applications open'])
+  assert.equal(text.match(/Examiner panel/g).length, 2)
+  // The footer names the next action and lists warnings instead of repeating the stepper.
+  const actions = root.root.findAll(node => node.type === 'a' && node.props['data-grading-stage'] !== undefined)
+  assert.deepEqual(actions.map(node => [node.props['data-grading-stage'], node.props.href]),
+    [['unsorted', '/admin/grading/days/up?list=sessions'], ['open', '/admin/grading/days/later?list=students']])
+  assert.ok(text.includes('Sort into sessions') && text.includes('View candidates'))
+  for (const warning of ['1 application under review', 'Runs past 9:00 pm', 'No examiners assigned']) assert.ok(text.includes(warning), warning)
+  assert.ok(!text.includes('Ready to sort into sessions'))
+  assert.ok(!text.includes('Nothing needs attention'))
+  // Examiners show as avatar chips with initials when there is no photo.
+  assert.ok(text.includes('"AM"'))
+  // Past gradings live on their own tab.
+  assert.ok(!text.includes('/admin/grading/days/past'))
+  const past = root.root.findAll(node => node.type === 'button' && node.props['aria-pressed'] !== undefined)[1]
+  await act(async () => { past.props.onClick() })
+  text = textOf(root)
+  assert.ok(hrefs(root).includes('/admin/grading/days/past'))
+  assert.ok(text.includes('2 sessions'))
+  assert.ok(!text.includes('Sort into sessions'))
 })
