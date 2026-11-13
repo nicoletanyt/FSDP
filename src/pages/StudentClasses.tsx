@@ -1,16 +1,14 @@
-import { useMemo, useState, useEffect } from 'react'
-import { Link, useOutletContext } from 'react-router'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useLocation, useOutletContext, useSearchParams } from 'react-router'
 import {
+  ArrowLeft,
   CalendarDays,
   ChevronDown,
-  Clock3,
-  MapPin,
-  SlidersHorizontal,
-  Sparkles,
-  UsersRound,
-  Coins // 👈 新增图标
+  SlidersHorizontal
 } from 'lucide-react'
-import { Button } from '@/components/student/button'
+import { Button, buttonVariants } from '@/components/student/button'
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
+import { Calendar } from '@/components/ui/calendar'
 import {
   Card,
   CardContent,
@@ -18,23 +16,24 @@ import {
   CardTitle
 } from '@/components/ui/card'
 import type { StudentContext } from '@/layouts/StudentLayout'
+import { supabase } from '@/lib/supabase'
+import { dateKey } from '@/lib/instructor-calendar'
+import { cn } from '@/lib/utils'
 import {
-  beltRanks,
+  conflict,
   dateTime,
   formatTime,
-  isEligible,
-  isRecommended,
   prettyDate
 } from '@/lib/student-schedule'
 import type {
-  BeltRank,
   ClassOffering
 } from '@/lib/student-schedule'
 
-type Action = {
-  kind: 'enroll' | 'waitlist' | 'leave'
-  session: ClassOffering
-}
+type Action =
+  | { kind: 'enroll'; sessions: ClassOffering[] }
+  | { kind: 'waitlist' | 'leave'; session: ClassOffering }
+
+type ClassType = { id: string; label: string; description: string }
 
 const days = [
   'Sunday',
@@ -48,175 +47,168 @@ const days = [
 
 const input =
   'h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-2 focus-visible:outline-ring'
+const seatColours = {
+  full: 'bg-rose-50 text-rose-950 dark:bg-rose-950/45 dark:text-rose-100',
+  low: 'bg-amber-50 text-amber-950 dark:bg-amber-950/45 dark:text-amber-100',
+  normal: 'bg-background text-foreground'
+}
 
-export default function StudentClasses() {
-  const { classes, schedule } = useOutletContext<StudentContext>()
+function sessionAvailability(session: ClassOffering) {
+  if (!session.bookable) return { tone: 'normal', label: 'Booking unavailable' } as const
 
-  // 👇 新增：读取并管理 Credits 余额
-  const [credits, setCredits] = useState(0)
-  useEffect(() => {
-    setCredits(parseInt(localStorage.getItem('student_credits') || '0'))
-  }, [])
+  const spaces = session.capacity - session.occupied
+  if (spaces <= 0) return { tone: 'full', label: 'Full · waitlist' } as const
+  if (spaces <= 5) return { tone: 'low', label: `${spaces} ${spaces === 1 ? 'spot' : 'spots'} left` } as const
+  return { tone: 'normal', label: '' } as const
+}
 
-  const [centre, setCentre] = useState('all')
-  const [day, setDay] = useState('all')
-  const [period, setPeriod] = useState('all')
-  const [instructor, setInstructor] = useState('all')
-  const [showAdvanced, setShowAdvanced] = useState(false)
-  const [showAllLevels, setShowAllLevels] = useState(false)
-  const [selected, setSelected] = useState<Record<string, string>>({})
-  const [action, setAction] = useState<Action | null>(null)
-  const [message, setMessage] = useState('')
+function sessionTime(session: ClassOffering) {
+  return `${formatTime(session.startTime)} – ${formatTime(session.endTime)}`
+}
 
-  const centres = [...new Set(classes.map(c => c.centre))]
-  const instructors = [...new Set(classes.map(c => c.instructor))]
-
-  const matching = useMemo(
-    () =>
-      classes.filter(c => {
-        const hour = Number(c.startTime.slice(0, 2))
-
-        return (
-          dateTime(c).getTime() > Date.now() &&
-          (centre === 'all' || c.centre === centre) &&
-          (day === 'all' || c.date.getDay() === Number(day)) &&
-          (instructor === 'all' || c.instructor === instructor) &&
-          (
-            period === 'all' ||
-            (period === 'morning' && hour < 12) ||
-            (period === 'afternoon' && hour >= 12 && hour < 17) ||
-            (period === 'evening' && hour >= 17)
-          ) &&
-          (showAllLevels || isEligible(c, schedule.belt))
-        )
-      }),
-    [
-      classes,
-      centre,
-      day,
-      instructor,
-      period,
-      showAllLevels,
-      schedule.belt
-    ]
-  )
-
-  const groups = useMemo(() => {
-    const grouped = new Map<string, ClassOffering[]>()
-
-    matching.forEach(c => {
-      const values = grouped.get(c.templateId) ?? []
-      values.push(c)
-      grouped.set(c.templateId, values)
-    })
-
-    return [...grouped.values()]
-  }, [matching])
-
-  function reset() {
-    setCentre('all')
-    setDay('all')
-    setPeriod('all')
-    setInstructor('all')
-    setShowAllLevels(false)
+function ClassSessionPicker({
+  sessions, date, selectedIds, conflictingIds, schedule, busy, onDateChange, onToggle, onWaitlist
+}: {
+  sessions: ClassOffering[]
+  date: Date
+  selectedIds: string[]
+  conflictingIds: ReadonlySet<string>
+  schedule: StudentContext['schedule']
+  busy: boolean
+  onDateChange: (date: Date) => void
+  onToggle: (session: ClassOffering) => void
+  onWaitlist: (session: ClassOffering, kind: 'waitlist' | 'leave') => void
+}) {
+  const sessionsByDay = new Map<string, ClassOffering[]>()
+  for (const session of sessions) {
+    const key = dateKey(session.date)
+    const entries = sessionsByDay.get(key) ?? []
+    entries.push(session)
+    sessionsByDay.set(key, entries)
   }
+  const daySessions = sessionsByDay.get(dateKey(date)) ?? []
 
-  // 👇 核心修改：加入扣费逻辑的确认函数
-  function confirm() {
-    if (!action) return
+  return (
+    <div className="grid min-w-0 gap-5 sm:grid-cols-[auto_minmax(0,1fr)]">
+      <div className="rounded-lg border p-3">
+        <Calendar
+          aria-label="Class dates"
+          mode="single"
+          required
+          selected={date}
+          defaultMonth={date}
+          startMonth={sessions[0]?.date}
+          endMonth={sessions.at(-1)?.date}
+          showOutsideDays={false}
+          className="mx-auto [--booking-day:clamp(1.75rem,9vw,2.75rem)] lg:[--booking-day:3rem] [&_.rdp-weekday]:w-(--booking-day) [&_.rdp-day]:size-(--booking-day) [&_.rdp-day_button]:size-(--booking-day) [&_.rdp-day_button]:text-base [&_.rdp-caption_label]:text-base [&_.rdp-caption_label]:font-semibold"
+          disabled={day => busy || !sessionsByDay.has(dateKey(day))}
+          onSelect={onDateChange}
+        />
+      </div>
+      <div className="min-w-0 space-y-3">
+        <h3 className="font-semibold" aria-live="polite">{prettyDate(date)}</h3>
+        <div role="group" aria-label="Session times" className="grid max-h-80 gap-2 overflow-y-auto p-1">
+          {daySessions.map(session => {
+            const { tone, label } = sessionAvailability(session)
+            const selected = selectedIds.includes(session.id)
+            const booked = schedule.isBooked(session.id)
+            const full = schedule.isFull(session)
+            const waiting = schedule.isWaitlisted(session.id)
+            const canLeave = waiting && full && session.bookable && !booked
+            const overlapsBooking = !full && conflictingIds.has(session.id)
+            const disabled = busy || booked || overlapsBooking || !session.bookable || (!schedule.active && !canLeave)
+            return (
+              <Button
+                key={session.id}
+                variant="outline"
+                aria-pressed={full || booked || overlapsBooking || !session.bookable ? undefined : selected}
+                disabled={disabled}
+                className={cn(
+                  'h-auto min-h-11 w-full flex-wrap justify-between gap-2 py-2 text-left whitespace-normal',
+                  seatColours[tone],
+                  selected && 'border-primary ring-1 ring-primary'
+                )}
+                onClick={() => {
+                  if (full) onWaitlist(session, waiting ? 'leave' : 'waitlist')
+                  else onToggle(session)
+                }}
+              >
+                <span className="min-w-0">
+                  <span className="block font-semibold">{sessionTime(session)}</span>
+                  <span className="block text-xs opacity-80">{session.centre} · {session.instructor}</span>
+                </span>
+                <span className="text-xs font-medium">
+                  {booked ? 'Already enrolled' : overlapsBooking ? 'Overlaps a booking' : canLeave ? 'Leave waitlist' : label || `${session.capacity - session.occupied} spots left`}
+                </span>
+              </Button>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
 
-    const { kind, session } = action
+function filterSessions(sessions: ClassOffering[], params: URLSearchParams) {
+  const centre = params.get('centre')
+  const day = params.get('day')
+  const instructor = params.get('instructor')
+  const period = params.get('period')
+  return sessions.filter(session => {
+    const hour = Number(session.startTime.slice(0, 2))
+    return (!centre || session.centre === centre)
+      && (!day || session.date.getDay() === Number(day))
+      && (!instructor || session.instructor === instructor)
+      && (!period || (period === 'morning' && hour < 12)
+        || (period === 'afternoon' && hour >= 12 && hour < 17)
+        || (period === 'evening' && hour >= 17))
+  })
+}
 
-    if (kind === 'enroll') {
-      // 1. 检查余额
-      if (credits <= 0) {
-        setMessage('❌ Insufficient credits. Please top up your account to enrol.')
-        setAction(null)
-        return
-      }
+function SessionFilters({
+  title, sessions, params, count, onChange, grade, disabled = false
+}: {
+  title: string
+  sessions: ClassOffering[]
+  params: URLSearchParams
+  count: number
+  onChange: (params: URLSearchParams) => void
+  grade?: string
+  disabled?: boolean
+}) {
+  const centre = params.get('centre') ?? 'all'
+  const day = params.get('day') ?? 'all'
+  const period = params.get('period') ?? 'all'
+  const instructor = params.get('instructor') ?? 'all'
+  const [showAdvanced, setShowAdvanced] = useState(period !== 'all' || instructor !== 'all')
+  const centres = [...new Set(sessions.map(session => session.centre))].sort()
+  const instructors = [...new Set(sessions.map(session => session.instructor))].sort()
 
-      // 2. 尝试报名
-      const error = schedule.enroll(session)
-      
-      if (error) {
-        setMessage(error)
-      } else {
-        // 3. 报名成功，扣除 1 Credit 并更新本地存储
-        const newCredits = credits - 1
-        localStorage.setItem('student_credits', newCredits.toString())
-        setCredits(newCredits)
-        setMessage(`✅ Enrolled in ${session.title} on ${prettyDate(session.date)}. (1 Credit deducted)`)
-      }
-    } else if (kind === 'waitlist') {
-      const error = schedule.joinWaitlist(session)
-      setMessage(
-        error ??
-        'You joined the demo waitlist. Joining does not guarantee a class spot. An administrator would email you if a space becomes available.'
-      )
-    } else {
-      schedule.leaveWaitlist(session.id)
-      setMessage('You have left the demo waitlist.')
-    }
-
-    setAction(null)
+  function setFilter(name: string, value: string) {
+    const next = new URLSearchParams(params)
+    if (value === 'all') next.delete(name)
+    else next.set(name, value)
+    onChange(next)
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-semibold">
-            Class timetable & enrolment
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Choose a class, then select a suitable session.
-            No need to scroll through every date.
-          </p>
+    <Card className="gap-3">
+      <CardHeader>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <CardTitle>{title}</CardTitle>
+          {grade && <span className="text-xs text-muted-foreground">{grade}</span>}
         </div>
+      </CardHeader>
 
-        {/* 👇 新增：顶部显示余额 & 跳转充值 */}
-        <div className="flex items-center gap-3">
-          <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold ${
-            credits > 0 ? 'bg-[#2c3f67]/10 text-[#2c3f67] dark:bg-blue-900/30 dark:text-blue-400' : 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'
-          }`}>
-            <Coins className="w-4 h-4" />
-            {credits} Credits
-          </div>
-          <Button
-            variant="outline"
-            render={<Link to="/student/credits" />}
-            className="gap-2"
-          >
-            Top Up
-          </Button>
-          <Button
-            variant="outline"
-            render={<Link to="/timetable" />}
-          >
-            <CalendarDays className="size-4" />
-            My schedule
-          </Button>
-        </div>
-      </div>
-
-      <Card className="gap-3">
-        <CardHeader>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <CardTitle>Find a class</CardTitle>
-            <span className="text-xs text-muted-foreground">
-              Demo belt: {schedule.belt}
-            </span>
-          </div>
-        </CardHeader>
-
-        <CardContent className="space-y-3">
+      <CardContent>
+        <fieldset disabled={disabled} className="min-w-0 space-y-3">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <label className="space-y-1 text-sm">
               <span>Centre</span>
               <select
                 className={input}
                 value={centre}
-                onChange={e => setCentre(e.target.value)}
+                onChange={e => setFilter('centre', e.target.value)}
               >
                 <option value="all">All centres</option>
                 {centres.map(c => (
@@ -232,7 +224,7 @@ export default function StudentClasses() {
               <select
                 className={input}
                 value={day}
-                onChange={e => setDay(e.target.value)}
+                onChange={e => setFilter('day', e.target.value)}
               >
                 <option value="all">Any day</option>
                 {days.map((d, i) => (
@@ -243,20 +235,6 @@ export default function StudentClasses() {
               </select>
             </label>
 
-            <label className="space-y-1 text-sm">
-              <span>My belt level (demo)</span>
-              <select
-                className={input}
-                value={schedule.belt}
-                onChange={e =>
-                  schedule.setBelt(e.target.value as BeltRank)
-                }
-              >
-                {beltRanks.map(b => (
-                  <option key={b}>{b}</option>
-                ))}
-              </select>
-            </label>
           </div>
 
           <button
@@ -281,7 +259,7 @@ export default function StudentClasses() {
                 <select
                   className={input}
                   value={period}
-                  onChange={e => setPeriod(e.target.value)}
+                  onChange={e => setFilter('period', e.target.value)}
                 >
                   <option value="all">Any time</option>
                   <option value="morning">Morning</option>
@@ -295,7 +273,7 @@ export default function StudentClasses() {
                 <select
                   className={input}
                   value={instructor}
-                  onChange={e => setInstructor(e.target.value)}
+                  onChange={e => setFilter('instructor', e.target.value)}
                 >
                   <option value="all">All instructors</option>
                   {instructors.map(i => (
@@ -304,190 +282,125 @@ export default function StudentClasses() {
                 </select>
               </label>
 
-              <label className="flex items-center gap-2 self-end pb-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={showAllLevels}
-                  onChange={e =>
-                    setShowAllLevels(e.target.checked)
-                  }
-                />
-                Show classes above my belt level
-              </label>
             </div>
           )}
 
           <div className="flex items-center justify-between border-t pt-3">
             <span className="text-sm text-muted-foreground">
-              {groups.length} class types found
+              {count} upcoming {count === 1 ? 'session' : 'sessions'}
             </span>
-            <Button variant="ghost" size="sm" onClick={reset}>
+            <Button variant="ghost" size="sm" disabled={disabled || !params.size} onClick={() => onChange(new URLSearchParams())}>
               Clear filters
             </Button>
           </div>
-        </CardContent>
-      </Card>
+        </fieldset>
+      </CardContent>
+    </Card>
+  )
+}
 
-      {message && (
-        <div
-          role="status"
-          className={`rounded-lg border px-4 py-3 text-sm font-medium ${
-            message.includes('❌') 
-              ? 'bg-red-50 border-red-200 text-red-700 dark:bg-red-900/20 dark:border-red-900/50 dark:text-red-400' 
-              : 'bg-green-50 border-green-200 text-green-700 dark:bg-green-900/20 dark:border-green-900/50 dark:text-green-400'
-          }`}
-        >
-          {message}
-          {message.includes('❌') && (
-            <Link to="/student/credits" className="ml-2 underline hover:text-red-900 dark:hover:text-red-300">
-              Go to Top Up page
-            </Link>
-          )}
+export default function StudentClasses() {
+  const { classes, schedule } = useOutletContext<StudentContext>()
+
+  const { pathname } = useLocation()
+  const [params, setParams] = useSearchParams()
+  const [catalog, setCatalog] = useState<ClassType[] | null>(null)
+  const [catalogError, setCatalogError] = useState(false)
+  const [catalogRevision, setCatalogRevision] = useState(0)
+
+  useEffect(() => {
+    const controller = new AbortController()
+    async function loadCatalog() {
+      try {
+        const { data, error } = await supabase.from('class_types')
+          .select('id, label, description')
+          .order('label')
+          .abortSignal(controller.signal)
+        if (error) throw error
+        if (!controller.signal.aborted) setCatalog(data)
+      } catch {
+        if (!controller.signal.aborted) setCatalogError(true)
+      }
+    }
+    void loadCatalog()
+    return () => controller.abort()
+  }, [catalogRevision])
+
+  const upcoming = useMemo(() => {
+    const now = new Date()
+    return classes.filter(session => session.scheduled && dateTime(session) > now)
+  }, [classes])
+  const scheduledTypes = new Set(upcoming.map(session => session.classType ?? session.title))
+  const unscheduled = catalog?.filter(type => !scheduledTypes.has(type.label))
+
+  const matching = useMemo(() => filterSessions(upcoming, params), [upcoming, params])
+
+  const groups = useMemo(() => {
+    const grouped = new Map<string, ClassOffering[]>()
+
+    for (const session of matching) {
+      const type = session.classType ?? session.title
+      const sessions = grouped.get(type) ?? []
+      sessions.push(session)
+      grouped.set(type, sessions)
+    }
+
+    return [...grouped].sort(([left], [right]) => left.localeCompare(right))
+  }, [matching])
+
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-semibold">
+            Classes
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Choose a class type to see its available dates and times.
+          </p>
         </div>
-      )}
 
+        <Link to="/timetable" className={buttonVariants({ variant: 'outline' })}>
+          <CalendarDays className="size-4" />
+          My schedule
+        </Link>
+      </div>
+
+      <SessionFilters
+        title="Find a class"
+        sessions={upcoming}
+        params={params}
+        count={matching.length}
+        grade={schedule.grade ? `Current grade: ${schedule.grade}` : 'Student membership'}
+        onChange={next => setParams(next, { replace: true })}
+      />
+
+      <h3 className="text-lg font-semibold">Upcoming sessions</h3>
       {groups.length === 0 ? (
         <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
-          No matching classes. Try another day or reset the filters.
+          {upcoming.length ? 'No upcoming sessions match these filters.' : 'No upcoming sessions are scheduled.'}
         </div>
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
-          {groups.map(sessions => {
-            const first = sessions[0]
-            const current =
-              sessions.find(
-                c => c.id === selected[first.templateId]
-              ) ?? first
-
-            const booked = schedule.isBooked(current.id)
-            const waitlisted = schedule.isWaitlisted(current.id)
-            const full = schedule.isFull(current)
-            const eligible = isEligible(current, schedule.belt)
-
-            const available = Math.max(
-              0,
-              current.capacity -
-                current.occupied -
-                (booked ? 1 : 0)
-            )
-
+          {groups.map(([type, sessions]) => {
+            const bookingParams = new URLSearchParams(params)
+            bookingParams.set('type', type)
+            if (pathname === '/timetable') bookingParams.set('from', 'timetable')
             return (
-              <Card key={first.templateId} className="gap-3">
-                <CardHeader className="gap-2">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <CardTitle className="text-lg">
-                      {first.title}
-                    </CardTitle>
-
-                    {isRecommended(current, schedule.belt) && (
-                      <span className="flex items-center gap-1 rounded-full bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
-                        <Sparkles className="size-3" />
-                        Recommended
-                      </span>
-                    )}
-                  </div>
-
-                  <p className="text-xs text-muted-foreground">
-                    {first.level}
-                  </p>
+              <Card key={type} className="gap-5 py-6 sm:py-7">
+                <CardHeader>
+                  <CardTitle className="text-lg">{type}</CardTitle>
+                  {sessions[0]?.level && <p className="text-sm text-muted-foreground">{sessions[0].level}</p>}
                 </CardHeader>
-
-                <CardContent className="space-y-4">
-                  <div className="grid gap-2 text-sm text-muted-foreground sm:grid-cols-2">
-                    <span className="flex items-center gap-2">
-                      <MapPin className="size-4" />
-                      {current.centre}
-                    </span>
-
-                    <span className="flex items-center gap-2">
-                      <Clock3 className="size-4" />
-                      {formatTime(current.startTime)}–
-                      {formatTime(current.endTime)}
-                    </span>
-
-                    <span>{current.instructor}</span>
-
-                    <span className="flex items-center gap-2">
-                      <UsersRound className="size-4" />
-                      {full
-                        ? 'Fully booked'
-                        : `${available} of ${current.capacity} slots left`}
-                    </span>
-                  </div>
-
-                  <label className="block space-y-1 text-sm">
-                    <span className="font-medium">
-                      Choose a session
-                    </span>
-
-                    <select
-                      className={input}
-                      value={current.id}
-                      onChange={e =>
-                        setSelected(prev => ({
-                          ...prev,
-                          [first.templateId]: e.target.value
-                        }))
-                      }
-                    >
-                      {sessions.slice(0, 12).map(c => (
-                        <option key={c.id} value={c.id}>
-                          {prettyDate(c.date)} ·{' '}
-                          {schedule.isFull(c)
-                            ? 'Full'
-                            : `${Math.max(
-                                0,
-                                c.capacity - c.occupied
-                              )} spaces`}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  {!eligible && (
-                    <p className="text-xs text-destructive">
-                      This class requires a higher belt level.
-                    </p>
-                  )}
-
-                  {booked ? (
-                    <Button className="w-full" disabled>
-                      Already enrolled
-                    </Button>
-                  ) : waitlisted ? (
-                    <Button
-                      className="w-full"
-                      variant="outline"
-                      onClick={() =>
-                        setAction({
-                          kind: 'leave',
-                          session: current
-                        })
-                      }
-                    >
-                      Leave waitlist
-                    </Button>
-                  ) : (
-                    <Button
-                      className="w-full flex items-center justify-center gap-2"
-                      disabled={!eligible}
-                      onClick={() =>
-                        setAction({
-                          kind: full ? 'waitlist' : 'enroll',
-                          session: current
-                        })
-                      }
-                    >
-                      {full ? (
-                        'Join waitlist'
-                      ) : (
-                        <>
-                          Enrol in this class 
-                          <span className="opacity-80 text-xs bg-black/10 dark:bg-white/10 px-1.5 py-0.5 rounded">- 1 Credit</span>
-                        </>
-                      )}
-                    </Button>
-                  )}
+                <CardContent>
+                  <Link
+                    to={`/classes/choose?${bookingParams}`}
+                    aria-label={`Choose class: ${type}`}
+                    className={buttonVariants({ className: 'w-full' })}
+                  >
+                    Choose class
+                  </Link>
                 </CardContent>
               </Card>
             )
@@ -495,83 +408,322 @@ export default function StudentClasses() {
         </div>
       )}
 
-      {/* 👇 确认弹窗中增加点数显示 */}
-      {action && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-          role="presentation"
-          onMouseDown={e => {
-            if (e.target === e.currentTarget) {
-              setAction(null)
-            }
-          }}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="class-confirm-title"
-            className="w-full max-w-md space-y-4 rounded-xl bg-background p-6 shadow-xl border border-border"
-          >
-            <h3
-              id="class-confirm-title"
-              className="text-xl font-semibold"
-            >
-              {action.kind === 'enroll'
-                ? 'Confirm enrolment?'
-                : action.kind === 'waitlist'
-                  ? 'Join the waitlist?'
-                  : 'Leave the waitlist?'}
-            </h3>
+      {catalogError ? (
+        <div role="alert" className="flex flex-wrap items-center gap-2 text-sm">
+          <p>Could not load the full class list.</p>
+          <Button variant="outline" size="sm" onClick={() => {
+            setCatalogError(false)
+            setCatalogRevision(revision => revision + 1)
+          }}>Try again</Button>
+        </div>
+      ) : !catalog ? (
+        <p role="status" className="text-sm text-muted-foreground">Loading the full class list…</p>
+      ) : unscheduled && unscheduled.length > 0 && (
+        <section aria-labelledby="other-class-types" className="space-y-3">
+          <h3 id="other-class-types" className="text-lg font-semibold">Other class types</h3>
+          <div className="grid gap-4 lg:grid-cols-2">
+            {unscheduled.map(type => (
+              <Card key={type.id} className="gap-2 py-6 sm:py-7">
+                <CardHeader>
+                  <CardTitle className="text-lg">{type.label}</CardTitle>
+                  {type.description && <p className="text-sm text-muted-foreground">{type.description}</p>}
+                </CardHeader>
+                <CardContent className="text-sm text-muted-foreground">No upcoming sessions</CardContent>
+              </Card>
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
+  )
+}
 
-            <p className="text-sm">
-              {action.session.title} —{' '}
-              {prettyDate(action.session.date)} at{' '}
-              {formatTime(action.session.startTime)}
+export function StudentClassBooking() {
+  const [params] = useSearchParams()
+  const type = params.get('type') ?? ''
+  const backParams = new URLSearchParams(params)
+  backParams.delete('type')
+  backParams.delete('from')
+  const backPath = params.get('from') === 'timetable' ? '/timetable' : '/classes'
+  const backTo = backParams.size ? `${backPath}?${backParams}` : backPath
+
+  return (
+    <div className="space-y-5">
+      <Link to={backTo} className={buttonVariants({ variant: 'ghost' })}>
+        <ArrowLeft aria-hidden="true" className="size-4" /> Back to classes
+      </Link>
+      <ClassBooking key={params.toString()} type={type} initialParams={backParams} />
+    </div>
+  )
+}
+
+function ClassBooking({ type, initialParams }: { type: string; initialParams: URLSearchParams }) {
+  const { classes, schedule } = useOutletContext<StudentContext>()
+  const { credits, deductCredit } = useOutletContext<StudentContext>()
+  const [params, setParams] = useState(initialParams)
+  const [day, setDay] = useState('')
+  const [pendingChange, setPendingChange] = useState<{ date: Date } | { params: URLSearchParams } | null>(null)
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [action, setAction] = useState<Action | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+  const [message, setMessage] = useState('')
+  const [selectionError, setSelectionError] = useState('')
+  const [actionError, setActionError] = useState('')
+
+  const now = new Date()
+  const classSessions = classes.filter(session =>
+    (session.classType ?? session.title) === type && session.scheduled && dateTime(session) > now
+  )
+  const sessions = filterSessions(classSessions, params)
+  const current = sessions.find(session => dateKey(session.date) === day)
+    ?? sessions.find(session => session.bookable && !schedule.isFull(session))
+    ?? sessions[0]
+
+  const busy = submitting || schedule.saving
+  const bookings = classes.filter(session => session.scheduled && schedule.isBooked(session.id))
+  const conflictingIds = new Set(sessions
+    .filter(session => bookings.some(booking => booking.id !== session.id && conflict(session, booking)))
+    .map(session => session.id))
+  const selected = sessions.filter(session =>
+    current && dateKey(session.date) === dateKey(current.date)
+    && selectedIds.includes(session.id) && session.bookable
+    && !schedule.isFull(session) && !schedule.isBooked(session.id) && !conflictingIds.has(session.id)
+  )
+
+  function applyDay(date: Date) {
+    setDay(dateKey(date))
+    setPendingChange(null)
+    setSelectedIds([])
+    setSelectionError('')
+    setMessage('')
+  }
+
+  function changeDay(date: Date) {
+    if (!current || dateKey(date) === dateKey(current.date)) return
+    if (selected.length) setPendingChange({ date })
+    else applyDay(date)
+  }
+
+  function changeFilters(next: URLSearchParams) {
+    const nextSessions = filterSessions(selected, next)
+    if (nextSessions.length !== selected.length) {
+      setPendingChange({ params: next })
+      return
+    }
+    setParams(next)
+    setSelectionError('')
+  }
+
+  function confirmChange() {
+    if (!pendingChange) return
+    if ('date' in pendingChange) {
+      applyDay(pendingChange.date)
+    } else {
+      setParams(pendingChange.params)
+      setSelectedIds([])
+      setPendingChange(null)
+      setSelectionError('')
+    }
+  }
+
+  function toggleSession(session: ClassOffering) {
+    setSelectionError('')
+    setMessage('')
+    if (selectedIds.includes(session.id)) {
+      setSelectedIds(ids => ids.filter(id => id !== session.id))
+      return
+    }
+
+    if (conflictingIds.has(session.id)) {
+      setSelectionError('This time overlaps a class you already booked.')
+      return
+    }
+
+    if (selected.some(other => conflict(session, other))) {
+      setSelectionError('These classes overlap. Choose times that do not overlap.')
+      return
+    }
+
+    setDay(dateKey(session.date))
+    setSelectedIds(ids => [...ids, session.id])
+  }
+
+  function closeAction() {
+    setAction(null)
+    setActionError('')
+  }
+
+  async function confirm() {
+    if (!action || busy) return
+    setSubmitting(true)
+    setActionError('')
+    try {
+      if (action.kind === 'enroll') {
+        if (credits < action.sessions.length) {
+          setActionError('Top up your credits before enrolling in these classes.')
+          return
+        }
+        const completed: string[] = []
+        const failed: ClassOffering[] = []
+        const errors: string[] = []
+        for (const session of action.sessions) {
+          const error = await schedule.enroll(session)
+          if (error) {
+            failed.push(session)
+            errors.push(`${sessionTime(session)} at ${session.centre}: ${error}`)
+          } else {
+            deductCredit()
+            completed.push(session.id)
+          }
+        }
+        setSelectedIds(ids => ids.filter(id => !completed.includes(id)))
+        if (completed.length) {
+          const count = completed.length
+          setMessage(`Enrolled in ${count} ${count === 1 ? 'class' : 'classes'} on ${prettyDate(action.sessions[0].date)}.`)
+        }
+        if (failed.length) {
+          setAction({ kind: 'enroll', sessions: failed })
+          setActionError([
+            ...(completed.length ? [`${completed.length} ${completed.length === 1 ? 'class was' : 'classes were'} booked.`] : []),
+            ...errors
+          ].join('\n'))
+          return
+        }
+      } else {
+        const error = action.kind === 'waitlist'
+          ? await schedule.joinWaitlist(action.session)
+          : await schedule.leaveWaitlist(action.session.id)
+        if (error) {
+          setActionError(error)
+          return
+        }
+        setMessage(action.kind === 'waitlist' ? 'You joined the waitlist.' : 'You have left the waitlist.')
+      }
+      closeAction()
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <section className="space-y-4" aria-labelledby="booking-class-title">
+      <header className="space-y-1">
+        <h2 id="booking-class-title" className="text-2xl font-semibold">{type || 'Choose a class'}</h2>
+        {classSessions[0]?.level && <p className="text-sm text-muted-foreground">{classSessions[0].level}</p>}
+      </header>
+      {message && (
+        <p role="status" className="rounded-lg border bg-muted px-4 py-3 text-sm">{message}</p>
+      )}
+      <SessionFilters
+        title="Filter sessions"
+        sessions={classSessions}
+        params={params}
+        count={sessions.length}
+        disabled={busy}
+        onChange={changeFilters}
+      />
+      {current ? <Card>
+        <CardHeader>
+          <CardTitle>Choose date and times</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Select one or more times, then enrol. You’ll be asked before a date change clears your selection.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <ClassSessionPicker
+            key={params.toString()}
+            sessions={sessions}
+            date={current.date}
+            selectedIds={selected.map(session => session.id)}
+            conflictingIds={conflictingIds}
+            schedule={schedule}
+            busy={busy}
+            onDateChange={changeDay}
+            onToggle={toggleSession}
+            onWaitlist={(session, kind) => {
+              setMessage('')
+              setAction({ kind, session })
+            }}
+          />
+          {selectionError && <p role="alert" className="text-sm text-destructive">{selectionError}</p>}
+          {!schedule.active && (
+            <p className="text-sm text-muted-foreground">
+              {schedule.linked ? 'Booking access requires an active membership.' : 'Link a student record to this account before booking.'}
             </p>
+          )}
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
+            <Link to="/student/credits" className="text-sm text-primary underline">{credits} credits available</Link>
+            <p role="status" className="text-sm text-muted-foreground">
+              {selected.length} {selected.length === 1 ? 'class' : 'classes'} selected
+            </p>
+            <Button
+              disabled={!selected.length || !schedule.active || busy}
+              onClick={() => setAction({ kind: 'enroll', sessions: selected })}
+            >
+              Enrol in selected classes
+            </Button>
+          </div>
+        </CardContent>
+      </Card> : (
+        <p className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
+          {classSessions.length ? 'No sessions match these filters.' : 'No upcoming sessions for this class.'}
+        </p>
+      )}
 
-            {action.kind === 'enroll' && (
-              <div className="rounded-lg bg-muted p-3 text-sm flex items-center justify-between">
-                <span>Enrolment Fee:</span>
-                <span className="font-bold flex items-center gap-1 text-[#2c3f67] dark:text-blue-400">
-                  <Coins className="w-4 h-4" /> 1 Credit
-                </span>
-              </div>
+      <Dialog open={pendingChange !== null} onOpenChange={open => {
+        if (!open) setPendingChange(null)
+      }}>
+        <DialogContent showCloseButton={false} className="sm:max-w-md">
+          <DialogTitle>{pendingChange && 'params' in pendingChange ? 'Change filters?' : 'Change date?'}</DialogTitle>
+          <DialogDescription>
+            Your selected slots will be cleared. Confirm to continue.
+          </DialogDescription>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button variant="outline" onClick={() => setPendingChange(null)}>Keep selection</Button>
+            <Button onClick={confirmChange}>{pendingChange && 'params' in pendingChange ? 'Apply filters' : 'Change date'}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={action !== null} onOpenChange={open => {
+        if (!open && !busy) closeAction()
+      }}>
+        {action && (
+          <DialogContent showCloseButton={false} className="sm:max-w-md">
+            <DialogTitle>
+              {action.kind === 'enroll' ? 'Confirm enrolment?' : action.kind === 'waitlist' ? 'Join the waitlist?' : 'Leave the waitlist?'}
+            </DialogTitle>
+            {action.kind === 'enroll' ? (
+              <>
+                <DialogDescription>{prettyDate(action.sessions[0].date)}</DialogDescription>
+                <ul className="max-h-48 space-y-1 overflow-y-auto text-sm">
+                  {action.sessions.map(session => (
+                    <li key={session.id}>{sessionTime(session)} · {session.centre}</li>
+                  ))}
+                </ul>
+              </>
+            ) : (
+              <DialogDescription>
+                {action.session.title} · {prettyDate(action.session.date)} · {sessionTime(action.session)} · {action.session.centre}
+              </DialogDescription>
             )}
-
             {action.kind === 'waitlist' && (
-              <p className="rounded-lg bg-muted p-3 text-sm">
-                <strong>Important:</strong> Joining the waitlist
-                does not guarantee a spot. If a slot opens and
-                you are selected, an administrator will notify
-                you by email.
-              </p>
+              <p className="text-sm text-muted-foreground">Joining the waitlist does not reserve a spot.</p>
             )}
-
-            <div className="flex justify-end gap-2">
-              <Button
-                variant="outline"
-                onClick={() => setAction(null)}
-              >
-                Back
-              </Button>
-
-              <Button onClick={confirm}>
-                {action.kind === 'enroll'
+            {actionError && <p role="alert" className="whitespace-pre-line rounded-md bg-destructive/10 p-3 text-sm text-destructive">{actionError}</p>}
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button variant="outline" disabled={busy} onClick={closeAction}>Back</Button>
+              <Button onClick={confirm} disabled={busy}>
+                {busy ? 'Saving…' : action.kind === 'enroll'
                   ? 'Yes, enrol'
                   : action.kind === 'waitlist'
                     ? 'Yes, join waitlist'
                     : 'Yes, leave waitlist'}
               </Button>
             </div>
-          </div>
-        </div>
-      )}
-
-      <p className="text-xs text-muted-foreground">
-        Prototype: class capacity, enrolments and waitlists use
-        demo data/local browser storage. Waitlist allocation
-        and administrator email alerts need backend integration.
-      </p>
-    </div>
+          </DialogContent>
+        )}
+      </Dialog>
+    </section>
   )
 }
