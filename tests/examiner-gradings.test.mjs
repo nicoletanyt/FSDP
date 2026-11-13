@@ -336,7 +336,9 @@ async function renderSession({ path, startsAt = '2026-11-14T02:00:00Z', isChief 
   }
   return { root, eventId }
 }
-const checkboxes = root => root.root.findAll(node => node.type === 'input' && node.props.type === 'checkbox')
+// The A | B | C picker for each technique and candidate.
+const markers = root => root.root.findAll(node => node.type === 'div' && node.props.role === 'group' && node.props['data-mark'] !== undefined)
+const letterButtons = marker => marker.findAll(node => node.type === 'button')
 
 test('a session checklist has one table per grade, each with only that grade\'s candidates and techniques', async () => {
   // The old /instructor/grading/:eventId?session= URL redirects to /instructor/grading/session/:id.
@@ -351,7 +353,8 @@ test('a session checklist has one table per grade, each with only that grade\'s 
     ['blue-6th-kyu', 'brown-4th-kyu'])
   const tables = root.root.findAll(node => node.props?.role === 'region')
   assert.deepEqual(tables.map(node => node.props['aria-label']), ['Grading checklist: Blue (6th Kyu)', 'Grading checklist: Brown (4th Kyu)'])
-  assert.deepEqual(checkboxes(root).map(node => node.props['aria-label']), ['Ada Student: Blue technique', 'Cy Student: Brown technique'])
+  assert.deepEqual(markers(root).map(node => node.props['aria-label']), ['Ada Student: Blue technique', 'Cy Student: Brown technique'])
+  assert.deepEqual(letterButtons(markers(root)[0]).map(node => node.props.children), ['A', 'B', 'C'])
   assert.ok(!text.includes('Other technique'))
   assert.equal(root.root.findAll(node => node.type === 'textarea').length, 2)
   assert.ok(root.root.findAll(node => node.type === 'a').some(node => node.props.href === `/instructor/gradings/${eventId}`))
@@ -362,13 +365,34 @@ test('marking is locked until the session starts, but the checklist is viewable'
   const text = textOf(early.root)
   assert.ok(text.includes('Marking opens when this session starts'))
   assert.ok(text.includes('Brown technique'), 'the grid is shown')
-  assert.ok(checkboxes(early.root).every(node => node.props.disabled), 'checkboxes are disabled')
+  assert.ok(markers(early.root).flatMap(letterButtons).every(node => node.props.disabled), 'the letters are disabled')
   assert.ok(early.root.root.findAll(node => node.type === 'textarea').every(node => node.props.disabled))
   assert.ok(!text.includes('Submit grading'))
   const started = await renderSession({ path: '/instructor/grading/session/mixed', startsAt: '2020-01-01T02:00:00Z' })
   assert.ok(!textOf(started.root).includes('Marking opens'))
-  assert.ok(checkboxes(started.root).some(node => !node.props.disabled), 'marking is open once the session has started')
+  assert.ok(markers(started.root).flatMap(letterButtons).some(node => !node.props.disabled), 'marking is open once the session has started')
   assert.ok(textOf(started.root).includes('Submit grading'))
+})
+
+test('each technique is marked A, B or C; Submit needs every technique marked', async () => {
+  const { root } = await renderSession({ path: '/instructor/grading/session/mixed', startsAt: '2020-01-01T02:00:00Z' })
+  const submit = () => root.root.find(node => node.type === 'button' && node.props['data-submit-grading'] !== undefined)
+  assert.ok(markers(root).every(node => node.props['data-mark'] === ''), 'cells start blank')
+  assert.equal(submit().props.disabled, true)
+  assert.ok(textOf(root).includes('2 techniques still need'))
+  const choose = async (index, letter) => {
+    const button = letterButtons(markers(root)[index]).find(node => node.props.children === letter)
+    await act(async () => { button.props.onClick() })
+  }
+  await choose(0, 'A'); await choose(1, 'C')
+  assert.deepEqual(markers(root).map(node => node.props['data-mark']), ['A', 'C'])
+  assert.equal(letterButtons(markers(root)[0]).find(node => node.props.children === 'A').props['aria-pressed'], true)
+  assert.equal(submit().props.disabled, false, 'every technique is marked')
+  assert.ok(!textOf(root).includes('still need'))
+  // Choosing the selected letter again clears it.
+  await choose(1, 'C')
+  assert.equal(markers(root)[1].props['data-mark'], '')
+  assert.equal(submit().props.disabled, true)
 })
 
 test('the chief can switch to another examiner\'s submitted checklist; other examiners get no picker', async () => {
@@ -376,19 +400,20 @@ test('the chief can switch to another examiner\'s submitted checklist; other exa
     updatedAt: '2020-01-01T03:00:00Z', submittedAt: '2020-01-01T03:00:00Z',
     students: [{ student_id: 's1', candidate_number: 1, name: 'Ada Student', notes: 'Hiroshi note', target_grade_id: blue.id }],
     items: [{ syllabus_item_id: 'b1', category: 'Basics', label: 'Blue technique', sort_order: 1, grade_id: blue.id }],
-    passed: new Set([JSON.stringify(['s1', 'b1'])]) }
+    marks: new Map([[JSON.stringify(['s1', 'b1']), 'B']]) }
   const chief = await renderSession({ path: '/instructor/grading/session/mixed', startsAt: '2020-01-01T02:00:00Z', others: [submitted] })
   const picker = chief.root.root.find(node => node.props?.role === 'group' && node.props['aria-label'] === 'Examiner')
   const buttons = picker.findAll(node => node.type === 'button')
   assert.equal(buttons.length, 2)
   assert.ok(textOf(chief.root).includes('(you)'))
   assert.equal(buttons[0].props['aria-pressed'], true, 'opens on your own, editable checklist')
-  assert.ok(checkboxes(chief.root).length > 0 && !textOf(chief.root).includes('Hiroshi note'))
+  assert.ok(markers(chief.root).length > 0 && !textOf(chief.root).includes('Hiroshi note'))
   await act(async () => { buttons[1].props.onClick() })
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)) })
   const viewing = textOf(chief.root)
-  assert.ok(viewing.includes('Hiroshi note') && viewing.includes('Passed'), 'their submitted checklist, read-only')
-  assert.equal(checkboxes(chief.root).length, 0, 'no editing someone else\'s checklist')
+  assert.ok(viewing.includes('Hiroshi note'), 'their submitted checklist, read-only')
+  assert.deepEqual(chief.root.root.findAll(node => node.type === 'span' && node.props['data-mark'] !== undefined).map(node => node.props['data-mark']), ['B'])
+  assert.equal(markers(chief.root).length, 0, 'no editing someone else\'s checklist')
   assert.ok(!viewing.includes('Submit grading'))
   const examiner = await renderSession({ path: '/instructor/grading/session/mixed', startsAt: '2020-01-01T02:00:00Z', isChief: false })
   assert.equal(examiner.root.root.findAll(node => node.props?.role === 'group' && node.props['aria-label'] === 'Examiner').length, 0)

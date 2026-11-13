@@ -70,7 +70,7 @@ test('View Grading opens the session checklist page, which goes back to that cal
     ;[...d.querySelectorAll('a')].find(node => node.textContent.trim() === 'View Grading').click(); await wait(1500)
     const back = [...d.querySelectorAll('main a')].find(node => /^Back to/.test(node.textContent.trim()))
     const landed = { path: w.location.pathname, label: back?.textContent.trim(), href: back?.getAttribute('href'),
-      checklist: !!d.querySelector('input[type="checkbox"]') }
+      checklist: !!d.querySelector('[data-mark]') }
     back?.click(); await wait()
     return { from, landed, returned: `${w.location.pathname}${w.location.search}` }
   })
@@ -154,7 +154,7 @@ test('grading lists students as columns with sequential roster IDs and only the 
       const d = w.document, group = [d.querySelector('main h1')?.textContent, !!d.querySelector('[data-grading-group] [data-track]'), d.querySelector('[data-grading-group] [data-grade-id]')?.dataset.gradeId], selects = d.querySelectorAll('main select').length
       const region = d.querySelector('[aria-label="Grading checklist table"]'), table = region.querySelector('table')
       const allRows = [...table.tBodies[0].rows], header = table.tHead.rows[0]
-      const rows = allRows.filter(row => row.querySelector('input[type="checkbox"]'))
+      const rows = allRows.filter(row => row.querySelector('[data-mark]'))
       const categoryRows = allRows.filter(row => row.hasAttribute('data-category-row')).map(row => row.cells[0].textContent.trim())
       const before = { id: rows[0].cells[0].getBoundingClientRect().x, name: rows[0].cells[1].getBoundingClientRect().x }
       region.scrollLeft = 120; await wait(50)
@@ -163,10 +163,10 @@ test('grading lists students as columns with sequential roster IDs and only the 
       const idsOf = () => [...d.querySelectorAll('thead [data-candidate-number]')].map(node => node.textContent.trim())
       const ids = idsOf()
       const stickyColumns = [...table.rows].map(row => [...row.cells].flatMap((cell, index) => w.getComputedStyle(cell).position === 'sticky' ? [index] : []))
-      const checkbox = rows[0].querySelector('input[type="checkbox"]'); checkbox.click(); await wait(50)
+      const marker = rows[0].querySelector('[data-mark]'); marker.querySelector('button').click(); await wait(50)
       ;[...d.querySelectorAll('button')].find(node => node.textContent === 'Save draft').click(); await wait(500)
       return { headers: [...header.cells].map(cell => cell.textContent.trim()), ids, stickyColumns, before, after, scroll, group, selects,
-        unchecked: !checkbox.checked, rowHeaders: allRows.map(row => row.cells[0].textContent.trim()), categoryRows,
+        marked: marker.dataset.mark, rowHeaders: allRows.map(row => row.cells[0].textContent.trim()), categoryRows,
         fits: d.documentElement.scrollWidth <= d.documentElement.clientWidth }
     })
     assert.deepEqual(result.group, ["Children's grading", false, 'stored-target-grade'])
@@ -185,7 +185,7 @@ test('grading lists students as columns with sequential roster IDs and only the 
       assert.ok(Math.abs(result.before.id - result.after.id) <= 1)
       assert.ok(result.after.name < result.before.name)
     }
-    assert.equal(result.unchecked, true)
+    assert.equal(result.marked, 'A')
     assert.equal(result.fits, true)
   })
 })
@@ -209,7 +209,7 @@ test('grading drafts save the complete matrix and survive a document reload', as
     const probe = d.createElement('span'); probe.className = 'bg-success'; d.body.append(probe)
     const success = w.getComputedStyle(probe).backgroundColor; probe.remove()
     const saveDraft = { initially: hasSaveDraft() }
-    d.querySelector('tbody input').click(); await wait(30)
+    d.querySelector('tbody [data-mark] button').click(); await wait(30)
     saveDraft.afterChange = hasSaveDraft()
     const comment = d.querySelector('tbody textarea')
     Object.getOwnPropertyDescriptor(w.HTMLTextAreaElement.prototype, 'value').set.call(comment, 'Good progress')
@@ -219,12 +219,12 @@ test('grading drafts save the complete matrix and survive a document reload', as
     const save = [...d.querySelectorAll('button')].find(node => node.textContent === 'Save draft')
     save.click(); save.click(); await wait(500)
     saveDraft.afterSave = hasSaveDraft()
-    const requests = w.gradingBatchRequestsFixture.map(r => ({ cells: r.cells.length, unchecked: r.cells.filter(c => !c.checked).length, submit: r.submit, comments: r.comments.map(c => c.notes) }))
+    const requests = w.gradingBatchRequestsFixture.map(r => ({ cells: r.cells.length, marks: r.cells.map(c => c.grade), submit: r.submit, comments: r.comments.map(c => c.notes) }))
     const savedText = d.querySelector('main').textContent
     const route = w.location.pathname + w.location.search
     w.location.href = '/tests/mobile-responsive/calendar.html?route=' + encodeURIComponent(route)
     await wait(1000); d = w.document
-    const value = d.querySelector('tbody input').checked, text = d.querySelector('main').textContent, restoredComment = d.querySelector('tbody textarea').value
+    const value = d.querySelector('tbody [data-mark]').dataset.mark, text = d.querySelector('main').textContent, restoredComment = d.querySelector('tbody textarea').value
     const group = [d.querySelector('main h1')?.textContent, !!d.querySelector('[data-grading-group] [data-track]'), d.querySelector('[data-grading-group] [data-grade-id]')?.dataset.gradeId]
     const timestamp = d.querySelector('[data-grading-timestamp]')
     const footer = { text: timestamp.textContent, datetime: timestamp.querySelector('time').dateTime,
@@ -235,10 +235,11 @@ test('grading drafts save the complete matrix and survive a document reload', as
   assert.deepEqual(result.saveDraft, { initially: false, afterChange: true, afterSave: false })
   assert.equal(result.submitColour.green, result.submitColour.success)
   assert.equal(result.cleanUi, true)
-  assert.deepEqual(result.requests, [{ cells: 4, unchecked: 1, submit: false, comments: ['Good progress', null, null, null] }])
+  // Cells start blank; the one chosen letter is saved and the rest stay blank in the draft.
+  assert.deepEqual(result.requests, [{ cells: 4, marks: ['A', null, null, null], submit: false, comments: ['Good progress', null, null, null] }])
   assert.equal(result.restoredComment, 'Good progress')
   assert.doesNotMatch(result.savedText, /Your draft has been saved|New draft|Your draft · Version/)
-  assert.equal(result.value, false)
+  assert.equal(result.value, 'A')
   assert.doesNotMatch(result.text, /New draft|Your draft · Version/)
   assert.deepEqual(result.group,["Children's grading",false,'stored-target-grade'])
   assert.match(result.footer.text,/Last saved:/)
@@ -249,6 +250,11 @@ test('grading drafts save the complete matrix and survive a document reload', as
 test('submitted grading automatically resumes, stays editable and supports draft saves and re-signing', async () => {
   const result = await inPage(390, `${checklistPath}&fixtureData=batch-persistence`, async (w, wait) => {
     let d = w.document
+    // Submitting needs every present candidate's techniques marked.
+    const markAll = async () => {
+      for (const marker of d.querySelectorAll('tbody [data-mark]')) if (!marker.dataset.mark && !marker.querySelector('button').disabled) marker.querySelector('button').click()
+      await wait(30)
+    }
     const sign = async () => {
       ;[...d.querySelectorAll('button')].find(node => node.textContent === 'Submit grading').click(); await wait()
       const canvas = d.querySelector('canvas'), bounds = canvas.getBoundingClientRect()
@@ -261,26 +267,30 @@ test('submitted grading automatically resumes, stays editable and supports draft
       await wait(50); confirm.click(); confirm.click(); await wait(500)
       return emptyDisabled
     }
+    const blocked = d.querySelector('[data-submit-grading]').disabled
+    await markAll()
     const emptyDisabled = await sign()
-    const after = { text: d.querySelector('main').textContent, editable: [...d.querySelectorAll('tbody input')].every(node => !node.disabled),
+    const after = { text: d.querySelector('main').textContent, editable: [...d.querySelectorAll('tbody [data-mark] button')].every(node => !node.disabled),
       dialogClosed: !d.querySelector('[data-slot="dialog-content"]'), timestamp: d.querySelector('[data-grading-timestamp]').textContent }
     const route = w.location.pathname + w.location.search
     w.location.href = '/tests/mobile-responsive/calendar.html?route=' + encodeURIComponent(route)
     await wait(1000); d = w.document
-    const resumed = { group: [d.querySelector('main h1')?.textContent, !!d.querySelector('[data-grading-group] [data-track]'), d.querySelector('[data-grading-group] [data-grade-id]')?.dataset.gradeId], editable: !d.querySelector('tbody input').disabled,
+    const resumed = { group: [d.querySelector('main h1')?.textContent, !!d.querySelector('[data-grading-group] [data-track]'), d.querySelector('[data-grading-group] [data-grade-id]')?.dataset.gradeId], editable: !d.querySelector('tbody [data-mark] button').disabled,
       timestamp: d.querySelector('[data-grading-timestamp]').textContent,
       versionLabelAbsent: !d.querySelector('main').textContent.includes('Your submitted grading · Version') }
-    d.querySelector('tbody input').click(); await wait(30)
+    // Change one mark from A to B, then save a draft.
+    d.querySelector('tbody [data-mark] button:nth-child(2)').click(); await wait(30)
     ;[...d.querySelectorAll('button')].find(node => node.textContent === 'Save draft').click(); await wait(500)
-    const edited = { value: d.querySelector('tbody input').checked, timestamp: d.querySelector('[data-grading-timestamp]').textContent,
+    const edited = { value: d.querySelector('tbody [data-mark]').dataset.mark, timestamp: d.querySelector('[data-grading-timestamp]').textContent,
       request: w.gradingBatchRequestsFixture[0] }
     const signatureRequiredAgain = await sign()
-    const resubmitted = { value: d.querySelector('tbody input').checked, timestamp: d.querySelector('[data-grading-timestamp]').textContent,
+    const resubmitted = { value: d.querySelector('tbody [data-mark]').dataset.mark, timestamp: d.querySelector('[data-grading-timestamp]').textContent,
       request: w.gradingBatchRequestsFixture[1] }
     w.sessionStorage.removeItem('test-only-grading-batches:audit')
     w.switchInstructorFixture(); await wait(1200)
-    return { emptyDisabled, after, resumed, edited, signatureRequiredAgain, resubmitted, ownDraft: d.querySelector('main').textContent, editable: !d.querySelector('tbody input').disabled }
+    return { blocked, emptyDisabled, after, resumed, edited, signatureRequiredAgain, resubmitted, ownDraft: d.querySelector('main').textContent, editable: !d.querySelector('tbody [data-mark] button').disabled }
   })
+  assert.equal(result.blocked, true, 'Submit is disabled until every technique is marked')
   assert.equal(result.emptyDisabled, true)
   assert.equal(result.after.editable, true)
   assert.equal(result.after.dialogClosed, true)
@@ -290,12 +300,12 @@ test('submitted grading automatically resumes, stays editable and supports draft
   assert.equal(result.resumed.editable,true)
   assert.equal(result.resumed.versionLabelAbsent,true)
   assert.match(result.resumed.timestamp,/Last submitted:/)
-  assert.equal(result.edited.value,false)
+  assert.equal(result.edited.value,'B')
   assert.match(result.edited.timestamp,/Last saved:/)
   assert.equal(result.edited.request.signature,null)
   assert.equal(result.edited.request.expectedVersion,1)
   assert.equal(result.signatureRequiredAgain,true)
-  assert.equal(result.resubmitted.value,false)
+  assert.equal(result.resubmitted.value,'B')
   assert.match(result.resubmitted.timestamp,/Last submitted:/)
   assert.equal(result.resubmitted.request.expectedVersion,2)
   assert.ok(result.resubmitted.request.signature.strokes.length)
@@ -306,32 +316,32 @@ test('submitted grading automatically resumes, stays editable and supports draft
 test('lost grading save responses retry the exact request without duplicate drafts', async () => {
   const result = await inPage(390, `${checklistPath}&fixtureData=batch-lost-response`, async (w, wait) => {
     const d = w.document
-    d.querySelector('tbody input').click(); await wait(30)
+    d.querySelector('tbody [data-mark] button').click(); await wait(30)
     ;[...d.querySelectorAll('button')].find(node => node.textContent === 'Save draft').click(); await wait(500)
-    const error = d.querySelector('[role="alert"]').textContent, locked = d.querySelector('tbody input').disabled
+    const error = d.querySelector('[role="alert"]').textContent, locked = d.querySelector('tbody [data-mark] button').disabled
     ;[...d.querySelectorAll('button')].find(node => node.textContent === 'Retry draft save').click(); await wait(500)
-    return { message: error, locked, requests: w.gradingBatchRequestsFixture, text: d.querySelector('main').textContent, value: d.querySelector('tbody input').checked }
+    return { message: error, locked, requests: w.gradingBatchRequestsFixture, text: d.querySelector('main').textContent, value: d.querySelector('tbody [data-mark]').dataset.mark }
   })
   assert.match(result.message, /response was lost/)
   assert.equal(result.locked, true)
   assert.equal(result.requests.length, 2)
   assert.deepEqual(result.requests[0], result.requests[1])
   assert.match(result.text, /Last saved:/)
-  assert.equal(result.value, false)
+  assert.equal(result.value, 'A')
 })
 
 test('grading conflicts keep local edits and explain page refresh without a reload button', async () => {
   const result = await inPage(390, `${checklistPath}&fixtureData=batch-conflict`, async (w, wait) => {
     const d = w.document
     const save = () => [...d.querySelectorAll('button')].find(node => node.textContent === 'Save draft')
-    const [first, second] = d.querySelectorAll('tbody input[type="checkbox"]')
-    first.click(); await wait(30); save().click(); await wait(500)
-    second.click(); await wait(30); save().click(); await wait(500)
-    const local = second.checked, message = d.querySelector('[role="alert"]').textContent
-    return { local, message, locked: d.querySelector('tbody input').disabled,
+    const [first, second] = d.querySelectorAll('tbody [data-mark]')
+    first.querySelector('button:nth-child(2)').click(); await wait(30); save().click(); await wait(500)
+    second.querySelector('button:nth-child(2)').click(); await wait(30); save().click(); await wait(500)
+    const local = second.dataset.mark, message = d.querySelector('[role="alert"]').textContent
+    return { local, message, locked: d.querySelector('tbody [data-mark] button').disabled,
       reloadButton: [...d.querySelectorAll('button')].some(node => node.textContent.includes('Reload saved version')) }
   })
-  assert.equal(result.local, false)
+  assert.equal(result.local, 'B', 'the unsaved local mark is kept')
   assert.match(result.message, /changed in another tab/)
   assert.match(result.message, /Refresh the page/)
   assert.equal(result.locked, true)
@@ -350,10 +360,10 @@ test('absent candidates are hidden from the checklist until the "Show absent" sw
     const hidden = { columns: columns(), label: d.querySelector('[data-show-absent]')?.textContent.trim(), checked: toggle?.getAttribute('aria-checked') }
     toggle.click(); await wait(100)
     const absentIndex = columns().findIndex(column => column.absent)
-    const body = [...d.querySelector('tbody').rows].filter(row => row.querySelector('input, textarea'))
-    const inputs = body.map(row => row.cells[absentIndex + 1].querySelector('input, textarea'))
+    const body = [...d.querySelector('tbody').rows].filter(row => row.querySelector('[data-mark], textarea'))
+    const inputs = body.flatMap(row => [...row.cells[absentIndex + 1].querySelectorAll('button, textarea')])
     const shown = { columns: columns(), checked: toggle.getAttribute('aria-checked'), inputsDisabled: inputs.length > 0 && inputs.every(input => input.disabled),
-      othersEnabled: body.every(row => [...row.cells].slice(1).filter((_, index) => index !== absentIndex).every(cell => !cell.querySelector('input, textarea')?.disabled)) }
+      othersEnabled: body.every(row => [...row.cells].slice(1).filter((_, index) => index !== absentIndex).every(cell => !cell.querySelector('button, textarea')?.disabled)) }
     d.querySelector('[data-show-absent]').click(); await wait(100)
     return { hidden, shown, rehidden: columns().length }
   })

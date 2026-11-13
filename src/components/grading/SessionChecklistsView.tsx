@@ -1,4 +1,4 @@
-import { CalendarDays, Check, Clock3, MapPin, Users, X } from 'lucide-react'
+import { CalendarDays, Clock3, MapPin, Users } from 'lucide-react'
 import { useSearchParams } from 'react-router'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -94,9 +94,12 @@ export function ExaminerChecklist({ examiner, session, scope }: { examiner: Exam
             </h3>
           )}
           <GradingChecklistTable label={mixed ? `Grading checklist: ${group.grade.label}` : undefined} students={group.students} items={group.items}
-            cell={(student, item) => batch.passed.has(resultKey(student.student_id, item.syllabus_item_id))
-              ? <span className="inline-flex min-h-11 items-center text-success"><Check className="size-5" aria-hidden="true" /><span className="sr-only">Passed</span></span>
-              : <span className="inline-flex min-h-11 items-center text-muted-foreground"><X className="size-5" aria-hidden="true" /><span className="sr-only">Not passed</span></span>}
+            cell={(student, item) => {
+              const mark = batch.marks.get(resultKey(student.student_id, item.syllabus_item_id))
+              return mark
+                ? <span className="inline-flex min-h-11 items-center font-semibold" data-mark={mark}>{mark}</span>
+                : <span className="inline-flex min-h-11 items-center text-muted-foreground"><span aria-hidden="true">–</span><span className="sr-only">Not marked</span></span>
+            }}
             comment={student => student.notes
               ? <p className="min-w-40 whitespace-pre-wrap sm:min-w-52">{student.notes}</p>
               : <span className="text-muted-foreground">No comment</span>} />
