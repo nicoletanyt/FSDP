@@ -733,3 +733,24 @@ test('grade filter options are GradeBadges in ladder order and a row badge filte
     assert.equal(result.clearedRank, null);
     assert.equal(result.path, '/instructor/students');
 });
+
+test('typing in the search keeps every letter and focus in the search box', async () => {
+    for (const width of [390, 1280]) {
+        await request(`/session/${session}/window/rect`, { width, height: 800 });
+        await request(`/session/${session}/url`, { url: `${origin}/tests/mobile-responsive/calendar.html?route=${encodeURIComponent('/instructor/students')}` });
+        await new Promise(resolve => setTimeout(resolve, 1200));
+        const input = await request(`/session/${session}/element`, { using: 'css selector', value: 'main input[type="search"]' });
+        const id = input['element-6066-11e4-a52e-4f735466cecf'];
+        await request(`/session/${session}/element/${id}/click`, {});
+        for (const letter of 'Emma') {
+            await request(`/session/${session}/element/${id}/value`, { text: letter });
+            await new Promise(resolve => setTimeout(resolve, 150));
+        }
+        const state = await request(`/session/${session}/execute/sync`, { args: [], script: `
+            const input = document.querySelector('main input[type="search"]');
+            return { value: input?.value, focused: document.activeElement === input, q: new URLSearchParams(location.search).get('q'),
+                count: document.querySelector('[role="status"]')?.textContent };` });
+        assert.deepEqual({ value: state.value, focused: state.focused, q: state.q }, { value: 'Emma', focused: true, q: 'Emma' }, `${width}px ${JSON.stringify(state)}`);
+        assert.match(state.count, /of \d+ students/);
+    }
+});
