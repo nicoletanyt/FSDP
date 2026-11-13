@@ -80,7 +80,7 @@ export default function App() {
               <Route path="profile" element={<StudentProfile />} />
               <Route path="payments" element={<StudentPayments />} />
               <Route path="student/credits" element={<StudentCredits />} />
-              <Route path="grading" element={<GradingPayment />} />
+              <Route path="grading" element={<StudentGrading />} />
               <Route path="grading/applications" element={<StudentGrading />} />
               <Route path="grading/payment" element={<GradingPayment />} />
             </Route>

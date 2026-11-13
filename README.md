@@ -352,6 +352,23 @@ The All selection combines current open grading recipients (maximum 50 BCC
 addresses including the dummy); it refuses, rather than truncates, larger lists.
 Only a signed-in administrator can preview and explicitly confirm a request;
 saving wording or deploying never sends an invitation. An accepted request does
-not establish delivery to any recipient. `STRIPE_GRADING_FEE_ID` must be an active test-mode
-one-time price of SGD 60.00; only the verified Stripe webhook submits grading
-applications. The guest Checkout price remains separate.
+not establish delivery to any recipient. Grading checkout uses the database's
+`grade_requirements.fee_cents`, with the S$22 late fee quoted server-side; only
+the verified Stripe webhook submits formal grading applications. The guest
+Checkout price remains separate.
+
+When `VITE_STRIPE_PUBLISHABLE_KEY` is a test key and the student has no eligible
+session, **Proceed to Payment** offers a clearly labelled Stripe test checkout
+for the next grade's base fee. The server independently resolves the signed-in
+student's next grade and price, rejects live secret keys and verifies return
+sessions against their owner. These preview sessions never create formal
+applications, payment records, membership activation or training records.
+Preview checkout now saves the form to `grading_application_drafts` before
+redirecting. The row contains the authenticated owner, student, current/target
+grades, track, fee, request ID and Stripe session. Verified preview payments
+update only its `preview_paid` status; formal applications remain separate.
+Saved drafts reload on `/grading`. Owners and administrators can read drafts;
+only server code can write them. Apply
+`20261113135904_grading_application_drafts.sql`, deploy both
+`create-grading-checkout` and `stripe-webhook`, and rebuild the frontend with
+the test publishable key. Never enter real card information in test mode.

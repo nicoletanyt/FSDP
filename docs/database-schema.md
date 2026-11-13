@@ -369,28 +369,62 @@ policies or grants. Authenticated RPCs derive/check the actual linked instructor
 - The grading page shows the server's `updated_at` as "Last saved" for drafts or
   `submitted_at` as "Last submitted" for submissions, below the table in Singapore time.
 
+### `grading_application_drafts`
+
+Persistent student form snapshots for the preview checkout path, separate from
+formal submitted applications. Created server-side when Proceed to Payment is
+clicked, before redirecting to Stripe. The authenticated account and database
+ladder determine the student, target, track and price; the browser cannot write
+or set payment status. Migration: `20261113135904_grading_application_drafts.sql`.
+
+| Columns | Purpose |
+| --- | --- |
+| `id uuid` PK | Draft identifier |
+| `user_id uuid`, `student_id uuid` | Owner/profile and linked student foreign keys |
+| `request_id uuid` | Unique with `user_id` for exact-request retries |
+| `current_grade_id text`, `target_grade_id text`, `track grade_track` | Recorded rank and next-grade snapshot |
+| `base_fee_cents integer`, `currency text` | Positive database base fee, SGD only |
+| `stripe_session_id text` nullable/unique | Linked preview checkout |
+| `status text` | `draft`, `checkout_open`, or `preview_paid` |
+| `created_at timestamptz`, `updated_at timestamptz` | Save timestamps |
+
+RLS allows owners and administrators to read; authenticated browser roles have
+no insert/update/delete grant. The Edge Function saves the draft before Stripe
+creation and links the returned session before redirecting. A verified webhook
+or owner-scoped return-status check matches the Stripe session, owner, grade,
+currency and amount before marking `preview_paid`. This never creates a formal
+application/payment or changes membership/training eligibility. Legacy preview
+sessions without a draft remain previews and are not backfilled as paid forms.
+
 ### `grading_applications`
 
 A student's application to a grading event for a target grade.
 
-The student portal records a confirmed (currently simulated) card payment with
-`record_grading_payment(p_grading_event_id, p_target_grade_id)`. The RPC resolves
-the signed-in student and, when IDs are omitted, their next eligible grading
-opportunity, then inserts the application as `submitted` (the enum has no `paid`
-value). Production payment confirmation should come from the Stripe webhook.
+`/grading` and `/grading/applications` select a real eligible session using
+`my_grading_checkout_options()`. This caller-scoped RPC supplies the target grade,
+deadline, base fee, late fee and total from the database. Student eligibility and
+training checks come from the existing grading readiness functions, not a mock
+student or hard-coded deadline. The administrator leaving a future session `open`
+permits late eligible applications; closed/cancelled/past sessions remain blocked.
 
-The grading checkout now calculates the displayed base fee by target grade using
-`src/lib/grading-fees.ts`, transcribed from the user-supplied ASK grading SOP.
-It adds S$22 after the application's closing day ends in Singapore. The current
-official grading page confirms a late administrative charge but does not publish
-the SOP amounts or payment methods. Card, PayNow and bank transfer are explicitly
-simulated UI methods; no recipient details/QR are fabricated. The receipt's fee
-breakdown/method are not persisted as verified payment data. Direct `/grading`
-fee previews do not call the application-write RPC; only an application carrying
-an event ID can save, with the existing server eligibility checks unchanged.
-Late pricing does not bypass those checks or automatically reopen an event.
-The separate legacy Stripe checkout still uses its fixed SGD 60 test price and
-must be migrated to authoritative per-grade pricing before any live use.
+`create-grading-checkout` supports `quote`, `checkout`, and caller-scoped `status`
+requests. `reserve_grading_checkout` fixes the amount on the attempt, adding
+SGD 22.00 after the closing day ends in Singapore. Thus 5th Kyu is SGD 55.00
+on time or SGD 77.00 late. The browser supplies an expected total solely as a
+review guard; it cannot set the amount, deadline, target eligibility or discount.
+An existing issued session retains its price until expiry; a retired expired
+session is requoted before a replacement is created. Stripe gets separate base
+and late-fee line items with a stable idempotency key.
+
+Proceed to Payment opens Stripe-hosted Checkout. No card inputs, simulated
+receipts or browser-triggered application writes remain. The verified shared
+webhook checks the attempt's amount (not a fixed SGD 60 price), then calls
+`finalize_grading_checkout` to submit the application, record a paid `payments`
+row and mark the attempt paid in one idempotent transaction. On return the UI
+checks the attempt status before claiming success. A `checkout=success` URL
+alone never submits an application. The legacy browser `record_grading_payment`
+endpoint is revoked if present. The shared webhook also retains production
+membership and credit handling; do not overwrite it with a grading-only version.
 
 | Column             | Type                 | Nullable | Default             |
 | ------------------ | -------------------- | -------- | ------------------- |

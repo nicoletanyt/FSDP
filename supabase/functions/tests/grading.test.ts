@@ -56,6 +56,7 @@ Deno.test('verified paid grading session finalizes once per webhook delivery; un
   const originalFetch = globalThis.fetch
   let finalized = 0
   let amount = 6000
+  let expectedAmount = 6000
   const attempt = '00000000-0000-4000-8000-000000000001'
   globalThis.fetch = async (input, init) => {
     const request = new Request(input, init)
@@ -70,6 +71,7 @@ Deno.test('verified paid grading session finalizes once per webhook delivery; un
       assert.equal(payload.stripe_session, 'cs_test_grading')
       return Response.json(null)
     }
+    if (request.url.includes('/rest/v1/grading_checkout_attempts')) return Response.json({ amount_cents: expectedAmount })
     throw new Error(`Unexpected external request: ${request.url}`)
   }
   async function signed(paid: boolean) {
@@ -90,6 +92,9 @@ Deno.test('verified paid grading session finalizes once per webhook delivery; un
     assert.equal((await webhook(await signed(true))).status, 200)
     assert.equal((await webhook(await signed(true))).status, 200)
     assert.equal(finalized, 2) // DB RPC locks and deduplicates on the attempt row.
+    amount = expectedAmount = 7700
+    assert.equal((await webhook(await signed(true))).status, 200)
+    assert.equal(finalized, 3)
   } finally {
     globalThis.fetch = originalFetch
     names.forEach((name, index) => previous[index] === undefined ? Deno.env.delete(name) : Deno.env.set(name, previous[index]!))
