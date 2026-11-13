@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useOutletContext, useSearchParams } from 'react-router'
 import {
@@ -29,6 +30,7 @@ import type {
   ClassOffering
 } from '@/lib/student-schedule'
 import FilterCombobox from '@/components/FilterCombobox'
+import { GradeLabelBadge } from '@/components/admin/AdminGradeBadge'
 
 type Action =
   | { kind: 'enroll'; sessions: ClassOffering[] }
@@ -172,7 +174,7 @@ function SessionFilters({
   params: URLSearchParams
   count: number
   onChange: (params: URLSearchParams) => void
-  grade?: string
+  grade?: ReactNode
   disabled?: boolean
 }) {
   const centre = params.get('centre') ?? 'all'
@@ -195,7 +197,7 @@ function SessionFilters({
       <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <CardTitle>{title}</CardTitle>
-          {grade && <span className="text-xs text-muted-foreground">{grade}</span>}
+          {grade && <span className="flex items-center gap-1.5 text-xs text-muted-foreground">{grade}</span>}
         </div>
       </CardHeader>
 
@@ -356,7 +358,7 @@ export default function StudentClasses() {
         sessions={upcoming}
         params={params}
         count={matching.length}
-        grade={schedule.grade ? `Current grade: ${schedule.grade}` : 'Student membership'}
+        grade={schedule.grade ? <>Current grade <GradeLabelBadge label={schedule.grade} /></> : 'Student membership'}
         onChange={next => setParams(next, { replace: true })}
       />
 

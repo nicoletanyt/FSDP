@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { AlertTriangle, Bell, CheckCircle2, GraduationCap, Users } from 'lucide-react'
 import { Link } from 'react-router'
 import AttendanceNoticeDialog, { noticeResultMessage } from '@/components/admin/AttendanceNoticeDialog'
+import { GradeLabelBadge } from '@/components/admin/AdminGradeBadge'
 import AttendanceTrend from '@/components/admin/AttendanceTrend'
 import CentreCombobox from '@/components/admin/CentreCombobox'
 import PageHeader from '@/components/admin/PageHeader'
@@ -136,7 +137,7 @@ export default function Overview() {
                   </span>
                   <div className="min-w-0">
                     <p className="truncate font-medium">{student.first_name} {student.last_name}</p>
-                    <p className="truncate text-xs text-muted-foreground">{centreNames.get(student.centre_id) ?? 'Centre'} · {student.grade}</p>
+                    <p className="mt-0.5 flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-muted-foreground"><span className="truncate">{centreNames.get(student.centre_id) ?? 'Centre'}</span> <GradeLabelBadge label={student.grade} /></p>
                     <p className="text-xs text-muted-foreground">
                       {student.missed} missed of {student.enrolments} completed enrolments
                     </p>

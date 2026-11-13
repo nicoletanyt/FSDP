@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { BookOpen } from 'lucide-react'
+import AdminGradeBadge from '@/components/admin/AdminGradeBadge'
 import FilterCombobox from '@/components/FilterCombobox'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -182,10 +183,11 @@ export default function Syllabus() {
                   <TableCell className="sticky left-0 z-10 bg-card align-top">
                     <button
                       type="button"
-                      className="text-left font-medium hover:text-primary"
+                      className="rounded-md text-left focus-visible:outline-2 focus-visible:outline-ring"
                       onClick={() => setSelectedGrade(row.grade)}
+                      aria-label={row.grade}
                     >
-                      {row.grade}
+                      <AdminGradeBadge grade={row.grade} track={row.track} />
                     </button>
                     <span className="mt-1 block text-xs font-normal text-muted-foreground">
                       {countRowItems(row)} items
@@ -203,7 +205,7 @@ export default function Syllabus() {
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <CardTitle>{selectedRow.grade}</CardTitle>
+              <CardTitle><AdminGradeBadge grade={selectedRow.grade} track={selectedRow.track} /></CardTitle>
               <CardDescription>
                 {selectedRow.track === 'children' ? "Children's" : 'Adult'}{' '}
                 syllabus · {countRowItems(selectedRow)} items in{' '}
@@ -216,6 +218,7 @@ export default function Syllabus() {
                 onChange={(value) => setSelectedGrade(value as Grade)}
                 ariaLabel="Choose a grade to inspect"
                 options={part.rows.map((row) => ({ value: row.grade, label: row.grade }))}
+                renderOption={(option) => <AdminGradeBadge grade={option.value as Grade} track={selectedRow.track} />}
               />
             </div>
           </div>

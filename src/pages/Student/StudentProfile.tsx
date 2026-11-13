@@ -8,6 +8,7 @@ import PaymentStatusBadge from "@/components/student/PaymentStatusBadge";
 import { useAuth } from "@/hooks/use-auth";
 import { formatDate, money } from "@/lib/format";
 import { mockProfile, type Payment, type Profile } from "@/lib/student-profile";
+import GradeBadge from "@/components/GradeBadge";
 
 /* ---------- Helpers ---------- */
 const PREVIEW_COUNT = 3;
@@ -91,9 +92,7 @@ function MembershipCard({ profile }: { profile: Profile }) {
             )}
             <div className="min-w-0">
               <h2 className="truncate text-lg font-extrabold leading-tight tracking-tight">{profile.fullName}</h2>
-              <p className="text-sm text-white/80">
-                {belt.name} ({belt.colour} belt)
-              </p>
+              <GradeBadge rank={belt.rank} system={belt.system} showBeltLabel className="mt-1" />
             </div>
           </div>
 

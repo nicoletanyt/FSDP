@@ -36,6 +36,9 @@ import {
   type GradingPaymentLocationState,
   type GradingPaymentRecord,
 } from '@/lib/grading-payment'
+import { GradeLabelBadge } from '@/components/admin/AdminGradeBadge'
+import GradeBadge from '@/components/GradeBadge'
+import type { RankId } from '@/lib/student-grades'
 
 type PaymentStatus = 'idle' | 'processing' | 'success'
 type RecordStatus = 'idle' | 'saving' | 'saved' | 'failed'
@@ -76,6 +79,10 @@ export default function GradingPayment() {
   const effectiveDeadline = isPreview ? deadline : state.applicationDeadline
   const price = calculateGradingFee(effectiveGradeId, effectiveDeadline, pricingDate)
   const targetBelt = gradingFeeFor(effectiveGradeId)?.label ?? state.targetBelt ?? 'Unknown grade'
+  // Fee ids are the rank ids GradeBadge draws; fall back to the plain label when unknown.
+  const gradeSystem = track === 'adult' ? 'adults' : 'children'
+  const targetRank = gradingFeeFor(effectiveGradeId) ? effectiveGradeId as RankId : null
+  const currentRank = resolveGradingGradeId(currentBelt) as RankId | null
   const fee = price?.total ?? 0
 
   // Recalculate across Singapore midnight, including while a page stays open.
@@ -318,7 +325,7 @@ export default function GradingPayment() {
                 <div className="flex items-center gap-3">
                   <div className="min-w-0 max-w-[40%] shrink-0">
                     <p className="text-2xs font-semibold uppercase tracking-[0.12em] text-slate-400">Current</p>
-                    <p className="mt-1 break-words font-medium text-slate-500 dark:text-slate-400">{currentBelt}</p>
+                    <div className="mt-1">{currentRank ? <GradeBadge rank={currentRank} system={gradeSystem} /> : <GradeLabelBadge label={currentBelt} />}</div>
                   </div>
                   <div className="relative flex min-w-8 flex-1 items-center justify-center" aria-hidden="true">
                     <span className="h-px w-full bg-slate-200 dark:bg-slate-700" />
@@ -328,7 +335,7 @@ export default function GradingPayment() {
                   </div>
                   <div className="min-w-0 text-right">
                     <p className="text-2xs font-semibold uppercase tracking-[0.12em] text-slate-400">Target</p>
-                    <p className="mt-1 break-words font-bold text-[#2c3f67] dark:text-blue-300">{targetBelt}</p>
+                    <div className="mt-1 flex justify-end">{targetRank ? <GradeBadge rank={targetRank} system={gradeSystem} /> : <GradeLabelBadge label={targetBelt} />}</div>
                   </div>
                 </div>
               </div>
@@ -391,7 +398,7 @@ export default function GradingPayment() {
                   </div>
                   <div className="flex items-center justify-between gap-4 py-3">
                     <dt className="text-2xs font-semibold uppercase tracking-[0.12em] text-slate-400">Target rank</dt>
-                    <dd className="text-right text-sm font-semibold text-[#2c3f67] dark:text-blue-300">{targetBelt}</dd>
+                    <dd className="text-right text-sm">{targetRank ? <GradeBadge rank={targetRank} system={gradeSystem} showBeltLabel /> : <GradeLabelBadge label={targetBelt} />}</dd>
                   </div>
                   <div className="flex items-center justify-between gap-4 py-3">
                     <dt className="text-2xs font-semibold uppercase tracking-[0.12em] text-slate-400">Grading fee</dt>

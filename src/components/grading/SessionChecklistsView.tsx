@@ -89,7 +89,7 @@ export function ExaminerChecklist({ examiner, session, scope }: { examiner: Exam
         <div key={group.grade.id} className="space-y-3">
           {mixed && (
             <h3 className="flex flex-wrap items-center gap-2 text-lg font-semibold">
-              {group.grade.label}
+              <DatabaseGradeBadge grade={group.grade} showBeltLabel className="text-sm" />
               <span className="text-sm font-normal text-muted-foreground">{candidateCount(group.students.length)}</span>
             </h3>
           )}

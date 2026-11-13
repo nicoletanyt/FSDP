@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 
 import { buttonVariants } from "@/components/student/button";
+import GradeBadge from "@/components/GradeBadge";
 import { Card } from "@/components/ui/card";
 import {
   Dialog,
@@ -165,9 +166,11 @@ export default function StudentDashboard() {
             </div>
             <div className="min-w-0">
               <h3 className="text-lg font-semibold">
-                {belt.name} ({belt.colour} belt)
+                <GradeBadge rank={belt.rank} system={belt.system} showBeltLabel className="text-sm" />
               </h3>
-              <p className="text-sm text-muted-foreground">Training towards {nextBelt.name}</p>
+              <p className="mt-1 flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
+                Training towards <GradeBadge rank={nextBelt.rank} system={nextBelt.system} />
+              </p>
             </div>
           </div>
 

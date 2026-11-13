@@ -5,6 +5,7 @@ import AttendanceNoticeDialog, { noticeResultMessage } from '@/components/admin/
 import CentreCombobox from '@/components/admin/CentreCombobox'
 import EmptyState from '@/components/admin/EmptyState'
 import { RiskBadge, StatusBadge } from '@/components/admin/StatusBadge'
+import { GradeLabelBadge } from '@/components/admin/AdminGradeBadge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -173,7 +174,7 @@ export default function AttendanceMonitoring() {
                   <span className="flex size-8 items-center justify-center rounded-full bg-destructive/10 text-xs font-semibold text-destructive">
                     {initials(student.first_name, student.last_name)}
                   </span><div><p className="font-medium">{name(student)}</p>
-                    <p className="text-xs text-muted-foreground">{student.centre_name} · {student.grade}</p></div>
+                    <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">{student.centre_name} <GradeLabelBadge label={student.grade} /></p></div>
                 </div></TableCell>
                 <TableCell>{student.level === 'unassessed' ? <StatusBadge tone="neutral">Not assessed</StatusBadge> : <RiskBadge level={student.level} />}</TableCell>
                 <TableCell className="text-right tabular-nums">

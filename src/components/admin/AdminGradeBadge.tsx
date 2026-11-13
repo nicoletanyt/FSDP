@@ -1,4 +1,5 @@
 import GradeBadge from '@/components/GradeBadge'
+import { getGradeMeta, grades, UNRANKED } from '@/lib/admin/types'
 import type { Grade, GradeTrack, RankedGrade } from '@/lib/admin/types'
 import type { RankId } from '@/lib/student-grades'
 
@@ -31,4 +32,14 @@ export default function AdminGradeBadge({ grade, track }: { grade: Grade; track:
   }
 
   return <GradeBadge rank={ranks[grade]} system={track === 'adult' ? 'adults' : 'children'} />
+}
+
+/** A grade from its stored label (e.g. "Red (12th Kyu)"); unknown labels keep the badge frame. */
+export function GradeLabelBadge({ label, track }: { label: string | null | undefined; track?: GradeTrack }) {
+  if (!label) return <GradeBadge rank={null} system={track === 'adult' ? 'adults' : 'children'} />
+  if (label !== UNRANKED && !grades.includes(label as (typeof grades)[number])) {
+    return <span className="inline-flex rounded-md border bg-background px-2 py-0.5 text-2xs font-semibold">{label}</span>
+  }
+  const grade = label as Grade
+  return <AdminGradeBadge grade={grade} track={track ?? (getGradeMeta(grade)?.tracks.includes('adult') ? 'adult' : 'children')} />
 }

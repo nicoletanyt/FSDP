@@ -10,6 +10,8 @@ import { calculateGradingFee } from '@/lib/grading-fees'
 import { money } from '@/lib/format'
 import EligibilityChecklist from '@/components/grading/EligibilityChecklist'
 import type { ChecklistRequirement } from '@/components/grading/EligibilityChecklist'
+import { GradeLabelBadge } from '@/components/admin/AdminGradeBadge'
+import DatabaseGradeBadge, { gradeFromId } from '@/components/instructor/DatabaseGradeBadge'
 
 type Readiness = { targetLabel: string; requirements: ChecklistRequirement[] }
 
@@ -117,7 +119,7 @@ export default function StudentGrading() {
             const price = calculateGradingFee(grading.target, grading.deadline)
             return price ? `${money.format(price.total)}${price.late ? ' (includes S$22 late charge)' : ''}` : 'Contact dojo for pricing'
           })()}</dd></div>
-          <div><dt className="text-muted-foreground">Target grade</dt><dd>{rankLabel(grading.target)}</dd></div>
+          <div><dt className="text-muted-foreground">Target grade</dt><dd><DatabaseGradeBadge grade={gradeFromId(grading.target)} showBeltLabel /></dd></div>
         </dl>
         {grading.applied ? <p className="font-medium text-primary">Application submitted after payment.</p> : <>
           <p className="text-sm text-muted-foreground">Your eligibility and target grade are checked again when you proceed. Your application is submitted only after payment is confirmed.</p>
@@ -141,7 +143,7 @@ function ReadinessCard({ readiness }: { readiness: Readiness | null }) {
     <div className="flex flex-wrap items-baseline justify-between gap-2">
       <div>
         <p className="text-sm text-muted-foreground">Your next grade</p>
-        <h2 className="text-xl font-semibold">{readiness.targetLabel}</h2>
+        <h2 className="mt-1 text-xl font-semibold"><GradeLabelBadge label={readiness.targetLabel} /></h2>
       </div>
       <p className={eligible ? 'text-sm font-medium text-success' : 'text-sm font-medium text-muted-foreground'}>
         {eligible ? 'Eligible to grade' : `${met} of ${total} requirements met`}

@@ -2,7 +2,7 @@ import { Fragment, useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronRight, Download, Search, X } from 'lucide-react'
 import { useSearchParams } from 'react-router'
-import AdminGradeBadge from '@/components/admin/AdminGradeBadge'
+import { GradeLabelBadge } from '@/components/admin/AdminGradeBadge'
 import EmptyState from '@/components/admin/EmptyState'
 import { EligibilityBadge, MembershipBadge, RiskBadge, StatusBadge } from '@/components/admin/StatusBadge'
 import { Button } from '@/components/ui/button'
@@ -13,8 +13,7 @@ import { useAdminFilters } from '@/lib/admin/admin-filters'
 import { downloadCsv } from '@/lib/admin/export'
 import { formatDate, formatPercent, initials, relativeDay } from '@/lib/admin/format'
 import { loadCalendarCentres } from '@/lib/admin/live-class-calendar'
-import { getGradeMeta, grades, UNRANKED } from '@/lib/admin/types'
-import type { Grade, MembershipStatus, RiskLevel } from '@/lib/admin/types'
+import type { MembershipStatus, RiskLevel } from '@/lib/admin/types'
 import { supabase } from '@/lib/supabase'
 import { cn } from 'cn'
 import FilterCombobox from '@/components/FilterCombobox'
@@ -61,12 +60,7 @@ export function GradingStatus({ status }: { status: DirectoryStudent['grading_st
 }
 
 export function StudentGrade({ label }: { label: string }) {
-  if (label !== UNRANKED && !grades.includes(label as (typeof grades)[number])) {
-    return <span className="inline-flex rounded-md border bg-background px-2 py-0.5 text-2xs font-semibold">{label}</span>
-  }
-  const grade = label as Grade
-  const track = getGradeMeta(grade)?.tracks.includes('adult') ? 'adult' : 'children'
-  return <AdminGradeBadge grade={grade} track={track} />
+  return <GradeLabelBadge label={label} />
 }
 
 export const studentDirectoryKey = (userId: string | undefined, centreId: string | null) =>

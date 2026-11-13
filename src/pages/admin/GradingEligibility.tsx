@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowRight, Bell, CheckCircle2, ChevronRight, XCircle } from 'lucide-react'
-import AdminGradeBadge from '@/components/admin/AdminGradeBadge'
+import { GradeLabelBadge } from '@/components/admin/AdminGradeBadge'
 import FilterCombobox from '@/components/FilterCombobox'
 import EmptyState from '@/components/admin/EmptyState'
 import EligibilityChecklist from '@/components/grading/EligibilityChecklist'
@@ -79,10 +79,7 @@ function studentName(student: LiveEligibleStudent) {
 }
 
 function LiveGrade({ label, track }: { label: string; track: GradeTrack }) {
-  if (label !== UNRANKED && !grades.includes(label as (typeof grades)[number])) {
-    return <span className="inline-flex rounded-md border bg-background px-2 py-0.5 text-2xs font-semibold">{label}</span>
-  }
-  return <AdminGradeBadge grade={label as Grade} track={track} />
+  return <GradeLabelBadge label={label} track={track} />
 }
 
 function liveRequirements(student: LiveEligibleStudent): EligibilityRequirement[] {
@@ -516,9 +513,9 @@ function RuleList({ title, track }: { title: string; track: GradeTrack }) {
           .map((grade) => (
             <div
               key={grade}
-              className="flex items-baseline justify-between gap-3"
+              className="flex items-center justify-between gap-3"
             >
-              <dt className="text-muted-foreground">{grade}</dt>
+              <dt><GradeLabelBadge label={grade} track={track} /></dt>
               <dd className="shrink-0 text-right tabular-nums">
                 {requirementText(grade, track)}
               </dd>
