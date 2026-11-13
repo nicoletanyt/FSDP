@@ -36,6 +36,7 @@ export default function FilterCombobox({
   contentClassName,
   renderOption,
   resetValue,
+  searchable = true,
 }: {
   options: FilterOption[]
   value: string
@@ -50,6 +51,8 @@ export default function FilterCombobox({
   renderOption?: (option: FilterOption) => ReactNode
   /** Shows a "Reset filter" button under the list that restores this value. */
   resetValue?: string
+  /** Show the "Search" box. Turn off for short lists so phones don't open the keyboard. */
+  searchable?: boolean
 }) {
   const items = useMemo(() => options.map((option) => option.value), [options])
   const byValue = useMemo(() => new Map(options.map((option) => [option.value, option])), [options])
@@ -84,11 +87,13 @@ export default function FilterCombobox({
         </span>
       </ComboboxTrigger>
       <ComboboxContent className={cn('min-w-56 p-1.5 *:data-[slot=input-group]:m-0 *:data-[slot=input-group]:mb-1.5 *:data-[slot=input-group]:h-10', contentClassName)}>
-        <ComboboxInput showTrigger={false} placeholder="Search" aria-label="Search" className="[&_input]:px-2">
-          <InputGroupAddon className="pl-3">
-            <Search aria-hidden="true" className="size-4 text-muted-foreground" />
-          </InputGroupAddon>
-        </ComboboxInput>
+        {searchable && (
+          <ComboboxInput showTrigger={false} placeholder="Search" aria-label="Search" className="[&_input]:px-2">
+            <InputGroupAddon className="pl-3">
+              <Search aria-hidden="true" className="size-4 text-muted-foreground" />
+            </InputGroupAddon>
+          </ComboboxInput>
+        )}
         <ComboboxEmpty className="py-3">{emptyText}</ComboboxEmpty>
         <ComboboxList className="max-h-64 p-0 [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border">
           {(item: string) => {

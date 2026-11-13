@@ -1,236 +1,166 @@
-import { useMemo, useState } from 'react'
-import type { ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { ChevronLeft, ChevronRight, Info } from 'lucide-react'
 import AdminGradeBadge from '@/components/admin/AdminGradeBadge'
 import FilterCombobox from '@/components/FilterCombobox'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import {
-  Table,
-  TableBody,
-  TableCaption,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
+import { Button } from '@/components/ui/button'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { syllabusParts } from '@/lib/admin/syllabus'
-import type {
-  GradeSyllabus,
-  SyllabusCell,
-  SyllabusColumn,
-  SyllabusPartId,
-} from '@/lib/admin/syllabus'
-import type { Grade } from '@/lib/admin/types'
+import type { GradeSyllabus, SyllabusCell, SyllabusColumn, SyllabusGroup } from '@/lib/admin/syllabus'
+import type { GradeTrack } from '@/lib/admin/types'
 import { cn } from 'cn'
 
-function countRowItems(row: GradeSyllabus): number {
-  return row.cells.reduce((total, cell) => total + cell.items.length, 0)
+const tracks: { value: GradeTrack; label: string }[] = [
+  { value: 'children', label: 'Children' },
+  { value: 'adult', label: 'Adults' },
+]
+
+const trackNotes: Record<GradeTrack, string> = {
+  children: 'Children start at Red from age 5. Numbers in brackets, like “8 different throws”, are the minimum to show.',
+  adult: 'Adults start at Blue (6th Kyu). From 2nd Dan, candidates aged 50 and over take 20 ukemis instead of 30.',
 }
 
-// Plain names for each printed syllabus, by belt range.
-const partLabels: Record<SyllabusPartId, string> = {
-  'children-1': 'Children: Red to Blue',
-  'children-2': 'Children: Blue-Silver to Black-Silver',
-  adult: 'Adults: Blue to 4th Dan',
+const groupOrder: { group: SyllabusGroup | 'requirements'; label: string }[] = [
+  { group: 'requirements', label: 'Requirements' },
+  { group: 'body', label: 'Body and movement' },
+  { group: 'technique', label: 'Techniques' },
+  { group: 'free', label: 'Free practice' },
+  { group: 'weapon', label: 'Weapons' },
+]
+
+type Step = { row: GradeSyllabus; columns: Map<string, SyllabusColumn> }
+
+// One belt ladder per track. The children's sheets are printed in two parts;
+// here they read as one continuous ladder.
+function ladderFor(track: GradeTrack): Step[] {
+  return syllabusParts
+    .filter((part) => part.track === track)
+    .flatMap((part) => part.rows.map((row) => ({ row, columns: new Map(part.columns.map((column) => [column.id, column])) })))
 }
 
 export default function Syllabus() {
-  const [partId, setPartId] = useState<SyllabusPartId>('children-1')
-  const part = syllabusParts.find((entry) => entry.id === partId) ?? syllabusParts[0]
-  const [selectedGrade, setSelectedGrade] = useState<Grade>(part.rows[0].grade)
+  const [track, setTrack] = useState<GradeTrack>('children')
+  const ladder = useMemo(() => ladderFor(track), [track])
+  const [index, setIndex] = useState(0)
+  const step = ladder[Math.min(index, ladder.length - 1)]
 
-  const columnOrder = useMemo(
-    () => new Map(part.columns.map((column, index) => [column.id, index])),
-    [part],
-  )
-  const cellsByColumn = useMemo(
-    () =>
-      new Map<string, Map<SyllabusColumn['id'], SyllabusCell>>(
-        part.rows.map((row) => [
-          row.grade,
-          new Map(row.cells.map((cell) => [cell.column, cell])),
-        ]),
-      ),
-    [part],
+  // A technique is "new" when no lower belt on this ladder includes it.
+  const seenBefore = useMemo(
+    () => new Set(ladder.slice(0, index).flatMap((earlier) => earlier.row.cells.map((cell) => cell.column))),
+    [ladder, index],
   )
 
-  const selectedRow =
-    part.rows.find((row) => row.grade === selectedGrade) ?? part.rows[0]
+  // One list for the grade, in the printed order: requirements, body, techniques, free, weapons.
+  const rows = groupOrder.flatMap(({ group }) =>
+    step.row.cells.filter((cell) => (cell.span ? 'requirements' : step.columns.get(cell.column)?.group) === group))
 
-  function selectPart(nextId: SyllabusPartId) {
-    const nextPart = syllabusParts.find((entry) => entry.id === nextId)
-    if (!nextPart) return
-    setPartId(nextId)
-    setSelectedGrade(nextPart.rows[0].grade)
-  }
-
-  function rowCells(row: GradeSyllabus): ReactNode[] {
-    const cells =
-      cellsByColumn.get(row.grade) ??
-      new Map<SyllabusColumn['id'], SyllabusCell>()
-    const rendered: ReactNode[] = []
-    for (let index = 0; index < part.columns.length; index++) {
-      const column = part.columns[index]
-      const cell = cells.get(column.id)
-      if (cell) {
-        rendered.push(
-          <TableCell
-            key={cell.column}
-            colSpan={cell.span}
-            className="min-w-36 align-top"
-          >
-            <ul className="space-y-1">
-              {cell.items.map((item) => (
-                <li key={item.id} className="text-xs leading-snug">
-                  <span>{item.label}</span>
-                  {item.note && (
-                    <span className="text-muted-foreground"> · {item.note}</span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </TableCell>,
-        )
-        if (cell.span) index += cell.span - 1
-      } else {
-        rendered.push(
-          <TableCell key={column.id} className="align-top">
-            <span className="text-xs text-muted-foreground/40">—</span>
-          </TableCell>,
-        )
-      }
+  // ← / → step through belts, unless typing or a menu/dialog is open.
+  const latest = useRef({ index, last: ladder.length - 1 })
+  useEffect(() => { latest.current = { index, last: ladder.length - 1 } })
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+      const target = event.target
+      if (target instanceof HTMLElement && (target.isContentEditable
+        || target.closest('input, textarea, select, [role="combobox"], [role="listbox"], [role="menu"], [role="dialog"], [role="tablist"]'))) return
+      const { index: current, last } = latest.current
+      const next = event.key === 'ArrowLeft' ? current - 1 : current + 1
+      if (next < 0 || next > last) return
+      event.preventDefault()
+      setIndex(next)
     }
-    return rendered
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  function chooseTrack(next: GradeTrack) {
+    setTrack(next)
+    setIndex(0)
   }
 
-  function columnLabel(columnId: SyllabusColumn['id']): string {
-    return (
-      part.columns.find((column) => column.id === columnId)?.label ?? columnId
-    )
+  function cellLabel(cell: SyllabusCell) {
+    return cell.span ? 'Requirements' : step.columns.get(cell.column)?.label ?? cell.column
   }
 
   return (
-    <div className="space-y-6">
-      <div className="w-full sm:w-80">
-        <FilterCombobox
-          value={part.id}
-          onChange={(value) => selectPart(value as SyllabusPartId)}
-          ariaLabel="Choose a syllabus"
-          options={syllabusParts.map((entry) => ({ value: entry.id, label: partLabels[entry.id] }))}
-        />
+    <div className="flex flex-col gap-4">
+      {/* Phones: two rows, the belt row sticky. Desktop: one row (switch · belt · info). */}
+      <div className="flex flex-col gap-4 max-lg:contents lg:flex-row lg:items-center lg:gap-3">
+      <div className="flex items-center gap-2 sm:gap-3 lg:contents">
+        <div role="group" aria-label="Syllabus" className="inline-flex rounded-lg border bg-muted/40 p-1 lg:order-1">
+          {tracks.map((item) => (
+            <button key={item.value} type="button" aria-pressed={track === item.value} onClick={() => chooseTrack(item.value)}
+              className={cn('h-9 cursor-pointer rounded-md px-4 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring',
+                track === item.value ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}>
+              {item.label}
+            </button>
+          ))}
+        </div>
+        <Popover>
+          <PopoverTrigger render={<Button type="button" variant="ghost" size="icon-touch" className="ml-auto lg:order-3" aria-label="About this syllabus" />}>
+            <Info aria-hidden="true" className="size-4 text-muted-foreground" />
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-72 text-sm">{trackNotes[track]}</PopoverContent>
+        </Popover>
       </div>
 
-      <Card className="overflow-hidden py-0">
-        <CardContent className="px-0">
-          <Table className="min-w-max">
-            <TableCaption className="sr-only">
-              {part.title} — technique columns by grade
-            </TableCaption>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="sticky left-0 z-20 bg-card">Grade</TableHead>
-                {part.columns.map((column) => (
-                  <TableHead
-                    key={column.id}
-                    className="min-w-36 whitespace-nowrap align-bottom text-xs"
-                  >
-                    {column.label}
-                  </TableHead>
-                ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {part.rows.map((row) => (
-                <TableRow
-                  key={row.grade}
-                  data-state={row.grade === selectedRow.grade ? 'selected' : undefined}
-                  className={cn(
-                    'cursor-pointer',
-                    row.grade === selectedRow.grade && 'bg-primary/5',
-                  )}
-                  onClick={() => setSelectedGrade(row.grade)}
-                >
-                  <TableCell className="sticky left-0 z-10 bg-card align-top">
-                    <button
-                      type="button"
-                      className="rounded-md text-left focus-visible:outline-2 focus-visible:outline-ring"
-                      onClick={() => setSelectedGrade(row.grade)}
-                      aria-label={row.grade}
-                    >
-                      <AdminGradeBadge grade={row.grade} track={row.track} />
-                    </button>
-                    <span className="mt-1 block text-xs font-normal text-muted-foreground">
-                      {countRowItems(row)} items
-                    </span>
-                  </TableCell>
-                  {rowCells(row)}
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      {/* The belt row stays in view under the top bar on phones and tablets. */}
+      <div className="flex items-center gap-2 lg:order-2 max-lg:sticky max-lg:top-[var(--mobile-site-nav-height)] max-lg:z-20 max-lg:-mx-4 max-lg:bg-background/95 max-lg:px-4 max-lg:py-2 max-lg:backdrop-blur sm:max-lg:-mx-6 sm:max-lg:px-6">
+        <Button type="button" variant="outline" size="icon-touch" disabled={index === 0}
+          aria-label={index > 0 ? `Previous belt: ${ladder[index - 1].row.grade}` : 'Previous belt'}
+          title="Previous belt (←)" aria-keyshortcuts="ArrowLeft"
+          onClick={() => setIndex(index - 1)}>
+          <ChevronLeft aria-hidden="true" />
+        </Button>
+        <div className="min-w-0 flex-1 sm:w-64 sm:flex-none">
+          <FilterCombobox
+            value={String(index)}
+            onChange={(value) => setIndex(Number(value))}
+            ariaLabel="Belt"
+            searchable={false}
+            className="h-11 lg:h-10"
+            options={ladder.map(({ row }, position) => ({ value: String(position), label: row.grade }))}
+            renderOption={(option) => {
+              const row = ladder[Number(option.value)]?.row
+              return row ? <AdminGradeBadge grade={row.grade} track={row.track} /> : option.label
+            }}
+          />
+        </div>
+        <Button type="button" variant="outline" size="icon-touch" disabled={index >= ladder.length - 1}
+          aria-label={index < ladder.length - 1 ? `Next belt: ${ladder[index + 1].row.grade}` : 'Next belt'}
+          title="Next belt (→)" aria-keyshortcuts="ArrowRight"
+          onClick={() => setIndex(index + 1)}>
+          <ChevronRight aria-hidden="true" />
+        </Button>
+      </div>
 
-      <Card>
-        <CardHeader>
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <CardTitle><AdminGradeBadge grade={selectedRow.grade} track={selectedRow.track} /></CardTitle>
-              <CardDescription>
-                {selectedRow.track === 'children' ? "Children's" : 'Adult'}{' '}
-                syllabus · {countRowItems(selectedRow)} items in{' '}
-                {selectedRow.cells.length} cells
-              </CardDescription>
+      </div>
+
+      <section aria-label={`${step.row.grade} syllabus`}>
+        <h2 className="sr-only">{step.row.grade} syllabus</h2>
+        <dl className="border-t border-border/50 lg:columns-2 lg:gap-12">
+          {rows.map((cell) => (
+            <div key={cell.column} className="grid break-inside-avoid grid-cols-[6.5rem_minmax(0,1fr)] gap-3 border-b border-border/50 py-2 sm:grid-cols-[11rem_minmax(0,1fr)] sm:gap-6">
+              <dt className="flex flex-wrap items-start gap-x-1.5 gap-y-0.5 pt-px text-xs text-muted-foreground [overflow-wrap:anywhere]">
+                {cellLabel(cell)}
+                {!cell.span && !seenBefore.has(cell.column) && index > 0 && (
+                  <span className="rounded-full bg-primary/10 px-1.5 text-3xs leading-4 font-medium text-primary">New</span>
+                )}
+              </dt>
+              <dd className="text-sm">
+                <ul className="space-y-0.5">
+                  {cell.items.map((item) => (
+                    <li key={item.id}>
+                      {item.label}
+                      {item.note && <span className="text-muted-foreground"> ({item.note})</span>}
+                    </li>
+                  ))}
+                </ul>
+              </dd>
             </div>
-            <div className="w-56">
-              <FilterCombobox
-                value={selectedRow.grade}
-                onChange={(value) => setSelectedGrade(value as Grade)}
-                ariaLabel="Choose a grade to inspect"
-                options={part.rows.map((row) => ({ value: row.grade, label: row.grade }))}
-                renderOption={(option) => <AdminGradeBadge grade={option.value as Grade} track={selectedRow.track} />}
-              />
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {[...selectedRow.cells]
-              .sort(
-                (left, right) =>
-                  (columnOrder.get(left.column) ?? 99) -
-                  (columnOrder.get(right.column) ?? 99),
-              )
-              .map((cell) => (
-                <div
-                  key={cell.column}
-                  className="rounded-lg border border-border/70 bg-background/60 p-3"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="text-sm font-medium">
-                      {columnLabel(cell.column)}
-                    </p>
-                    <span className="text-xs tabular-nums text-muted-foreground">
-                      {cell.items.length}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-xs italic text-muted-foreground">
-                    “{cell.source}”
-                  </p>
-                  <ul className="mt-2 space-y-1 text-sm">
-                    {cell.items.map((item) => (
-                      <li key={item.id}>
-                        <span className="font-medium">{item.label}</span>
-                        {item.note && (
-                          <span className="text-muted-foreground"> · {item.note}</span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-          </div>
-        </CardContent>
-      </Card>
+          ))}
+        </dl>
+      </section>
     </div>
   )
 }
