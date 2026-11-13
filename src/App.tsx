@@ -40,6 +40,7 @@ const ApplicationSuccess = lazy(() => import('./pages/Student/ApplicationSuccess
 
 const StudentDashboard = lazy(() => import('./pages/Student/StudentDashboard'))
 const StudentClasses = lazy(() => import('./pages/StudentClasses'))
+const StudentClassBooking = lazy(() => import('./pages/StudentClasses').then(module => ({ default: module.StudentClassBooking })))
 const StudentAttendance = lazy(() => import('./pages/StudentAttendance'))
 const StudentProfile = lazy(() => import('./pages/Student/StudentProfile'))
 const StudentPayments = lazy(() => import('./pages/Student/StudentPayments'))
@@ -56,6 +57,8 @@ const InstructorStudentDetails = lazy(() => import('./pages/Instructor/Instructo
 const InstructorGradingSession = lazy(() => import('./pages/Instructor/InstructorGradingSession'))
 const InstructorGradings = lazy(() => import('./pages/Instructor/InstructorGradings'))
 const InstructorGradingDay = lazy(() => import('./pages/Instructor/InstructorGradingDay'))
+const InstructorGradingSessionPage = lazy(() => import('./pages/Instructor/InstructorGradingSession').then(module => ({ default: module.InstructorGradingSessionPage })))
+const LegacySessionChecklistsRedirect = lazy(() => import('./pages/Instructor/InstructorGradingSession').then(module => ({ default: module.LegacySessionChecklistsRedirect })))
 
 function LegacyCoverInvitationRedirect() {
   const { invitationId } = useParams()
@@ -83,6 +86,8 @@ export default function App() {
               <Route path="dashboard" element={<StudentDashboard />} />
               <Route path="classes" element={<StudentClasses />} />
               <Route path="timetable" element={<StudentAttendance />} />
+              <Route path="attendance" element={<Navigate to="/timetable" replace />} />
+              <Route path="classes/choose" element={<StudentClassBooking />} />
               <Route path="profile" element={<StudentProfile />} />
               <Route path="payments" element={<StudentPayments />} />
               <Route path="student/credits" element={<StudentCredits />} />
@@ -110,6 +115,8 @@ export default function App() {
                 <Route path="reports/:eventId" element={<Navigate to="/instructor/calendar" replace />} />
                 <Route path="gradings" element={<InstructorGradings />} />
                 <Route path="gradings/:eventId" element={<InstructorGradingDay />} />
+                <Route path="gradings/:eventId/sessions/:sessionId" element={<LegacySessionChecklistsRedirect />} />
+                <Route path="grading/session/:sessionId" element={<InstructorGradingSessionPage />} />
                 <Route path="grading/:eventId" element={<InstructorGradingSession />} />
                 <Route path="profile" element={<InstructorProfile />} />
               </Route>

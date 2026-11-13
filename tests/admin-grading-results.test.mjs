@@ -42,11 +42,11 @@ const batches = [
     instructors: person('Alex', 'Morgan'),
     grading_batch_students: [
       { student_id: 's2', candidate_number: 2, name: 'Ben Lim', notes: null, target_grade_id: 'blue-6th-kyu',
-        grading_batch_results: [{ syllabus_item_id: 'k1', checked: false }, { syllabus_item_id: 'b1', checked: true }] },
+        grading_batch_results: [{ syllabus_item_id: 'k1', grade: 'C' }, { syllabus_item_id: 'b1', grade: 'A' }] },
       { student_id: 's1', candidate_number: 1, name: 'Ada Tan', notes: 'Strong ukemi', target_grade_id: 'blue-6th-kyu',
-        grading_batch_results: [{ syllabus_item_id: 'k1', checked: true }, { syllabus_item_id: 'b1', checked: true }] },
+        grading_batch_results: [{ syllabus_item_id: 'k1', grade: 'A' }, { syllabus_item_id: 'b1', grade: 'B' }] },
       { student_id: 's3', candidate_number: 3, name: 'Cy Ong', notes: null, target_grade_id: 'brown-4th-kyu',
-        grading_batch_results: [{ syllabus_item_id: 'r1', checked: true }] },
+        grading_batch_results: [{ syllabus_item_id: 'r1', grade: null }] },
     ],
     grading_batch_items: [{ syllabus_item_id: 'k1', category: 'Kihon', label: 'Ikkyo', sort_order: 1, grade_id: 'blue-6th-kyu' },
       { syllabus_item_id: 'b1', category: 'Basics', label: 'Kamae', sort_order: 1, grade_id: 'blue-6th-kyu' },
@@ -166,9 +166,11 @@ test('admin results show one examiner\'s submitted session checklist at a time, 
   }
   assert.deepEqual(root.root.findAll(node => node.props?.role === 'region').map(node => node.props['aria-label']),
     ['Grading checklist: Blue (6th Kyu)', 'Grading checklist: Brown (4th Kyu)'])
-  // Ben failed Ikkyo; everything else passed.
-  assert.equal(text.match(/"Not passed"/g).length, 1)
-  assert.equal(text.match(/"Passed"/g).length, 4)
+  // Each cell shows the examiner's letter; a blank cell reads "Not marked". No pass/fail wording.
+  const letters = root.root.findAll(node => typeof node.type === 'string' && node.props?.['data-mark'] !== undefined).map(node => node.props['data-mark'])
+  assert.deepEqual([...letters].sort(), ['A', 'A', 'B', 'C'])
+  assert.equal(text.match(/"Not marked"/g).length, 1)
+  assert.ok(!text.includes('Passed') && !text.includes('Not passed'))
   // Candidates in number order within each grade.
   const heads = root.root.findAll(node => node.props?.['data-candidate-number'] !== undefined).map(node => node.props.children)
   assert.deepEqual(heads, [1, 2, 3])

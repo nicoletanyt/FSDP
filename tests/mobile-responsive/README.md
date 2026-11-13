@@ -88,7 +88,7 @@ resubmission requires a new signature and each prior signed receipt is retained.
 Timestamp checks verify "Last saved" / "Last submitted" appears below the table.
 
 The chatbot suite opts into `fixtureChat=true`, mocks the existing Supabase
-session/function methods in the fixture only, and never contacts Ollama or writes
+session/function methods in the fixture only, and never contacts OpenRouter or writes
 database records. It covers instructor-only visibility, send/retry/hidden sources,
 Escape/focus return, stop/clear, late replies after account switches, and panel
 bounds at 320px, 390px, short landscape and desktop sizes.

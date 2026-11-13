@@ -11,7 +11,7 @@ import InstructorDashboard from '../../src/pages/Instructor/InstructorDashboard'
 import InstructorStudents from '../../src/pages/Instructor/InstructorStudents'
 import InstructorStudentDetails from '../../src/pages/Instructor/InstructorStudentDetails'
 import InstructorGradingAssessment from '../../src/pages/Instructor/InstructorGradingAssessment'
-import InstructorGradingSession from '../../src/pages/Instructor/InstructorGradingSession'
+import InstructorGradingSession, { InstructorGradingSessionPage, LegacySessionChecklistsRedirect } from '../../src/pages/Instructor/InstructorGradingSession'
 import InstructorGradingDay from '../../src/pages/Instructor/InstructorGradingDay'
 import InstructorProfile from '../../src/pages/Instructor/InstructorProfile'
 import RootLayout from '../../src/layouts/RootLayout'
@@ -54,7 +54,7 @@ if (new URLSearchParams(location.search).get('fixtureChat') === 'true') {
     options.signal.addEventListener('abort', () => { state.aborted++ }, { once: true })
     if (state.mode === 'pending') await new Promise<void>(resolve => { state.release = resolve })
     return state.mode === 'error'
-      ? { data: null, error: { context: Response.json({ error: 'Ollama Cloud is unavailable. Please retry.' }, { status: 502 }) } }
+      ? { data: null, error: { context: Response.json({ error: 'The chat provider is unavailable. Please retry.' }, { status: 502 }) } }
       : { data: { reply: state.reply ?? 'Your next class is at 10:00 AM at Central.\nCheck the calendar for the full schedule.', sources: [{ label: 'Your calendar', href: '/instructor/calendar?date=2026-11-08' }] }, error: null }
   } } })
 }
@@ -99,6 +99,8 @@ function FixtureApp() {
           <Route path="/instructor/assessments/:eventId/:studentId" element={<InstructorGradingAssessment />} />
           <Route path="/instructor/grading/:eventId" element={<InstructorGradingSession />} />
           <Route path="/instructor/gradings/:eventId" element={<InstructorGradingDay />} />
+          <Route path="/instructor/gradings/:eventId/sessions/:sessionId" element={<LegacySessionChecklistsRedirect />} />
+          <Route path="/instructor/grading/session/:sessionId" element={<InstructorGradingSessionPage />} />
           <Route path="/instructor/profile" element={<InstructorProfile />} />
         </Route></Route>
         <Route element={<RootLayout />}><Route path="*" element={<p>Navigation fixture page</p>} /></Route>
