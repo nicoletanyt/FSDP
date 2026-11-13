@@ -138,7 +138,7 @@ export default function StudentDashboard() {
           </p>
         </div>
         
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <p className="inline-flex rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
             Membership {student.membershipStatus.toLowerCase()}
           </p>

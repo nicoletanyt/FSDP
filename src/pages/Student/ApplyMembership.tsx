@@ -57,7 +57,6 @@ export default function ApplyMembership() {
     guardianName: '', guardianNric: '', guardianRelationship: '', guardianPhone: '',
   })
 
-  // PAR-Q 医疗问卷状态 (默认全选 No)
   const [parqAnswers, setParqAnswers] = useState<Record<string, boolean>>({
     heart: false,
     dizziness: false,
@@ -77,7 +76,6 @@ export default function ApplyMembership() {
   const age = calculateAge(formData.dob)
   const isMinor = age !== null && age < 18
 
-  // Members under 18 must provide guardian details, so keep the section open for them.
   useEffect(() => {
     if (isMinor) setShowGuardian(true)
   }, [isMinor])
@@ -122,7 +120,7 @@ export default function ApplyMembership() {
       }
       if (isMinor && (!formData.guardianName || !formData.guardianNric || !formData.guardianRelationship || !formData.guardianPhone)) {
         setShowGuardian(true)
-        setErrorMsg('Members under 18 must provide complete Guardian Information (name, NRIC / FIN, relationship, and contact number).')
+        setErrorMsg('Members under 18 must provide complete Guardian Information.')
         return false
       }
       if (formData.guardianNric && !isValidNric(formData.guardianNric)) {
@@ -133,7 +131,6 @@ export default function ApplyMembership() {
         setErrorMsg('Guardian contact number must be exactly 8 digits.')
         return false
       }
-      // 强制检查免责声明
       if (!waiverSigned) {
         setErrorMsg('You must sign the Deed of Waiver & Indemnity to proceed.')
         return false
@@ -158,29 +155,64 @@ export default function ApplyMembership() {
     } else {
       setIsSubmitting(true)
       try {
-        const finalDataToSubmit = {
-          ...formData,
-          parq: parqAnswers,
-          waiver_signed: waiverSigned,
-          membership_id: generateMembershipId(),
-          start_date: getTodayDate(),
-          belt_rank: 'Mukyu (White)',
-        }
+        // 1. 获取当前登录用户
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) throw new Error("No authenticated user found. Please log in again.")
+
+        const membershipId = generateMembershipId()
+        const today = getTodayDate()
+
+        // 2. 写入 student_profiles 表 (请确保你的数据库表名和列名一致)
+        const { error: profileError } = await supabase
+          .from('student_profiles')
+          .upsert({
+            user_id: user.id,
+            full_name: formData.fullName,
+            nric: formData.nric,
+            nationality: formData.nationality,
+            dob: formData.dob,
+            gender: formData.gender,
+            mobile: formData.mobile,
+            address: formData.address,
+            principal_dojo: formData.principalDojo,
+            membership_type: formData.membershipType,
+            current_belt: formData.currentBelt || 'Mukyu (White)',
+            membership_id: membershipId,
+            start_date: today,
+            emergency_name: formData.emergencyName,
+            emergency_phone: formData.emergencyPhone,
+            waiver_signed: waiverSigned,
+            parq_answers: parqAnswers
+          })
+
+        if (profileError) throw new Error("Profile Error: " + profileError.message)
+
+        // 3. 初始化 credit_accounts 表
+        const { error: creditError } = await supabase
+          .from('credit_accounts')
+          .upsert({
+            user_id: user.id,
+            credits: 0,
+            unlimited: false,
+            active: true,
+            membership_type: formData.membershipType // 👈 这里的字段必须存进去
+          })
+
+        if (creditError) throw new Error("Credit Error: " + creditError.message)
         
-        // 模拟网络请求
-        await new Promise(resolve => setTimeout(resolve, 1000))
-        
-        // 将生日和会员类型存入本地，供 Credits 页面筛选对应课卡
+        // 4. 保存到本地存储（双保险，防止刷新丢失，但不再依赖它作为唯一数据源）
         localStorage.setItem(DATE_OF_BIRTH_STORAGE_KEY, formData.dob)
         localStorage.setItem(MEMBERSHIP_TYPE_STORAGE_KEY, formData.membershipType)
         
+        // 5. 跳转到成功页
         navigate('/apply-membership/success', { state: { 
-            membershipId: finalDataToSubmit.membership_id,
-            startDate: finalDataToSubmit.start_date,
-            beltRank: finalDataToSubmit.belt_rank
+            membershipId: membershipId,
+            startDate: today,
+            beltRank: 'Mukyu (White)'
         }}) 
       } catch (error) {
-        setErrorMsg("Failed to submit application. Please try again.")
+        console.error("DB Insert Error:", error)
+        setErrorMsg(error instanceof Error ? error.message : "Failed to submit to database.")
       } finally {
         setIsSubmitting(false)
       }

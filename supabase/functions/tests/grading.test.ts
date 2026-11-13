@@ -56,12 +56,16 @@ Deno.test('verified paid grading session finalizes once per webhook delivery; un
   const originalFetch = globalThis.fetch
   let finalized = 0
   let amount = 6000
+  let expectedAmount = 6000
   const attempt = '00000000-0000-4000-8000-000000000001'
   globalThis.fetch = async (input, init) => {
     const request = new Request(input, init)
     if (request.url.startsWith('https://api.stripe.com/v1/checkout/sessions/')) {
       return Response.json({ id: 'cs_test_grading', object: 'checkout.session', mode: 'payment',
         payment_status: 'paid', amount_total: amount, currency: 'sgd', metadata: { grading_attempt_id: attempt } })
+    }
+    if (request.url.includes('/rest/v1/grading_checkout_attempts')) {
+      return Response.json({ amount_cents: expectedAmount })
     }
     if (request.url.includes('/rest/v1/rpc/finalize_grading_checkout')) {
       finalized++
@@ -90,6 +94,9 @@ Deno.test('verified paid grading session finalizes once per webhook delivery; un
     assert.equal((await webhook(await signed(true))).status, 200)
     assert.equal((await webhook(await signed(true))).status, 200)
     assert.equal(finalized, 2) // DB RPC locks and deduplicates on the attempt row.
+    amount = expectedAmount = 4500
+    assert.equal((await webhook(await signed(true))).status, 200)
+    assert.equal(finalized, 3) // Preserve the deployed per-grade fee support.
   } finally {
     globalThis.fetch = originalFetch
     names.forEach((name, index) => previous[index] === undefined ? Deno.env.delete(name) : Deno.env.set(name, previous[index]!))

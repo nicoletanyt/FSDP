@@ -68,6 +68,11 @@ application-context saving and sync failure. Fixture options: `?grade=4-dan`,
 `?deadline=2020-01-01`, and `?application=1` (stubbed application write).
 Without `application=1`, previews must never write to the database.
 
+`student-credits.test.mjs` uses the same Chrome setup and port 5180 to check the
+real dashboard's database-backed balance at mobile and desktop sizes. It covers
+waiting for the checkout receipt, the updated balance, database failures/retry,
+and unlimited accounts. Its fixture never contacts Supabase or charges a card.
+
 The NFC suite simulates Android Chrome 89+, tablets, Edge, missing Web NFC,
 old Chrome, iPhones and insecure contexts without using real NFC hardware or
 calling Supabase. It checks ready/QR-only states, the compatible-device list,
