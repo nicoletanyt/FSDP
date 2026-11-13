@@ -23,6 +23,7 @@ import InstructorLoadingBoundary from "@/components/instructor/InstructorLoading
 import { InstructorSkeleton } from "@/components/instructor/InstructorSkeletons";
 import StudentSessionHistory from "@/components/instructor/StudentSessionHistory";
 import StudentGradingRead from "@/components/instructor/StudentGradingRead";
+import StudentApplications from "@/components/instructor/StudentApplications";
 import { useAuth } from "@/hooks/use-auth";
 import { useInstructorQuery } from "@/hooks/use-instructor-data";
 import { instructorQueryKeys as queryKeys, instructorQueryTimes as queryTimes } from "@/lib/instructor/query-keys";
@@ -353,6 +354,7 @@ function StudentDetailContent({ detail }: { detail: StudentDetail }) {
                         </section>
                         <AttendanceSummary studentId={detail.student.id} />
                         <StudentGradingRead title="Next grading" detail={detail} reads={grading} onRetry={grading.retry} onViewGrading={() => selectTab("grading")} />
+                        <StudentApplications studentId={detail.student.id} today={singaporeToday()} />
                         <StudentGradingRead title="Technique checklist" detail={detail} reads={grading} onRetry={grading.retry} />
                     </TabsContent>
                     <TabsContent value="sessions">
@@ -363,6 +365,7 @@ function StudentDetailContent({ detail }: { detail: StudentDetail }) {
                     </TabsContent>
                     <TabsContent value="grading" className="space-y-6">
                         <StudentGradingRead title="Grading eligibility" detail={detail} reads={grading} onRetry={grading.retry} />
+                        <StudentApplications studentId={detail.student.id} today={singaporeToday()} />
                         <StudentGradingRead title="Grading history" detail={detail} reads={grading} onRetry={grading.retry} />
                     </TabsContent>
                 </Tabs>

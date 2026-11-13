@@ -483,3 +483,29 @@ test('an Endorse button appears only once every requirement is met, and endorsin
   })
   assert.equal(ineligible.buttons, 0)
 })
+
+test('grading applications are listed upcoming first, or a no-applications note is shown', async () => {
+  const listed = await inDetail(1280, async (w, wait) => {
+    await wait(300)
+    const section = [...w.document.querySelectorAll('[aria-label="Grading applications"]')].find(e => e.getClientRects().length)
+    return {
+      sections: w.document.querySelectorAll('[aria-label="Grading applications"]').length,
+      order: [...(section?.querySelectorAll('[data-application-id]') ?? [])].map(e => e.dataset.applicationId),
+      statuses: [...(section?.querySelectorAll('[data-application-status]') ?? [])].map(e => e.textContent.replace('Application: ', '').trim()),
+      session: section?.querySelector('[data-application-session]')?.textContent.trim() ?? null,
+      text: section?.textContent ?? '',
+    }
+  }, { query: '?fixtureData=student-applications' })
+  assert.equal(listed.sections, 1, 'only the active tab renders the section')
+  assert.deepEqual(listed.order, ['application-upcoming', 'application-past'])
+  assert.deepEqual(listed.statuses, ['Submitted', 'Withdrawn'])
+  assert.match(listed.session ?? '', /^Session 2 · 10:00 – 10:30$/)
+  assert.match(listed.text, /December grading[\s\S]*Central Dojo[\s\S]*Applied/)
+  const none = await inDetail(1280, async (w, wait) => {
+    await wait(300)
+    const section = [...w.document.querySelectorAll('[aria-label="Grading applications"]')].find(e => e.getClientRects().length)
+    return { applications: section?.querySelectorAll('[data-application-id]').length ?? null,
+      note: section?.querySelector('[data-no-applications]')?.textContent.trim() ?? null }
+  })
+  assert.deepEqual(none, { applications: 0, note: 'No grading applications so far.' })
+})

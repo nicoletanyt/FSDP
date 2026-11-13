@@ -7,7 +7,7 @@ import {
   decodeSummary, decodeSyllabusItem, decodeTechniqueSignOff, array, decodeAttendanceSave, decodeAttendanceSnapshot,
   decodeSessionSave, decodeAssessmentSnapshot,
   decodeGradingBatch, decodeGradingSignature, decodeAvailabilitySave, decodeAvailabilitySnapshot,
-  decodeEndorsementStatus, decodeEventEndorsements,
+  decodeEndorsementStatus, decodeEventEndorsements, decodeStudentApplication,
 } from './decoders'
 import { InstructorDataError, toInstructorDataError } from './errors'
 import { createInstructorProfileApi } from './profile'
@@ -506,6 +506,15 @@ export function createInstructorApi(client: InstructorClient) {
     },
 
     // One grading day with a session per target grade. Panel members and admins only.
+    // Every grading application the student has made, newest first.
+    async getStudentApplications(id: StudentId, signal?: AbortSignal) {
+      const studentId = parseEntityId(id, 'student')
+      await getInstructorAccount(signal)
+      return allRows('grading_applications', ['submitted_at', 'id'], decodeStudentApplication, signal,
+        'id,status,submitted_at,target_grade:grades(*),session:grading_sessions(position,starts_at,ends_at),'
+        + 'grading:gradings(grading_date,track,event:events(id,name,starts_at,status,centre:centres(name)))', { student_id: studentId })
+    },
+
     async getEndorsementStatus(id: StudentId, signal?: AbortSignal) {
       const studentId = parseEntityId(id, 'student')
       return decodeEndorsementStatus(await rpc('grading_endorsement_status', { target_student: studentId }, signal,

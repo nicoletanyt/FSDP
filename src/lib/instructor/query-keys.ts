@@ -25,6 +25,7 @@ export const instructorQueryKeys = {
   studentHistory: (userId: string, studentId: string, filters: QueryFilters) => [...instructorQueryKeys.student(userId, studentId), 'history', filters] as const,
   studentSummary: (userId: string, studentId: string) => [...instructorQueryKeys.student(userId, studentId), 'summary'] as const,
   studentGrading: (userId: string, studentId: string) => [...instructorQueryKeys.student(userId, studentId), 'grading'] as const,
+  studentApplications: (userId: string, studentId: string) => [...instructorQueryKeys.student(userId, studentId), 'applications'] as const,
   endorsement: (userId: string, studentId: string) => [...instructorQueryKeys.student(userId, studentId), 'endorsement'] as const,
   eventEndorsements: (userId: string, eventId: string) => [...instructorQueryKeys.all(userId), 'event-endorsements', eventId] as const,
   reference: (userId: string) => [...instructorQueryKeys.all(userId), 'reference'] as const,

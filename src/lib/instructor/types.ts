@@ -111,6 +111,21 @@ export interface GradeTrackRow {
   track: GradeTrack
 }
 
+/** A student's grading application, with its grading and (if visible) session. */
+export interface StudentApplication {
+  id: string
+  status: 'submitted' | 'under_review' | 'withdrawn'
+  submittedAt: string
+  targetGrade: GradeRow | null
+  eventId: string
+  eventName: string
+  eventStatus: string
+  gradingDate: string | null
+  track: GradeTrack | null
+  centreName: string | null
+  session: { position: number; startsAt: string | null; endsAt: string | null } | null
+}
+
 /** An instructor's endorsement of a student for their next grade. */
 export interface GradingEndorsement {
   endorsedAt: string

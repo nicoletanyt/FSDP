@@ -1,8 +1,8 @@
-import { parseEntityId, parseInstructorRow, timestampMilliseconds } from './adapters'
+import { parseEntityId, parseInstructorRow, timestampMilliseconds, toSingaporeDateTime } from './adapters'
 import { InstructorDataError } from './errors'
 import type {
   AssessmentDetail, AttendanceSaveResult, AttendanceSnapshot, CalendarEntry, CentreRow, ClassTypeRow, EventRow, EventStudentRow,
-  EventEndorsement, GradeRequirementRow, GradeRow, GradeTrackRow, GradingApplicationRow, GradingEndorsement, GradingEndorsementStatus, GradingRow,
+  EventEndorsement, StudentApplication, GradeRequirementRow, GradeRow, GradeTrackRow, GradingApplicationRow, GradingEndorsement, GradingEndorsementStatus, GradingRow,
   InstructorAvailabilityRow, Page, RosterEntry, StudentAttendanceSummary,
   StudentDetail, StudentDirectory, StudentEntry, StudentHistoryEntry, StudentRow,
   SyllabusItemRow, TechniqueSignOffEntry, TechniqueSignOffRow, AssessmentSnapshot, SessionSaveResult,
@@ -144,6 +144,25 @@ export function decodeEndorsementStatus(value: unknown): GradingEndorsementStatu
   const source = object(value)
   return { targetGradeId: nullable(text)(source.target_grade_id ?? null), eligible: boolean(source.eligible),
     endorsement: source.endorsement == null ? null : decodeEndorsement(source.endorsement) }
+}
+
+const applicationStatus = enumeration('submitted', 'under_review', 'withdrawn')
+
+export function decodeStudentApplication(value: unknown): StudentApplication {
+  const source = object(value)
+  const grading = object(source.grading)
+  const event = object(grading.event)
+  const session = source.session == null ? null : object(source.session)
+  const startsAt = nullable(timestamp)(event.starts_at ?? null)
+  return {
+    id: text(source.id), status: applicationStatus(source.status), submittedAt: timestamp(source.submitted_at),
+    targetGrade: nullable(decodeGrade)(source.target_grade ?? null),
+    eventId: text(event.id), eventName: text(event.name), eventStatus: text(event.status),
+    gradingDate: nullable(dateOnly)(grading.grading_date ?? null) ?? (startsAt ? toSingaporeDateTime(startsAt).date : null),
+    track: nullable(track)(grading.track ?? null),
+    centreName: event.centre == null ? null : text(object(event.centre).name),
+    session: session && { position: count(session.position), startsAt: nullable(timestamp)(session.starts_at ?? null), endsAt: nullable(timestamp)(session.ends_at ?? null) },
+  }
 }
 
 export function decodeEventEndorsements(value: unknown): EventEndorsement[] {
