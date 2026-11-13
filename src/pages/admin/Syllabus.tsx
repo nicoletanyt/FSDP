@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import { BookOpen } from 'lucide-react'
 import AdminGradeBadge from '@/components/admin/AdminGradeBadge'
 import FilterCombobox from '@/components/FilterCombobox'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -18,22 +17,20 @@ import type {
   GradeSyllabus,
   SyllabusCell,
   SyllabusColumn,
-  SyllabusPart,
   SyllabusPartId,
 } from '@/lib/admin/syllabus'
 import type { Grade } from '@/lib/admin/types'
 import { cn } from 'cn'
 
-function countItems(part: SyllabusPart): number {
-  return part.rows.reduce(
-    (total, row) =>
-      total + row.cells.reduce((rowTotal, cell) => rowTotal + cell.items.length, 0),
-    0,
-  )
-}
-
 function countRowItems(row: GradeSyllabus): number {
   return row.cells.reduce((total, cell) => total + cell.items.length, 0)
+}
+
+// Plain names for each printed syllabus, by belt range.
+const partLabels: Record<SyllabusPartId, string> = {
+  'children-1': 'Children: Red to Blue',
+  'children-2': 'Children: Blue-Silver to Black-Silver',
+  adult: 'Adults: Blue to 4th Dan',
 }
 
 export default function Syllabus() {
@@ -113,42 +110,14 @@ export default function Syllabus() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center gap-3">
-        <label htmlFor="syllabus-part" className="text-sm font-medium">
-          Syllabus
-        </label>
-        <div className="w-full sm:w-80">
-          <FilterCombobox
-            id="syllabus-part"
-            value={part.id}
-            onChange={(value) => selectPart(value as SyllabusPartId)}
-            options={syllabusParts.map((entry) => ({ value: entry.id, label: `${entry.title} · ${entry.subtitle}` }))}
-          />
-        </div>
+      <div className="w-full sm:w-80">
+        <FilterCombobox
+          value={part.id}
+          onChange={(value) => selectPart(value as SyllabusPartId)}
+          ariaLabel="Choose a syllabus"
+          options={syllabusParts.map((entry) => ({ value: entry.id, label: partLabels[entry.id] }))}
+        />
       </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <BookOpen className="size-4 text-primary" aria-hidden="true" />
-            {part.title}
-          </CardTitle>
-          <CardDescription>
-            {part.rows.length} grades · {part.columns.length} columns ·{' '}
-            {countItems(part)} printed sub-items
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ul className="grid gap-1 text-sm text-muted-foreground sm:grid-cols-2">
-            {part.notes.map((note) => (
-              <li key={note} className="flex gap-2">
-                <span className="mt-1.5 size-1 shrink-0 rounded-full bg-primary" />
-                {note}
-              </li>
-            ))}
-          </ul>
-        </CardContent>
-      </Card>
 
       <Card className="overflow-hidden py-0">
         <CardContent className="px-0">

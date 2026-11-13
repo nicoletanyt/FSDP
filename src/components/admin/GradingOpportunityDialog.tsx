@@ -153,7 +153,7 @@ export default function GradingOpportunityDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <GraduationCap className="size-4 text-primary" aria-hidden="true" />

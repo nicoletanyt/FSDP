@@ -149,8 +149,8 @@ export default function App() {
                 <Route path="eligibility" element={<AdminGradingEligibility />} />
                 <Route path="opportunities" element={<AdminGradingOpportunities />} />
                 <Route path="applications" element={<AdminGradingApplications />} />
+                <Route path="syllabus" element={<AdminGradingSyllabus />} />
               </Route>
-              <Route path="grading/syllabus" element={<MovedRoute to="/admin/settings/syllabus" />} />
               <Route path="grading/rules" element={<MovedRoute to="/admin/settings/grading-rules" />} />
               {/* A grading's own pages sit outside the section tabs. */}
               <Route path="grading/days/:eventId" element={<AdminGradingDay />} />
@@ -160,8 +160,8 @@ export default function App() {
                 <Route index element={<Navigate to="email-templates" replace />} />
                 <Route path="email-templates" element={<AdminEmailTemplates />} />
                 <Route path="email-log" element={<AdminNotifications />} />
-                <Route path="syllabus" element={<AdminGradingSyllabus />} />
                 <Route path="grading-rules" element={<AdminGradingRules />} />
+                <Route path="syllabus" element={<MovedRoute to="/admin/grading/syllabus" />} />
               </Route>
               <Route path="notifications" element={<MovedRoute to="/admin/settings/email-log" />} />
               <Route path="email-templates" element={<MovedRoute to="/admin/settings/email-templates" />} />

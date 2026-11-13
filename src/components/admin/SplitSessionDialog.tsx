@@ -26,7 +26,7 @@ export default function SplitSessionDialog({ session, open, onOpenChange, onSpli
 
   return (
     <Dialog open={open} onOpenChange={next => { if (!next) setChosen([]); onOpenChange(next) }}>
-      <DialogContent className="sm:max-w-lg" showCloseButton={!busy}>
+      <DialogContent showCloseButton={!busy}>
         <DialogHeader>
           <DialogTitle>Split {label}</DialogTitle>
           <DialogDescription>

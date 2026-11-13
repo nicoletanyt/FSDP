@@ -99,7 +99,7 @@ export default function Instructors() {
             <Plus className="size-4" aria-hidden="true" />
             Create instructor
           </DialogTrigger>
-          <DialogContent className="sm:max-w-lg">
+          <DialogContent >
             <DialogHeader>
               <DialogTitle>Create instructor</DialogTitle>
               <DialogDescription>

@@ -69,7 +69,7 @@ export function AvailabilityDialog({ initial, editingId, slots, getEvents, onSav
 
     return (
         <Dialog open onOpenChange={(open) => { if (!open && !busy.current) onClose(); }}>
-            <DialogContent showCloseButton={!pending} className="p-4 sm:max-w-md lg:p-6 [&_[data-slot=dialog-close]]:size-11 lg:[&_[data-slot=dialog-close]]:size-10 [&_[data-slot=dialog-close]_svg]:size-6">
+            <DialogContent showCloseButton={!pending} className="p-4 lg:p-6 [&_[data-slot=dialog-close]]:size-11 lg:[&_[data-slot=dialog-close]]:size-10 [&_[data-slot=dialog-close]_svg]:size-6">
                 <form className="grid gap-5" aria-busy={Boolean(pending)} onSubmit={async (event) => {
                     event.preventDefault();
                     if (locked || busy.current || confirmDelete || !onSave) return;

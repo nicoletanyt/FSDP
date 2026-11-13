@@ -142,7 +142,7 @@ export default function LiveStudentsTab() {
     {loading && !error && <p role="status" className="text-sm text-muted-foreground">Loading live students…</p>}
 
     {!loading && !error && <>
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
         <StatCard label="Students" value={String(students.length)} icon={Users} />
         <StatCard label="Needs attention" value={String(attention)} icon={AlertTriangle} tone={attention ? 'danger' : 'default'} />
         <StatCard label="Eligible to grade" value={String(eligible)} icon={GraduationCap} tone="success" />
@@ -151,8 +151,9 @@ export default function LiveStudentsTab() {
       <div className="flex flex-wrap items-center gap-2 sm:gap-3">
         <SearchInput value={search} onChange={event => updateParam('q', event.target.value)}
           placeholder="Search by name, member number, or email" aria-label="Search students" />
-        <Button variant="outline" size="touch" onClick={exportStudents} disabled={filtered.length === 0} className="shrink-0">
-          <Download />Export CSV
+        <Button variant="outline" size="touch" onClick={exportStudents} disabled={filtered.length === 0} className="shrink-0"
+          aria-label="Export CSV">
+          <Download /><span className="hidden sm:inline">Export CSV</span>
         </Button>
         <FilterPopover title="Filter students" activeCount={popoverFilters} onReset={() => clearFilters(true)}>
           <FilterField label="Dojo" value={selectedCentre ?? 'all'} onChange={setCentreId} ariaLabel="Dojo filter"
@@ -179,9 +180,9 @@ export default function LiveStudentsTab() {
           <Table className="[&_th]:px-4 [&_td]:px-4 [&_td]:py-4 [&_th:first-child]:pl-5 [&_td:first-child]:pl-5 [&_th:last-child]:pr-5 [&_td:last-child]:pr-5">
             <TableCaption className="sr-only">Live students matching the current filters</TableCaption>
             <TableHeader><TableRow>
-              <TableHead>Student</TableHead><TableHead>Grade</TableHead>
-              <TableHead>Membership</TableHead><TableHead className="text-right">Last 5 enrolments</TableHead>
-              <TableHead>Risk</TableHead><TableHead>Last attended</TableHead>
+              <TableHead>Student</TableHead><TableHead className="hidden md:table-cell">Grade</TableHead>
+              <TableHead className="hidden md:table-cell">Membership</TableHead><TableHead className="hidden md:table-cell text-right">Last 5 enrolments</TableHead>
+              <TableHead>Risk</TableHead><TableHead className="hidden md:table-cell">Last attended</TableHead>
               <TableHead className="text-right"><span className="sr-only">Details</span></TableHead>
             </TableRow></TableHeader>
             <TableBody>{filtered.map(student => {
@@ -193,21 +194,26 @@ export default function LiveStudentsTab() {
                       {initials(student.first_name, student.last_name)}
                     </span><p className="min-w-0 truncate font-medium">{studentName(student)}</p>
                   </div></TableCell>
-                  <TableCell><StudentGrade label={student.grade} /></TableCell>
-                  <TableCell><MembershipBadge status={student.membership_status} /></TableCell>
-                  <TableCell className="text-right font-medium tabular-nums">{student.attendance_rate === null ? '—' : formatPercent(student.attendance_rate)}</TableCell>
+                  <TableCell className="hidden md:table-cell"><StudentGrade label={student.grade} /></TableCell>
+                  <TableCell className="hidden md:table-cell"><MembershipBadge status={student.membership_status} /></TableCell>
+                  <TableCell className="hidden md:table-cell text-right font-medium tabular-nums">{student.attendance_rate === null ? '—' : formatPercent(student.attendance_rate)}</TableCell>
                   <TableCell><StudentRisk level={student.risk_level} /></TableCell>
-                  <TableCell className="text-muted-foreground">{relativeDay(student.last_attended ?? '')}</TableCell>
+                  <TableCell className="hidden md:table-cell text-muted-foreground">{relativeDay(student.last_attended ?? '')}</TableCell>
                   <TableCell className="text-right"><Button variant="ghost" size="sm" type="button"
                     aria-label={`${isExpanded ? 'Hide' : 'View'} details for ${studentName(student)}`}
                     aria-expanded={isExpanded} aria-controls={isExpanded ? `student-directory-details-${student.id}` : undefined}
                     onClick={event => { event.stopPropagation(); setExpanded(isExpanded ? null : student.id) }}>
-                    {isExpanded ? 'Hide details' : 'View details'}
+                    <span className="hidden md:inline">{isExpanded ? 'Hide details' : 'View details'}</span>
                     <ChevronRight className={cn('size-4 transition-transform', isExpanded && 'rotate-90')} aria-hidden="true" />
                   </Button></TableCell>
                 </TableRow>
                 {isExpanded && <TableRow id={`student-directory-details-${student.id}`}><TableCell colSpan={7} className="bg-muted/30">
                   <dl className="grid gap-x-8 gap-y-2 whitespace-normal text-sm sm:grid-cols-2 lg:grid-cols-4">
+                    {/* Columns hidden on phones. */}
+                    <div className="md:hidden"><dt className="text-muted-foreground">Grade</dt><dd><StudentGrade label={student.grade} /></dd></div>
+                    <div className="md:hidden"><dt className="text-muted-foreground">Membership</dt><dd><MembershipBadge status={student.membership_status} /></dd></div>
+                    <div className="md:hidden"><dt className="text-muted-foreground">Last 5 enrolments</dt><dd>{student.attendance_rate === null ? '—' : formatPercent(student.attendance_rate)}</dd></div>
+                    <div className="md:hidden"><dt className="text-muted-foreground">Last attended</dt><dd>{relativeDay(student.last_attended ?? '')}</dd></div>
                     <div><dt className="text-muted-foreground">Email</dt><dd className="break-all">{student.email}</dd></div>
                     <div><dt className="text-muted-foreground">Date of birth</dt><dd>{formatDate(student.date_of_birth)}</dd></div>
                     <div><dt className="text-muted-foreground">Recent enrolments</dt><dd>{student.enrolments} completed · {student.attended} attended · {student.missed} missed</dd></div>

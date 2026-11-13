@@ -123,7 +123,7 @@ export default function StudentTrainingDialog({
                 <DialogContent
                     showCloseButton={false}
                     data-student-training-dialog=""
-                    className="student-detail-view flex h-[80dvh] max-h-[80dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl"
+                    className="student-detail-view flex flex-col gap-0 overflow-hidden p-0"
                 >
                     {payload && (
                         <StudentTrainingContent

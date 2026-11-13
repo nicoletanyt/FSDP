@@ -179,9 +179,9 @@ export default function GradingApplications() {
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>Student</TableHead>
-                                    <TableHead>Grading</TableHead>
+                                    <TableHead className="hidden md:table-cell">Grading Session</TableHead>
                                     <TableHead>Target</TableHead>
-                                    <TableHead>Submitted date</TableHead>
+                                    <TableHead className="hidden md:table-cell">Submitted date</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -191,8 +191,11 @@ export default function GradingApplications() {
                                             <span className="font-medium">
                                                 {student!.first_name} {student!.last_name}
                                             </span>
+                                            <span className="block text-xs text-muted-foreground md:hidden">
+                                                {event!.name}
+                                            </span>
                                         </TableCell>
-                                        <TableCell>
+                                        <TableCell className="hidden md:table-cell">
                                             {event!.name}
                                             <span className="block text-xs text-muted-foreground">
                                                 {grading?.grading_date
@@ -216,7 +219,7 @@ export default function GradingApplications() {
                                                 />
                                             </div>
                                         </TableCell>
-                                        <TableCell>
+                                        <TableCell className="hidden md:table-cell">
                                             {formatDate(item.submitted_at.slice(0, 10))}
                                         </TableCell>
                                     </TableRow>

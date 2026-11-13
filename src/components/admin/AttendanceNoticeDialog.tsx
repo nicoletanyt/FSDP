@@ -91,7 +91,7 @@ export default function AttendanceNoticeDialog({ centreId, studentIds, onClose, 
   }
 
   return <Dialog open onOpenChange={open => { if (!open && !busy) onClose() }}>
-    <DialogContent className="max-h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)_auto] sm:max-w-2xl">
+    <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto]">
       <DialogHeader><DialogTitle>Follow Up</DialogTitle></DialogHeader>
       <div className="min-h-0 space-y-4 overflow-y-auto px-1">
         {error && <Alert variant="destructive" role="alert"><AlertDescription>{error}</AlertDescription></Alert>}

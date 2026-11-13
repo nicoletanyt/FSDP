@@ -415,7 +415,7 @@ export default function InstructorProfile() {
                                         <Pencil aria-hidden="true" className="size-4" />
                                     </DialogTrigger>
                                     <DialogContent
-                                        className="sm:max-w-md"
+                                        
                                         showCloseButton={!addressPending}
                                     >
                                         <DialogHeader className="pr-10">

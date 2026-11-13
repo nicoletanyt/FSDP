@@ -61,7 +61,7 @@ export default function Centres() {
     <div className="space-y-6">
       <PageHeader title="Centres" />
         <div className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
             <StatCard label="Dojos" value={`${centres.length}`} icon={Building2} />
             <StatCard label="Active" value={`${activeCount}`} icon={CircleCheck} tone="success" />
             <StatCard label="Closed" value={`${closedCount}`} icon={CircleX} tone="danger" />

@@ -517,7 +517,7 @@ export default function StudentAttendance() {
       <Dialog open={Boolean(rescheduleId) && !pending} onOpenChange={open => {
         if (!open) setRescheduleId(null)
       }}>
-        <DialogContent className="sm:max-w-lg" showCloseButton={false}>
+        <DialogContent showCloseButton={false}>
           <DialogTitle>Choose a replacement class</DialogTitle>
           <DialogDescription>Your current booking stays until you confirm the replacement.</DialogDescription>
 
@@ -576,7 +576,7 @@ export default function StudentAttendance() {
         if (!open) setPending(null)
       }}>
         {pending && (
-          <DialogContent className="sm:max-w-md" showCloseButton={false}>
+          <DialogContent showCloseButton={false}>
             <DialogTitle>
               {pending.kind === 'cancel'
                 ? 'Cancel this class?'

@@ -608,7 +608,7 @@ function ClassBooking({ type, initialParams }: { type: string; initialParams: UR
       <Dialog open={pendingChange !== null} onOpenChange={open => {
         if (!open) setPendingChange(null)
       }}>
-        <DialogContent showCloseButton={false} className="sm:max-w-md">
+        <DialogContent showCloseButton={false} >
           <DialogTitle>{pendingChange && 'params' in pendingChange ? 'Change filters?' : 'Change date?'}</DialogTitle>
           <DialogDescription>
             Your selected slots will be cleared. Confirm to continue.
@@ -624,7 +624,7 @@ function ClassBooking({ type, initialParams }: { type: string; initialParams: UR
         if (!open && !busy) closeAction()
       }}>
         {action && (
-          <DialogContent showCloseButton={false} className="sm:max-w-md">
+          <DialogContent showCloseButton={false} >
             <DialogTitle>
               {action.kind === 'enroll' ? 'Confirm enrolment?' : action.kind === 'waitlist' ? 'Join the waitlist?' : 'Leave the waitlist?'}
             </DialogTitle>

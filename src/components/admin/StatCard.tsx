@@ -41,7 +41,7 @@ export default function StatCard({
       <div className="min-w-0">
         <p className="text-xs font-medium text-muted-foreground">{label}</p>
         <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-          <p className="text-2xl leading-tight font-semibold tracking-tight tabular-nums">{value}</p>
+          <p className="text-xl leading-tight font-semibold tracking-tight tabular-nums sm:text-2xl">{value}</p>
           {change !== undefined && (
             <span className={cn('inline-flex items-center gap-0.5 text-xs font-medium',
               change > 0 ? 'text-success' : change < 0 ? 'text-destructive' : 'text-muted-foreground')}>
@@ -53,14 +53,14 @@ export default function StatCard({
           {detail && <span className="text-xs text-muted-foreground">{detail}</span>}
         </div>
       </div>
-      <span className={cn('flex size-8 shrink-0 items-center justify-center rounded-lg', toneClasses[tone])}>
+      <span className={cn('hidden size-8 shrink-0 items-center justify-center rounded-lg sm:flex', toneClasses[tone])}>
         <Icon className="size-4" aria-hidden="true" />
       </span>
     </div>
   )
 
   const className = cn(
-    'block rounded-xl p-3 ring-1 sm:px-4',
+    'block min-w-0 rounded-xl p-3 ring-1 sm:px-4',
     surfaceClasses[tone],
     to && 'transition-colors hover:ring-primary/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
   )

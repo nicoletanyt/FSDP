@@ -79,7 +79,7 @@ export default function Overview() {
     : 1
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-4">
       <PageHeader
         title="Overview"
         actions={centresQuery.isSuccess
@@ -104,7 +104,7 @@ export default function Overview() {
       )}
       {notice && <Alert role="status"><CheckCircle2 className="size-4 text-success" aria-hidden="true" /><AlertDescription>{notice}</AlertDescription></Alert>}
 
-      <section aria-label="Key figures" className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
+      <section aria-label="Key figures" className="grid grid-cols-3 gap-2 sm:gap-3">
         <StatCard label="Active students" value={snapshot ? String(snapshot.active_students) : '—'}
           detail={snapshot ? `of ${snapshot.total_students} students` : undefined} icon={Users}
           to={snapshot ? '/admin/students?membership=active' : undefined} />
@@ -117,7 +117,8 @@ export default function Overview() {
           to={snapshot ? '/admin/students?eligibility=eligible' : undefined} />
       </section>
 
-      <Card>
+      {/* On phones the students needing attention come before the trend chart. */}
+      <Card className="order-last xl:order-none">
         <CardHeader>
           <CardTitle>Attendance trend</CardTitle>
           <CardDescription>Completed classes over the last 12 weeks {selectedCentre ? 'at the selected centre' : 'across all centres'}.</CardDescription>

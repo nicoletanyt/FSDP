@@ -131,7 +131,7 @@ function Endorsement({ detail, view }: { detail: StudentDetail; view: GradingVie
                 <BadgeCheck aria-hidden="true" />
                 Endorse
             </AlertDialogTrigger>
-            <AlertDialogContent className="data-[size=default]:sm:max-w-md" data-endorse-dialog>
+            <AlertDialogContent data-endorse-dialog>
                 <AlertDialogHeader>
                     <AlertDialogMedia className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
                         <BadgeCheck aria-hidden="true" />

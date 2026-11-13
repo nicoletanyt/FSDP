@@ -3,10 +3,9 @@ import PageHeader from '@/components/admin/PageHeader'
 import SectionTabs from '@/components/admin/SectionTabs'
 
 const tabs = [
-  { to: '/admin/settings/email-templates', label: 'Email templates' },
-  { to: '/admin/settings/email-log', label: 'Email log' },
-  { to: '/admin/settings/syllabus', label: 'Syllabus' },
-  { to: '/admin/settings/grading-rules', label: 'Grading rules' },
+  { to: '/admin/settings/email-templates', label: 'Emails' },
+  { to: '/admin/settings/email-log', label: 'Sent emails' },
+  { to: '/admin/settings/grading-rules', label: 'Grading schedule' },
 ]
 
 export default function Settings() {

@@ -153,8 +153,8 @@ export default function AttendanceMonitoring() {
           <TableHeader><TableRow>
             <TableHead className="w-8"><input type="checkbox" className="size-4 accent-[var(--primary)]" checked={allSelected} disabled={!selectable.length}
               onChange={toggleAll} aria-label="Select all visible students needing attention" /></TableHead>
-            <TableHead>Student</TableHead><TableHead>Risk</TableHead><TableHead className="text-right">Last 5 enrolments</TableHead>
-            <TableHead>Last attended</TableHead><TableHead className="text-right">Details</TableHead>
+            <TableHead>Student</TableHead><TableHead>Risk</TableHead><TableHead className="hidden md:table-cell text-right">Last 5 enrolments</TableHead>
+            <TableHead className="hidden md:table-cell">Last attended</TableHead><TableHead className="text-right"><span className="sr-only md:not-sr-only">Details</span></TableHead>
           </TableRow></TableHeader>
           <TableBody>{filtered.map(student => {
             const isExpanded = expanded === student.id
@@ -171,21 +171,22 @@ export default function AttendanceMonitoring() {
                     <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">{student.centre_name} <GradeLabelBadge label={student.grade} /></p></div>
                 </div></TableCell>
                 <TableCell>{student.level === 'unassessed' ? <StatusBadge tone="neutral">Not assessed</StatusBadge> : <RiskBadge level={student.level} />}</TableCell>
-                <TableCell className="text-right tabular-nums">
+                <TableCell className="hidden md:table-cell text-right tabular-nums">
                   <p className="font-medium">{student.rate === null ? '—' : formatPercent(student.rate)}</p>
                   <p className="text-xs text-muted-foreground">{student.attended} attended · {student.missed} missed</p>
                 </TableCell>
-                <TableCell className="text-muted-foreground">{relativeDay(student.last_attended ?? '')}</TableCell>
+                <TableCell className="hidden md:table-cell text-muted-foreground">{relativeDay(student.last_attended ?? '')}</TableCell>
                 <TableCell className="text-right"><Button type="button" variant="ghost" size="sm"
                   aria-label={`${isExpanded ? 'Hide' : 'View'} attendance details for ${name(student)}`}
                   aria-expanded={isExpanded} aria-controls={isExpanded ? `monitoring-details-${student.id}` : undefined}
                   onClick={event => { event.stopPropagation(); setExpanded(isExpanded ? null : student.id) }}>
-                  {isExpanded ? 'Hide details' : 'View details'}
+                  <span className="hidden md:inline">{isExpanded ? 'Hide details' : 'View details'}</span>
                   <ChevronRight className={cn('size-4 transition-transform', isExpanded && 'rotate-90')} aria-hidden="true" />
                 </Button></TableCell>
               </TableRow>
               {isExpanded && <TableRow id={`monitoring-details-${student.id}`}><TableCell colSpan={6} className="bg-muted/30">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Attendance assessment</p>
+                <p className="mt-2 text-sm md:hidden">Last attended {relativeDay(student.last_attended ?? '')}{student.rate === null ? '' : ` · ${formatPercent(student.rate)} of the last 5`}</p>
                 <p className="mt-2 text-sm">{student.enrolments} completed enrolments considered · {marked} marked · {student.attended} attended · {student.missed} missed.</p>
                 <p className="mt-1 text-sm text-muted-foreground">{marked === 0
                   ? 'No marked attendance in these enrolments; risk is not assessed.'

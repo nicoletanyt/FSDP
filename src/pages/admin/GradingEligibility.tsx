@@ -264,7 +264,7 @@ export default function GradingEligibility() {
         </FilterPopover>
       </div>
       <Dialog open={notifyOpen} onOpenChange={changeNotifyOpen}>
-        <DialogContent className="max-h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)_auto] sm:max-w-2xl">
+        <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto]">
           <DialogHeader>
             <DialogTitle>Notify Students</DialogTitle>
             <DialogDescription className="sr-only">Edit the saved grading invitation and preview students before sending.</DialogDescription>
@@ -313,7 +313,7 @@ export default function GradingEligibility() {
       </Dialog>
 
       <Dialog open={Boolean(selectedStudent)} onOpenChange={(open) => { if (!open) setSelectedStudentId(null) }}>
-        <DialogContent className="h-[80dvh] w-[calc(100vw-2rem)] max-w-none grid-rows-[auto_minmax(0,1fr)] gap-6 overflow-hidden p-5 sm:w-[80vw] sm:max-w-none sm:p-6">
+        <DialogContent className="grid-rows-[auto_minmax(0,1fr)] gap-6 overflow-hidden p-5 sm:p-6">
           {selectedStudent && (
             <>
               <DialogHeader>
@@ -372,13 +372,13 @@ export default function GradingEligibility() {
                 <TableRow>
                   <TableHead>Student</TableHead>
                   <TableHead>Next grade</TableHead>
-                  <TableHead>Requirements</TableHead>
-                  <TableHead>Last graded</TableHead>
-                   <TableHead>Status</TableHead>
+                  <TableHead className="hidden md:table-cell">Requirements</TableHead>
+                  <TableHead className="hidden md:table-cell">Last graded</TableHead>
+                   <TableHead className="hidden md:table-cell">Status</TableHead>
                    <TableHead className="text-right">
                      <span className="sr-only">Details</span>
                      <span className="inline-flex items-center gap-1 rounded-md bg-success/10 px-2 py-1 text-xs font-medium text-success">
-                       Eligible now <span className="tabular-nums">{eligible.length}</span>
+                       <span className="hidden md:inline">Eligible now</span> <span className="tabular-nums">{eligible.length}</span>
                      </span>
                    </TableHead>
                 </TableRow>
@@ -406,13 +406,13 @@ export default function GradingEligibility() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
                              <LiveGrade label={student.current_grade} track={student.track} />
                              <ArrowRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                              <LiveGrade label={student.target_grade} track={student.track} />
                           </div>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="hidden md:table-cell">
                           <div className="flex items-center gap-2">
                             <span className="font-medium tabular-nums">
                                {requirements.length}/{requirements.length}
@@ -424,10 +424,10 @@ export default function GradingEligibility() {
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell className="text-muted-foreground">
+                        <TableCell className="hidden md:table-cell text-muted-foreground">
                            {student.last_graded_at ? formatDate(student.last_graded_at) : 'Never'}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="hidden md:table-cell">
                            <EligibilityBadge status="eligible" />
                         </TableCell>
                         <TableCell className="text-right">
@@ -441,7 +441,7 @@ export default function GradingEligibility() {
                               setSelectedStudentId(student.id)
                             }}
                           >
-                            View details
+                            <span className="hidden md:inline">View details</span>
                             <ChevronRight className="size-4" aria-hidden="true" />
                           </Button>
                         </TableCell>

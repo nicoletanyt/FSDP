@@ -58,8 +58,8 @@ export default function CalendarToolbar({
     const viewLabel = `${view[0].toUpperCase()}${view.slice(1)}`;
     return (
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-4">
-            <div className="flex min-w-0 w-full flex-wrap items-center gap-3 lg:w-auto lg:gap-4">
-                <div role="group" aria-label={`${viewLabel} navigation`} className="flex items-center gap-2">
+            <div className="flex min-w-0 w-full items-center gap-3 lg:w-auto lg:gap-4">
+                <div role="group" aria-label={`${viewLabel} navigation`} className="flex shrink-0 items-center gap-1 sm:gap-2">
                     <Button variant="outline" onClick={onToday} className="mr-1 h-11 px-4 lg:h-10">
                         Today
                     </Button>
@@ -82,15 +82,15 @@ export default function CalendarToolbar({
                         <ChevronRight aria-hidden="true" />
                     </Button>
                 </div>
-                <h2 className="w-full text-sm font-medium lg:w-auto" aria-live="polite">
+                <h2 className="min-w-0 flex-1 truncate text-sm font-medium lg:flex-none" aria-live="polite">
                     {heading}
                 </h2>
             </div>
-            <div className="grid w-full grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-2 sm:flex sm:flex-wrap sm:gap-3 lg:w-auto">
+            <div className="flex w-full flex-wrap items-center gap-2 sm:gap-3 lg:w-auto">
                 {actions}
                 <DropdownMenu>
                     <DropdownMenuTrigger
-                        render={<Button variant="outline" className="h-11 min-w-0 justify-between gap-1 px-2 sm:min-w-28 sm:gap-3 sm:px-4 lg:h-10" />}
+                        render={<Button variant="outline" className="h-11 min-w-0 flex-1 justify-between gap-1 px-3 sm:min-w-28 sm:flex-none sm:gap-3 sm:px-4 lg:h-10" />}
                         aria-label={`Calendar date range: ${view}`}
                     >
                         {viewLabel}
@@ -121,7 +121,7 @@ export default function CalendarToolbar({
                         <Tooltip>
                             <TooltipTrigger render={
                                 <DropdownMenuTrigger
-                                    render={<Button variant="outline" className="h-11 min-w-0 justify-between gap-1 px-2 sm:min-w-28 sm:gap-3 sm:px-4 lg:h-10" />}
+                                    render={<Button variant="outline" className="h-11 min-w-0 flex-1 justify-between gap-1 px-3 sm:min-w-28 sm:flex-none sm:gap-3 sm:px-4 lg:h-10" />}
                                     aria-label={`Calendar display mode: ${displayMode}`}
                                 />
                             }>

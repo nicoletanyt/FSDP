@@ -7,6 +7,7 @@ const baseTabs = [
   { to: '/admin/grading/opportunities', label: 'Schedule' },
   { to: '/admin/grading/applications', label: 'Applications' },
   { to: '/admin/grading/eligibility', label: 'Eligibility' },
+  { to: '/admin/grading/syllabus', label: 'Syllabus' },
 ]
 
 export default function Grading() {
