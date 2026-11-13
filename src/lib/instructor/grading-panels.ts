@@ -20,6 +20,9 @@ export interface ExaminerSession {
   centre: { name: string; address: string }
   candidates: number
   panel: PanelExaminer[]
+  // The application window, for the status pill. Null when not provided.
+  applicationOpensOn: string | null
+  applicationDeadline: string | null
 }
 
 const invalid = () => new InstructorDataError('invalid_data', 'Your grading sessions contain invalid data.')
@@ -30,6 +33,11 @@ const record = (value: unknown): Record<string, unknown> => {
 const text = (value: unknown) => { if (typeof value !== 'string') throw invalid(); return value }
 const optionalText = (value: unknown) => value === null || value === undefined ? null : text(value)
 const flag = (value: unknown) => { if (typeof value !== 'boolean') throw invalid(); return value }
+const optionalDate = (value: unknown) => {
+  const date = optionalText(value)
+  if (date !== null && !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw invalid()
+  return date
+}
 
 export function decodeExaminerSessions(value: unknown): ExaminerSession[] {
   if (!Array.isArray(value)) throw invalid()
@@ -47,6 +55,7 @@ export function decodeExaminerSessions(value: unknown): ExaminerSession[] {
       startsAt: optionalText(row.starts_at), endsAt: optionalText(row.ends_at), reportingTime: optionalText(row.reporting_time),
       isChief: flag(row.is_chief), centre: { name: text(centre.name), address: text(centre.address) },
       candidates: row.candidates as number,
+      applicationOpensOn: optionalDate(row.application_opens_on), applicationDeadline: optionalDate(row.application_deadline),
       panel: row.panel.map(member => {
         const examiner = record(member)
         return { instructorId: text(examiner.instructor_id), name: text(examiner.name), isChief: flag(examiner.is_chief) }

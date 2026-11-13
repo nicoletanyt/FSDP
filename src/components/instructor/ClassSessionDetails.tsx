@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
-import { Link } from "react-router";
+import { Link, useLocation } from "react-router";
 import {
     ArrowRight,
     Check,
@@ -302,7 +302,13 @@ export default function ClassSessionDetails({
                 parseEntityId(entry.record.student_id, "student"),
             );
     };
-    const gradingHref = `/instructor/grading/${eventId}${gradeSession ? `?session=${encodeURIComponent(gradeSession.sessionId)}` : ""}`;
+    // The grading page offers "Back to calendar" to this exact view (date and selection).
+    const location = useLocation();
+    // The same checklist page as the grading day's "View checklist";
+    // without a scheduled session, the grading day itself.
+    const gradingHref = gradeSession
+        ? `/instructor/grading/session/${encodeURIComponent(gradeSession.sessionId)}`
+        : `/instructor/gradings/${eventId}`;
 
     return (
         <div
@@ -612,7 +618,7 @@ export default function ClassSessionDetails({
                                 size="sm"
                                 className="min-h-11 w-full"
                                 nativeButton={false}
-                                render={<Link to={gradingHref} />}
+                                render={<Link to={gradingHref} state={{ from: `${location.pathname}${location.search}` }} />}
                             >
                                 View Grading
                             </Button>
