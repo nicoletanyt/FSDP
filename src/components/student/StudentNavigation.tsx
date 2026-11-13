@@ -5,6 +5,7 @@ import ThemeToggle from '@/components/theme-toggle'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import MobileNavigation from '@/components/MobileNavigation'
 import { useAuth } from '@/hooks/use-auth'
+import { pageWidth } from '@/lib/page-width'
 import { cn } from '@/lib/utils'
 
 const routes = [
@@ -35,7 +36,7 @@ export default function StudentNavigation() {
       { label: 'Profile', to: '/profile', icon: UserCircle, active: pathname === '/profile' },
     ]} />
     <header className="hidden shrink-0 border-b bg-background lg:block">
-    <div className="mx-auto flex w-[calc(100%-2rem)] flex-wrap items-center gap-y-2 py-3 lg:w-[80%] lg:justify-between lg:gap-x-6 lg:gap-y-3 lg:px-6 lg:py-5">
+    <div className={cn(pageWidth, "flex flex-wrap items-center gap-y-2 py-3 lg:justify-between lg:gap-x-6 lg:gap-y-3 lg:py-5")}>
       <Link
         to="/dashboard"
         className="mr-auto flex min-h-11 items-center rounded-sm font-semibold tracking-tight focus-visible:outline-2 focus-visible:outline-ring lg:mr-0 lg:min-h-0"

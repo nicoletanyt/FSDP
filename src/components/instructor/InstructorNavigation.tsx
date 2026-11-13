@@ -5,6 +5,7 @@ import ThemeToggle from "@/components/theme-toggle";
 import InstructorAccountMenu from "@/components/instructor/InstructorAccountMenu";
 import MobileNavigation from "@/components/MobileNavigation";
 import OverflowNav from "@/components/OverflowNav";
+import { pageWidth } from "@/lib/page-width";
 import { cn } from "@/lib/utils";
 import { useMyGradingPanels } from "@/hooks/use-my-grading-panels";
 
@@ -23,13 +24,7 @@ export function instructorNavigation(onGradingPanel: boolean) {
         : baseNavigation;
 }
 
-export default function InstructorNavigation({
-    calendarTo,
-    contentWidthClassName = "w-[calc(100%-2rem)] lg:w-[80%]",
-}: {
-    calendarTo: string;
-    contentWidthClassName?: string;
-}) {
+export default function InstructorNavigation({ calendarTo }: { calendarTo: string }) {
     const { pathname } = useLocation();
     const panels = useMyGradingPanels();
     const navigation = instructorNavigation(Boolean(panels.data?.length));
@@ -46,10 +41,7 @@ export default function InstructorNavigation({
         ]} />
         <header className="hidden shrink-0 border-b bg-background lg:block">
             <div
-                className={cn(
-                    "mx-auto flex items-center gap-6 px-6 py-5",
-                    contentWidthClassName,
-                )}
+                className={cn(pageWidth, "flex items-center gap-6 py-5")}
             >
                 <Link
                     to={calendarTo}

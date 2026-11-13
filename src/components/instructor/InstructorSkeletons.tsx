@@ -108,7 +108,7 @@ export function InstructorSkeleton({ variant = 'card', entry }: { variant?: Vari
   return <div role="status" aria-busy="true" aria-label="Loading instructor data" data-instructor-skeleton={variant}>
     <span className="sr-only">Loading instructor data…</span>
     {variant === 'student-detail' ? <StudentPreview entry={entry} />
-      : variant === 'grading-page' ? <section className="mx-auto w-full max-w-7xl space-y-6"><BackToCalendarLink /><GradingBody /></section>
+      : variant === 'grading-page' ? <section className="w-full space-y-6"><BackToCalendarLink /><GradingBody /></section>
       : variant === 'grading' ? <GradingBody />
       : variant === 'inline' ? <Bar className="h-4 w-40 max-w-full" />
       : variant === 'directory' ? <Rows count={5} />

@@ -16,6 +16,7 @@ import MobileNavigation from '@/components/MobileNavigation'
 import OverflowNav from '@/components/OverflowNav'
 import ThemeToggle from '@/components/theme-toggle'
 import { useAuth } from '@/hooks/use-auth'
+import { pageWidth } from '@/lib/page-width'
 import { cn } from '@/lib/utils'
 
 const navigation = [
@@ -38,7 +39,6 @@ export default function AdminNavbar() {
   const [signingOut, setSigningOut] = useState(false)
   const signOutPending = useRef(false)
   const [signOutError, setSignOutError] = useState('')
-  const isCalendar = pathname === '/admin/calendar'
 
   async function handleSignOut() {
     if (signOutPending.current) return
@@ -76,10 +76,7 @@ export default function AdminNavbar() {
       />
       <header className="hidden shrink-0 border-b bg-background lg:block">
         <div
-          className={cn(
-            'mx-auto flex items-center gap-6 px-6 py-5',
-            isCalendar ? 'w-[calc(100%-2rem)] max-w-[1600px] sm:w-[94%]' : 'w-full max-w-[1400px]',
-          )}
+          className={cn(pageWidth, 'flex items-center gap-6 py-5')}
         >
           <Link
             to="/admin"

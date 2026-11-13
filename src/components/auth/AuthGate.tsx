@@ -24,7 +24,7 @@ function AuthStatus() {
   const { loading, error, reloadProfile, signOut } = useAuth()
   const { pathname } = useLocation()
   const [signOutError, setSignOutError] = useState('')
-  const shell = pathname.startsWith('/instructor') ? 'mx-auto w-full p-4 lg:w-[70%] lg:px-0 lg:py-6' : ''
+  const shell = pathname.startsWith('/instructor') ? 'mx-auto w-full p-4 lg:w-[80%] lg:px-0 lg:py-6' : ''
 
   if (loading) {
     return (

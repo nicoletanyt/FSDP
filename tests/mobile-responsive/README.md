@@ -137,8 +137,8 @@ The directory suite checks:
 
 - No horizontal overflow at 320/390/640/768/1024/1280/1440px, a same-row search and
   Filter toolbar at every width and 44px mobile control targets. Directory and
-  detail pages share 24px main padding below `lg`, and 92% width capped at 1200px
-  with 32px vertical padding at `lg` and above. Cross-route geometry checks also
+  detail pages share 24px main padding below `lg`, and the shared 80% page width
+  (10% each side) with 32px vertical padding at `lg` and above. Cross-route geometry checks also
   compare navigation bounds, 16px card insets and section spacing.
 - Directory rows use 16px horizontal and 12px vertical padding. Top-level gaps
   match detail's 8px mobile / 24px desktop rhythm, result-count-to-card spacing is
@@ -281,7 +281,4 @@ Only explicit persistence test modes keep
 fixture row overrides in test-scoped `sessionStorage`. Production drafts and save
 requests stay in component memory, with authoritative Supabase reads after saves.
 
-Known data-only-phase limitation: at 1024px and 200% root text, the existing
-student-page navbar's `calc(92% + 3rem)` width exceeds the usable viewport. The
-directory row contents remain contained; the suite reports the page overflow
-rather than weakening that assertion or changing application styling.
+

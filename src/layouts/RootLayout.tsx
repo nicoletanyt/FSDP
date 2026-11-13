@@ -7,6 +7,7 @@ import ThemeToggle from '@/components/theme-toggle'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/hooks/use-auth'
 import { dashboardPaths } from '@/lib/auth'
+import { pageWidth } from '@/lib/page-width'
 import { cn } from "@/lib/utils";
 
 export default function RootLayout() {
@@ -66,7 +67,7 @@ export default function RootLayout() {
         fallback={
           <p
             role="status"
-            className="mx-auto w-full p-6 text-muted-foreground lg:w-[70%] lg:px-0 lg:py-6"
+            className="mx-auto w-full p-6 text-muted-foreground lg:w-[80%] lg:px-0 lg:py-6"
           >
             Loading…
           </p>
@@ -100,7 +101,7 @@ export default function RootLayout() {
             <header className="sticky top-0 z-40 hidden border-b border-border bg-background/90 backdrop-blur lg:block">
               <nav
                 aria-label="Main navigation"
-                className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-y-2 px-4 py-3 lg:gap-4 lg:px-6 lg:py-5"
+                className={cn(pageWidth, "flex flex-wrap items-center justify-between gap-y-2 px-4 py-3 lg:gap-4 lg:py-5")}
               >
                 <Link
                   to={homePath}
@@ -160,7 +161,7 @@ export default function RootLayout() {
               {error && (
                 <p
                   role="alert"
-                  className="mx-auto w-full px-4 pb-3 text-sm break-words text-destructive lg:w-[70%] lg:px-0"
+                  className={cn(pageWidth, "px-4 pb-3 text-sm break-words text-destructive")}
                 >
                   {error}
                 </p>
@@ -186,7 +187,7 @@ export default function RootLayout() {
         <main
           className={cn(
             'mx-auto w-full',
-            isGradingPayment ? 'p-0' : 'p-6 lg:w-[70%] lg:px-0',
+            isGradingPayment ? 'p-0' : cn('p-6', pageWidth),
             !isGradingPayment && (isStudent ? 'lg:py-8' : 'lg:py-12'),
           )}
         >
