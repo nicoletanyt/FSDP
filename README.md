@@ -193,23 +193,39 @@ credentials local; do not upload them to Vercel or function secrets.
 
 ## Deployment
 
-### Instructor chatbot — Ollama Cloud
+### Instructor chatbot — OpenRouter
 
 DojoGPT is available only inside authenticated instructor routes. It uses the
-`instructor-chat` Edge Function, not a browser-to-Ollama connection. Its five
+`instructor-chat` Edge Function, not a browser-to-OpenRouter connection. Its
 read-only tools cover student search, profile/attendance summaries, past session
-history, the current instructor's assigned schedule, and permitted part-time
-availability. Students and administrators cannot call this function. An unlinked
-instructor can still ask student questions, but their timeline is unavailable.
+history, the current instructor's assigned schedule and permitted part-time
+availability, a class roster with attendance (own classes only), grading
+readiness and endorsement status, the instructor's examiner panels and their
+candidates, and students with a streak of consecutive absences (taught in the
+last 90 days, via the `instructor_follow_up_students` RPC). Students and
+administrators cannot call this function. An unlinked instructor can still ask
+student questions, but their timeline is unavailable.
 
-The chat offers four instructor starter topics (today, this week, attendance
-and session history) and related follow-up questions after
+**Confirmed actions.** DojoGPT can *propose* two changes: endorsing an eligible
+student for their next grade, and marking one student present or absent in a
+class the instructor teaches that has not ended. The function re-checks
+eligibility, roster membership, ownership and read-only entries, then returns a
+proposal only; it never writes. The chat shows a card with **Confirm** and
+**Dismiss**, and confirming runs the same `InstructorApi` write
+(`endorseStudent` / `saveAttendance`) and server-side checks as the regular
+controls, with the instructor's own session. At most three proposals are
+returned per reply. Replies also show **Related pages** chips (student,
+calendar and grading routes only, validated client-side).
+
+The chat offers four instructor starter topics (today's classes, absences from
+the last class, students needing follow-up, and examiner gradings) and related
+follow-up questions (this week, attendance, session history, grading readiness) after
 replies. Full question chips use an outlined, theme-aware style
 and sit directly beneath the greeting or latest assistant answer, before its
-timestamp. The greeting is local UI only; it does not invoke Ollama or become
+timestamp. The greeting is local UI only; it does not invoke the model or become
 database context. Selected chips show a natural question in the transcript while
 the request retains the topic's pagination and student-identity guidance.
-These are shortcuts into the same Ollama/database workflow, not static
+These are shortcuts into the same model/database workflow, not static
 FAQ answers; free-form questions remain available. Student-specific prompts ask
 for a name or membership number when the conversation has no identified student.
 
@@ -227,9 +243,14 @@ to return to the floating panel. Messages, unfinished drafts and pending replies
 are preserved. Escape or dismissing the modal returns to the floating panel;
 the Close chat button hides the chat entirely.
 
-Create an API key at <https://ollama.com/settings/keys>. Choose a **tool-calling
-cloud model** using its API name from <https://ollama.com/api/tags>, not a local
-CLI `:cloud` alias. Put `OLLAMA_API_KEY` and `OLLAMA_MODEL` in the root `.env`
+Create an API key at <https://openrouter.ai/settings/keys>. Choose a model that
+supports **tool calling** from
+<https://openrouter.ai/models?supported_parameters=tools> and use its full ID
+(for example `nvidia/nemotron-3-ultra-550b-a55b:free`). Free `:free` models are
+rate limited and their availability changes, so `OPENROUTER_MODEL` may be a
+comma-separated list of up to three models; OpenRouter then falls back to the
+next one when a model is unavailable. Put `OPENROUTER_API_KEY` and
+`OPENROUTER_MODEL` in the root `.env`
 for local function development, and add both as **server-only Edge Function
 secrets** in your Supabase project dashboard. Never use a `VITE_` prefix or put
 the API key in Vercel's frontend configuration. `APP_URL` must be your frontend
@@ -241,21 +262,24 @@ After configuring secrets, deploy the backend separately from the frontend:
 npx supabase@latest functions deploy instructor-chat --project-ref YOUR_PROJECT_REF --use-api
 ```
 
-No new migration is required. The existing instructor directory, attendance
-summary/history and calendar RPCs must already be deployed. Do not blindly run
+Apply migration `20261113130000_instructor_follow_up_students.sql` (the
+follow-up tool). The existing instructor directory, attendance summary/history,
+calendar, event report, endorsement and grading panel RPCs must already be deployed. Do not blindly run
 `db push` against a project whose migration history differs from this checkout.
 For local testing, serve the function with the Supabase CLI against a local
 stack and configure the frontend's Supabase URL/key for that stack.
 
 Database reads carry the caller's JWT and retain RLS; the chatbot never uses a
-service-role key, writes records, or executes model-generated SQL. Only
-allowlisted fields reach Ollama. Medical alerts, contact details, date of birth,
+service-role key, writes records (confirmed actions are performed by the
+browser), or executes model-generated SQL. Only
+allowlisted fields reach OpenRouter. Medical alerts, contact details, date of birth,
 private addresses and free-text assessment notes are excluded. Relevant student
-records **are processed by Ollama Cloud**; review your organisation's privacy
+records **are processed by OpenRouter and the selected model provider**; free models
+may log prompts for training, so review your organisation's privacy
 requirements before enabling this on real student data. Chat history stays in
 memory and resets on account changes, sign-out, new conversation or reload.
 
-Each reply is bounded to 90 seconds, five model rounds and eight tool calls;
+Each reply is bounded to 90 seconds, six model rounds and ten tool calls;
 queries return 20-row pages and date ranges are limited to 62 days in Singapore
 time. The function has a best-effort **per-isolate**, per-account six-message
 minute limit and concurrent-reply guard, not a deployment-wide quota. Configure
@@ -275,7 +299,14 @@ node --test tests/mobile-responsive/chatbot.test.mjs
 
 ### NFC attendance (separate from QR check-in)
 
-The NFC URL opens `/instructor/nfc_checkin?tag=...`. This route is separate from
+On a supported Android Chrome device, open `/instructor/nfc_checkin` from the
+instructor navbar. Tap **Start scanning** to grant Web NFC permission the first
+time; subsequent visits auto-start if permission is already granted. Keep the
+page visible and phone unlocked, then tap successive tags without navigating.
+**Stop scanning** stops the foreground reader. Web NFC needs enabled NFC hardware,
+a secure context (HTTPS or localhost), and a supported browser. If Web NFC is
+unavailable or scanning fails, an existing URL chip can still open
+`/instructor/nfc_checkin?tag=...` as before. This route is separate from
 `/instructor/check-in`, the existing QR scanner. Tag URLs contain random bearer
 tokens; `public.student_nfc_tags` stores only SHA-256 hashes under the composite
 `(student_id, tag_id)` key with a unique `tag_id`. Deleting a tag row immediately
@@ -304,7 +335,12 @@ node --env-file=.env scripts/nfc-tags.mjs revoke SK-1006 TAG_TOKEN
 node --env-file=.env scripts/nfc-tags.mjs revoke-all SK-1006
 ```
 
-Write the entire printed URL as an NFC URI record. The URL is a credential; do
+Write the entire printed URL as an NFC URI record. The foreground reader only
+accepts URI records on the current site at `/instructor/nfc_checkin` with one
+valid `tag` parameter. Test on an actual Android phone: some devices may open
+URI chips at the OS level instead of handing them to the active Web NFC reader.
+If so, a future non-URL tag format may be needed for uninterrupted scans; do
+not rewrite existing tags until that behavior is verified. The URL is a credential; do
 not share it or commit it. Issuing another tag does **not** revoke existing tags.
 Use `revoke-all` if the missing tag's token is unknown. For temporary LAN-only
 phone testing, the function also permits exactly `http://192.168.1.13:5173`;

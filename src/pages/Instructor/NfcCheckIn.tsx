@@ -5,10 +5,7 @@ import {
     CircleAlert,
     Clock3,
     ScanLine,
-    Smartphone,
-    QrCode,
 } from "lucide-react";
-import { Link } from "react-router";
 import { pendingNfcTagKey } from "@/components/instructor/NfcTagCapture";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -16,6 +13,13 @@ import { Card, CardContent } from "@/components/ui/card";
 import { scanNfcTag } from "@/lib/nfc-check-in";
 import type { NfcScanResult } from "@/lib/nfc-check-in";
 import { currentDeviceSupportsNfcCheckIn } from "@/lib/nfc-device";
+import { tokenFromNdefRecords } from "@/lib/nfc-tag-reader";
+
+type NdefReader = {
+    scan: (options: { signal: AbortSignal }) => Promise<void>;
+    onreading: ((event: { message: { records: Iterable<{ recordType: string; data: DataView | null }> } }) => void) | null;
+    onreadingerror: (() => void) | null;
+};
 
 const formatTime = (value: string) =>
     new Intl.DateTimeFormat("en-SG", {
@@ -26,26 +30,33 @@ const formatTime = (value: string) =>
     }).format(new Date(value));
 
 export default function NfcCheckIn() {
-    const [supportedDevice] = useState(currentDeviceSupportsNfcCheckIn);
     const [tag, setTag] = useState(() =>
         sessionStorage.getItem(pendingNfcTagKey),
     );
     const [result, setResult] = useState<NfcScanResult | null>(null);
     const [pending, setPending] = useState(false);
     const [error, setError] = useState("");
+    const [scannerError, setScannerError] = useState("");
+    const [scannerState, setScannerState] = useState<"idle" | "starting" | "active">("idle");
     const [feedbackVisible, setFeedbackVisible] = useState(false);
     const attempted = useRef(false);
     const inFlight = useRef(false);
+    const classChoicePending = useRef(false);
+    const manuallyStopped = useRef(false);
+    const scanController = useRef<AbortController | null>(null);
+    const lastRead = useRef<{ tag: string; at: number } | null>(null);
+    const checkTagRef = useRef<(token: string, eventId?: string) => Promise<void>>(async () => {});
 
-    const scan = useCallback(
-        async (eventId?: string) => {
-            if (!supportedDevice || !tag || inFlight.current) return;
+    const checkTag = useCallback(
+        async (token: string, eventId?: string) => {
+            if (!supportedDevice || inFlight.current) return;
             inFlight.current = true;
             setPending(true);
             setError("");
             try {
-                const response = await scanNfcTag(tag, eventId);
+                const response = await scanNfcTag(token, eventId);
                 setResult(response);
+                classChoicePending.current = response.status === "select_class";
                 if (response.status !== "select_class") {
                     sessionStorage.removeItem(pendingNfcTagKey);
                     setTag(null);
@@ -62,15 +73,84 @@ export default function NfcCheckIn() {
                 setPending(false);
             }
         },
-        [supportedDevice, tag],
+        [supportedDevice],
     );
+    checkTagRef.current = checkTag;
+
+    const stopScanning = useCallback(() => {
+        manuallyStopped.current = true;
+        scanController.current?.abort();
+        scanController.current = null;
+        setScannerState("idle");
+    }, []);
+
+    const startScanning = useCallback(async () => {
+        if (scanController.current || !supportedDevice) return;
+        manuallyStopped.current = false;
+        const controller = new AbortController();
+        scanController.current = controller;
+        setScannerState("starting");
+        setScannerError("");
+        try {
+            const Reader = (window as Window & { NDEFReader?: new () => NdefReader }).NDEFReader;
+            if (!Reader) throw new Error("Web NFC is unavailable in this browser.");
+            const reader = new Reader();
+            reader.onreading = (event) => {
+                if (controller.signal.aborted || inFlight.current || classChoicePending.current) return;
+                const token = tokenFromNdefRecords(event.message.records, window.location.origin);
+                if (!token) {
+                    setTag(null);
+                    setResult(null);
+                    setError("");
+                    setFeedbackVisible(false);
+                    setScannerError("This tag does not contain a valid check-in URL for this site.");
+                    return;
+                }
+                if (lastRead.current?.tag === token && Date.now() - lastRead.current.at < 2500) return;
+                lastRead.current = { tag: token, at: Date.now() };
+                attempted.current = true;
+                setScannerError("");
+                setResult(null);
+                setFeedbackVisible(false);
+                setTag(token);
+                void checkTagRef.current(token);
+            };
+            reader.onreadingerror = () => {
+                if (!controller.signal.aborted) setScannerError("Unable to read that tag. Move it away and try again.");
+            };
+            await reader.scan({ signal: controller.signal });
+            if (!controller.signal.aborted) setScannerState("active");
+        } catch (failure) {
+            if (!controller.signal.aborted) {
+                setScannerState("idle");
+                setScannerError(failure instanceof DOMException && failure.name === "NotAllowedError"
+                    ? "Allow NFC access to scan tags, then try again."
+                    : "Unable to start NFC scanning. Check that NFC is on and try again.");
+            }
+            if (scanController.current === controller) scanController.current = null;
+        }
+    }, [supportedDevice]);
 
     useEffect(() => {
-        if (!supportedDevice) {
-            sessionStorage.removeItem(pendingNfcTagKey);
-            setTag(null);
-            return;
-        }
+        if (!supportedDevice || !navigator.permissions?.query) return;
+        let cancelled = false;
+        // A permission prompt requires a user gesture; only auto-start if already granted.
+        const autoStartIfPermitted = () => void navigator.permissions.query({ name: "nfc" as PermissionName }).then(permission => {
+            if (!cancelled && !manuallyStopped.current && permission.state === "granted" && document.visibilityState === "visible") {
+                void startScanning();
+            }
+        }).catch(() => { /* Permission query unsupported: show the Start scanning button. */ });
+        autoStartIfPermitted();
+        document.addEventListener("visibilitychange", autoStartIfPermitted);
+        return () => { cancelled = true; document.removeEventListener("visibilitychange", autoStartIfPermitted); };
+    }, [supportedDevice, startScanning]);
+
+    useEffect(() => () => {
+        scanController.current?.abort();
+        scanController.current = null;
+    }, []);
+
+    useEffect(() => {
         if (!tag || attempted.current) return;
         attempted.current = true;
         if (tag === "invalid") {
@@ -79,8 +159,8 @@ export default function NfcCheckIn() {
             setResult({ status: "invalid" });
             return;
         }
-        void scan();
-    }, [supportedDevice, tag, scan]);
+        void checkTag(tag);
+    }, [supportedDevice, tag, checkTag]);
 
     useEffect(() => {
         if (!feedbackVisible) return;
@@ -103,11 +183,31 @@ export default function NfcCheckIn() {
                     NFC attendance
                 </h1>
                 <p className="max-w-prose text-sm text-muted-foreground">
-                    {supportedDevice
-                        ? "Tap a student’s tag with this phone or tablet to check their lesson today."
-                        : "NFC check-in is not supported on this device or browser."}
+                    Tap a student’s tag with this phone or tablet to check their lesson today.
                 </p>
             </header>
+
+            {supportedDevice && (
+                <div className="flex flex-wrap items-center gap-3" role="status">
+                    <Button type="button" variant={scannerState === "active" ? "outline" : "default"}
+                        disabled={scannerState === "starting"}
+                        onClick={() => scannerState === "active" ? stopScanning() : void startScanning()}>
+                        <ScanLine className="size-4" aria-hidden="true" />
+                        {scannerState === "active" ? "Stop scanning" : scannerState === "starting" ? "Starting NFC…" : "Start scanning"}
+                    </Button>
+                    <p className="text-sm text-muted-foreground">
+                        {scannerState === "active" ? "Scanning is active. Keep this page open and your phone unlocked."
+                            : "Start once to scan tags here without reopening this page."}
+                    </p>
+                </div>
+            )}
+
+            {scannerError && supportedDevice && (
+                <Alert variant="destructive" role="alert">
+                    <CircleAlert className="size-4" aria-hidden="true" />
+                    <AlertDescription>{scannerError}</AlertDescription>
+                </Alert>
+            )}
 
             {!supportedDevice && (
                 <Card>
@@ -156,7 +256,7 @@ export default function NfcCheckIn() {
                                 size="sm"
                                 variant="outline"
                                 disabled={pending}
-                                onClick={() => void scan()}
+                                onClick={() => tag && void checkTag(tag)}
                             >
                                 Try again
                             </Button>
@@ -198,7 +298,7 @@ export default function NfcCheckIn() {
                                     type="button"
                                     variant="outline"
                                     className="h-auto min-h-12 justify-start whitespace-normal py-3 text-left"
-                                    onClick={() => void scan(item.event_id)}
+                                    onClick={() => tag && void checkTag(tag, item.event_id)}
                                     disabled={pending}
                                 >
                                     {item.class_name} · {formatTime(item.starts_at)}–
@@ -236,7 +336,7 @@ export default function NfcCheckIn() {
                             <>
                                 <ScanLine className="size-9 text-primary" aria-hidden="true" />
                                 <h2 className="text-lg font-semibold">
-                                    Ready for the next tag
+                                    {scannerState === "active" ? "Ready for the next tag" : "Scan complete"}
                                 </h2>
                                 <p className="text-sm text-muted-foreground">
                                     Attendance has been recorded.
@@ -325,14 +425,15 @@ export default function NfcCheckIn() {
                     </Alert>
                 )}
 
-            {supportedDevice && !pending && !result && !error && (
+            {!pending && !result && !error && (
                 <Card>
                     <CardContent className="flex min-h-48 flex-col items-center justify-center gap-3 py-8 text-center">
                         <ScanLine className="size-9 text-primary" aria-hidden="true" />
-                        <h2 className="text-lg font-semibold">Ready for a scan</h2>
+                        <h2 className="text-lg font-semibold">{scannerState === "active" ? "Ready for a scan" : "Start scanning to check in"}</h2>
                         <p className="max-w-sm text-sm text-muted-foreground">
-                            Make sure NFC is enabled, then tap a student’s NFC tag to see
-                            their attendance status.
+                            {scannerState === "active"
+                                ? "Tap a student’s NFC tag to see their attendance status."
+                                : "Turn on NFC, then tap Start scanning. Existing URL tags also work when opened directly."}
                         </p>
                     </CardContent>
                 </Card>

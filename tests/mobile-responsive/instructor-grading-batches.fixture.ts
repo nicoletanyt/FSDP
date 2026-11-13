@@ -22,7 +22,7 @@ export function fixtureGradingSessions(startsAt: string, endsAt: string, student
   ]
 }
 
-export function createGradingBatchFixture(account: string, mode: string | null, getApi: () => InstructorApi): Pick<InstructorApi, 'getGradingBatch' | 'getLatestGradingBatch' | 'saveGradingBatch' | 'getGradingDay'> {
+export function createGradingBatchFixture(account: string, mode: string | null, getApi: () => InstructorApi): Pick<InstructorApi, 'getGradingBatch' | 'getLatestGradingBatch' | 'saveGradingBatch' | 'getGradingDay' | 'getSessionChecklists'> {
   const key = `test-only-grading-batches:${account}`
   const batches = new Map<string, GradingBatch>(mode === 'batch-persistence' ? JSON.parse(sessionStorage.getItem(key) ?? '[]') : [])
   const receipts = new Map<string, { input: string; result: GradingBatch }>()
@@ -51,11 +51,16 @@ export function createGradingBatchFixture(account: string, mode: string | null, 
         startsAt: event.starts_at, endsAt: event.ends_at, reportingTime: null, isChief: true,
         centre: { name: roster.session.centre?.name ?? 'Centre', address: '' },
         panel: [{ instructorId, name: 'Fixture examiner', isChief: true }],
-        applicationDeadline: '2026-11-01', gradingStarted: false,
+        applicationOpensOn: null, applicationDeadline: '2026-11-01', gradingStarted: false, publishedAt: '2026-11-01T00:00:00Z', isPrivate: false, capacity: null, warnings: [],
         students: candidates.map(candidate => ({ ...candidate, targetGrade: target, sessionId: sessionOf(candidate.studentId) })),
         sessions: timed ? timed.map(item => ({ id: item.id, position: item.position, startsAt: item.startsAt, endsAt: item.endsAt,
           grades: [{ grade: target, candidates: candidates.filter(candidate => item.studentIds.includes(candidate.studentId)) }], myBatch: null }))
           : [{ id: fixtureSessionId, position: 1, startsAt: null, endsAt: null, grades: [{ grade: target, candidates }], myBatch: null }] }
+    },
+    // Read-only checklists page: the fixture examiner has no saved checklist to show.
+    async getSessionChecklists() {
+      await new Promise(resolve => setTimeout(resolve, 30))
+      return { viewerId: instructorId as string, batches: [] }
     },
     async getLatestGradingBatch(eventId, signal) {
       await new Promise(resolve => setTimeout(resolve, 30))

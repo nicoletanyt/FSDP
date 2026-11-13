@@ -10,7 +10,7 @@ import type { CalendarEntry, CentreRow, EventId, Page, PageOptions, RosterEntry,
 import { createDirectoryFixtureReader } from './instructor-directory.fixture'
 import { createDetailFixtureReads } from './instructor-detail.fixture'
 import { createGradingFixtureReads } from './instructor-grading.fixture'
-import { createGradingBatchFixture, fixtureGradingSessions } from './instructor-grading-batches.fixture'
+import { createGradingBatchFixture, fixtureGradingSessions, fixtureSecondSessionId, fixtureSessionId } from './instructor-grading-batches.fixture'
 import { createEndorsementFixture } from './instructor-endorsements.fixture'
 import { createApplicationFixture } from './instructor-applications.fixture'
 import { createSessionFixtureReads } from './instructor-session.fixture'
@@ -78,6 +78,8 @@ function page<T>(items: T[], { offset = 0, limit = 50 }: PageOptions = {}): Page
 
 export function createCalendarFixtureApi(account = 'audit'): InstructorApi {
   const mode = new URLSearchParams(location.search).get('fixtureData')
+  // Kept across document reloads, which start on the session URL.
+  let lastGradingEvent: string | null = sessionStorage.getItem('test-only-last-grading-event')
   let calendarFailed = false
   let rosterFailed = false
   let availabilityFailed = false
@@ -361,7 +363,14 @@ export function createCalendarFixtureApi(account = 'audit'): InstructorApi {
       })
       return page(items.map(entry => ({ ...entry, record: sessionWrites.decorate(attendanceRows.get(`${id}:${entry.record.student_id}`) ?? entry.record) })), options)
     },
+    // Fixture gradings all share the same session IDs, so a session resolves to
+    // the grading most recently loaded (the redirect and calendar both load it first).
+    async getGradingSessionEvent(sessionId) {
+      await new Promise(resolve => setTimeout(resolve, 30))
+      return [fixtureSessionId, fixtureSecondSessionId].includes(sessionId) ? lastGradingEvent : null
+    },
     async getAttendanceRoster(id, signal) {
+      lastGradingEvent = id; sessionStorage.setItem('test-only-last-grading-event', id)
       if (mode === 'attendance-initial-slow' || (mode === 'attendance-refresh-slow' && attendanceSaved)) {
         await new Promise(resolve => setTimeout(resolve, 1400))
         signal.throwIfAborted()

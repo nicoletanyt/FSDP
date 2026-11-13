@@ -5,11 +5,11 @@ const studentId = '00000000-0000-4000-8000-000000000010'
 const instructorId = '00000000-0000-4000-8000-000000000020'
 const eventId = '00000000-0000-4000-8000-000000000030'
 
-Deno.test('Instructor chat authorization, scoped reads and Ollama failures', async test => {
+Deno.test('Instructor chat authorization, scoped reads and provider failures', async test => {
   const environment = {
     APP_URL: 'https://app.example.test', AUTH_ALLOWED_ORIGINS: 'http://localhost:5173',
     SUPABASE_URL: 'https://project.supabase.co', SUPABASE_ANON_KEY: 'public-test-key',
-    OLLAMA_API_KEY: 'server-only-ollama-secret', OLLAMA_MODEL: 'tool-capable-cloud-model',
+    OPENROUTER_API_KEY: 'server-only-openrouter-secret', OPENROUTER_MODEL: 'tool-capable/model:free',
   }
   const previous = new Map(Object.keys(environment).map(key => [key, Deno.env.get(key)]))
   for (const [key, value] of Object.entries(environment)) Deno.env.set(key, value)
@@ -25,6 +25,13 @@ Deno.test('Instructor chat authorization, scoped reads and Ollama failures', asy
   let missingStudent = false
   let emptySearch = false
   let wrongOwner = false
+  const everyCall: typeof calls = []
+  let rpcDenied = false
+  let eligible = true
+  let endorsed = false
+  let rosterStatus: string | null = null
+  let classEndsAt = '2099-01-01T03:00:00Z'
+  let classOwner = instructorId
   let providerStatus = 200
   let providerText: string | undefined
   let replies: unknown[] = []
@@ -37,10 +44,14 @@ Deno.test('Instructor chat authorization, scoped reads and Ollama failures', asy
     email: 'do-not-send@example.test', phone: 'secret-phone', date_of_birth: '2015-01-01',
     medical_alerts: 'secret-medical', emergency_contacts: 'secret-contact' }
   const paged = (items: unknown[], total = items.length, offset = 0) => ({ items, total, offset, limit: 20 })
-  const callTool = (name: string, args: unknown) => ({ message: { role: 'assistant', content: '', tool_calls: [{ function: { name, arguments: args } }] } })
-  const answer = (content = 'Here are the verified records.') => ({ message: { role: 'assistant', content } })
+  let callId = 0
+  const choice = (message: unknown) => ({ id: 'gen', choices: [{ index: 0, finish_reason: 'stop', message }] })
+  const callTool = (name: string, args: unknown) => choice({ role: 'assistant', content: null,
+    tool_calls: [{ id: `call_${++callId}`, type: 'function', function: { name, arguments: JSON.stringify(args) } }] })
+  const answer = (content = 'Here are the verified records.') => choice({ role: 'assistant', content })
   function reset() {
     calls.length = 0
+    rpcDenied = false; eligible = true; endorsed = false; rosterStatus = null; classEndsAt = '2099-01-01T03:00:00Z'; classOwner = instructorId
     role = 'instructor'; invalidToken = false; linked = true; dbFailure = false; wrongOwner = false; missingStudent = false; emptySearch = false
     employment = 'part_time'; providerStatus = 200; providerText = undefined; providerWait = undefined
     replies = [answer()]; onProvider = undefined
@@ -58,10 +69,15 @@ Deno.test('Instructor chat authorization, scoped reads and Ollama failures', asy
     const text = await req.text()
     const body = text ? JSON.parse(text) : null
     calls.push({ url, body, method: req.method, authorization: req.headers.get('authorization') })
-    if (url.origin === 'https://ollama.com') {
-      assert.equal(req.headers.get('authorization'), `Bearer ${environment.OLLAMA_API_KEY}`)
-      assert.equal(url.pathname, '/api/chat')
-      assert.equal(body.model, environment.OLLAMA_MODEL)
+    everyCall.push(calls.at(-1)!)
+    if (url.origin === 'https://openrouter.ai') {
+      assert.equal(req.headers.get('authorization'), `Bearer ${environment.OPENROUTER_API_KEY}`)
+      assert.equal(url.pathname, '/api/v1/chat/completions')
+      if (!body.models) assert.equal(body.model, environment.OPENROUTER_MODEL)
+      for (const message of body.messages) if (message.role === 'tool') {
+        // Every tool result must answer a tool call the assistant made earlier.
+        assert.ok(body.messages.some((m: { tool_calls?: { id: string }[] }) => m.tool_calls?.some(call => call.id === message.tool_call_id)))
+      }
       assert.equal(body.stream, false)
       assert.match(body.messages[0].content, /Prefer stacked lists over tables/)
       assert.match(body.messages[0].content, /Do not include source or citation sections/)
@@ -72,7 +88,7 @@ Deno.test('Instructor chat authorization, scoped reads and Ollama failures', asy
     }
     assert.equal(url.origin, environment.SUPABASE_URL)
     assert.equal(req.headers.get('authorization'), 'Bearer caller-token')
-    assert.notEqual(req.headers.get('apikey'), environment.OLLAMA_API_KEY)
+    assert.notEqual(req.headers.get('apikey'), environment.OPENROUTER_API_KEY)
     if (url.pathname === '/auth/v1/user') return invalidToken ? Response.json({ message: 'Invalid token' }, { status: 401 })
       : Response.json({ id: userId, app_metadata: { role: 'instructor' } })
     if (url.pathname === '/rest/v1/users') {
@@ -89,6 +105,24 @@ Deno.test('Instructor chat authorization, scoped reads and Ollama failures', asy
       assert.equal(url.searchParams.get('id'), `eq.${studentId}`)
       return Response.json(missingStudent ? null : student)
     }
+    if (url.pathname === '/rest/v1/grades') return Response.json({ label: '4th Kyu' })
+    if (url.pathname === '/rest/v1/events') {
+      assert.equal(req.method, 'GET')
+      assert.equal(url.searchParams.get('id'), `eq.${eventId}`)
+      return Response.json({ ...event, instructor_id: classOwner })
+    }
+    if (url.pathname === '/rest/v1/event_students') {
+      assert.equal(req.method, 'GET')
+      assert.equal(url.searchParams.get('event_id'), `eq.${eventId}`)
+      if (!url.searchParams.has('student_id')) {
+        // Roster read: the select must not request report/notes columns.
+        assert.doesNotMatch(url.searchParams.get('select')!, /report|notes|email|phone|medical|contact/)
+        return Response.json([{ attendance_status: 'absent', checked_in_at: null,
+          student: { id: studentId, member_no: 'SK-1006', first_name: 'Alex', last_name: 'Tan', grade: { label: 'Unranked' } } }],
+          { headers: { 'content-range': '0-0/1' } })
+      }
+      return Response.json({ attendance_status: rosterStatus, event: { ...event, ends_at: classEndsAt, instructor_id: classOwner } })
+    }
     if (url.pathname === '/rest/v1/instructor_availability') {
       assert.equal(req.method, 'GET')
       assert.equal(url.searchParams.get('instructor_id'), `eq.${instructorId}`)
@@ -96,6 +130,19 @@ Deno.test('Instructor chat authorization, scoped reads and Ollama failures', asy
       return Response.json([{ id: 'slot', date: '2026-11-09', start_time: '09:00:00', end_time: '11:00:00' }], { headers: { 'content-range': '0-0/1' } })
     }
     assert.equal(req.method, 'POST')
+    if (rpcDenied) return Response.json({ code: '42501', message: 'private permission diagnostic' }, { status: 403 })
+    if (url.pathname === '/rest/v1/rpc/grading_endorsement_status') return Response.json({ target_grade_id: '4th-kyu', eligible,
+      endorsement: endorsed ? { endorsed_at: '2026-11-01T00:00:00Z', endorsed_by: 'Another Teacher' } : null })
+    if (url.pathname === '/rest/v1/rpc/my_grading_panels') return Response.json([{ event_id: eventId, name: 'November grading', status: 'scheduled',
+      grading_date: '2026-11-21', is_chief: true, candidates: 1, centre: { name: 'Central', address: 'secret-address' },
+      panel: [{ instructor_id: instructorId, name: 'Sensei One', is_chief: true }] }])
+    if (url.pathname === '/rest/v1/rpc/examiner_grading_day') return Response.json({ name: 'November grading', grading_date: '2026-11-21',
+      students: [{ application_id: 'app', student_id: studentId, name: 'Alex Tan', member_no: 'SK-1006', candidate_number: 1,
+        current_grade: { label: 'Unranked' }, target_grade: { label: '4th Kyu' } }] })
+    if (url.pathname === '/rest/v1/rpc/instructor_follow_up_students') {
+      assert.equal(body.min_absences, 4)
+      return Response.json(paged([{ student_id: studentId, member_no: 'SK-1006', first_name: 'Alex', last_name: 'Tan', grade: 'Unranked', consecutive_absences: 4, last_attended_on: '2026-10-01' }]))
+    }
     if (url.pathname === '/rest/v1/rpc/instructor_student_directory') return Response.json(paged(emptySearch ? [] : [student], emptySearch ? 0 : 23, Number(body.page_offset)))
     if (url.pathname === '/rest/v1/rpc/instructor_student_summary') return Response.json({ pastSessions: 10, present: 6, late: 1, absent: 2, excused: 1, unmarked: 0, lastAttended: { event, centre: { name: 'Central' } } })
     if (url.pathname === '/rest/v1/rpc/instructor_student_history') return Response.json(paged([{
@@ -109,10 +156,12 @@ Deno.test('Instructor chat authorization, scoped reads and Ollama failures', asy
     ]))
     throw new Error(`Unexpected fetch ${req.method} ${url}`)
   }
-  const providerCalls = () => calls.filter(call => call.url.origin === 'https://ollama.com')
+  const providerCalls = () => calls.filter(call => call.url.origin === 'https://openrouter.ai')
+  type SentMessage = { role: string; content: string; tool_call_id?: string; tool_calls?: { id: string; function: { name: string } }[] }
   const toolResult = (name: string) => {
-    const messages = providerCalls().at(-1)!.body!.messages as { role: string; tool_name: string; content: string }[]
-    return JSON.parse(messages.find(message => message.role === 'tool' && message.tool_name === name)!.content)
+    const messages = providerCalls().at(-1)!.body!.messages as SentMessage[]
+    const ids = messages.flatMap(message => message.tool_calls ?? []).filter(call => call.function.name === name).map(call => call.id)
+    return JSON.parse(messages.find(message => message.role === 'tool' && ids.includes(message.tool_call_id!))!.content)
   }
   try {
     await test.step('CORS, methods and missing JWT fail before any upstream request', async () => {
@@ -145,11 +194,11 @@ Deno.test('Instructor chat authorization, scoped reads and Ollama failures', asy
       assert.equal((await handleRequest(request({ body: 'x'.repeat(33_000) }))).status, 413)
       assert.equal(providerCalls().length, 0)
     })
-    await test.step('missing cloud credentials fail safely without contacting Ollama', async () => {
-      reset(); Deno.env.delete('OLLAMA_API_KEY')
+    await test.step('missing cloud credentials fail safely without contacting the provider', async () => {
+      reset(); Deno.env.delete('OPENROUTER_API_KEY')
       assert.equal((await handleRequest(request())).status, 503)
       assert.equal(providerCalls().length, 0)
-      Deno.env.set('OLLAMA_API_KEY', environment.OLLAMA_API_KEY)
+      Deno.env.set('OPENROUTER_API_KEY', environment.OPENROUTER_API_KEY)
     })
     await test.step('source footers are removed even when the model ignores the formatting instruction', async () => {
       reset()
@@ -195,7 +244,7 @@ Deno.test('Instructor chat authorization, scoped reads and Ollama failures', asy
       assert.equal(toolResult('get_student').attendance.present, 6)
       const outbound = JSON.stringify(providerCalls())
       for (const secret of ['do-not-send@example.test', 'secret-phone', '2015-01-01', 'secret-medical', 'secret-contact', 'secret-notes', 'secret-report', 'private-instructor-email']) assert.ok(!outbound.includes(secret), secret)
-      assert.ok(!JSON.stringify(result).includes(environment.OLLAMA_API_KEY))
+      assert.ok(!JSON.stringify(result).includes(environment.OPENROUTER_API_KEY))
       const historyCall = calls.find(call => call.url.pathname.endsWith('instructor_student_history'))!
       assert.equal(historyCall.body!.page_offset, 20)
       assert.equal(historyCall.body!.page_size, 20)
@@ -237,7 +286,7 @@ Deno.test('Instructor chat authorization, scoped reads and Ollama failures', asy
         reset(); replies = [callTool(name, args), answer('That lookup is unavailable.')]
         assert.equal((await handleRequest(request())).status, 200)
         assert.ok(toolResult(name).error)
-        assert.ok(calls.every(call => call.url.origin === 'https://ollama.com' || ['/auth/v1/user', '/rest/v1/users'].includes(call.url.pathname)))
+        assert.ok(calls.every(call => call.url.origin === 'https://openrouter.ai' || ['/auth/v1/user', '/rest/v1/users'].includes(call.url.pathname)))
       }
     })
     await test.step('database failures and ownership mismatches fail closed without a fabricated answer', async () => {
@@ -251,19 +300,107 @@ Deno.test('Instructor chat authorization, scoped reads and Ollama failures', asy
       }
     })
     await test.step('upstream failure, rate limit, malformed/empty replies and tool loops are bounded', async () => {
-      for (const status of [401, 500, 429]) {
+      for (const status of [401, 500, 429, 402]) {
         reset(); providerStatus = status
         const response = await handleRequest(request())
-        assert.equal(response.status, status === 429 ? 429 : 502)
+        assert.equal(response.status, status === 429 || status === 402 ? 429 : 502)
         assert.ok(!(await response.text()).includes('private upstream diagnostic'))
       }
-      for (const content of ['not-json', JSON.stringify(answer('')), JSON.stringify({ message: { role: 'assistant', content: 'x', tool_calls: 'bad' } })]) {
+      for (const content of ['not-json', JSON.stringify(answer('')), JSON.stringify(choice({ role: 'assistant', content: 'x', tool_calls: 'bad' })),
+        JSON.stringify({ error: { code: 502, message: 'upstream model error' } }), JSON.stringify({ choices: [] })]) {
         reset(); providerText = content
         assert.equal((await handleRequest(request())).status, 502)
       }
-      reset(); replies = Array(5).fill(callTool('search_students', { query: 'Alex' }))
+      reset(); replies = Array(6).fill(callTool('search_students', { query: 'Alex' }))
       assert.equal((await handleRequest(request())).status, 422)
-      assert.equal(providerCalls().length, 5)
+      assert.equal(providerCalls().length, 6)
+    })
+    await test.step('roster, grading and follow-up tools return allowlisted fields only', async () => {
+      reset()
+      replies = [callTool('get_class_roster', { event_id: eventId }), callTool('get_grading_readiness', { student_id: studentId }),
+        callTool('get_my_gradings', {}), callTool('get_grading_candidates', { event_id: eventId }),
+        callTool('get_follow_up_students', { min_consecutive_absences: 4 }), answer('Alex was absent.')]
+      const response = await handleRequest(request())
+      assert.equal(response.status, 200)
+      const result = await response.json()
+      assert.deepEqual(result.actions, [])
+      assert.ok(result.sources.some((source: { href: string }) => source.href === `/instructor/gradings/${eventId}`))
+      const roster = toolResult('get_class_roster')
+      assert.equal(roster.items[0].attendance_status, 'absent')
+      assert.equal(roster.items[0].student.grade, 'Unranked')
+      assert.equal(toolResult('get_grading_readiness').eligible, true)
+      assert.equal(toolResult('get_my_gradings').items[0].panel[0].name, 'Sensei One')
+      assert.equal(toolResult('get_grading_candidates').items[0].target_grade, '4th Kyu')
+      assert.equal(toolResult('get_follow_up_students').items[0].consecutive_absences, 4)
+      const outbound = JSON.stringify(providerCalls())
+      for (const secret of ['secret-report', 'secret-notes', 'secret-previous-report', 'private-instructor-email', 'secret-address', 'do-not-send@example.test', 'secret-medical']) assert.ok(!outbound.includes(secret), secret)
+    })
+    await test.step('permission errors become tool errors, not fabricated data', async () => {
+      reset(); rpcDenied = true
+      replies = [callTool('get_grading_candidates', { event_id: eventId }), answer('You are not on that panel.')]
+      assert.equal((await handleRequest(request())).status, 200)
+      assert.match(toolResult('get_grading_candidates').error, /Only examiners/)
+      assert.ok(!JSON.stringify(providerCalls()).includes('private permission diagnostic'))
+      reset(); classOwner = 'other-instructor'
+      replies = [callTool('get_class_roster', { event_id: eventId }), answer('That class is not yours.')]
+      assert.equal((await handleRequest(request())).status, 200)
+      assert.match(toolResult('get_class_roster').error, /not assigned to you/)
+      assert.ok(!calls.some(call => call.url.pathname === '/rest/v1/event_students'))
+    })
+    await test.step('propose_action returns validated proposals and never writes', async () => {
+      const propose = async (args: Record<string, unknown>) => {
+        replies = [callTool('propose_action', args), answer('Ready to confirm.')]
+        const response = await handleRequest(request())
+        assert.equal(response.status, 200)
+        return (await response.json()).actions
+      }
+      reset()
+      assert.deepEqual(await propose({ kind: 'endorse_student', student_id: studentId }),
+        [{ kind: 'endorse_student', student_id: studentId, target_grade_id: '4th-kyu', label: 'Endorse Alex Tan for 4th Kyu' }])
+      reset(); eligible = false
+      assert.deepEqual(await propose({ kind: 'endorse_student', student_id: studentId }), [])
+      assert.match(toolResult('propose_action').error, /does not meet every requirement/)
+      reset(); endorsed = true
+      assert.deepEqual(await propose({ kind: 'endorse_student', student_id: studentId }), [])
+      assert.match(toolResult('propose_action').error, /already endorsed/)
+      reset()
+      const [mark] = await propose({ kind: 'mark_attendance', student_id: studentId, event_id: eventId, status: 'present' })
+      assert.equal(mark.kind, 'mark_attendance'); assert.equal(mark.status, 'present'); assert.equal(mark.event_id, eventId)
+      assert.match(mark.label, /^Mark Alex Tan present · Kids class/)
+      reset(); classEndsAt = '2020-01-01T00:00:00Z'
+      assert.deepEqual(await propose({ kind: 'mark_attendance', student_id: studentId, event_id: eventId, status: 'absent' }), [])
+      assert.match(toolResult('propose_action').error, /has not ended/)
+      reset(); classOwner = 'other-instructor'
+      assert.deepEqual(await propose({ kind: 'mark_attendance', student_id: studentId, event_id: eventId, status: 'absent' }), [])
+      reset(); rosterStatus = 'excused'
+      assert.deepEqual(await propose({ kind: 'mark_attendance', student_id: studentId, event_id: eventId, status: 'present' }), [])
+      assert.match(toolResult('propose_action').error, /read-only/)
+      for (const bad of [{ kind: 'mark_attendance', student_id: studentId, event_id: eventId, status: 'late' },
+        { kind: 'delete_student', student_id: studentId }, { kind: 'endorse_student', student_id: studentId, status: 'present' }]) {
+        reset()
+        assert.deepEqual(await propose(bad), [])
+        assert.ok(calls.every(call => call.url.origin === 'https://openrouter.ai' || ['/auth/v1/user', '/rest/v1/users'].includes(call.url.pathname)))
+      }
+    })
+    await test.step('a comma-separated model list uses OpenRouter fallback routing', async () => {
+      reset(); Deno.env.set('OPENROUTER_MODEL', 'first/model:free, second/model:free')
+      try {
+        assert.equal((await handleRequest(request())).status, 200)
+      } finally { Deno.env.set('OPENROUTER_MODEL', environment.OPENROUTER_MODEL) }
+      const sent = providerCalls()[0].body!
+      assert.deepEqual(sent.models, ['first/model:free', 'second/model:free'])
+      assert.ok(!('model' in sent))
+    })
+    await test.step('across every scenario the function only reads: no write RPCs or mutating table requests', () => {
+      const reads = ['instructor_student_directory', 'instructor_student_summary', 'instructor_student_history', 'instructor_calendar',
+        'grading_endorsement_status', 'my_grading_panels', 'examiner_grading_day', 'instructor_follow_up_students']
+      assert.ok(everyCall.length > 50)
+      for (const call of everyCall) {
+        if (call.url.origin === 'https://openrouter.ai' || call.url.pathname === '/auth/v1/user') continue
+        if (call.method === 'GET') continue
+        assert.equal(call.method, 'POST', call.url.pathname)
+        assert.ok(reads.includes(call.url.pathname.replace('/rest/v1/rpc/', '')), call.url.pathname)
+      }
     })
     await test.step('per-account request budget and concurrent reply guard are enforced', async () => {
       reset()

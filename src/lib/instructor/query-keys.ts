@@ -7,6 +7,8 @@ export const instructorQueryKeys = {
   profile: (userId: string) => [...instructorQueryKeys.all(userId), 'profile'] as const,
   gradingPanels: (userId: string) => [...instructorQueryKeys.all(userId), 'grading-panels'] as const,
   gradingDay: (userId: string, eventId: string) => [...instructorQueryKeys.all(userId), 'grading-day', eventId] as const,
+  // Nested under the grading day so refreshing the day also refreshes its checklists.
+  sessionChecklists: (userId: string, eventId: string, sessionId: string) => [...instructorQueryKeys.gradingDay(userId, eventId), 'checklists', sessionId] as const,
   calendar: (userId: string, from: string, to: string) => [...instructorQueryKeys.all(userId), 'calendar', from, to] as const,
   availability: (userId: string, from: string, to: string) => [...instructorQueryKeys.all(userId), 'availability', from, to] as const,
   availabilityAccess: (userId: string) => [...instructorQueryKeys.all(userId), 'availability-access'] as const,

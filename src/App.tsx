@@ -57,6 +57,8 @@ const InstructorStudentDetails = lazy(() => import('./pages/Instructor/Instructo
 const InstructorGradingSession = lazy(() => import('./pages/Instructor/InstructorGradingSession'))
 const InstructorGradings = lazy(() => import('./pages/Instructor/InstructorGradings'))
 const InstructorGradingDay = lazy(() => import('./pages/Instructor/InstructorGradingDay'))
+const InstructorGradingSessionPage = lazy(() => import('./pages/Instructor/InstructorGradingSession').then(module => ({ default: module.InstructorGradingSessionPage })))
+const LegacySessionChecklistsRedirect = lazy(() => import('./pages/Instructor/InstructorGradingSession').then(module => ({ default: module.LegacySessionChecklistsRedirect })))
 
 function LegacyCoverInvitationRedirect() {
   const { invitationId } = useParams()
@@ -113,6 +115,8 @@ export default function App() {
                 <Route path="reports/:eventId" element={<Navigate to="/instructor/calendar" replace />} />
                 <Route path="gradings" element={<InstructorGradings />} />
                 <Route path="gradings/:eventId" element={<InstructorGradingDay />} />
+                <Route path="gradings/:eventId/sessions/:sessionId" element={<LegacySessionChecklistsRedirect />} />
+                <Route path="grading/session/:sessionId" element={<InstructorGradingSessionPage />} />
                 <Route path="grading/:eventId" element={<InstructorGradingSession />} />
                 <Route path="profile" element={<InstructorProfile />} />
               </Route>
