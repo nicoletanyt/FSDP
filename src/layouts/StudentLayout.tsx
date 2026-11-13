@@ -1,49 +1,44 @@
+import { useQuery } from '@tanstack/react-query'
 import { matchPath, Outlet, useLocation } from 'react-router'
-import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/hooks/use-auth'
 import { useLiveStudentSchedule } from '@/lib/use-live-student-schedule'
-
-const CREDITS_STORAGE_KEY = 'student_credits'
+import { supabase } from '@/lib/supabase'
 
 export default function StudentLayout() {
   const { profile } = useAuth()
   const { pathname } = useLocation()
-
-  const [credits, setCredits] = useState(() => {
-    const saved = Number.parseInt(localStorage.getItem(CREDITS_STORAGE_KEY) ?? '0', 10)
-    return Number.isNaN(saved) ? 0 : saved
+  const balance = useQuery({
+    queryKey: ['student-credit-account', profile?.id],
+    enabled: Boolean(profile?.id),
+    queryFn: async ({ signal }) => {
+      const { data, error } = await supabase.from('credit_accounts').select('credits, unlimited, active').eq('user_id', profile?.id ?? '').abortSignal(signal).maybeSingle<CreditAccount>()
+      if (error) throw error
+      return data ?? { credits: 0, unlimited: false, active: true }
+    }
   })
-
-  const addCredits = (amount: number) => {
-    setCredits((previous) => {
-      const next = previous + amount
-      localStorage.setItem(CREDITS_STORAGE_KEY, String(next))
-      return next
-    })
+  const creditContext = {
+    creditAccount: balance.data,
+    creditError: balance.isError,
+    refreshCredits: balance.refetch
   }
 
-  const deductCredit = () => {
-    if (credits <= 0) return false
-    setCredits((previous) => {
-      const next = Math.max(previous - 1, 0)
-      localStorage.setItem(CREDITS_STORAGE_KEY, String(next))
-      return next
-    })
-    return true
-  }
-
-  const creditContext = { credits, addCredits, deductCredit }
   if (!['/timetable', '/classes', '/classes/choose'].some(path => matchPath(path, pathname))) {
     return <Outlet context={creditContext} />
   }
   return <StudentScheduleOutlet key={profile?.id} {...creditContext} />
 }
 
-type CreditsContext = {
+type CreditAccount = {
   credits: number
-  addCredits: (amount: number) => void
-  deductCredit: () => boolean
+  unlimited: boolean
+  active: boolean
+}
+
+type CreditsContext = {
+  creditAccount: CreditAccount | undefined
+  creditError: boolean
+  refreshCredits: () => Promise<unknown>
 }
 
 function StudentScheduleOutlet(creditContext: CreditsContext) {

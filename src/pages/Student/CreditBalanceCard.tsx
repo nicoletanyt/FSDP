@@ -5,8 +5,8 @@ import { buttonVariants } from '@/components/student/button'
 import type { StudentContext } from '@/layouts/StudentLayout'
 
 export default function CreditBalanceCard() {
-  const { credits } = useOutletContext<StudentContext>()
-  const display = credits >= 9999 ? 'Unlimited' : String(credits)
+  const { creditAccount, creditError } = useOutletContext<StudentContext>()
+  const display = creditError ? 'Unavailable' : creditAccount?.unlimited ? 'Unlimited' : creditAccount?.credits ?? '…'
 
   return (
     <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary to-primary/80 p-6 text-primary-foreground shadow-lg">
@@ -21,7 +21,7 @@ export default function CreditBalanceCard() {
           </div>
           <div className="mt-2 flex items-baseline gap-1">
             <span className="text-4xl font-extrabold tabular-nums">{display}</span>
-            {credits < 9999 && <span className="text-sm opacity-80">/ classes</span>}
+            {creditAccount && !creditAccount.unlimited && !creditError && <span className="text-sm opacity-80">/ classes</span>}
           </div>
           <p className="mt-2 text-xs opacity-80">1 credit = 1 training session</p>
         </div>

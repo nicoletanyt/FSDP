@@ -1,10 +1,9 @@
 import { useMemo, useState } from 'react'
-import { Link, useNavigate, useOutletContext } from 'react-router'
-import { BadgeCheck, CreditCard, GraduationCap, ShieldCheck, Sparkles, User } from 'lucide-react'
+import { Link, Navigate, useSearchParams } from 'react-router'
+import { BadgeCheck, CreditCard, GraduationCap, ShieldCheck, Sparkles, User, Loader2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import type { StudentContext } from '@/layouts/StudentLayout'
 import {
   classPassAudience,
   isStudentMembership,
@@ -13,6 +12,7 @@ import {
   type MembershipType,
 } from '@/lib/membership'
 import { money } from '@/lib/format'
+import { supabase } from '@/lib/supabase'
 
 const UNLIMITED_CREDITS = 9999
 
@@ -44,6 +44,19 @@ const JUNIOR_PASSES: PassPackage[] = [
 
 const STUDENT_DISCOUNT = 0.5
 
+async function checkoutErrorMessage(error: unknown) {
+  const context = (error as { context?: Response } | null)?.context
+  if (context instanceof Response) {
+    try {
+      const body = await context.clone().json() as { error?: unknown }
+      if (typeof body.error === 'string' && body.error) return body.error
+    } catch {
+      // Fall through to the generic message.
+    }
+  }
+  return error instanceof Error ? error.message : 'Unable to initiate checkout.'
+}
+
 function applyStudentDiscount(packages: PassPackage[]): PassPackage[] {
   return packages.map((pass) => {
     const price = Math.round(pass.price * STUDENT_DISCOUNT * 100) / 100
@@ -59,10 +72,11 @@ function applyStudentDiscount(packages: PassPackage[]): PassPackage[] {
 }
 
 export default function StudentCredits() {
-  const navigate = useNavigate()
-  const { addCredits } = useOutletContext<StudentContext>()
-  const [loading, setLoading] = useState<string | null>(null)
+  const [searchParams] = useSearchParams()
   const [membershipType] = useState<MembershipType>(() => resolveMembershipType())
+  const [loadingPassId, setLoadingPassId] = useState<string | null>(null)
+  const [error, setError] = useState('')
+  const checkoutState = searchParams.get('checkout')
 
   const audience = classPassAudience(membershipType)
   const isStudent = isStudentMembership(membershipType)
@@ -72,15 +86,6 @@ export default function StudentCredits() {
     return isStudent ? applyStudentDiscount(base) : base
   }, [audience, isStudent])
 
-  const handlePurchase = (planId: string, creditsToAdd: number) => {
-    setLoading(planId)
-    window.setTimeout(() => {
-      addCredits(creditsToAdd)
-      setLoading(null)
-      navigate('/dashboard')
-    }, 1200)
-  }
-
   const heading = audience === 'junior' ? 'Junior Class Passes' : 'Adult Class Passes'
   const description = isStudent
     ? 'Student members receive 50% off adult class pass rates. Please bring your full-time student ID when collecting your pass.'
@@ -89,6 +94,36 @@ export default function StudentCredits() {
       : membershipType === 'junior'
         ? 'You are registered as a Junior member. Children class passes are shown below.'
         : 'You are registered as an Adult member. Purchase your class passes below.'
+
+  // 👇 核心逻辑：直接跳转真实 Stripe Checkout
+  const handlePurchase = async (pass: PassPackage) => {
+    setLoadingPassId(pass.id)
+    setError('')
+
+    try {
+      // The Edge Function resolves the price server-side; never send an amount.
+      const { data, error: fnError } = await supabase.functions.invoke<{ url: string }>(
+        'create-credit-checkout',
+        {
+          body: { passId: pass.id, membershipType },
+          headers: { 'Idempotency-Key': crypto.randomUUID() },
+        },
+      )
+
+      if (fnError) throw new Error(await checkoutErrorMessage(fnError))
+      if (!data?.url) throw new Error('Stripe did not return a Checkout URL.')
+
+      // 👈 直接跳转到 Stripe 官方页面！
+      window.location.assign(data.url)
+    } catch (err) {
+      console.error(err)
+      setError(err instanceof Error ? err.message : 'Unable to initiate checkout.')
+      setLoadingPassId(null)
+    }
+  }
+
+  // Also support already-created Stripe sessions with the old return URL.
+  if (checkoutState === 'success') return <Navigate to={`/dashboard?${searchParams}`} replace />
 
   return (
     <main className="mx-auto w-full max-w-4xl">
@@ -115,6 +150,18 @@ export default function StudentCredits() {
           </Link>
         </div>
       </header>
+
+      {checkoutState === 'cancel' && (
+        <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">
+          Checkout was canceled. No payment was taken.
+        </div>
+      )}
+
+      {error && (
+        <div className="mt-6 p-4 rounded-xl bg-red-50 text-red-600 text-sm border border-red-100">
+          {error}
+        </div>
+      )}
 
       <section className="mt-8 space-y-4" aria-label="Class passes">
         {packages.map((pass) => (
@@ -150,12 +197,19 @@ export default function StudentCredits() {
 
             <Button
               type="button"
-              onClick={() => handlePurchase(pass.id, pass.credits)}
-              disabled={loading !== null}
+              onClick={() => handlePurchase(pass)}
+              disabled={loadingPassId !== null}
               className="w-full shrink-0 px-8 sm:w-auto"
               size="lg"
             >
-              {loading === pass.id ? 'Processing…' : 'Purchase'}
+              {loadingPassId === pass.id ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Redirecting to Stripe...
+                </>
+              ) : (
+                'Purchase'
+              )}
             </Button>
           </Card>
         ))}
@@ -163,7 +217,7 @@ export default function StudentCredits() {
 
       <p className="mt-8 flex items-center justify-center gap-1.5 text-center text-xs text-muted-foreground">
         <ShieldCheck className="size-4" aria-hidden="true" />
-        All prices are in SGD. Your pass options are based on your registered membership type.
+        All prices are in SGD. Secure payments handled by Stripe.
       </p>
     </main>
   )

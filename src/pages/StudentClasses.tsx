@@ -3,6 +3,7 @@ import { Link, useLocation, useOutletContext, useSearchParams } from 'react-rout
 import {
   ArrowLeft,
   CalendarDays,
+  Coins,
   ChevronDown,
   SlidersHorizontal
 } from 'lucide-react'
@@ -481,7 +482,7 @@ export function StudentClassBooking() {
 
 function ClassBooking({ type, initialParams }: { type: string; initialParams: URLSearchParams }) {
   const { classes, schedule } = useOutletContext<StudentContext>()
-  const { credits, deductCredit } = useOutletContext<StudentContext>()
+  const { creditAccount, creditError, refreshCredits } = useOutletContext<StudentContext>()
   const [params, setParams] = useState(initialParams)
   const [day, setDay] = useState('')
   const [pendingChange, setPendingChange] = useState<{ date: Date } | { params: URLSearchParams } | null>(null)
@@ -502,6 +503,8 @@ function ClassBooking({ type, initialParams }: { type: string; initialParams: UR
     ?? sessions[0]
 
   const busy = submitting || schedule.saving
+  const enrolmentCount = action?.kind === 'enroll' ? action.sessions.length : 0
+  const insufficientCredits = Boolean(creditAccount && !creditAccount.unlimited && creditAccount.credits < enrolmentCount)
   const bookings = classes.filter(session => session.scheduled && schedule.isBooked(session.id))
   const conflictingIds = new Set(sessions
     .filter(session => bookings.some(booking => booking.id !== session.id && conflict(session, booking)))
@@ -581,10 +584,6 @@ function ClassBooking({ type, initialParams }: { type: string; initialParams: UR
     setActionError('')
     try {
       if (action.kind === 'enroll') {
-        if (credits < action.sessions.length) {
-          setActionError('Top up your credits before enrolling in these classes.')
-          return
-        }
         const completed: string[] = []
         const failed: ClassOffering[] = []
         const errors: string[] = []
@@ -594,10 +593,10 @@ function ClassBooking({ type, initialParams }: { type: string; initialParams: UR
             failed.push(session)
             errors.push(`${sessionTime(session)} at ${session.centre}: ${error}`)
           } else {
-            deductCredit()
             completed.push(session.id)
           }
         }
+        await refreshCredits()
         setSelectedIds(ids => ids.filter(id => !completed.includes(id)))
         if (completed.length) {
           const count = completed.length
@@ -674,7 +673,7 @@ function ClassBooking({ type, initialParams }: { type: string; initialParams: UR
             </p>
           )}
           <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
-            <Link to="/student/credits" className="text-sm text-primary underline">{credits} credits available</Link>
+            <Link to="/student/credits" className="text-sm text-primary underline">{creditError ? 'Credit balance unavailable' : creditAccount?.unlimited ? 'Unlimited pass' : creditAccount ? creditAccount.credits + ' credits available' : 'Loading credits…'}</Link>
             <p role="status" className="text-sm text-muted-foreground">
               {selected.length} {selected.length === 1 ? 'class' : 'classes'} selected
             </p>
@@ -711,18 +710,31 @@ function ClassBooking({ type, initialParams }: { type: string; initialParams: UR
         if (!open && !busy) closeAction()
       }}>
         {action && (
-          <DialogContent showCloseButton={false} className="sm:max-w-md">
-            <DialogTitle>
+          <DialogContent showCloseButton={false} className="gap-4 p-6 sm:max-w-md">
+            <DialogTitle className="text-xl font-semibold">
               {action.kind === 'enroll' ? 'Confirm enrolment?' : action.kind === 'waitlist' ? 'Join the waitlist?' : 'Leave the waitlist?'}
             </DialogTitle>
             {action.kind === 'enroll' ? (
               <>
-                <DialogDescription>{prettyDate(action.sessions[0].date)}</DialogDescription>
+                <DialogDescription>{type} · {prettyDate(action.sessions[0].date)}</DialogDescription>
                 <ul className="max-h-48 space-y-1 overflow-y-auto text-sm">
                   {action.sessions.map(session => (
                     <li key={session.id}>{sessionTime(session)} · {session.centre}</li>
                   ))}
                 </ul>
+                <div className="flex items-center justify-between gap-3 rounded-lg bg-muted px-3 py-2.5">
+                  <span>Enrolment fee</span>
+                  <span className="inline-flex items-center gap-1.5 font-semibold text-primary">
+                    <Coins aria-hidden="true" className="size-4" />
+                    {creditAccount?.active && creditAccount.unlimited ? 'Included in your pass' : enrolmentCount + (enrolmentCount === 1 ? ' credit' : ' credits')}
+                  </span>
+                </div>
+                {insufficientCredits && (
+                  <p className="text-sm text-destructive">
+                    {creditAccount?.credits} credits available.{' '}
+                    <Link to="/student/credits" className="font-medium underline">Top up credits</Link>
+                  </p>
+                )}
               </>
             ) : (
               <DialogDescription>
@@ -735,7 +747,7 @@ function ClassBooking({ type, initialParams }: { type: string; initialParams: UR
             {actionError && <p role="alert" className="whitespace-pre-line rounded-md bg-destructive/10 p-3 text-sm text-destructive">{actionError}</p>}
             <div className="flex flex-wrap justify-end gap-2">
               <Button variant="outline" disabled={busy} onClick={closeAction}>Back</Button>
-              <Button onClick={confirm} disabled={busy}>
+              <Button onClick={confirm} disabled={busy || (action.kind === 'enroll' && insufficientCredits)}>
                 {busy ? 'Saving…' : action.kind === 'enroll'
                   ? 'Yes, enrol'
                   : action.kind === 'waitlist'
