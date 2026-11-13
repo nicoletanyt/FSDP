@@ -51,7 +51,7 @@ export function createGradingBatchFixture(account: string, mode: string | null, 
         startsAt: event.starts_at, endsAt: event.ends_at, reportingTime: null, isChief: true,
         centre: { name: roster.session.centre?.name ?? 'Centre', address: '' },
         panel: [{ instructorId, name: 'Fixture examiner', isChief: true }],
-        applicationDeadline: '2026-11-01', gradingStarted: false, publishedAt: '2026-11-01T00:00:00Z', isPrivate: false, capacity: null, warnings: [],
+        applicationOpensOn: null, applicationDeadline: '2026-11-01', gradingStarted: false, publishedAt: '2026-11-01T00:00:00Z', isPrivate: false, capacity: null, warnings: [],
         students: candidates.map(candidate => ({ ...candidate, targetGrade: target, sessionId: sessionOf(candidate.studentId) })),
         sessions: timed ? timed.map(item => ({ id: item.id, position: item.position, startsAt: item.startsAt, endsAt: item.endsAt,
           grades: [{ grade: target, candidates: candidates.filter(candidate => item.studentIds.includes(candidate.studentId)) }], myBatch: null }))

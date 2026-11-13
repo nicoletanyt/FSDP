@@ -100,6 +100,24 @@ async function render(element, sessions, { day = null, path = '/instructor/gradi
 }
 const textOf = root => JSON.stringify(root.toJSON())
 
+test('the gradings list shows each grading\'s application status pill', async () => {
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Singapore' }).format(new Date())
+  const shift = days => new Date(Date.parse(`${today}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10)
+  const [decoded] = decodeExaminerSessions([row({ application_opens_on: shift(-3), application_deadline: shift(3) })])
+  assert.equal(decoded.applicationOpensOn, shift(-3))
+  assert.equal(decoded.applicationDeadline, shift(3))
+  assert.equal(decodeExaminerSessions([row()])[0].applicationDeadline, null)
+  assert.throws(() => decodeExaminerSessions([row({ application_deadline: '10/11/2026' })]), error => error.code === 'invalid_data')
+  const pills = async overrides => {
+    const root = await render(React.createElement(InstructorGradings), [row({ grading_date: '2999-01-01', ...overrides })])
+    return root.root.findAll(node => node.props?.['data-status-pill'] !== undefined && typeof node.type === 'string').map(node => node.props.children)
+  }
+  assert.deepEqual(await pills({ application_opens_on: shift(-3), application_deadline: shift(3) }), ['Applications open'])
+  assert.deepEqual(await pills({ application_opens_on: shift(2), application_deadline: shift(9) }), ['Not open yet'])
+  assert.deepEqual(await pills({ application_opens_on: shift(-9), application_deadline: shift(-2) }), ['Closed'])
+  assert.deepEqual(await pills({}), [], 'no application window known: no pill rather than a wrong one')
+})
+
 test('the gradings page lists the examiner\'s sessions with their panel and a link into grading', async () => {
   const root = await render(React.createElement(InstructorGradings), [row({ grading_date: '2999-01-01' })])
   const text = textOf(root)
