@@ -1,12 +1,15 @@
 import { useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Building2, CircleCheck, CircleX, Construction, MapPin } from 'lucide-react'
 import { Navigate, useSearchParams } from 'react-router'
 import EmptyState from '@/components/shared/layout/EmptyState'
 import PageHeader from '@/components/shared/layout/PageHeader'
+import RetryAlert from '@/components/shared/layout/RetryAlert'
 import StatCard from '@/components/shared/layout/StatCard'
 import { CentreStatusBadge } from '@/components/shared/status/StatusBadge'
 import FilterPopover, { FilterField } from '@/components/shared/filters/FilterPopover'
-import { useAdminData } from '@/lib/admin/admin-data-context'
+import { useAuth } from '@/hooks/use-auth'
+import { loadCalendarCentres } from '@/lib/admin/live-class-calendar'
 import type { Centre } from '@/lib/admin/types'
 import SearchInput from '@/components/shared/filters/SearchInput'
 
@@ -18,7 +21,13 @@ const dojoStatusOptions = [
 ]
 
 export default function Centres() {
-  const { centres } = useAdminData()
+  const { session } = useAuth()
+  const centresQuery = useQuery({
+    queryKey: ['admin', 'overview', 'centres', session?.user.id],
+    queryFn: ({ signal }) => loadCalendarCentres(signal),
+    enabled: !!session,
+  })
+  const centres = centresQuery.data ?? []
   const [searchParams, setSearchParams] = useSearchParams()
 
   const legacyStudentsTab = searchParams.get('tab') === 'students'
@@ -60,6 +69,14 @@ export default function Centres() {
   return (
     <div className="space-y-6">
       <PageHeader title="Centres" />
+      {centresQuery.isPending && <p role="status" className="text-sm text-muted-foreground">Loading dojos…</p>}
+      {centresQuery.isError && (
+        <RetryAlert message="Unable to load dojos. Check your connection and try again." onRetry={() => { void centresQuery.refetch() }} />
+      )}
+      {centresQuery.isSuccess && centres.length === 0 && (
+        <EmptyState icon={Building2} title="No dojos yet" description="No centres are available in the database." />
+      )}
+      {centresQuery.isSuccess && centres.length > 0 && (
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
             <StatCard label="Dojos" value={`${centres.length}`} icon={Building2} />
@@ -89,24 +106,25 @@ export default function Centres() {
           </div>
 
           <div className="space-y-2">
-          <p className="text-xs text-muted-foreground">
-            Showing {filteredDojos.length} of {centres.length} dojos
-          </p>
+            <p className="text-xs text-muted-foreground">
+              Showing {filteredDojos.length} of {centres.length} dojos
+            </p>
 
-          {filteredDojos.length === 0 ? (
-            <EmptyState
-              title="No dojos match these filters"
-              description="Try another name, address, or operating status."
-            />
-          ) : (
-            <div className="grid auto-rows-fr gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {filteredDojos.map((centre) => (
-                <DojoCard key={centre.id} centre={centre} />
-              ))}
-            </div>
-          )}
+            {filteredDojos.length === 0 ? (
+              <EmptyState
+                title="No dojos match these filters"
+                description="Try another name, address, or operating status."
+              />
+            ) : (
+              <div className="grid auto-rows-fr gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {filteredDojos.map((centre) => (
+                  <DojoCard key={centre.id} centre={centre} />
+                ))}
+              </div>
+            )}
           </div>
         </div>
+      )}
     </div>
   )
 }
