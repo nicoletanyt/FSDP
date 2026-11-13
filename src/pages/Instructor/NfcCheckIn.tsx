@@ -5,10 +5,7 @@ import {
     CircleAlert,
     Clock3,
     ScanLine,
-    Smartphone,
-    QrCode,
 } from "lucide-react";
-import { Link } from "react-router";
 import { pendingNfcTagKey } from "@/components/instructor/NfcTagCapture";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -33,7 +30,6 @@ const formatTime = (value: string) =>
     }).format(new Date(value));
 
 export default function NfcCheckIn() {
-    const [supportedDevice] = useState(currentDeviceSupportsNfcCheckIn);
     const [tag, setTag] = useState(() =>
         sessionStorage.getItem(pendingNfcTagKey),
     );
@@ -155,11 +151,6 @@ export default function NfcCheckIn() {
     }, []);
 
     useEffect(() => {
-        if (!supportedDevice) {
-            sessionStorage.removeItem(pendingNfcTagKey);
-            setTag(null);
-            return;
-        }
         if (!tag || attempted.current) return;
         attempted.current = true;
         if (tag === "invalid") {
@@ -192,9 +183,7 @@ export default function NfcCheckIn() {
                     NFC attendance
                 </h1>
                 <p className="max-w-prose text-sm text-muted-foreground">
-                    {supportedDevice
-                        ? "Tap a student’s tag with this phone or tablet to check their lesson today."
-                        : "NFC check-in is not supported on this device or browser."}
+                    Tap a student’s tag with this phone or tablet to check their lesson today.
                 </p>
             </header>
 
@@ -436,7 +425,7 @@ export default function NfcCheckIn() {
                     </Alert>
                 )}
 
-            {supportedDevice && !pending && !result && !error && (
+            {!pending && !result && !error && (
                 <Card>
                     <CardContent className="flex min-h-48 flex-col items-center justify-center gap-3 py-8 text-center">
                         <ScanLine className="size-9 text-primary" aria-hidden="true" />
