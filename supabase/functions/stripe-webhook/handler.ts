@@ -38,6 +38,24 @@ export async function handleRequest(request: Request): Promise<Response> {
       return new Response('Only test-mode events are supported.', { status: 400 })
     }
 
+    // Record what Stripe sends, so a missing event subscription is visible in the logs.
+    console.log(`Stripe event ${event.type} (${event.id})`)
+
+    // An abandoned or failed membership checkout is not a payment: remove its
+    // pending row so payment history doesn't show it as pending forever.
+    if (
+      event.type === 'checkout.session.expired' ||
+      event.type === 'checkout.session.async_payment_failed'
+    ) {
+      const session = event.data.object
+      if (session.metadata?.membership_student_id) {
+        const { error } = await adminClient().from('payments').delete()
+          .eq('stripe_session_id', session.id).eq('status', 'pending')
+        if (error) throw error
+      }
+      return Response.json({ received: true })
+    }
+
     if (
       event.type === 'checkout.session.completed' ||
       event.type === 'checkout.session.async_payment_succeeded'
@@ -65,17 +83,27 @@ export async function handleRequest(request: Request): Promise<Response> {
           return Response.json({ received: true })
         }
         if (session.metadata?.membership_student_id) {
-          // Re-read the session and price from Stripe rather than trusting the event body.
+          // Re-read the session from Stripe rather than trusting the event body.
           const verified = await stripe.checkout.sessions.retrieve(session.id)
-          const price = await stripe.prices.retrieve(requireEnv('STRIPE_MEMBERSHIP_PRICE_ID'))
           const studentId = verified.metadata?.membership_student_id
+          const db = adminClient()
+          // Expect the amount fixed when this checkout started (the pending payment row that
+          // create-checkout-session wrote from Stripe's price), so later price changes or
+          // per-membership-type prices never strand a paid student. Fall back to the
+          // configured price only if that row is missing.
+          const { data: pending, error: pendingError } = await db.from('payments')
+            .select('student_id, amount_cents').eq('stripe_session_id', session.id).maybeSingle()
+          if (pendingError) throw pendingError
+          const expectedAmount = pending
+            ? (pending.student_id === studentId ? pending.amount_cents : null)
+            : (await stripe.prices.retrieve(requireEnv('STRIPE_MEMBERSHIP_PRICE_ID'))).unit_amount
           if (verified.payment_status !== 'paid' || verified.currency !== 'sgd' ||
-            verified.amount_total !== price.unit_amount || !studentId ||
+            !expectedAmount || verified.amount_total !== expectedAmount || !studentId ||
             studentId !== session.metadata.membership_student_id ||
             verified.client_reference_id !== studentId) {
             return new Response('Membership payment mismatch.', { status: 400 })
           }
-          const { error } = await adminClient().rpc('finalize_membership_checkout', {
+          const { error } = await db.rpc('finalize_membership_checkout', {
             student: studentId, stripe_session: session.id,
             paid_amount: verified.amount_total, paid_currency: verified.currency,
           })

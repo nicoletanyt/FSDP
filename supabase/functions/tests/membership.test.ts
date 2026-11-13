@@ -16,7 +16,7 @@ const userId = '00000000-0000-4000-8000-0000000000a1'
 const studentId = '00000000-0000-4000-8000-0000000000b1'
 const retryKey = '00000000-0000-4000-8000-000000000001'
 
-type Call = { method: string; path: string; key: string | null; body: string }
+type Call = { method: string; path: string; search: string; key: string | null; body: string }
 
 // Fake Stripe and Supabase. `state` lets each step change what they return.
 function installFakes(state: {
@@ -25,6 +25,8 @@ function installFakes(state: {
   price?: Record<string, unknown>
   session?: Record<string, unknown>
   submitError?: { code: string; message: string }
+  /** The payment row written when checkout started; null means it is missing. */
+  pendingPayment?: { student_id: string; amount_cents: number } | null
 }) {
   const calls: Call[] = []
   const originalFetch = globalThis.fetch
@@ -32,7 +34,7 @@ function installFakes(state: {
     const request = new Request(input, init)
     const url = new URL(request.url)
     calls.push({
-      method: request.method, path: url.pathname,
+      method: request.method, path: url.pathname, search: decodeURIComponent(url.search),
       key: request.headers.get('idempotency-key'), body: await request.text(),
     })
     if (url.origin === 'https://api.stripe.com') {
@@ -59,6 +61,11 @@ function installFakes(state: {
       }
       if (url.pathname === '/rest/v1/rpc/finalize_membership_checkout') return new Response(null, { status: 204 })
       if (url.pathname === '/rest/v1/payments' && request.method === 'POST') return new Response(null, { status: 201 })
+      if (url.pathname === '/rest/v1/payments' && request.method === 'GET') {
+        const row = state.pendingPayment === undefined ? { student_id: studentId, amount_cents: 8000 } : state.pendingPayment
+        return Response.json(row ? [row] : [])
+      }
+      if (url.pathname === '/rest/v1/payments' && request.method === 'DELETE') return new Response(null, { status: 204 })
     }
     throw new Error(`Unexpected external request: ${request.method} ${request.url}`)
   }
@@ -82,8 +89,8 @@ function checkoutRequest(options: { body?: unknown; headers?: Record<string, str
   })
 }
 
-async function signedEvent(metadata: Record<string, string>) {
-  const body = JSON.stringify({ id: 'evt_membership', object: 'event', type: 'checkout.session.completed',
+async function signedEvent(metadata: Record<string, string>, type = 'checkout.session.completed') {
+  const body = JSON.stringify({ id: 'evt_membership', object: 'event', type,
     livemode: false, data: { object: { id: 'cs_test_membership', mode: 'payment', payment_status: 'paid', metadata } } })
   const signature = await getStripe().webhooks.generateTestHeaderStringAsync({
     payload: body, secret: environment.STRIPE_WEBHOOK_SECRET, cryptoProvider,
@@ -210,6 +217,47 @@ Deno.test('membership checkout and activation', async (test) => {
         assert.equal((await webhook(await signedEvent({ membership_student_id: studentId }))).status, 400)
         assert.ok(!fakes.calls.some((c) => c.path.endsWith('finalize_membership_checkout')))
       }
+    })
+
+    await test.step('a price change after checkout started still activates the student who paid', async () => {
+      reset()
+      state.price = { unit_amount: 12000 } // the configured price moved on; this checkout was fixed at 8000
+      assert.equal((await webhook(await signedEvent({ membership_student_id: studentId }))).status, 200)
+      assert.equal(fakes.calls.filter((c) => c.path.endsWith('finalize_membership_checkout')).length, 1)
+      assert.ok(!fakes.calls.some((c) => c.path === '/v1/prices/price_membership'))
+    })
+
+    await test.step('without the checkout-time payment row, the configured price is the check', async () => {
+      reset()
+      state.pendingPayment = null
+      assert.equal((await webhook(await signedEvent({ membership_student_id: studentId }))).status, 200)
+      reset()
+      state.pendingPayment = null
+      state.price = { unit_amount: 12000 }
+      assert.equal((await webhook(await signedEvent({ membership_student_id: studentId }))).status, 400)
+      assert.ok(!fakes.calls.some((c) => c.path.endsWith('finalize_membership_checkout')))
+    })
+
+    await test.step("a payment row belonging to someone else never activates this student", async () => {
+      reset()
+      state.pendingPayment = { student_id: '00000000-0000-4000-8000-0000000000ff', amount_cents: 8000 }
+      assert.equal((await webhook(await signedEvent({ membership_student_id: studentId }))).status, 400)
+      assert.ok(!fakes.calls.some((c) => c.path.endsWith('finalize_membership_checkout')))
+    })
+
+    await test.step('expired or failed membership checkouts remove only their pending payment row', async () => {
+      for (const type of ['checkout.session.expired', 'checkout.session.async_payment_failed']) {
+        reset()
+        assert.equal((await webhook(await signedEvent({ membership_student_id: studentId }, type))).status, 200)
+        const removed = fakes.calls.filter((c) => c.path === '/rest/v1/payments' && c.method === 'DELETE')
+        assert.equal(removed.length, 1, type)
+        assert.match(removed[0].search, /stripe_session_id=eq\.cs_test_membership/)
+        assert.match(removed[0].search, /status=eq\.pending/)
+        assert.ok(!fakes.calls.some((c) => c.path.endsWith('finalize_membership_checkout')))
+      }
+      reset()
+      assert.equal((await webhook(await signedEvent({ grading_attempt_id: 'attempt-1' }, 'checkout.session.expired'))).status, 200)
+      assert.ok(!fakes.calls.some((c) => c.method === 'DELETE'), 'grading checkouts are left alone')
     })
   } finally {
     fakes.restore()
