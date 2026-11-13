@@ -12,6 +12,7 @@ import {
 import { InstructorDataError, toInstructorDataError } from './errors'
 import { createInstructorProfileApi } from './profile'
 import { decodeExaminerSessions, decodeGradingDay } from './grading-panels'
+import { loadSessionResults } from '../grading/checklist-results'
 import { collectCalendarPages } from './page-collector'
 import type {
   AssessmentDetail, AssessmentKey, AttendanceSaveInput, AvailabilityInput, CalendarOptions, DirectoryOptions, EventId, HistoryOptions,
@@ -538,6 +539,28 @@ export function createInstructorApi(client: InstructorClient) {
       await getCurrentInstructor(signal)
       return decodeGradingDay(await rpc('examiner_grading_day', { target_event: eventId }, signal,
         'Unable to load this grading. Please try again.'))
+    },
+
+    // The grading a session belongs to, or null when the caller can't see the
+    // session (row security: panel examiners once published, the chief always).
+    async getGradingSessionEvent(session: string, signal?: AbortSignal): Promise<string | null> {
+      const sessionId = parseEntityId(session, 'grading-session')
+      const data = await requestInstructorData(
+        () => cancellable(client.from('grading_sessions').select('grading_event_id').eq('id', sessionId), signal).maybeSingle<unknown>(),
+        'Unable to load this grading session. Please try again.', signal)
+      if (data === null) return null
+      const eventId = data && typeof data === 'object' ? (data as Record<string, unknown>).grading_event_id : null
+      return parseEntityId(eventId, 'event')
+    },
+
+    // Checklists for one grading session. Row security returns the caller's own
+    // batch, plus every submitted panel batch when they are the chief examiner.
+    async getSessionChecklists(id: string, session: string) {
+      const eventId = parseEntityId(id, 'event')
+      const sessionId = parseEntityId(session, 'grading-session')
+      const identity = await getCurrentInstructor()
+      // The viewer's own instructor ID, so the page can open on their own checklist.
+      return { viewerId: identity.instructorId as string, batches: await loadSessionResults(client, eventId, sessionId) }
     },
 
     async getStudentSummary(id: StudentId, signal?: AbortSignal) {

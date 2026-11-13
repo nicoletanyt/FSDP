@@ -28,6 +28,7 @@ export function toInstructorDataError(error: unknown, message: string): Instruct
     if (code === 'PGB02') return new InstructorDataError('conflict', 'The saved grading changed. Refresh the page before continuing.')
     if (code === 'PGB04') return new InstructorDataError('forbidden', 'This grading’s schedule has not been published yet, so it can’t be graded.')
     if (code === 'PGB03') return new InstructorDataError('forbidden', 'Cancelled grading sessions are read-only.')
+    if (code === 'PGB05') return new InstructorDataError('forbidden', 'Marking opens when this grading session starts.')
     if (code === 'PGP01') return new InstructorDataError('forbidden', 'Only examiners on this grading’s panel can grade it. Ask an administrator to add you to the panel.')
     if (code === 'PPR01') return new InstructorDataError('conflict', 'Your photo changed in another session. Reload your profile, then try again.')
     if (code === 'PRS01') return new InstructorDataError('conflict', 'This record changed while you were editing. Reload the saved record before saving again; your draft is kept.')

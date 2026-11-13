@@ -80,11 +80,13 @@ afterEach(async () => {
   }
 })
 
-async function render(element, sessions, { day = null, path = '/instructor/gradings' } = {}) {
+async function render(element, sessions, { day = null, path = '/instructor/gradings', checklists = null, syllabus = [] } = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const auth = { session: { user: { id: userId } }, profile: { id: userId, role: 'instructor' } }
   const api = { getMyGradingPanels: async () => decodeExaminerSessions(sessions),
-    getGradingDay: async () => { if (day instanceof Error) throw day; return decodeGradingDay(day) } }
+    getGradingDay: async () => { if (day instanceof Error) throw day; return decodeGradingDay(day) },
+    getSessionChecklists: async () => checklists,
+    getReferenceData: async () => ({ centres: [], grades: [], gradeTracks: [], gradeRequirements: [], syllabusItems: syllabus, classTypes: [] }) }
   let root
   await act(async () => {
     root = create(React.createElement(QueryClientProvider, { client },
@@ -188,7 +190,7 @@ test('once sorted, the grading day opens on the session list with each session\'
   const root = await render(dayPage(), [], { day: dayRow(), path: dayPath })
   const text = textOf(root)
   assert.deepEqual(pressed(root, 'Grading day list'), [['Student list', false], ['Session list', true]])
-  for (const expected of ['Session 1', 'Session 2', 'Ada Tan', 'Ben Lim', 'Cy Ong', 'Continue grading', 'Start grading',
+  for (const expected of ['Session 1', 'Session 2', 'Ada Tan', 'Ben Lim', 'Cy Ong', 'View checklist',
     'Alex Morgan', '"Chief, you"', '2 candidates', '1 candidate']) {
     assert.ok(text.includes(expected), expected)
   }
@@ -212,10 +214,21 @@ test('once sorted, the grading day opens on the session list with each session\'
   // Examiners can't sort or move students.
   assert.ok(!text.includes('Sort into sessions') && !text.includes('Sort again') && !text.includes('Move to'))
   const hrefs = hrefsOf(root)
-  assert.ok(hrefs.includes(`/instructor/grading/${row().event_id}?session=session-1`))
-  assert.ok(hrefs.includes(`/instructor/grading/${row().event_id}?session=session-2`))
+  assert.ok(hrefs.includes('/instructor/grading/session/session-1'))
+  assert.ok(hrefs.includes('/instructor/grading/session/session-2'))
   assert.ok(hrefs.includes('/instructor/students/s1'))
   assert.ok(hrefs.includes('/instructor/gradings'))
+})
+
+test('each published session has one View checklist link to its checklist page', async () => {
+  const checklist = id => `/instructor/grading/session/${id}`
+  for (const isChief of [true, false]) {
+    const hrefs = hrefsOf(await render(dayPage(), [], { day: dayRow({ is_chief: isChief }), path: dayPath }))
+    assert.ok(hrefs.includes(checklist('session-1')) && hrefs.includes(checklist('session-2')))
+    assert.ok(!hrefs.some(href => href.includes('?session=') || href.includes('/sessions/')), 'no older checklist URLs')
+  }
+  const draft = hrefsOf(await render(dayPage(), [], { day: dayRow({ is_chief: false, published_at: null }), path: dayPath }))
+  assert.ok(!draft.some(href => href.startsWith('/instructor/grading/session/')), 'nothing to open before the schedule is published')
 })
 
 test('a session holding several grades lists each candidate\'s target grade', async () => {
@@ -254,8 +267,9 @@ test('grading days with no applicants, and non-examiners, get clear messages', a
   assert.ok(!blocked.includes('Session list'))
 })
 
-test('a session checklist has one table per grade, each with only that grade\'s candidates and techniques', async () => {
-  const { default: InstructorGradingSession } = await server.ssrLoadModule('/src/pages/Instructor/InstructorGradingSession.tsx')
+// The checklist page for one session, reached by the old URL (which redirects) or /instructor/grading/session/:id.
+async function renderSession({ path, startsAt = '2026-11-14T02:00:00Z', isChief = true, others = [] } = {}) {
+  const { default: InstructorGradingSession, InstructorGradingSessionPage } = await server.ssrLoadModule('/src/pages/Instructor/InstructorGradingSession.tsx')
   const eventId = row().event_id
   const person = (id, first, number) => ({ record: { event_id: eventId, student_id: id, candidate_number: number },
     student: { student: { id, first_name: first, last_name: 'Student', email: `${id}@example.test` } } })
@@ -268,8 +282,10 @@ test('a session checklist has one table per grade, each with only that grade\'s 
       { id: 'x1', grade_id: 'other', track: 'adult', category: 'Basics', sort_order: 1, label: 'Other technique' }] }
   const ann = candidate('s1', 'Ada Student', null, 1, null), cyStudent = candidate('s2', 'Cy Student', null, 2, null)
   const day = decodeGradingDay(dayRow({
+    is_chief: isChief,
+    panel: [{ instructor_id: 'i1', name: 'Alex Morgan', is_chief: isChief }, { instructor_id: 'i2', name: 'Hiroshi Sato', is_chief: !isChief }],
     students: [{ ...ann, target_grade: blue, session_id: 'mixed' }, { ...cyStudent, target_grade: brown, session_id: 'mixed' }],
-    sessions: [{ id: 'mixed', position: 1, starts_at: '2026-11-14T02:00:00Z', ends_at: '2026-11-14T02:30:00Z', my_batch: null,
+    sessions: [{ id: 'mixed', position: 1, starts_at: startsAt, ends_at: '2099-01-01T02:30:00Z', my_batch: null,
       grades: [{ grade: blue, candidates: [ann] }, { grade: brown, candidates: [cyStudent] }] },
     { id: 'other', position: 2, starts_at: '2026-11-14T02:30:00Z', ends_at: '2026-11-14T03:00:00Z', my_batch: null, grades: [] }],
   }))
@@ -280,6 +296,8 @@ test('a session checklist has one table per grade, each with only that grade\'s 
     getLatestGradingBatch: async () => null,
     getGradingBatch: async () => null,
     getGradingDay: async () => day,
+    getGradingSessionEvent: async () => eventId,
+    getSessionChecklists: async () => ({ viewerId: 'i1', batches: others }),
   }
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const auth = { session: { user: { id: userId } }, profile: { id: userId, role: 'instructor' } }
@@ -289,13 +307,22 @@ test('a session checklist has one table per grade, each with only that grade\'s 
     root = create(React.createElement(QueryClientProvider, { client },
       React.createElement(AuthContext.Provider, { value: auth },
         React.createElement(InstructorApiContext.Provider, { value: api },
-          React.createElement(MemoryRouter, { initialEntries: [`/instructor/grading/${eventId}?session=mixed`] },
-            React.createElement(Routes, null, React.createElement(Route, { path: '/instructor/grading/:eventId', element: React.createElement(InstructorGradingSession) })))))))
+          React.createElement(MemoryRouter, { initialEntries: [path ?? `/instructor/grading/${eventId}?session=mixed`] },
+            React.createElement(Routes, null,
+              React.createElement(Route, { path: '/instructor/grading/session/:sessionId', element: React.createElement(InstructorGradingSessionPage) }),
+              React.createElement(Route, { path: '/instructor/grading/:eventId', element: React.createElement(InstructorGradingSession) })))))))
   })
   mounted.push({ root, client })
-  for (let attempt = 0; attempt < 20 && !textOf(root).includes('Brown technique'); attempt++) {
+  for (let attempt = 0; attempt < 30 && !textOf(root).includes('Brown technique'); attempt++) {
     await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)) })
   }
+  return { root, eventId }
+}
+const checkboxes = root => root.root.findAll(node => node.type === 'input' && node.props.type === 'checkbox')
+
+test('a session checklist has one table per grade, each with only that grade\'s candidates and techniques', async () => {
+  // The old /instructor/grading/:eventId?session= URL redirects to /instructor/grading/session/:id.
+  const { root, eventId } = await renderSession()
   const text = textOf(root)
   assert.equal(root.root.findAll(node => node.type === 'select').length, 0)
   assert.equal(root.root.find(node => node.type === 'h1').props.children, 'Adult grading')
@@ -306,11 +333,47 @@ test('a session checklist has one table per grade, each with only that grade\'s 
     ['blue-6th-kyu', 'brown-4th-kyu'])
   const tables = root.root.findAll(node => node.props?.role === 'region')
   assert.deepEqual(tables.map(node => node.props['aria-label']), ['Grading checklist: Blue (6th Kyu)', 'Grading checklist: Brown (4th Kyu)'])
-  const boxes = root.root.findAll(node => node.type === 'input' && node.props.type === 'checkbox').map(node => node.props['aria-label'])
-  assert.deepEqual(boxes, ['Ada Student: Blue technique', 'Cy Student: Brown technique'])
+  assert.deepEqual(checkboxes(root).map(node => node.props['aria-label']), ['Ada Student: Blue technique', 'Cy Student: Brown technique'])
   assert.ok(!text.includes('Other technique'))
   assert.equal(root.root.findAll(node => node.type === 'textarea').length, 2)
   assert.ok(root.root.findAll(node => node.type === 'a').some(node => node.props.href === `/instructor/gradings/${eventId}`))
+})
+
+test('marking is locked until the session starts, but the checklist is viewable', async () => {
+  const early = await renderSession({ path: '/instructor/grading/session/mixed', startsAt: '2099-01-01T02:00:00Z' })
+  const text = textOf(early.root)
+  assert.ok(text.includes('Marking opens when this session starts'))
+  assert.ok(text.includes('Brown technique'), 'the grid is shown')
+  assert.ok(checkboxes(early.root).every(node => node.props.disabled), 'checkboxes are disabled')
+  assert.ok(early.root.root.findAll(node => node.type === 'textarea').every(node => node.props.disabled))
+  assert.ok(!text.includes('Submit grading'))
+  const started = await renderSession({ path: '/instructor/grading/session/mixed', startsAt: '2020-01-01T02:00:00Z' })
+  assert.ok(!textOf(started.root).includes('Marking opens'))
+  assert.ok(checkboxes(started.root).some(node => !node.props.disabled), 'marking is open once the session has started')
+  assert.ok(textOf(started.root).includes('Submit grading'))
+})
+
+test('the chief can switch to another examiner\'s submitted checklist; other examiners get no picker', async () => {
+  const submitted = { instructorId: 'i2', instructorName: 'Hiroshi Sato', sessionId: 'mixed', status: 'submitted',
+    updatedAt: '2020-01-01T03:00:00Z', submittedAt: '2020-01-01T03:00:00Z',
+    students: [{ student_id: 's1', candidate_number: 1, name: 'Ada Student', notes: 'Hiroshi note', target_grade_id: blue.id }],
+    items: [{ syllabus_item_id: 'b1', category: 'Basics', label: 'Blue technique', sort_order: 1, grade_id: blue.id }],
+    passed: new Set([JSON.stringify(['s1', 'b1'])]) }
+  const chief = await renderSession({ path: '/instructor/grading/session/mixed', startsAt: '2020-01-01T02:00:00Z', others: [submitted] })
+  const picker = chief.root.root.find(node => node.props?.role === 'group' && node.props['aria-label'] === 'Examiner')
+  const buttons = picker.findAll(node => node.type === 'button')
+  assert.equal(buttons.length, 2)
+  assert.ok(textOf(chief.root).includes('(you)'))
+  assert.equal(buttons[0].props['aria-pressed'], true, 'opens on your own, editable checklist')
+  assert.ok(checkboxes(chief.root).length > 0 && !textOf(chief.root).includes('Hiroshi note'))
+  await act(async () => { buttons[1].props.onClick() })
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)) })
+  const viewing = textOf(chief.root)
+  assert.ok(viewing.includes('Hiroshi note') && viewing.includes('Passed'), 'their submitted checklist, read-only')
+  assert.equal(checkboxes(chief.root).length, 0, 'no editing someone else\'s checklist')
+  assert.ok(!viewing.includes('Submit grading'))
+  const examiner = await renderSession({ path: '/instructor/grading/session/mixed', startsAt: '2020-01-01T02:00:00Z', isChief: false })
+  assert.equal(examiner.root.root.findAll(node => node.props?.role === 'group' && node.props['aria-label'] === 'Examiner').length, 0)
 })
 
 test('grading titles name the track and fall back to the event name', () => {

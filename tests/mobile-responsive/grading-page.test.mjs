@@ -53,9 +53,56 @@ test('View Grading fills its container with more space above and opens the gradi
     assert.ok(Math.abs(result.width - result.available) < 1)
     assert.ok(result.height >= 44)
     assert.ok(result.topSpace >= 16)
-    assert.equal(result.path, gradingPath)
+    assert.match(result.path, new RegExp(`^/instructor/(gradings/${gradingId}|grading/session/[0-9a-f-]{36})$`))
     assert.ok(result.heading)
   })
+})
+
+test('View Grading opens the session checklist page, which goes back to that calendar view', async () => {
+  // Timed sessions: the calendar links straight to the session's checklist page.
+  const calendar = '/instructor/calendar?view=day&date=2026-11-7&fixtureData=grading-sessions'
+  const timed = await inPage(390, calendar, async (w, wait) => {
+    const d = w.document
+    ;[...d.querySelectorAll('button[aria-label]')].find(node => node.getAttribute('aria-label').startsWith('Session 1 · Children Grading')
+      && node.getAttribute('aria-label').endsWith('View details')).click(); await wait(900)
+    // Selecting the session adds it to the calendar URL; that exact view is where Back returns.
+    const from = `${w.location.pathname}${w.location.search}`
+    ;[...d.querySelectorAll('a')].find(node => node.textContent.trim() === 'View Grading').click(); await wait(1500)
+    const back = [...d.querySelectorAll('main a')].find(node => /^Back to/.test(node.textContent.trim()))
+    const landed = { path: w.location.pathname, label: back?.textContent.trim(), href: back?.getAttribute('href'),
+      checklist: !!d.querySelector('input[type="checkbox"]') }
+    back?.click(); await wait()
+    return { from, landed, returned: `${w.location.pathname}${w.location.search}` }
+  })
+  assert.ok(timed.from.startsWith(calendar))
+  assert.equal(timed.landed.path, '/instructor/grading/session/00000000-0000-4000-8000-000000000901')
+  assert.equal(timed.landed.checklist, true)
+  assert.equal(timed.landed.label, 'Back to calendar')
+  assert.equal(timed.landed.href, timed.from)
+  assert.equal(timed.returned, timed.from)
+  // Without timed sessions it opens the grading day, whose View checklist leads to the session page.
+  const untimed = `/instructor/calendar?view=month&date=2026-11-7&session=${gradingId}`
+  const day = await inPage(390, untimed, async (w, wait) => {
+    const d = w.document
+    ;[...d.querySelectorAll('a')].find(node => node.textContent.trim() === 'View Grading').click(); await wait(1200)
+    const back = [...d.querySelectorAll('main a')].find(node => /^Back to/.test(node.textContent.trim()))
+    const landed = { path: w.location.pathname, label: back?.textContent.trim(), href: back?.getAttribute('href') }
+    ;[...d.querySelectorAll('main a')].find(node => /^View checklist/.test(node.textContent.trim())).click(); await wait(1200)
+    const sessionBack = [...d.querySelectorAll('main a')].find(node => /^Back to/.test(node.textContent.trim()))
+    return { landed, session: { path: w.location.pathname, label: sessionBack?.textContent.trim(), href: sessionBack?.getAttribute('href') } }
+  })
+  assert.equal(day.landed.path, `/instructor/gradings/${gradingId}`)
+  assert.equal(day.landed.label, 'Back to calendar')
+  assert.equal(day.landed.href, untimed)
+  assert.match(day.session.path, /^\/instructor\/grading\/session\/[0-9a-f-]{36}$/)
+  assert.equal(day.session.label, 'Back to grading sessions')
+  assert.equal(day.session.href, `/instructor/gradings/${gradingId}`)
+  // The old URL redirects to the session page, keeping its other parameters.
+  const legacy = await inPage(390, `${gradingPath}?session=00000000-0000-4000-8000-000000000901&fixtureData=grading-endorsed`, async (w, wait) => {
+    await wait(1200)
+    return `${w.location.pathname}${w.location.search}`
+  })
+  assert.equal(legacy, '/instructor/grading/session/00000000-0000-4000-8000-000000000901?fixtureData=grading-endorsed')
 })
 
 test('grading skeleton fits the page and keeps the same back link after loading', async t => {
@@ -91,10 +138,13 @@ test('grading load errors retain calendar navigation and retry successfully', as
     const d = w.document, link = d.querySelector('main a'), message = d.querySelector('[role="alert"]').textContent
     ;[...d.querySelectorAll('main button')].find(node => node.textContent === 'Try again').click()
     await wait()
-    return { message, sameLink: link.isConnected, loaded: !!d.querySelector('main h1') }
+    // A successful retry moves to the session's URL, so the back link is re-rendered rather than the same node.
+    const after = [...d.querySelectorAll('main a')].find(node => /^Back to/.test(node.textContent.trim()))
+    return { message, hadLink: !!link, backLink: !!after, loaded: !!d.querySelector('main h1') }
   })
   assert.match(result.message, /Roster could not be loaded/)
-  assert.equal(result.sameLink, true)
+  assert.equal(result.hadLink, true)
+  assert.equal(result.backLink, true)
   assert.equal(result.loaded, true)
 })
 
