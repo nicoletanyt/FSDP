@@ -5,8 +5,7 @@ import { BadgeCheck, CalendarDays, Clock3, MapPin, UserX, Users } from "lucide-r
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { historyDate } from "@/lib/instructor/student-detail";
+import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@/components/ui/popover";
 import DatabaseGradeBadge from "@/components/instructor/DatabaseGradeBadge";
 import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
 import GradingSignatureDialog from "@/components/instructor/GradingSignatureDialog";
@@ -184,16 +183,25 @@ function GradingTable({
                             nameAdornment={(student) => {
                                 const endorsement = endorsements.get(`${student.student_id}:${student.target_grade_id}`);
                                 if (!endorsement) return null;
-                                const label = `Endorsed${endorsement.endorsedBy ? ` by ${endorsement.endorsedBy}` : ""} · ${historyDate(endorsement.endorsedAt)}`;
+                                const by = endorsement.endorsedBy ?? "Instructor not recorded";
                                 return (
-                                    <TooltipProvider>
-                                        <Tooltip>
-                                            <TooltipTrigger render={<span role="img" aria-label={label} data-endorsed className="inline-flex text-emerald-700 dark:text-emerald-400" />}>
-                                                <BadgeCheck aria-hidden="true" className="size-4" />
-                                            </TooltipTrigger>
-                                            <TooltipContent>{label}</TooltipContent>
-                                        </Tooltip>
-                                    </TooltipProvider>
+                                    <Popover>
+                                        <PopoverTrigger data-endorsed aria-label={`Endorsed: ${student.name}. Show who endorsed and when`}
+                                            className="inline-flex size-6 items-center justify-center rounded-md text-emerald-700 outline-none hover:bg-emerald-50 focus-visible:ring-2 focus-visible:ring-ring dark:text-emerald-400 dark:hover:bg-emerald-950">
+                                            <BadgeCheck aria-hidden="true" className="size-4" />
+                                        </PopoverTrigger>
+                                        <PopoverContent align="center" className="w-64 gap-2 text-left font-normal" data-endorsement-details>
+                                            <PopoverTitle className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
+                                                <BadgeCheck aria-hidden="true" className="size-4" />Endorsed
+                                            </PopoverTitle>
+                                            <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">
+                                                <dt className="text-muted-foreground">By</dt>
+                                                <dd className="font-medium" data-endorsed-by>{by}</dd>
+                                                <dt className="text-muted-foreground">On</dt>
+                                                <dd><time dateTime={endorsement.endorsedAt} data-endorsed-at>{gradingStamp(endorsement.endorsedAt)}</time></dd>
+                                            </dl>
+                                        </PopoverContent>
+                                    </Popover>
                                 );
                             }}
                             headerBadge={(student) => absent.has(student.student_id) && (

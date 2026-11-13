@@ -320,12 +320,23 @@ test('absent candidates are hidden from the checklist until the "Show absent" sw
   assert.equal(result.rehidden, result.hidden.columns.length)
 })
 
-test('endorsed candidates show an endorsed icon beside their name in the checklist', async () => {
+test('endorsed candidates show an endorsed icon; clicking it shows who endorsed and when', async () => {
   const result = await inPage(1440, `${checklistPath}&fixtureData=grading-endorsed`, async (w, wait) => {
+    const d = w.document
     await wait(300)
-    const headers = [...w.document.querySelectorAll('thead th[scope="col"]')].slice(1)
-    return headers.map(cell => cell.querySelector('[data-endorsed]')?.getAttribute('aria-label') ?? null)
+    const headers = [...d.querySelectorAll('thead th[scope="col"]')].slice(1)
+    const icons = headers.map(cell => !!cell.querySelector('[data-endorsed]'))
+    const closed = !d.querySelector('[data-endorsement-details]')
+    headers[0].querySelector('[data-endorsed]').click(); await wait(300)
+    const details = d.querySelector('[data-endorsement-details]')
+    return { icons, closed, by: details?.querySelector('[data-endorsed-by]')?.textContent.trim() ?? null,
+      at: details?.querySelector('[data-endorsed-at]')?.getAttribute('datetime') ?? null,
+      atText: details?.querySelector('[data-endorsed-at]')?.textContent.trim() ?? null }
   })
-  assert.match(result[0] ?? '', /^Endorsed by Fixture Sensei · /)
-  assert.ok(result.slice(1).every(label => label === null), JSON.stringify(result))
+  assert.deepEqual(result.icons, [true, ...result.icons.slice(1).map(() => false)])
+  assert.equal(result.closed, true)
+  assert.equal(result.by, 'Fixture Sensei')
+  assert.equal(result.at, '2026-11-13T02:00:00Z')
+  // Shown in Singapore time with the time of day.
+  assert.match(result.atText ?? '', /13 Nov 2026.*10:00/)
 })
