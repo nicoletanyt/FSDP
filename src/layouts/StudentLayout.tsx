@@ -6,7 +6,7 @@ import { useLiveStudentSchedule } from '@/lib/use-live-student-schedule'
 export default function StudentLayout() {
   const { profile } = useAuth()
   const { pathname } = useLocation()
-  if (!['/attendance', '/classes', '/timetable'].some(path => matchPath(path, pathname))) return <Outlet />
+  if (!['/attendance', '/classes', '/classes/choose', '/timetable'].some(path => matchPath(path, pathname))) return <Outlet />
   return <StudentScheduleOutlet key={profile?.id} />
 }
 

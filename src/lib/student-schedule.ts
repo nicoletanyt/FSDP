@@ -15,6 +15,7 @@ export type ClassOffering = {
   capacity: number
   occupied: number
   startsAt?: string
+  endsAt?: string
   scheduled?: boolean
   bookable?: boolean
   classType?: string
@@ -155,6 +156,11 @@ export function getOfferings(
 }
 
 export function conflict(a: ClassOffering, b: ClassOffering) {
+  if (a.startsAt && a.endsAt && b.startsAt && b.endsAt) {
+    return Date.parse(a.startsAt) < Date.parse(b.endsAt)
+      && Date.parse(b.startsAt) < Date.parse(a.endsAt)
+  }
+
   return (
     a.dateId === b.dateId &&
     a.startTime < b.endTime &&

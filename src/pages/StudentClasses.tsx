@@ -1,15 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useOutletContext } from 'react-router'
+import { Link, useLocation, useOutletContext, useSearchParams } from 'react-router'
 import {
+  ArrowLeft,
   CalendarDays,
   ChevronDown,
-  Clock3,
-  MapPin,
-  SlidersHorizontal,
-  UsersRound
+  SlidersHorizontal
 } from 'lucide-react'
 import { Button, buttonVariants } from '@/components/student/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
+import { Calendar } from '@/components/ui/calendar'
 import {
   Card,
   CardContent,
@@ -18,7 +17,10 @@ import {
 } from '@/components/ui/card'
 import type { StudentContext } from '@/layouts/StudentLayout'
 import { supabase } from '@/lib/supabase'
+import { dateKey } from '@/lib/instructor-calendar'
+import { cn } from '@/lib/utils'
 import {
+  conflict,
   dateTime,
   formatTime,
   prettyDate
@@ -27,10 +29,9 @@ import type {
   ClassOffering
 } from '@/lib/student-schedule'
 
-type Action = {
-  kind: 'enroll' | 'waitlist' | 'leave'
-  session: ClassOffering
-}
+type Action =
+  | { kind: 'enroll'; sessions: ClassOffering[] }
+  | { kind: 'waitlist' | 'leave'; session: ClassOffering }
 
 type ClassType = { id: string; label: string; description: string }
 
@@ -46,162 +47,168 @@ const days = [
 
 const input =
   'h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-2 focus-visible:outline-ring'
-const monthFormat = new Intl.DateTimeFormat('en-SG', { month: 'long', year: 'numeric' })
+const seatColours = {
+  full: 'bg-rose-50 text-rose-950 dark:bg-rose-950/45 dark:text-rose-100',
+  low: 'bg-amber-50 text-amber-950 dark:bg-amber-950/45 dark:text-amber-100',
+  normal: 'bg-background text-foreground'
+}
 
-export default function StudentClasses() {
-  const { classes, schedule } = useOutletContext<StudentContext>()
+function sessionAvailability(session: ClassOffering) {
+  if (!session.bookable) return { tone: 'normal', label: 'Booking unavailable' } as const
 
-  const [centre, setCentre] = useState('all')
-  const [day, setDay] = useState('all')
-  const [period, setPeriod] = useState('all')
-  const [instructor, setInstructor] = useState('all')
-  const [showAdvanced, setShowAdvanced] = useState(false)
-  const [selected, setSelected] = useState<Record<string, string>>({})
-  const [action, setAction] = useState<Action | null>(null)
-  const [message, setMessage] = useState('')
-  const [actionError, setActionError] = useState('')
-  const [catalog, setCatalog] = useState<ClassType[] | null>(null)
-  const [catalogError, setCatalogError] = useState(false)
-  const [catalogRevision, setCatalogRevision] = useState(0)
+  const spaces = session.capacity - session.occupied
+  if (spaces <= 0) return { tone: 'full', label: 'Full · waitlist' } as const
+  if (spaces <= 5) return { tone: 'low', label: `${spaces} ${spaces === 1 ? 'spot' : 'spots'} left` } as const
+  return { tone: 'normal', label: '' } as const
+}
 
-  useEffect(() => {
-    const controller = new AbortController()
-    async function loadCatalog() {
-      try {
-        const { data, error } = await supabase.from('class_types')
-          .select('id, label, description')
-          .order('label')
-          .abortSignal(controller.signal)
-        if (error) throw error
-        if (!controller.signal.aborted) setCatalog(data)
-      } catch {
-        if (!controller.signal.aborted) setCatalogError(true)
-      }
-    }
-    void loadCatalog()
-    return () => controller.abort()
-  }, [catalogRevision])
+function sessionTime(session: ClassOffering) {
+  return `${formatTime(session.startTime)} – ${formatTime(session.endTime)}`
+}
 
-  const upcoming = useMemo(() => {
-    const now = new Date()
-    return classes.filter(session => session.scheduled && dateTime(session) > now)
-  }, [classes])
-  const centres = [...new Set(upcoming.map(c => c.centre))]
-  const instructors = [...new Set(upcoming.map(c => c.instructor))]
-  const scheduledTypes = new Set(upcoming.map(session => session.classType ?? session.title))
-  const unscheduled = catalog?.filter(type => !scheduledTypes.has(type.label))
-
-  const matching = useMemo(
-    () =>
-      upcoming.filter(c => {
-        const hour = Number(c.startTime.slice(0, 2))
-
-        return (
-          (centre === 'all' || c.centre === centre) &&
-          (day === 'all' || c.date.getDay() === Number(day)) &&
-          (instructor === 'all' || c.instructor === instructor) &&
-          (
-            period === 'all' ||
-            (period === 'morning' && hour < 12) ||
-            (period === 'afternoon' && hour >= 12 && hour < 17) ||
-            (period === 'evening' && hour >= 17)
-          )
-        )
-      }),
-    [
-      upcoming,
-      centre,
-      day,
-      instructor,
-      period
-    ]
-  )
-
-  const groups = useMemo(() => {
-    const grouped = new Map<string, ClassOffering[]>()
-
-    for (const session of matching) {
-      const type = session.classType ?? session.title
-      const sessions = grouped.get(type) ?? []
-      sessions.push(session)
-      grouped.set(type, sessions)
-    }
-
-    return [...grouped].sort(([left], [right]) => left.localeCompare(right))
-  }, [matching])
-
-  function reset() {
-    setCentre('all')
-    setDay('all')
-    setPeriod('all')
-    setInstructor('all')
+function ClassSessionPicker({
+  sessions, date, selectedIds, conflictingIds, schedule, busy, onDateChange, onToggle, onWaitlist
+}: {
+  sessions: ClassOffering[]
+  date: Date
+  selectedIds: string[]
+  conflictingIds: ReadonlySet<string>
+  schedule: StudentContext['schedule']
+  busy: boolean
+  onDateChange: (date: Date) => void
+  onToggle: (session: ClassOffering) => void
+  onWaitlist: (session: ClassOffering, kind: 'waitlist' | 'leave') => void
+}) {
+  const sessionsByDay = new Map<string, ClassOffering[]>()
+  for (const session of sessions) {
+    const key = dateKey(session.date)
+    const entries = sessionsByDay.get(key) ?? []
+    entries.push(session)
+    sessionsByDay.set(key, entries)
   }
+  const daySessions = sessionsByDay.get(dateKey(date)) ?? []
 
-  async function confirm() {
-    if (!action || schedule.saving) return
-    setActionError('')
+  return (
+    <div className="grid min-w-0 gap-5 sm:grid-cols-[auto_minmax(0,1fr)]">
+      <div className="rounded-lg border p-3">
+        <Calendar
+          aria-label="Class dates"
+          mode="single"
+          required
+          selected={date}
+          defaultMonth={date}
+          startMonth={sessions[0]?.date}
+          endMonth={sessions.at(-1)?.date}
+          showOutsideDays={false}
+          className="mx-auto [--booking-day:clamp(1.75rem,9vw,2.75rem)] lg:[--booking-day:3rem] [&_.rdp-weekday]:w-(--booking-day) [&_.rdp-day]:size-(--booking-day) [&_.rdp-day_button]:size-(--booking-day) [&_.rdp-day_button]:text-base [&_.rdp-caption_label]:text-base [&_.rdp-caption_label]:font-semibold"
+          disabled={day => busy || !sessionsByDay.has(dateKey(day))}
+          onSelect={onDateChange}
+        />
+      </div>
+      <div className="min-w-0 space-y-3">
+        <h3 className="font-semibold" aria-live="polite">{prettyDate(date)}</h3>
+        <div role="group" aria-label="Session times" className="grid max-h-80 gap-2 overflow-y-auto p-1">
+          {daySessions.map(session => {
+            const { tone, label } = sessionAvailability(session)
+            const selected = selectedIds.includes(session.id)
+            const booked = schedule.isBooked(session.id)
+            const full = schedule.isFull(session)
+            const waiting = schedule.isWaitlisted(session.id)
+            const canLeave = waiting && full && session.bookable && !booked
+            const overlapsBooking = !full && conflictingIds.has(session.id)
+            const disabled = busy || booked || overlapsBooking || !session.bookable || (!schedule.active && !canLeave)
+            return (
+              <Button
+                key={session.id}
+                variant="outline"
+                aria-pressed={full || booked || overlapsBooking || !session.bookable ? undefined : selected}
+                disabled={disabled}
+                className={cn(
+                  'h-auto min-h-11 w-full flex-wrap justify-between gap-2 py-2 text-left whitespace-normal',
+                  seatColours[tone],
+                  selected && 'border-primary ring-1 ring-primary'
+                )}
+                onClick={() => {
+                  if (full) onWaitlist(session, waiting ? 'leave' : 'waitlist')
+                  else onToggle(session)
+                }}
+              >
+                <span className="min-w-0">
+                  <span className="block font-semibold">{sessionTime(session)}</span>
+                  <span className="block text-xs opacity-80">{session.centre} · {session.instructor}</span>
+                </span>
+                <span className="text-xs font-medium">
+                  {booked ? 'Already enrolled' : overlapsBooking ? 'Overlaps a booking' : canLeave ? 'Leave waitlist' : label || `${session.capacity - session.occupied} spots left`}
+                </span>
+              </Button>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
 
-    const { kind, session } = action
+function filterSessions(sessions: ClassOffering[], params: URLSearchParams) {
+  const centre = params.get('centre')
+  const day = params.get('day')
+  const instructor = params.get('instructor')
+  const period = params.get('period')
+  return sessions.filter(session => {
+    const hour = Number(session.startTime.slice(0, 2))
+    return (!centre || session.centre === centre)
+      && (!day || session.date.getDay() === Number(day))
+      && (!instructor || session.instructor === instructor)
+      && (!period || (period === 'morning' && hour < 12)
+        || (period === 'afternoon' && hour >= 12 && hour < 17)
+        || (period === 'evening' && hour >= 17))
+  })
+}
 
-    const error =
-      kind === 'enroll'
-        ? await schedule.enroll(session)
-        : kind === 'waitlist'
-          ? await schedule.joinWaitlist(session)
-          : await schedule.leaveWaitlist(session.id)
+function SessionFilters({
+  title, sessions, params, count, onChange, grade, disabled = false
+}: {
+  title: string
+  sessions: ClassOffering[]
+  params: URLSearchParams
+  count: number
+  onChange: (params: URLSearchParams) => void
+  grade?: string
+  disabled?: boolean
+}) {
+  const centre = params.get('centre') ?? 'all'
+  const day = params.get('day') ?? 'all'
+  const period = params.get('period') ?? 'all'
+  const instructor = params.get('instructor') ?? 'all'
+  const [showAdvanced, setShowAdvanced] = useState(period !== 'all' || instructor !== 'all')
+  const centres = [...new Set(sessions.map(session => session.centre))].sort()
+  const instructors = [...new Set(sessions.map(session => session.instructor))].sort()
 
-    if (error) {
-      setActionError(error)
-      return
-    }
-
-    setMessage(
-      kind === 'enroll'
-          ? `Enrolled in ${session.title} on ${prettyDate(session.date)}.`
-          : kind === 'waitlist'
-            ? 'You joined the waitlist. Check the timetable for an available spot.'
-            : 'You have left the waitlist.'
-    )
-
-    setAction(null)
+  function setFilter(name: string, value: string) {
+    const next = new URLSearchParams(params)
+    if (value === 'all') next.delete(name)
+    else next.set(name, value)
+    onChange(next)
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-semibold">
-            Class timetable & enrolment
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Browse all class types and choose a session when one is scheduled.
-          </p>
+    <Card className="gap-3">
+      <CardHeader>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <CardTitle>{title}</CardTitle>
+          {grade && <span className="text-xs text-muted-foreground">{grade}</span>}
         </div>
+      </CardHeader>
 
-        <Link to="/attendance" className={buttonVariants({ variant: 'outline' })}>
-          <CalendarDays className="size-4" />
-          My schedule
-        </Link>
-      </div>
-
-      <Card className="gap-3">
-        <CardHeader>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <CardTitle>Find a class</CardTitle>
-            <span className="text-xs text-muted-foreground">
-              {schedule.grade ? `Current grade: ${schedule.grade}` : 'Student membership'}
-            </span>
-          </div>
-        </CardHeader>
-
-        <CardContent className="space-y-3">
+      <CardContent>
+        <fieldset disabled={disabled} className="min-w-0 space-y-3">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <label className="space-y-1 text-sm">
               <span>Centre</span>
               <select
                 className={input}
                 value={centre}
-                onChange={e => setCentre(e.target.value)}
+                onChange={e => setFilter('centre', e.target.value)}
               >
                 <option value="all">All centres</option>
                 {centres.map(c => (
@@ -217,7 +224,7 @@ export default function StudentClasses() {
               <select
                 className={input}
                 value={day}
-                onChange={e => setDay(e.target.value)}
+                onChange={e => setFilter('day', e.target.value)}
               >
                 <option value="all">Any day</option>
                 {days.map((d, i) => (
@@ -252,7 +259,7 @@ export default function StudentClasses() {
                 <select
                   className={input}
                   value={period}
-                  onChange={e => setPeriod(e.target.value)}
+                  onChange={e => setFilter('period', e.target.value)}
                 >
                   <option value="all">Any time</option>
                   <option value="morning">Morning</option>
@@ -266,7 +273,7 @@ export default function StudentClasses() {
                 <select
                   className={input}
                   value={instructor}
-                  onChange={e => setInstructor(e.target.value)}
+                  onChange={e => setFilter('instructor', e.target.value)}
                 >
                   <option value="all">All instructors</option>
                   {instructors.map(i => (
@@ -280,32 +287,96 @@ export default function StudentClasses() {
 
           <div className="flex items-center justify-between border-t pt-3">
             <span className="text-sm text-muted-foreground">
-              {matching.length} upcoming {matching.length === 1 ? 'session' : 'sessions'}
+              {count} upcoming {count === 1 ? 'session' : 'sessions'}
             </span>
-            <Button variant="ghost" size="sm" onClick={reset}>
+            <Button variant="ghost" size="sm" disabled={disabled || !params.size} onClick={() => onChange(new URLSearchParams())}>
               Clear filters
             </Button>
           </div>
-        </CardContent>
-      </Card>
+        </fieldset>
+      </CardContent>
+    </Card>
+  )
+}
 
-      {message && (
-        <div
-          role="status"
-          className="rounded-lg border bg-muted px-4 py-3 text-sm"
-        >
-          {message}
+export default function StudentClasses() {
+  const { classes, schedule } = useOutletContext<StudentContext>()
+
+  const { pathname } = useLocation()
+  const [params, setParams] = useSearchParams()
+  const [catalog, setCatalog] = useState<ClassType[] | null>(null)
+  const [catalogError, setCatalogError] = useState(false)
+  const [catalogRevision, setCatalogRevision] = useState(0)
+
+  useEffect(() => {
+    const controller = new AbortController()
+    async function loadCatalog() {
+      try {
+        const { data, error } = await supabase.from('class_types')
+          .select('id, label, description')
+          .order('label')
+          .abortSignal(controller.signal)
+        if (error) throw error
+        if (!controller.signal.aborted) setCatalog(data)
+      } catch {
+        if (!controller.signal.aborted) setCatalogError(true)
+      }
+    }
+    void loadCatalog()
+    return () => controller.abort()
+  }, [catalogRevision])
+
+  const upcoming = useMemo(() => {
+    const now = new Date()
+    return classes.filter(session => session.scheduled && dateTime(session) > now)
+  }, [classes])
+  const scheduledTypes = new Set(upcoming.map(session => session.classType ?? session.title))
+  const unscheduled = catalog?.filter(type => !scheduledTypes.has(type.label))
+
+  const matching = useMemo(() => filterSessions(upcoming, params), [upcoming, params])
+
+  const groups = useMemo(() => {
+    const grouped = new Map<string, ClassOffering[]>()
+
+    for (const session of matching) {
+      const type = session.classType ?? session.title
+      const sessions = grouped.get(type) ?? []
+      sessions.push(session)
+      grouped.set(type, sessions)
+    }
+
+    return [...grouped].sort(([left], [right]) => left.localeCompare(right))
+  }, [matching])
+
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-semibold">
+            Classes
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Choose a class type to see its available dates and times.
+          </p>
         </div>
-      )}
+
+        <Link to="/attendance" className={buttonVariants({ variant: 'outline' })}>
+          <CalendarDays className="size-4" />
+          My schedule
+        </Link>
+      </div>
+
+      <SessionFilters
+        title="Find a class"
+        sessions={upcoming}
+        params={params}
+        count={matching.length}
+        grade={schedule.grade ? `Current grade: ${schedule.grade}` : 'Student membership'}
+        onChange={next => setParams(next, { replace: true })}
+      />
 
       <h3 className="text-lg font-semibold">Upcoming sessions</h3>
-      {!schedule.active && (
-        <p className="rounded-lg border bg-muted px-4 py-3 text-sm">
-          {schedule.linked
-            ? 'Your membership is not active. You can browse classes while booking access is pending.'
-            : 'Link a student record to this account before booking.'}
-        </p>
-      )}
       {groups.length === 0 ? (
         <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
           {upcoming.length ? 'No upcoming sessions match these filters.' : 'No upcoming sessions are scheduled.'}
@@ -313,123 +384,23 @@ export default function StudentClasses() {
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
           {groups.map(([type, sessions]) => {
-            const first = sessions[0]
-            const current = sessions.find(session => session.id === selected[type])
-              ?? sessions.find(session => session.bookable && !schedule.isFull(session))
-              ?? first
-            const months = new Map<string, ClassOffering[]>()
-            for (const session of sessions) {
-              const month = monthFormat.format(session.date)
-              const entries = months.get(month) ?? []
-              entries.push(session)
-              months.set(month, entries)
-            }
-
-            const booked = schedule.isBooked(current.id)
-            const waitlisted = schedule.isWaitlisted(current.id)
-            const full = schedule.isFull(current)
-
-            const available = Math.max(
-              0,
-              current.capacity - current.occupied
-            )
-
+            const bookingParams = new URLSearchParams(params)
+            bookingParams.set('type', type)
+            if (pathname === '/timetable') bookingParams.set('from', 'timetable')
             return (
-              <Card key={type} className="gap-3">
-                <CardHeader className="gap-2">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <CardTitle className="text-lg">
-                      {type}
-                    </CardTitle>
-                  </div>
-
-                  {first.level && <p className="text-xs text-muted-foreground">{first.level}</p>}
+              <Card key={type} className="gap-5 py-6 sm:py-7">
+                <CardHeader>
+                  <CardTitle className="text-lg">{type}</CardTitle>
+                  {sessions[0]?.level && <p className="text-sm text-muted-foreground">{sessions[0].level}</p>}
                 </CardHeader>
-
-                <CardContent className="space-y-4">
-                  <div className="grid gap-2 text-sm text-muted-foreground sm:grid-cols-2">
-                    <span className="flex items-center gap-2">
-                      <MapPin className="size-4" />
-                      {current.centre}
-                    </span>
-
-                    <span className="flex items-center gap-2">
-                      <Clock3 className="size-4" />
-                      {formatTime(current.startTime)}–
-                      {formatTime(current.endTime)}
-                    </span>
-
-                    <span>{current.instructor}</span>
-
-                    <span className="flex items-center gap-2">
-                      <UsersRound className="size-4" />
-                      {!current.bookable ? 'Online booking unavailable' : full
-                        ? 'Fully booked'
-                        : `${available} of ${current.capacity} slots left`}
-                    </span>
-                  </div>
-
-                  <label className="block space-y-1 text-sm">
-                    <span className="font-medium">
-                      Choose date and time
-                    </span>
-
-                    <select
-                      className={input}
-                      aria-label={`Choose date and time for ${type}`}
-                      value={current.id}
-                      onChange={e =>
-                        setSelected(prev => ({
-                          ...prev,
-                          [type]: e.target.value
-                        }))
-                      }
-                    >
-                      {[...months].map(([month, entries]) => (
-                        <optgroup key={month} label={month}>
-                          {entries.map(session => (
-                            <option key={session.id} value={session.id}>
-                              {prettyDate(session.date)} · {formatTime(session.startTime)} – {formatTime(session.endTime)} · {session.centre}
-                              {schedule.isFull(session) && session.bookable ? ' · Full' : ''}
-                            </option>
-                          ))}
-                        </optgroup>
-                      ))}
-                    </select>
-                  </label>
-
-
-                  {booked ? (
-                    <Button className="w-full" disabled>
-                      Already enrolled
-                    </Button>
-                  ) : waitlisted && full ? (
-                    <Button
-                      className="w-full"
-                      variant="outline"
-                      onClick={() =>
-                        setAction({
-                          kind: 'leave',
-                          session: current
-                        })
-                      }
-                    >
-                      Leave waitlist
-                    </Button>
-                  ) : (
-                    <Button
-                      className="w-full"
-                      disabled={!current.bookable || !schedule.active || schedule.saving}
-                      onClick={() =>
-                        setAction({
-                          kind: full ? 'waitlist' : 'enroll',
-                          session: current
-                        })
-                      }
-                    >
-                      {!current.bookable ? 'Booking unavailable' : full ? 'Join waitlist' : 'Enrol in this class'}
-                    </Button>
-                  )}
+                <CardContent>
+                  <Link
+                    to={`/classes/choose?${bookingParams}`}
+                    aria-label={`Choose class: ${type}`}
+                    className={buttonVariants({ className: 'w-full' })}
+                  >
+                    Choose class
+                  </Link>
                 </CardContent>
               </Card>
             )
@@ -452,7 +423,7 @@ export default function StudentClasses() {
           <h3 id="other-class-types" className="text-lg font-semibold">Other class types</h3>
           <div className="grid gap-4 lg:grid-cols-2">
             {unscheduled.map(type => (
-              <Card key={type.id} className="gap-2">
+              <Card key={type.id} className="gap-2 py-6 sm:py-7">
                 <CardHeader>
                   <CardTitle className="text-lg">{type.label}</CardTitle>
                   {type.description && <p className="text-sm text-muted-foreground">{type.description}</p>}
@@ -463,41 +434,280 @@ export default function StudentClasses() {
           </div>
         </section>
       )}
+    </div>
+  )
+}
+
+export function StudentClassBooking() {
+  const [params] = useSearchParams()
+  const type = params.get('type') ?? ''
+  const backParams = new URLSearchParams(params)
+  backParams.delete('type')
+  backParams.delete('from')
+  const backPath = params.get('from') === 'timetable' ? '/timetable' : '/classes'
+  const backTo = backParams.size ? `${backPath}?${backParams}` : backPath
+
+  return (
+    <div className="space-y-5">
+      <Link to={backTo} className={buttonVariants({ variant: 'ghost' })}>
+        <ArrowLeft aria-hidden="true" className="size-4" /> Back to classes
+      </Link>
+      <ClassBooking key={params.toString()} type={type} initialParams={backParams} />
+    </div>
+  )
+}
+
+function ClassBooking({ type, initialParams }: { type: string; initialParams: URLSearchParams }) {
+  const { classes, schedule } = useOutletContext<StudentContext>()
+  const [params, setParams] = useState(initialParams)
+  const [day, setDay] = useState('')
+  const [pendingChange, setPendingChange] = useState<{ date: Date } | { params: URLSearchParams } | null>(null)
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [action, setAction] = useState<Action | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+  const [message, setMessage] = useState('')
+  const [selectionError, setSelectionError] = useState('')
+  const [actionError, setActionError] = useState('')
+
+  const now = new Date()
+  const classSessions = classes.filter(session =>
+    (session.classType ?? session.title) === type && session.scheduled && dateTime(session) > now
+  )
+  const sessions = filterSessions(classSessions, params)
+  const current = sessions.find(session => dateKey(session.date) === day)
+    ?? sessions.find(session => session.bookable && !schedule.isFull(session))
+    ?? sessions[0]
+
+  const busy = submitting || schedule.saving
+  const bookings = classes.filter(session => session.scheduled && schedule.isBooked(session.id))
+  const conflictingIds = new Set(sessions
+    .filter(session => bookings.some(booking => booking.id !== session.id && conflict(session, booking)))
+    .map(session => session.id))
+  const selected = sessions.filter(session =>
+    current && dateKey(session.date) === dateKey(current.date)
+    && selectedIds.includes(session.id) && session.bookable
+    && !schedule.isFull(session) && !schedule.isBooked(session.id) && !conflictingIds.has(session.id)
+  )
+
+  function applyDay(date: Date) {
+    setDay(dateKey(date))
+    setPendingChange(null)
+    setSelectedIds([])
+    setSelectionError('')
+    setMessage('')
+  }
+
+  function changeDay(date: Date) {
+    if (!current || dateKey(date) === dateKey(current.date)) return
+    if (selected.length) setPendingChange({ date })
+    else applyDay(date)
+  }
+
+  function changeFilters(next: URLSearchParams) {
+    const nextSessions = filterSessions(selected, next)
+    if (nextSessions.length !== selected.length) {
+      setPendingChange({ params: next })
+      return
+    }
+    setParams(next)
+    setSelectionError('')
+  }
+
+  function confirmChange() {
+    if (!pendingChange) return
+    if ('date' in pendingChange) {
+      applyDay(pendingChange.date)
+    } else {
+      setParams(pendingChange.params)
+      setSelectedIds([])
+      setPendingChange(null)
+      setSelectionError('')
+    }
+  }
+
+  function toggleSession(session: ClassOffering) {
+    setSelectionError('')
+    setMessage('')
+    if (selectedIds.includes(session.id)) {
+      setSelectedIds(ids => ids.filter(id => id !== session.id))
+      return
+    }
+
+    if (conflictingIds.has(session.id)) {
+      setSelectionError('This time overlaps a class you already booked.')
+      return
+    }
+
+    if (selected.some(other => conflict(session, other))) {
+      setSelectionError('These classes overlap. Choose times that do not overlap.')
+      return
+    }
+
+    setDay(dateKey(session.date))
+    setSelectedIds(ids => [...ids, session.id])
+  }
+
+  function closeAction() {
+    setAction(null)
+    setActionError('')
+  }
+
+  async function confirm() {
+    if (!action || busy) return
+    setSubmitting(true)
+    setActionError('')
+    try {
+      if (action.kind === 'enroll') {
+        const completed: string[] = []
+        const failed: ClassOffering[] = []
+        const errors: string[] = []
+        for (const session of action.sessions) {
+          const error = await schedule.enroll(session)
+          if (error) {
+            failed.push(session)
+            errors.push(`${sessionTime(session)} at ${session.centre}: ${error}`)
+          } else {
+            completed.push(session.id)
+          }
+        }
+        setSelectedIds(ids => ids.filter(id => !completed.includes(id)))
+        if (completed.length) {
+          const count = completed.length
+          setMessage(`Enrolled in ${count} ${count === 1 ? 'class' : 'classes'} on ${prettyDate(action.sessions[0].date)}.`)
+        }
+        if (failed.length) {
+          setAction({ kind: 'enroll', sessions: failed })
+          setActionError([
+            ...(completed.length ? [`${completed.length} ${completed.length === 1 ? 'class was' : 'classes were'} booked.`] : []),
+            ...errors
+          ].join('\n'))
+          return
+        }
+      } else {
+        const error = action.kind === 'waitlist'
+          ? await schedule.joinWaitlist(action.session)
+          : await schedule.leaveWaitlist(action.session.id)
+        if (error) {
+          setActionError(error)
+          return
+        }
+        setMessage(action.kind === 'waitlist' ? 'You joined the waitlist.' : 'You have left the waitlist.')
+      }
+      closeAction()
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <section className="space-y-4" aria-labelledby="booking-class-title">
+      <header className="space-y-1">
+        <h2 id="booking-class-title" className="text-2xl font-semibold">{type || 'Choose a class'}</h2>
+        {classSessions[0]?.level && <p className="text-sm text-muted-foreground">{classSessions[0].level}</p>}
+      </header>
+      {message && (
+        <p role="status" className="rounded-lg border bg-muted px-4 py-3 text-sm">{message}</p>
+      )}
+      <SessionFilters
+        title="Filter sessions"
+        sessions={classSessions}
+        params={params}
+        count={sessions.length}
+        disabled={busy}
+        onChange={changeFilters}
+      />
+      {current ? <Card>
+        <CardHeader>
+          <CardTitle>Choose date and times</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Select one or more times, then enrol. You’ll be asked before a date change clears your selection.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <ClassSessionPicker
+            key={params.toString()}
+            sessions={sessions}
+            date={current.date}
+            selectedIds={selected.map(session => session.id)}
+            conflictingIds={conflictingIds}
+            schedule={schedule}
+            busy={busy}
+            onDateChange={changeDay}
+            onToggle={toggleSession}
+            onWaitlist={(session, kind) => {
+              setMessage('')
+              setAction({ kind, session })
+            }}
+          />
+          {selectionError && <p role="alert" className="text-sm text-destructive">{selectionError}</p>}
+          {!schedule.active && (
+            <p className="text-sm text-muted-foreground">
+              {schedule.linked ? 'Booking access requires an active membership.' : 'Link a student record to this account before booking.'}
+            </p>
+          )}
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
+            <p role="status" className="text-sm text-muted-foreground">
+              {selected.length} {selected.length === 1 ? 'class' : 'classes'} selected
+            </p>
+            <Button
+              disabled={!selected.length || !schedule.active || busy}
+              onClick={() => setAction({ kind: 'enroll', sessions: selected })}
+            >
+              Enrol in selected classes
+            </Button>
+          </div>
+        </CardContent>
+      </Card> : (
+        <p className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
+          {classSessions.length ? 'No sessions match these filters.' : 'No upcoming sessions for this class.'}
+        </p>
+      )}
+
+      <Dialog open={pendingChange !== null} onOpenChange={open => {
+        if (!open) setPendingChange(null)
+      }}>
+        <DialogContent showCloseButton={false} className="sm:max-w-md">
+          <DialogTitle>{pendingChange && 'params' in pendingChange ? 'Change filters?' : 'Change date?'}</DialogTitle>
+          <DialogDescription>
+            Your selected slots will be cleared. Confirm to continue.
+          </DialogDescription>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button variant="outline" onClick={() => setPendingChange(null)}>Keep selection</Button>
+            <Button onClick={confirmChange}>{pendingChange && 'params' in pendingChange ? 'Apply filters' : 'Change date'}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={action !== null} onOpenChange={open => {
-        if (!open && !schedule.saving) {
-          setAction(null)
-          setActionError('')
-        }
+        if (!open && !busy) closeAction()
       }}>
         {action && (
           <DialogContent showCloseButton={false} className="sm:max-w-md">
             <DialogTitle>
-              {action.kind === 'enroll'
-                ? 'Confirm enrolment?'
-                : action.kind === 'waitlist'
-                  ? 'Join the waitlist?'
-                  : 'Leave the waitlist?'}
+              {action.kind === 'enroll' ? 'Confirm enrolment?' : action.kind === 'waitlist' ? 'Join the waitlist?' : 'Leave the waitlist?'}
             </DialogTitle>
-            <DialogDescription>
-              {action.session.title} · {prettyDate(action.session.date)} ·{' '}
-              {formatTime(action.session.startTime)} – {formatTime(action.session.endTime)} · {action.session.centre}
-            </DialogDescription>
-
+            {action.kind === 'enroll' ? (
+              <>
+                <DialogDescription>{prettyDate(action.sessions[0].date)}</DialogDescription>
+                <ul className="max-h-48 space-y-1 overflow-y-auto text-sm">
+                  {action.sessions.map(session => (
+                    <li key={session.id}>{sessionTime(session)} · {session.centre}</li>
+                  ))}
+                </ul>
+              </>
+            ) : (
+              <DialogDescription>
+                {action.session.title} · {prettyDate(action.session.date)} · {sessionTime(action.session)} · {action.session.centre}
+              </DialogDescription>
+            )}
             {action.kind === 'waitlist' && (
               <p className="text-sm text-muted-foreground">Joining the waitlist does not reserve a spot.</p>
             )}
-            {actionError && <p role="alert" className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{actionError}</p>}
-
+            {actionError && <p role="alert" className="whitespace-pre-line rounded-md bg-destructive/10 p-3 text-sm text-destructive">{actionError}</p>}
             <div className="flex flex-wrap justify-end gap-2">
-              <Button variant="outline" disabled={schedule.saving} onClick={() => {
-                setAction(null)
-                setActionError('')
-              }}>
-                Back
-              </Button>
-              <Button onClick={confirm} disabled={schedule.saving}>
-                {schedule.saving ? 'Saving…' : action.kind === 'enroll'
+              <Button variant="outline" disabled={busy} onClick={closeAction}>Back</Button>
+              <Button onClick={confirm} disabled={busy}>
+                {busy ? 'Saving…' : action.kind === 'enroll'
                   ? 'Yes, enrol'
                   : action.kind === 'waitlist'
                     ? 'Yes, join waitlist'
@@ -507,7 +717,6 @@ export default function StudentClasses() {
           </DialogContent>
         )}
       </Dialog>
-
-    </div>
+    </section>
   )
 }

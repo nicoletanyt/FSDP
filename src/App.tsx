@@ -37,6 +37,7 @@ const ApplicationSuccess = lazy(() => import('./pages/Student/ApplicationSuccess
 
 const StudentDashboard = lazy(() => import('./pages/Student/StudentDashboard'))
 const StudentClasses = lazy(() => import('./pages/StudentClasses'))
+const StudentClassBooking = lazy(() => import('./pages/StudentClasses').then(module => ({ default: module.StudentClassBooking })))
 const StudentAttendance = lazy(() => import('./pages/StudentAttendance'))
 const StudentProfile = lazy(() => import('./pages/Student/StudentProfile'))
 const StudentPayments = lazy(() => import('./pages/Student/StudentPayments'))
@@ -71,6 +72,7 @@ export default function App() {
               <Route path="dashboard" element={<StudentDashboard />} />
               <Route path="timetable" element={<StudentClasses />} />
               <Route path="classes" element={<StudentClasses />} />
+              <Route path="classes/choose" element={<StudentClassBooking />} />
               <Route path="attendance" element={<StudentAttendance />} />
               <Route path="profile" element={<StudentProfile />} />
               <Route path="payments" element={<StudentPayments />} />
