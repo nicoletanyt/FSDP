@@ -5,17 +5,13 @@ import {
     CircleAlert,
     Clock3,
     ScanLine,
-    Smartphone,
-    QrCode,
 } from "lucide-react";
-import { Link } from "react-router";
 import { pendingNfcTagKey } from "@/components/instructor/NfcTagCapture";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { scanNfcTag } from "@/lib/nfc-check-in";
 import type { NfcScanResult } from "@/lib/nfc-check-in";
-import { currentDeviceSupportsNfcCheckIn } from "@/lib/nfc-device";
 
 const formatTime = (value: string) =>
     new Intl.DateTimeFormat("en-SG", {
@@ -26,7 +22,6 @@ const formatTime = (value: string) =>
     }).format(new Date(value));
 
 export default function NfcCheckIn() {
-    const [supportedDevice] = useState(currentDeviceSupportsNfcCheckIn);
     const [tag, setTag] = useState(() =>
         sessionStorage.getItem(pendingNfcTagKey),
     );
@@ -39,7 +34,7 @@ export default function NfcCheckIn() {
 
     const scan = useCallback(
         async (eventId?: string) => {
-            if (!supportedDevice || !tag || inFlight.current) return;
+            if (!tag || inFlight.current) return;
             inFlight.current = true;
             setPending(true);
             setError("");
@@ -62,15 +57,10 @@ export default function NfcCheckIn() {
                 setPending(false);
             }
         },
-        [supportedDevice, tag],
+        [tag],
     );
 
     useEffect(() => {
-        if (!supportedDevice) {
-            sessionStorage.removeItem(pendingNfcTagKey);
-            setTag(null);
-            return;
-        }
         if (!tag || attempted.current) return;
         attempted.current = true;
         if (tag === "invalid") {
@@ -80,7 +70,7 @@ export default function NfcCheckIn() {
             return;
         }
         void scan();
-    }, [supportedDevice, tag, scan]);
+    }, [tag, scan]);
 
     useEffect(() => {
         if (!feedbackVisible) return;
@@ -103,47 +93,9 @@ export default function NfcCheckIn() {
                     NFC attendance
                 </h1>
                 <p className="max-w-prose text-sm text-muted-foreground">
-                    {supportedDevice
-                        ? "Tap a student’s tag with this phone or tablet to check their lesson today."
-                        : "NFC check-in is not supported on this device or browser."}
+                    Tap a student’s tag with this phone or tablet to check their lesson today.
                 </p>
             </header>
-
-            {!supportedDevice && (
-                <Card>
-                    <CardContent className="flex flex-col items-center gap-4 py-6 text-center" role="status">
-                        <Smartphone
-                            className="size-9 text-muted-foreground"
-                            aria-hidden="true"
-                        />
-                        <div className="space-y-2">
-                            <h2 className="text-lg font-semibold">
-                                Please try a valid device.
-                            </h2>
-                            <p className="text-sm font-medium">
-                                This device can only handle QR check-in.
-                            </p>
-                        </div>
-                        <Button
-                            nativeButton={false}
-                            render={<Link to="/instructor/check-in" />}
-                            className="min-h-11 w-full sm:w-auto"
-                        >
-                            <QrCode className="size-4" aria-hidden="true" />
-                            Use QR check-in
-                        </Button>
-                        <div className="space-y-2 text-sm text-muted-foreground">
-                            <p>Supported devices:</p>
-                            <ul className="list-inside list-disc space-y-2">
-                                <li>
-                                    Android phones/tablets with NFC hardware, running Chrome 89 or
-                                    later.
-                                </li>
-                            </ul>
-                        </div>
-                    </CardContent>
-                </Card>
-            )}
 
             {error && (
                 <Alert variant="destructive" role="alert">
@@ -325,7 +277,7 @@ export default function NfcCheckIn() {
                     </Alert>
                 )}
 
-            {supportedDevice && !pending && !result && !error && (
+            {!pending && !result && !error && (
                 <Card>
                     <CardContent className="flex min-h-48 flex-col items-center justify-center gap-3 py-8 text-center">
                         <ScanLine className="size-9 text-primary" aria-hidden="true" />
