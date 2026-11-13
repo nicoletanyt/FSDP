@@ -1,24 +1,24 @@
 import { lazy } from 'react'
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router'
+import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router'
 import { GuestRoute, InstructorIndexRedirect, ProtectedRoute } from '@/components/auth/AuthGate'
-import FloatingChatbot from '@/components/FloatingChatbot'
+import NfcTagCapture from '@/components/instructor/NfcTagCapture'
 import AuthLayout from './layouts/AuthLayout'
 import RootLayout from './layouts/RootLayout'
-import InstructorLayout from './layouts/InstructorLayout'
-import StudentLayout from './layouts/StudentLayout'
 import CheckoutCancel from './pages/CheckoutCancel'
 import CheckoutSuccess from './pages/CheckoutSuccess'
 import NotFound from './pages/NotFound'
 
 const Login = lazy(() => import('./pages/Login'))
 const Signup = lazy(() => import('./pages/Signup'))
+const InstructorLayout = lazy(() => import('./layouts/InstructorLayout'))
+const StudentLayout = lazy(() => import('./layouts/StudentLayout'))
 
 const AdminLayout = lazy(() => import('./pages/admin/AdminLayout'))
 const AdminOverview = lazy(() => import('./pages/admin/Overview'))
 const AdminCentres = lazy(() => import('./pages/admin/Centres'))
 const AdminStudentDetail = lazy(() => import('./pages/admin/StudentDetail'))
 const AdminAttendance = lazy(() => import('./pages/admin/Attendance'))
-const AdminAttendanceRegister = lazy(() => import('./pages/admin/AttendanceRegister'))
+const AdminAttendanceRegister = lazy(() => import('./pages/admin/LiveAttendanceRegister'))
 const AdminAttendanceRecords = lazy(() => import('./pages/admin/AttendanceRecords'))
 const AdminAttendanceMonitoring = lazy(() => import('./pages/admin/AttendanceMonitoring'))
 const AdminGrading = lazy(() => import('./pages/admin/Grading'))
@@ -26,10 +26,13 @@ const AdminGradingEligibility = lazy(() => import('./pages/admin/GradingEligibil
 const AdminGradingOpportunities = lazy(() => import('./pages/admin/GradingOpportunities'))
 const AdminGradingApplications = lazy(() => import('./pages/admin/GradingApplications'))
 const AdminGradingSyllabus = lazy(() => import('./pages/admin/Syllabus'))
+const AdminGradingRules = lazy(() => import('./pages/admin/GradingRules'))
+const AdminGradingDay = lazy(() => import('./pages/admin/GradingDay'))
+const AdminGradingResults = lazy(() => import('./pages/admin/GradingResults'))
 const AdminNotifications = lazy(() => import('./pages/admin/Notifications'))
 const AdminInstructors = lazy(() => import('./pages/admin/Instructors'))
+const AdminEmailTemplates = lazy(() => import('./pages/admin/EmailTemplates'))
 const AdminProfile = lazy(() => import('./pages/admin/Profile'))
-const AdminReports = lazy(() => import('./pages/admin/Reports'))
 
 const ForgetPassword = lazy(() => import('./pages/ForgetPassword')) 
 const ApplyMembership = lazy(() => import('./pages/Student/ApplyMembership'))
@@ -41,15 +44,24 @@ const StudentClassBooking = lazy(() => import('./pages/StudentClasses').then(mod
 const StudentAttendance = lazy(() => import('./pages/StudentAttendance'))
 const StudentProfile = lazy(() => import('./pages/Student/StudentProfile'))
 const StudentPayments = lazy(() => import('./pages/Student/StudentPayments'))
+const StudentCredits = lazy(() => import('./pages/Student/StudentCredits'))
 const StudentGrading = lazy(() => import('./pages/Student/StudentGrading'))
+const GradingPayment = lazy(() => import('./pages/Student/GradingPayment'))
 
 const InstructorDashboard = lazy(() => import('./pages/Instructor/InstructorDashboard'))
 const InstructorStudents = lazy(() => import('./pages/Instructor/InstructorStudents'))
 const InstructorProfile = lazy(() => import('./pages/Instructor/InstructorProfile'))
 const InstructorCheckIn = lazy(() => import('./pages/Instructor/InstructorCheckIn'))
+const NfcCheckIn = lazy(() => import('./pages/Instructor/NfcCheckIn'))
 const InstructorStudentDetails = lazy(() => import('./pages/Instructor/InstructorStudentDetails'))
-const InstructorStudentReports = lazy(() => import('./pages/Instructor/InstructorStudentReports'))
-const InstructorGradingAssessment = lazy(() => import('./pages/Instructor/InstructorGradingAssessment'))
+const InstructorGradingSession = lazy(() => import('./pages/Instructor/InstructorGradingSession'))
+const InstructorGradings = lazy(() => import('./pages/Instructor/InstructorGradings'))
+const InstructorGradingDay = lazy(() => import('./pages/Instructor/InstructorGradingDay'))
+
+function LegacyCoverInvitationRedirect() {
+  const { invitationId } = useParams()
+  return <Navigate to={`/instructor/calendar?cover=${encodeURIComponent(invitationId ?? '')}`} replace />
+}
 
 export default function App() {
   return (
@@ -70,16 +82,19 @@ export default function App() {
               <Route path="apply-membership" element={<ApplyMembership />} />
               <Route path="apply-membership/success" element={<ApplicationSuccess />} /> 
               <Route path="dashboard" element={<StudentDashboard />} />
-              <Route path="timetable" element={<StudentClasses />} />
               <Route path="classes" element={<StudentClasses />} />
+              <Route path="timetable" element={<StudentAttendance />} />
+              <Route path="attendance" element={<Navigate to="/timetable" replace />} />
               <Route path="classes/choose" element={<StudentClassBooking />} />
-              <Route path="attendance" element={<StudentAttendance />} />
               <Route path="profile" element={<StudentProfile />} />
               <Route path="payments" element={<StudentPayments />} />
-              <Route path="grading" element={<StudentGrading />} />
+              <Route path="student/credits" element={<StudentCredits />} />
+              <Route path="grading" element={<GradingPayment />} />
+              <Route path="grading/applications" element={<StudentGrading />} />
+              <Route path="grading/payment" element={<GradingPayment />} />
             </Route>
           </Route>
-          <Route path="instructor">
+          <Route path="instructor" element={<NfcTagCapture />}>
             <Route index element={<InstructorIndexRedirect />} />
             <Route element={<GuestRoute />}>
               <Route element={<AuthLayout />}>
@@ -92,10 +107,13 @@ export default function App() {
                 <Route path="calendar" element={<InstructorDashboard />} />
                 <Route path="students" element={<InstructorStudents />} />
                 <Route path="check-in" element={<InstructorCheckIn />} />
+                <Route path="cover/:invitationId" element={<LegacyCoverInvitationRedirect />} />
+                <Route path="nfc_checkin" element={<NfcCheckIn />} />
                 <Route path="students/:studentId" element={<InstructorStudentDetails />} />
-                <Route path="reports/:eventId" element={<InstructorStudentReports />} />
-                <Route path="assessments/:assessmentId" element={<InstructorGradingAssessment />} />
-                <Route path="assessments/:eventId/:studentId" element={<InstructorGradingAssessment />} />
+                <Route path="reports/:eventId" element={<Navigate to="/instructor/calendar" replace />} />
+                <Route path="gradings" element={<InstructorGradings />} />
+                <Route path="gradings/:eventId" element={<InstructorGradingDay />} />
+                <Route path="grading/:eventId" element={<InstructorGradingSession />} />
                 <Route path="profile" element={<InstructorProfile />} />
               </Route>
             </Route>
@@ -118,11 +136,15 @@ export default function App() {
                 <Route path="opportunities" element={<AdminGradingOpportunities />} />
                 <Route path="applications" element={<AdminGradingApplications />} />
                 <Route path="syllabus" element={<AdminGradingSyllabus />} />
+                <Route path="rules" element={<AdminGradingRules />} />
               </Route>
+              {/* A grading's own pages sit outside the section tabs. */}
+              <Route path="grading/days/:eventId" element={<AdminGradingDay />} />
+              <Route path="grading/days/:eventId/:sessionId" element={<AdminGradingResults />} />
               <Route path="notifications" element={<AdminNotifications />} />
               <Route path="instructors" element={<AdminInstructors />} />
+              <Route path="email-templates" element={<AdminEmailTemplates />} />
               <Route path="profile" element={<AdminProfile />} />
-              <Route path="reports" element={<AdminReports />} />
             </Route>
           </Route>
           <Route path="checkout/success" element={<CheckoutSuccess />} />
@@ -130,7 +152,6 @@ export default function App() {
           <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>
-      <FloatingChatbot />
     </BrowserRouter>
   )
 }

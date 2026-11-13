@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Download, Search } from 'lucide-react'
 import EmptyState from '@/components/admin/EmptyState'
+import CentreCombobox from '@/components/admin/CentreCombobox'
 import { AttendanceBadge, StatusBadge } from '@/components/admin/StatusBadge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -14,7 +15,6 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { useAdminData } from '@/lib/admin/admin-data-context'
-import { useAdminFilters } from '@/lib/admin/admin-filters'
 import { downloadCsv } from '@/lib/admin/export'
 import { daysAgoIso, formatDate, fullName } from '@/lib/admin/format'
 import { studentAge } from '@/lib/admin/grading-eligibility'
@@ -22,7 +22,7 @@ import { NativeSelect } from '@/components/admin/form-controls'
 
 export default function AttendanceRecords() {
   const { centres, instructors, students, sessions, attendance } = useAdminData()
-  const { centreId } = useAdminFilters()
+  const [centreId, setCentreId] = useState('all')
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState('all')
   const [days, setDays] = useState(30)
@@ -70,14 +70,6 @@ export default function AttendanceRecords() {
       )
   }, [attendance, sessionById, studentById, centreId, days, externalOnly, status, query])
 
-  const summary = records.reduce(
-    (total, entry) => {
-      total[entry.record.status]++
-      return total
-    },
-    { present: 0, late: 0, absent: 0, excused: 0 },
-  )
-
   const visible = records.slice(0, 200)
 
   function exportRecords() {
@@ -110,11 +102,16 @@ export default function AttendanceRecords() {
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search student"
             aria-label="Search attendance by student"
-            className="h-8 w-full rounded-lg border border-input bg-background pr-2.5 pl-8 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+            className="h-10 w-full rounded-lg border border-input bg-background pr-2.5 pl-8 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
           />
+        </div>
+        <div className="w-full sm:w-auto">
+          <CentreCombobox centres={centres} value={centreId} onChange={setCentreId}
+            ariaLabel="Filter attendance records by centre" className="w-full sm:w-56" />
         </div>
         <div className="w-36">
           <NativeSelect
+            className="h-10"
             value={status}
             onChange={(event) => setStatus(event.target.value)}
             aria-label="Filter by attendance status"
@@ -128,6 +125,7 @@ export default function AttendanceRecords() {
         </div>
         <div className="w-32">
           <NativeSelect
+            className="h-10"
             value={days}
             onChange={(event) => setDays(Number(event.target.value))}
             aria-label="Date range"
@@ -137,7 +135,7 @@ export default function AttendanceRecords() {
             <option value={90}>Last 90 days</option>
           </NativeSelect>
         </div>
-        <label className="flex items-center gap-2 rounded-lg border border-border px-2.5 py-1.5 text-sm">
+        <label className="flex h-10 items-center gap-2 rounded-lg border border-border px-2.5 text-sm">
           <input
             type="checkbox"
             className="size-4 rounded border-input accent-[var(--primary)]"
@@ -152,15 +150,9 @@ export default function AttendanceRecords() {
         </Button>
       </div>
 
-      <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-        <StatusBadge tone="success">{summary.present} present</StatusBadge>
-        <StatusBadge tone="warning">{summary.late} late</StatusBadge>
-        <StatusBadge tone="danger">{summary.absent} absent</StatusBadge>
-        <StatusBadge tone="neutral">{summary.excused} excused</StatusBadge>
-        <span className="self-center">
-          {records.length} records · showing {visible.length}
-        </span>
-      </div>
+      <p className="text-xs text-muted-foreground">
+        {records.length} records · showing {visible.length}
+      </p>
 
       {visible.length === 0 ? (
         <EmptyState
@@ -170,7 +162,7 @@ export default function AttendanceRecords() {
       ) : (
         <Card className="overflow-hidden py-0">
           <CardContent className="px-0">
-            <Table>
+            <Table className="[&_th]:px-4 [&_td]:px-4 [&_td]:py-4 [&_th:first-child]:pl-5 [&_td:first-child]:pl-5 [&_th:last-child]:pr-5 [&_td:last-child]:pr-5">
               <TableCaption className="sr-only">Attendance records</TableCaption>
               <TableHeader>
                 <TableRow>

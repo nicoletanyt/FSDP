@@ -1,7 +1,5 @@
 import { Avatar as AvatarPrimitive } from "@base-ui/react/avatar"
-import { useSyncExternalStore } from "react"
 import type { InstructorProfile } from "@/lib/instructor-calendar"
-import { getInstructorPhoto, subscribeInstructorPhotos } from "@/lib/instructor-calendar"
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
 
@@ -17,10 +15,6 @@ function AvatarImage({ className, ...props }: AvatarPrimitive.Image.Props) {
   return <AvatarPrimitive.Image data-slot="avatar-image" className={cn("size-full object-cover", className)} {...props} />
 }
 
-function useInstructorPhoto(instructorId: string | null | undefined) {
-  return useSyncExternalStore(subscribeInstructorPhotos, () => getInstructorPhoto(instructorId), () => null)
-}
-
 function InstructorAvatar({ profile, showName = true, interactive = true, className, avatarClassName, fallbackClassName }: {
   profile: InstructorProfile
   showName?: boolean
@@ -29,8 +23,7 @@ function InstructorAvatar({ profile, showName = true, interactive = true, classN
   avatarClassName?: string
   fallbackClassName?: string
 }) {
-  const localPhoto = useInstructorPhoto(profile.id)
-  const photo = localPhoto ?? profile.avatarUrl
+  const photo = profile.avatarUrl
   const parts = profile.name.trim().split(/\s+/).filter(Boolean)
   const initials = (parts.length > 1 ? `${parts[0][0]}${parts.at(-1)![0]}` : parts[0]?.[0] ?? "?").toUpperCase()
   const content = <>
@@ -71,4 +64,4 @@ function InstructorAvatar({ profile, showName = true, interactive = true, classN
   )
 }
 
-export { Avatar, AvatarImage, AvatarFallback, InstructorAvatar, useInstructorPhoto }
+export { Avatar, AvatarImage, AvatarFallback, InstructorAvatar }

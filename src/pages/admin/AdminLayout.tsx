@@ -1,4 +1,4 @@
-import { Outlet, useLocation, useSearchParams } from 'react-router'
+import { Outlet, useLocation } from 'react-router'
 import AdminFilterBar from '@/components/admin/AdminFilterBar'
 import AdminNavbar from '@/components/admin/AdminNavbar'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -8,12 +8,16 @@ import { cn } from 'cn'
 
 function AdminShell() {
   const { pathname } = useLocation()
-  const [searchParams] = useSearchParams()
   const isCalendar = pathname === '/admin/calendar'
-  const isDojosTab =
-    pathname === '/admin/centres' && searchParams.get('tab') !== 'students'
+  // main's list already hides the filter bar on every grading page (a superset
+  // of the grading schedule pages this branch hid).
   const showFilters =
-    pathname !== '/admin/profile' && !isCalendar && !isDojosTab
+    pathname !== '/admin' && pathname !== '/admin/profile' && pathname !== '/admin/instructors' &&
+    pathname !== '/admin/notifications' &&
+    pathname !== '/admin/email-templates' &&
+    pathname !== '/admin/grading' && !pathname.startsWith('/admin/grading/') &&
+    pathname !== '/admin/calendar/records' && pathname !== '/admin/calendar/monitoring' &&
+    !isCalendar && pathname !== '/admin/centres'
 
   return (
     <div

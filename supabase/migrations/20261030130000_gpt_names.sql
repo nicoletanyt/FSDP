@@ -12,7 +12,6 @@ begin
   end if;
 end;
 $$;
-
 -- PL/pgSQL bodies retain textual table references when a table is renamed.
 create or replace function public.consume_gpt_request()
 returns boolean
@@ -32,7 +31,5 @@ begin
   return used <= 10;
 end;
 $$;
-
 revoke all on function public.consume_gpt_request() from public, anon;
-
 grant execute on function public.consume_gpt_request() to authenticated;

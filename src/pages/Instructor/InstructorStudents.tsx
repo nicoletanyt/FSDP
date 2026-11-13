@@ -1,7 +1,8 @@
-import { useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useSearchParams, Link } from "react-router";
 import {
     ChevronDown,
+    ChevronLeft,
     ChevronRight,
     MapPin,
     Search,
@@ -18,7 +19,15 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import GradeBadge from "@/components/GradeBadge";
+import GradeBadge from "@/components/instructor/DatabaseGradeBadge";
+import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
+import { useAuth } from "@/hooks/use-auth";
+import { useInstructorQuery } from "@/hooks/use-instructor-data";
+import { instructorQueryKeys, instructorQueryTimes } from "@/lib/instructor/query-keys";
+import type { QueryState } from "@/hooks/use-instructor-data";
+import { toInstructorDataError } from "@/lib/instructor/errors";
+import { useInstructorApi } from "@/lib/instructor/data-context";
+import type { GradeRow, StudentDirectory } from "@/lib/instructor/types";
 import { Label } from "@/components/ui/label";
 import {
     Popover,
@@ -26,15 +35,16 @@ import {
     PopoverTitle,
     PopoverTrigger,
 } from "@/components/ui/popover";
-import { studentDetailsHref, students } from "@/lib/instructor-calendar";
-import { getStudentProfile } from "@/lib/instructor-student-details";
+import { studentDetailsHref } from "@/lib/instructor-calendar";
 import {
-    belts,
-    compareRanks,
-    formatRank,
-    getGrade,
-    gradingSystems,
-} from "@/lib/student-grades";
+    changeDirectoryFilter,
+    clearDirectoryFilters,
+    directoryPage,
+    directoryStudent,
+    filterDirectorySnapshot,
+    loadDirectorySnapshot,
+    singaporeToday,
+} from "@/lib/instructor/directory";
 
 function DirectoryFilter({
     label,
@@ -42,7 +52,7 @@ function DirectoryFilter({
     options,
     onValueChange,
 }: {
-    label: "Rank" | "Belt" | "Dojo";
+    label: "Dojo";
     value: string;
     options: { value: string; label: string }[];
     onValueChange: (value: string) => void;
@@ -87,12 +97,7 @@ function DirectoryFilter({
                     >
                         <DropdownMenuRadioItem value="" closeOnClick>
                             <span className="min-w-0 [overflow-wrap:anywhere]">
-                                All{" "}
-                                {label === "Rank"
-                                    ? "ranks"
-                                    : label === "Belt"
-                                        ? "belts"
-                                        : "dojos"}
+                                All dojos
                             </span>
                         </DropdownMenuRadioItem>
                         {options.map((option) => (
@@ -113,54 +118,141 @@ function DirectoryFilter({
     );
 }
 
+// One grade filter drawn with the same GradeBadge the list uses, in ladder order.
+function GradeFilter({
+    value,
+    grades,
+    onValueChange,
+}: {
+    value: string;
+    grades: GradeRow[];
+    onValueChange: (value: string) => void;
+}) {
+    const triggerId = useId();
+    const selected = grades.find((grade) => grade.id === value) ?? null;
+
+    return (
+        <div className="grid min-w-0 gap-1.5">
+            <Label
+                htmlFor={triggerId}
+                className="shrink-0 text-sm text-muted-foreground"
+            >
+                Grade
+            </Label>
+            <DropdownMenu>
+                <DropdownMenuTrigger
+                    id={triggerId}
+                    render={
+                        <Button
+                            variant="outline"
+                            size="touch"
+                            className="directory-control w-full min-w-0 justify-between gap-2"
+                        />
+                    }
+                    aria-label={`Grade: ${selected?.label || value || "All"}`}
+                >
+                    <span className="flex min-w-0 items-center">
+                        {selected ? (
+                            <GradeBadge grade={selected} showBeltLabel />
+                        ) : (
+                            <span className="truncate">{value || "All"}</span>
+                        )}
+                    </span>
+                    <ChevronDown aria-hidden="true" className="size-4" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                    align="start"
+                    className="student-directory-filter-menu"
+                >
+                    <DropdownMenuRadioGroup
+                        value={value}
+                        onValueChange={onValueChange}
+                        aria-label="Grade filter"
+                    >
+                        <DropdownMenuRadioItem value="" closeOnClick>
+                            <span className="min-w-0 [overflow-wrap:anywhere]">All grades</span>
+                        </DropdownMenuRadioItem>
+                        {grades.map((grade) => (
+                            <DropdownMenuRadioItem
+                                key={grade.id}
+                                value={grade.id}
+                                closeOnClick
+                                aria-label={grade.label}
+                            >
+                                <GradeBadge grade={grade} showBeltLabel />
+                            </DropdownMenuRadioItem>
+                        ))}
+                    </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+            </DropdownMenu>
+        </div>
+    );
+}
+
 export default function InstructorStudents() {
+    const api = useInstructorApi();
+    const { session, profile } = useAuth();
     const [params, setParams] = useSearchParams();
     const searchRef = useRef<HTMLInputElement>(null);
     const filterTriggerRef = useRef<HTMLButtonElement>(null);
     const [filtersOpen, setFiltersOpen] = useState(false);
     const query = params.get("q") ?? "";
-    const belt = params.get("belt") ?? "";
     const rank = params.get("rank") ?? "";
     const dojo = params.get("dojo") ?? "";
-    const today = new Date();
-    const directory = students.map((student) => {
-        const grade = getGrade(student.gradingSystem, student.rank);
-        return {
-            ...getStudentProfile(student, today),
-            beltLabel: grade ? belts[grade.belt].label : "Rank not recorded",
-        };
-    });
-    const ranks = [...new Set(directory.map((student) => student.rank))]
-        .sort(compareRanks)
-        .map((rank) => ({ value: rank, label: formatRank(rank) }));
-    const beltOptions = [
-        ...new Set(directory.map((student) => student.beltLabel)),
-    ]
-        .sort()
-        .map((belt) => ({ value: belt, label: belt }));
-    const dojos = [...new Set(directory.map((student) => student.principalDojo))]
-        .sort()
-        .map((dojo) => ({ value: dojo, label: dojo }));
+    const page = directoryPage(params);
+    const [today, setToday] = useState(singaporeToday);
+    useEffect(() => {
+        const timer = window.setInterval(() => setToday(singaporeToday()), 60_000);
+        return () => window.clearInterval(timer);
+    }, []);
+    const loadDirectory = useCallback((signal: AbortSignal) => loadDirectorySnapshot(api.getStudents, signal), [api]);
+    const snapshot = useInstructorQuery(instructorQueryKeys.directory, loadDirectory, instructorQueryTimes.student);
+    const view = useMemo<QueryState<StudentDirectory>>(() => {
+        if (snapshot.status === "loading") return { status: "loading", data: null, error: null };
+        if (snapshot.status === "error") return { status: "error", data: null, error: snapshot.error };
+        try {
+            const filters = new URLSearchParams({ q: query, rank, dojo, page: String(page) });
+            return { status: "success", data: filterDirectorySnapshot(snapshot.data, filters), error: null };
+        } catch (error) {
+            return { status: "error", data: null, error: toInstructorDataError(error, "Unable to filter student records.").message };
+        }
+    }, [snapshot.status, snapshot.data, snapshot.error, query, rank, dojo, page]);
+    const data = { ...view, retry: snapshot.retry };
+    const account = profile?.role === "instructor" ? session?.user.id : null;
+    const [metadata, setMetadata] = useState<{ account: string; facets: StudentDirectory["facets"] } | null>(null);
+    useEffect(() => {
+        if (snapshot.status === "success" && account) setMetadata({ account, facets: snapshot.data.facets });
+    }, [account, snapshot.status, snapshot.data]);
+    // Keep only same-account filter metadata during refetches, never old rows or
+    // counts. Popover choices and focus remain stable while the request runs.
+    const facets = snapshot.data?.facets ?? (metadata?.account === account ? metadata?.facets : null);
+    const grades = useMemo(() => [...(facets?.grades ?? [])]
+        .sort((a, b) => a.sort_order - b.sort_order || a.label.localeCompare(b.label)), [facets]);
+    const dojos = (facets?.centres ?? []).map(centre => ({ value: centre.id, label: centre.name }));
     const search = query.trim().toLowerCase();
-    const hasFilters = Boolean(search || rank || belt || dojo);
-    const activeFilterCount = [rank, belt, dojo].filter(Boolean).length;
-    const filtered = directory.filter(
-        (student) =>
-            `${student.name} ${student.studentNumber}`
-                .toLowerCase()
-                .includes(search) &&
-            (!rank || student.rank === rank) &&
-            (!belt || student.beltLabel === belt) &&
-            (!dojo || student.principalDojo === dojo),
-    );
+    const hasFilters = Boolean(search || rank || dojo);
+    const activeFilterCount = [rank, dojo].filter(Boolean).length;
+    const pageCount = data.status === "success" ? Math.max(1, Math.ceil(data.data.total / data.data.limit)) : 1;
+    const outOfRange = data.status === "success" && page > pageCount;
+    const ready = data.status === "success" && !outOfRange;
+    const directory = ready ? data.data.items.map(entry => directoryStudent(entry, today)) : [];
+    useEffect(() => {
+        if (!outOfRange) return;
+        setParams(current => {
+            if (directoryPage(current) !== page || (current.get("q") ?? "") !== query
+                || (current.get("rank") ?? "") !== rank
+                || (current.get("dojo") ?? "") !== dojo) return current;
+            const next = new URLSearchParams(current);
+            if (pageCount === 1) next.delete("page");
+            else next.set("page", String(pageCount));
+            return next;
+        }, { replace: true });
+    }, [outOfRange, pageCount, page, query, rank, dojo, setParams]);
 
-    function updateFilter(name: "q" | "rank" | "belt" | "dojo", value: string) {
+    function updateFilter(name: "q" | "rank" | "dojo", value: string) {
         setParams(
             (current) => {
-                const next = new URLSearchParams(current);
-                if (value) next.set(name, value);
-                else next.delete(name);
-                return next;
+                return changeDirectoryFilter(current, name, value);
             },
             { replace: true },
         );
@@ -169,9 +261,7 @@ export default function InstructorStudents() {
     function clearFilters() {
         setParams(
             (current) => {
-                const next = new URLSearchParams(current);
-                for (const name of ["q", "rank", "belt", "dojo"]) next.delete(name);
-                return next;
+                return clearDirectoryFilters(current, true);
             },
             { replace: true },
         );
@@ -181,16 +271,24 @@ export default function InstructorStudents() {
     function resetFilters() {
         setParams(
             (current) => {
-                const next = new URLSearchParams(current);
-                for (const name of ["rank", "belt", "dojo"]) next.delete(name);
-                return next;
+                return clearDirectoryFilters(current, false);
             },
             { replace: true },
         );
     }
 
+    function selectPage(nextPage: number) {
+        setParams(current => {
+            const next = new URLSearchParams(current);
+            if (nextPage === 1) next.delete("page");
+            else next.set("page", String(nextPage));
+            return next;
+        });
+        searchRef.current?.focus({ preventScroll: true });
+    }
+
     return (
-        <section className="student-directory-view space-y-2 md:space-y-6">
+        <section aria-busy={data.status === "loading" || outOfRange} className="student-directory-view space-y-2 md:space-y-6">
             <header>
                 <h1 className="text-3xl font-semibold tracking-tight">Students</h1>
             </header>
@@ -206,6 +304,7 @@ export default function InstructorStudents() {
                         aria-label="Search by name or student ID"
                         placeholder="Name or ID…"
                         value={query}
+                        maxLength={200}
                         onChange={(event) => updateFilter("q", event.target.value)}
                         className="directory-control h-11 bg-background pl-9 lg:h-10"
                     />
@@ -246,17 +345,10 @@ export default function InstructorStudents() {
                                 Filter students
                             </PopoverTitle>
                         </div>
-                        <DirectoryFilter
-                            label="Rank"
+                        <GradeFilter
                             value={rank}
-                            options={ranks}
+                            grades={grades}
                             onValueChange={(value) => updateFilter("rank", value)}
-                        />
-                        <DirectoryFilter
-                            label="Belt"
-                            value={belt}
-                            options={beltOptions}
-                            onValueChange={(value) => updateFilter("belt", value)}
                         />
                         <DirectoryFilter
                             label="Dojo"
@@ -291,9 +383,10 @@ export default function InstructorStudents() {
                         role="status"
                         className="directory-meta text-xs text-muted-foreground"
                     >
-                        {hasFilters
-                            ? `${filtered.length} of ${students.length} students`
-                            : `${students.length} students`}
+                        {ready ? hasFilters
+                            ? `${data.data.total} of ${data.data.scopeTotal} students`
+                            : `${data.data.total} ${data.data.total === 1 ? "student" : "students"}`
+                            : data.status === "error" ? "Student count unavailable" : "Loading students…"}
                     </p>
                     {hasFilters && (
                         <Button
@@ -309,27 +402,49 @@ export default function InstructorStudents() {
                 </div>
                 <Card className="gap-0 overflow-hidden py-0">
                     <CardContent className="px-0">
-                        {filtered.length ? (
+                        {!ready && data.status !== "error" ? <InstructorDataStatus loading onRetry={data.retry} variant="directory" />
+                        : data.status === "error" ? <InstructorDataStatus error={data.error} onRetry={data.retry} />
+                        : directory.length ? (
                             <ul className="divide-y" aria-label="Student directory">
-                                {filtered.map((student) => (
+                                {directory.map((student) => (
                                     <li key={student.id}>
-                                        <Link
-                                            to={studentDetailsHref(student.id)}
-                                            className="flex min-h-17 items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:-outline-offset-2 focus-visible:outline-2 focus-visible:outline-ring"
+                                        {/* The name link stretches over the whole row, so the grade
+                                            badge can be its own button without nesting it in a link. */}
+                                        <div
+                                            data-member-no={student.memberNo}
+                                            className="relative flex min-h-17 items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/50 has-[a:focus-visible]:bg-muted/50 has-[a:focus-visible]:-outline-offset-2 has-[a:focus-visible]:outline-2 has-[a:focus-visible]:outline-ring"
                                         >
                                             <div className="min-w-0 flex-1">
                                                 <div className="flex flex-wrap items-start gap-x-2 gap-y-1">
-                                                    <p className="directory-name min-w-0 flex-1 basis-24 text-sm font-medium [overflow-wrap:anywhere]">
+                                                    <Link
+                                                        to={studentDetailsHref(student.id)}
+                                                        className="directory-name min-w-0 flex-1 basis-24 text-sm font-medium [overflow-wrap:anywhere] outline-none after:absolute after:inset-0"
+                                                    >
                                                         {student.name}
-                                                    </p>
+                                                    </Link>
                                                 </div>
                                                 <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 sm:mt-1">
-                                                    <GradeBadge
-                                                        rank={student.rank}
-                                                        system={student.gradingSystem}
-                                                    />
+                                                    {student.grade ? (
+                                                        <button
+                                                            type="button"
+                                                            className="relative z-10 max-w-full rounded-md focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+                                                            aria-label={rank === student.grade.id
+                                                                ? `Showing ${student.grade.label} only. Show all grades`
+                                                                : `Show only ${student.grade.label}`}
+                                                            aria-pressed={rank === student.grade.id}
+                                                            title={rank === student.grade.id ? "Show all grades" : `Show only ${student.grade.label}`}
+                                                            onClick={() => updateFilter("rank", rank === student.grade?.id ? "" : student.grade!.id)}
+                                                        >
+                                                            <GradeBadge
+                                                                grade={student.grade}
+                                                                className="hover:border-foreground/40"
+                                                            />
+                                                        </button>
+                                                    ) : (
+                                                        <GradeBadge grade={null} />
+                                                    )}
                                                     <p className="directory-meta min-w-0 text-xs text-muted-foreground [overflow-wrap:anywhere]">
-                                                        {gradingSystems[student.gradingSystem].label}
+                                                        {student.trackLabel}
                                                     </p>
                                                 </div>
                                                 <p className="directory-meta mt-2 flex items-center gap-1.5 text-xs text-muted-foreground [overflow-wrap:anywhere] sm:hidden">
@@ -351,7 +466,7 @@ export default function InstructorStudents() {
                                                 aria-hidden="true"
                                                 className="size-4 shrink-0 text-muted-foreground"
                                             />
-                                        </Link>
+                                        </div>
                                     </li>
                                 ))}
                             </ul>
@@ -361,22 +476,31 @@ export default function InstructorStudents() {
                                     aria-hidden="true"
                                     className="mx-auto size-6 text-muted-foreground"
                                 />
-                                <h2 className="text-sm font-semibold">No students found</h2>
+                                <h2 className="text-sm font-semibold">{hasFilters ? "No students found" : "No students yet"}</h2>
                                 <p className="directory-copy text-sm text-muted-foreground">
-                                    Try another name, student ID, rank, belt or dojo.
+                                    {hasFilters ? "Try another name, student ID, grade or dojo." : "No student records are available."}
                                 </p>
                                 <Button
                                     variant="outline"
                                     size="touch"
                                     className="directory-control mt-2 h-auto min-h-11 max-w-full whitespace-normal px-2 py-2 lg:min-h-10"
-                                    onClick={clearFilters}
+                                    onClick={hasFilters ? clearFilters : data.retry}
                                 >
-                                    Clear search and filters
+                                    {hasFilters ? "Clear search and filters" : "Refresh students"}
                                 </Button>
                             </div>
                         )}
                     </CardContent>
                 </Card>
+                {ready && pageCount > 1 && <nav aria-label="Student directory pages" className="flex flex-wrap items-center justify-between gap-2">
+                    <Button variant="outline" size="touch" disabled={page === 1} onClick={() => selectPage(page - 1)}>
+                        <ChevronLeft aria-hidden="true" />Previous
+                    </Button>
+                    <p className="directory-meta text-xs text-muted-foreground">Page {page} of {pageCount}</p>
+                    <Button variant="outline" size="touch" disabled={page === pageCount} onClick={() => selectPage(page + 1)}>
+                        Next<ChevronRight aria-hidden="true" />
+                    </Button>
+                </nav>}
             </div>
         </section>
     );

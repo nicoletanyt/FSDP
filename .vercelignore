@@ -4,7 +4,10 @@ node_modules/
 dist/
 .env
 .env.*
-supabase/
+supabase/*
+!supabase/functions/
+supabase/functions/*
+!supabase/functions/_shared/
 scripts/
 tests/
 *.log

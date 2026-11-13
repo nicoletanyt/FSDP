@@ -61,7 +61,7 @@ export default function CentreCombobox({
         id={id}
         aria-label={ariaLabel}
         placeholder={placeholder}
-        className={cn('w-64 cursor-pointer', className)}
+        className={cn('h-10 w-64 cursor-pointer', className)}
       />
       <ComboboxContent className="w-72">
         <ComboboxEmpty>No dojo found.</ComboboxEmpty>

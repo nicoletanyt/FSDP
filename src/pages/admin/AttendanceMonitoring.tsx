@@ -1,109 +1,102 @@
-import { Fragment, useMemo, useState } from 'react'
-import { AlertTriangle, Bell, CheckCircle2, ChevronDown, Search } from 'lucide-react'
-import { Link } from 'react-router'
+import { Fragment, useEffect, useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { AlertTriangle, Bell, CheckCircle2, ChevronRight, Search } from 'lucide-react'
+import AttendanceNoticeDialog, { noticeResultMessage } from '@/components/admin/AttendanceNoticeDialog'
+import CentreCombobox from '@/components/admin/CentreCombobox'
 import EmptyState from '@/components/admin/EmptyState'
-import Sparkline from '@/components/admin/Sparkline'
-import { RiskBadge } from '@/components/admin/StatusBadge'
+import { RiskBadge, StatusBadge } from '@/components/admin/StatusBadge'
 import { NativeSelect } from '@/components/admin/form-controls'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import {
-  Table,
-  TableBody,
-  TableCaption,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+  Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
-import { useAdminData } from '@/lib/admin/admin-data-context'
-import { useAdminFilters } from '@/lib/admin/admin-filters'
-import { getRiskAssessments } from '@/lib/admin/attendance-risk'
-import {
-  formatPercent,
-  formatSignedPercent,
-  fullName,
-  initials,
-  relativeDay,
-} from '@/lib/admin/format'
-import type { FollowUpStatus, RiskLevel } from '@/lib/admin/types'
+import { useAuth } from '@/hooks/use-auth'
+import { formatPercent, initials, relativeDay } from '@/lib/admin/format'
+import { loadCalendarCentres } from '@/lib/admin/live-class-calendar'
+import type { RiskLevel } from '@/lib/admin/types'
+import { supabase } from '@/lib/supabase'
 import { cn } from 'cn'
 
-const followUpOptions: { value: FollowUpStatus; label: string }[] = [
-  { value: 'none', label: 'Not flagged' },
-  { value: 'flagged', label: 'Flagged' },
-  { value: 'contacted', label: 'Contacted' },
-  { value: 'resolved', label: 'Resolved' },
-]
+type MonitoredStudent = {
+  id: string
+  first_name: string
+  last_name: string
+  member_no: string
+  email: string
+  centre_name: string
+  grade: string
+  level: RiskLevel | 'unassessed'
+  enrolments: number
+  attended: number
+  missed: number
+  rate: number | null
+  last_attended: string | null
+}
+
+const name = (student: MonitoredStudent) => `${student.first_name} ${student.last_name}`.trim()
 
 export default function AttendanceMonitoring() {
-  const { centres, students, attendance, sessions, sendNotification, updateFollowUp } =
-    useAdminData()
-  const { centreId } = useAdminFilters()
-  const [levelFilter, setLevelFilter] = useState('flagged')
-  const [followUpFilter, setFollowUpFilter] = useState('all')
-  const [query, setQuery] = useState('')
+  const { session } = useAuth()
+  const [centreId, setCentreId] = useState('all')
+  const [levelFilter, setLevelFilter] = useState('at_risk')
+  const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [expanded, setExpanded] = useState<string | null>(null)
   const [notice, setNotice] = useState('')
+  const [noticeOpen, setNoticeOpen] = useState(false)
+  const [noticeStudentIds, setNoticeStudentIds] = useState<string[] | null>(null)
 
-  const centreNames = new Map(centres.map((centre) => [centre.id, centre.name]))
-  const scopedStudents = useMemo(
-    () =>
-      students.filter(
-        (student) => centreId === 'all' || student.homeCentreId === centreId,
-      ),
-    [students, centreId],
-  )
+  const centresQuery = useQuery({
+    queryKey: ['admin', 'overview', 'centres', session?.user.id],
+    queryFn: ({ signal }) => loadCalendarCentres(signal),
+    enabled: !!session,
+  })
+  const validCentre = centreId === 'all' || centresQuery.data?.some(centre => centre.id === centreId)
+  const targetCentre = validCentre && centreId !== 'all' ? centreId : null
+  const monitoring = useQuery({
+    queryKey: ['admin', 'attendance-monitoring-recent-enrolments', session?.user.id, targetCentre],
+    queryFn: async (): Promise<MonitoredStudent[]> => {
+      const { data, error } = await supabase.rpc('admin_attendance_monitoring', { target_centre: targetCentre })
+      if (error) throw error
+      if (!Array.isArray(data)) throw new Error('No monitoring data was returned.')
+      return data as MonitoredStudent[]
+    },
+    enabled: !!session && centresQuery.isSuccess && !!validCentre,
+    refetchOnWindowFocus: true,
+  })
+  const error = centresQuery.error ?? monitoring.error
+  const students = !error && validCentre && monitoring.isSuccess ? monitoring.data : []
+  const loading = centresQuery.isPending || monitoring.isPending || !validCentre
 
-  const assessments = useMemo(
-    () => getRiskAssessments(scopedStudents, attendance, sessions),
-    [scopedStudents, attendance, sessions],
-  )
+  useEffect(() => { setSelected(new Set()); setExpanded(null) }, [centreId, levelFilter, search])
 
   const filtered = useMemo(() => {
-    const needle = query.trim().toLowerCase()
-    return assessments
-      .filter((assessment) => {
-        if (levelFilter === 'all') return true
-        if (levelFilter === 'flagged') {
-          return assessment.level === 'at_risk' || assessment.level === 'critical'
-        }
-        return assessment.level === (levelFilter as RiskLevel)
-      })
-      .filter((assessment) => {
-        const student = scopedStudents.find((item) => item.id === assessment.studentId)
-        if (!student) return false
-        return followUpFilter === 'all' || student.followUpStatus === followUpFilter
-      })
-      .filter((assessment) => {
-        if (!needle) return true
-        const student = scopedStudents.find((item) => item.id === assessment.studentId)
-        return student
-          ? [fullName(student), student.memberNo, student.email].some((value) =>
-              value.toLowerCase().includes(needle),
-            )
-          : false
-      })
-  }, [assessments, levelFilter, followUpFilter, query, scopedStudents])
-
-  const allSelected = filtered.length > 0 && filtered.every((assessment) => selected.has(assessment.studentId))
+    const needle = search.trim().toLowerCase()
+    return students.filter(student =>
+      (levelFilter === 'all' || student.level === levelFilter) &&
+      (!needle || [name(student), student.member_no, student.email].some(value => value.toLowerCase().includes(needle))),
+    )
+  }, [students, levelFilter, search])
+  const selectable = filtered.filter(student => student.level === 'at_risk')
+  const visibleSelected = selectable.filter(student => selected.has(student.id)).map(student => student.id)
+  const allSelected = selectable.length > 0 && selectable.every(student => selected.has(student.id))
 
   function toggleAll() {
-    setSelected((current) => {
+    setSelected(current => {
       const next = new Set(current)
-      if (allSelected) {
-        for (const assessment of filtered) next.delete(assessment.studentId)
-      } else {
-        for (const assessment of filtered) next.add(assessment.studentId)
+      for (const student of selectable) {
+        if (allSelected) next.delete(student.id)
+        else next.add(student.id)
       }
       return next
     })
   }
 
   function toggleOne(studentId: string) {
-    setSelected((current) => {
+    if (!selectable.some(student => student.id === studentId)) return
+    setSelected(current => {
       const next = new Set(current)
       if (next.has(studentId)) next.delete(studentId)
       else next.add(studentId)
@@ -111,289 +104,101 @@ export default function AttendanceMonitoring() {
     })
   }
 
-  function notifyStudents(studentIds: string[], label: string) {
-    if (studentIds.length === 0) return
-    sendNotification({
-      channel: 'email',
-      template: 'Attendance concern',
-      audience: label,
-      recipientCount: studentIds.length,
-    })
-    setNotice(
-      `Attendance concern queued for ${studentIds.length} ${
-        studentIds.length === 1 ? 'student' : 'students'
-      }.`,
-    )
-  }
-
-  function markSelected(status: FollowUpStatus) {
-    for (const studentId of selected) updateFollowUp(studentId, status)
-    setNotice(`${selected.size} students marked as ${status}.`)
-    setSelected(new Set())
+  function openNotice() {
+    setNoticeStudentIds(visibleSelected.length ? visibleSelected : null)
+    setNoticeOpen(true)
   }
 
   return (
     <div className="space-y-4">
       <div className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm">
         <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning-foreground dark:text-warning" aria-hidden="true" />
-        <p className="text-muted-foreground">
-          A student is flagged when their 30-day attendance is below 70%, attendance
-          drops by 15 points or more, or they have 3 or more consecutive absences.
-        </p>
+        <p className="text-muted-foreground">Based on each student’s last five completed class enrolments, not how often they book. Two or more missed classes means at risk. With no marked results, risk is not assessed. Unmarked and excused classes do not count as attendance results.</p>
       </div>
 
-      {notice && (
-        <Alert>
-          <CheckCircle2 className="size-4 text-success" aria-hidden="true" />
-          <AlertDescription>{notice}</AlertDescription>
-        </Alert>
-      )}
+      {notice && <Alert role="status"><CheckCircle2 className="size-4 text-success" aria-hidden="true" /><AlertDescription>{notice}</AlertDescription></Alert>}
+      {error && <Alert variant="destructive" role="alert"><AlertDescription className="flex flex-wrap items-center gap-3">
+        Unable to load live attendance monitoring. No demo students are shown.
+        <Button variant="outline" size="sm" onClick={() => { void centresQuery.refetch(); void monitoring.refetch() }}>Retry</Button>
+      </AlertDescription></Alert>}
+      {loading && !error && <p role="status" className="text-sm text-muted-foreground">Loading live attendance monitoring…</p>}
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-48 flex-1">
-          <Search
-            className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
-            aria-hidden="true"
-          />
-          <input
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Find a student"
-            aria-label="Search monitored students"
-            className="h-8 w-full rounded-lg border border-input bg-background pr-2.5 pl-8 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
-          />
+          <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+          <input type="search" value={search} onChange={event => setSearch(event.target.value)}
+            placeholder="Find a student" aria-label="Search monitored students"
+            className="h-10 w-full rounded-lg border border-input bg-background pr-2.5 pl-8 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30" />
         </div>
-        <div className="w-40">
-          <NativeSelect
-            value={levelFilter}
-            onChange={(event) => setLevelFilter(event.target.value)}
-            aria-label="Filter by risk level"
-          >
-            <option value="flagged">At risk & critical</option>
-            <option value="all">All levels</option>
-            <option value="critical">Critical</option>
-            <option value="at_risk">At risk</option>
-            <option value="watch">Watch</option>
-          </NativeSelect>
+        <div className="w-full sm:w-auto">
+          <CentreCombobox centres={centresQuery.data ?? []} value={centreId} onChange={setCentreId}
+            ariaLabel="Filter monitored students by centre" className="w-full sm:w-56" />
         </div>
-        <div className="w-36">
-          <NativeSelect
-            value={followUpFilter}
-            onChange={(event) => setFollowUpFilter(event.target.value)}
-            aria-label="Filter by follow-up status"
-          >
-            <option value="all">All follow-ups</option>
-            <option value="none">Not flagged</option>
-            <option value="flagged">Flagged</option>
-            <option value="contacted">Contacted</option>
-            <option value="resolved">Resolved</option>
-          </NativeSelect>
-        </div>
-        <Button
-          variant="outline"
-          onClick={() =>
-            notifyStudents(
-              [...selected],
-              `Selected students (${selected.size})`,
-            )
-          }
-          disabled={selected.size === 0}
-        >
-          <Bell />
-          Notify selected
-        </Button>
-        <Button
-          variant="outline"
-          onClick={() => markSelected('flagged')}
-          disabled={selected.size === 0}
-        >
-          Mark follow-up
+        <div className="w-40"><NativeSelect className="h-10" value={levelFilter} onChange={event => setLevelFilter(event.target.value)} aria-label="Filter by risk level">
+          <option value="at_risk">At risk</option><option value="all">All levels</option><option value="healthy">Healthy</option>
+          <option value="unassessed">Not assessed</option>
+        </NativeSelect></div>
+        <Button className="ml-auto" variant="outline" onClick={openNotice} disabled={!!error || loading}>
+          <Bell aria-hidden="true" />Follow Up
         </Button>
       </div>
 
-      {filtered.length === 0 ? (
-        <EmptyState
-          title="No students match this view"
-          description="Try a different risk level or follow-up status, or clear the search."
-        />
-      ) : (
-        <Card className="overflow-hidden py-0">
-          <CardContent className="px-0">
-            <Table>
-              <TableCaption className="sr-only">Students with declining attendance</TableCaption>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-8">
-                    <input
-                      type="checkbox"
-                      className="size-4 rounded border-input accent-[var(--primary)]"
-                      checked={allSelected}
-                      onChange={toggleAll}
-                      aria-label="Select all visible students"
-                    />
-                  </TableHead>
-                  <TableHead>Student</TableHead>
-                  <TableHead>Risk</TableHead>
-                  <TableHead className="text-right">30-day</TableHead>
-                  <TableHead className="text-right">Change</TableHead>
-                  <TableHead className="text-right">Absence streak</TableHead>
-                  <TableHead>Last attended</TableHead>
-                  <TableHead>Trend</TableHead>
-                  <TableHead>Follow-up</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((assessment) => {
-                  const student = scopedStudents.find(
-                    (item) => item.id === assessment.studentId,
-                  )
-                  if (!student) return null
-                  const isExpanded = expanded === student.id
-                  return (
-                    <Fragment key={student.id}>
-                      <TableRow>
-                        <TableCell>
-                          <input
-                            type="checkbox"
-                            className="size-4 rounded border-input accent-[var(--primary)]"
-                            checked={selected.has(student.id)}
-                            onChange={() => toggleOne(student.id)}
-                            aria-label={`Select ${fullName(student)}`}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-3">
-                            <span className="flex size-8 items-center justify-center rounded-full bg-destructive/10 text-xs font-semibold text-destructive">
-                              {initials(student.firstName, student.lastName)}
-                            </span>
-                            <div>
-                              <p className="font-medium">{fullName(student)}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {centreNames.get(student.homeCentreId)} · {student.currentGrade}
-                              </p>
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <RiskBadge level={assessment.level} />
-                        </TableCell>
-                        <TableCell className="text-right font-medium tabular-nums">
-                          {formatPercent(assessment.rate30)}
-                        </TableCell>
-                        <TableCell
-                          className={cn(
-                            'text-right text-xs font-medium tabular-nums',
-                            assessment.change < 0 ? 'text-destructive' : 'text-muted-foreground',
-                          )}
-                        >
-                          {formatSignedPercent(assessment.change)}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {assessment.consecutiveAbsences}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {relativeDay(assessment.lastAttended ?? '')}
-                        </TableCell>
-                        <TableCell>
-                          <Sparkline
-                            values={assessment.weeklyRates}
-                            tone={
-                              assessment.level === 'critical'
-                                ? 'var(--destructive)'
-                                : 'var(--warning)'
-                            }
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <NativeSelect
-                            value={student.followUpStatus}
-                            onChange={(event) =>
-                              updateFollowUp(
-                                student.id,
-                                event.target.value as FollowUpStatus,
-                              )
-                            }
-                            aria-label={`Follow-up status for ${fullName(student)}`}
-                            className="h-7 w-32 text-xs"
-                          >
-                            {followUpOptions.map((option) => (
-                              <option key={option.value} value={option.value}>
-                                {option.label}
-                              </option>
-                            ))}
-                          </NativeSelect>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex justify-end gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon-xs"
-                              aria-label={`Why ${fullName(student)} is flagged`}
-                              onClick={() =>
-                                setExpanded(isExpanded ? null : student.id)
-                              }
-                            >
-                              <ChevronDown
-                                className={cn(
-                                  'transition-transform',
-                                  isExpanded && 'rotate-180',
-                                )}
-                              />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon-xs"
-                              aria-label={`Notify ${fullName(student)}`}
-                              onClick={() =>
-                                notifyStudents(
-                                  [student.id],
-                                  `Selected student — ${fullName(student)}`,
-                                )
-                              }
-                            >
-                              <Bell />
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="xs"
-                              render={<Link to={`/admin/students/${student.id}`} />}
-                            >
-                              View
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                      {isExpanded && (
-                        <TableRow>
-                          <TableCell colSpan={10} className="bg-muted/30">
-                            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                              Why flagged
-                            </p>
-                            <ul className="mt-2 space-y-1 text-sm">
-                              {assessment.reasons.length ? (
-                                assessment.reasons.map((reason) => (
-                                  <li key={reason} className="flex gap-2">
-                                    <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-destructive" />
-                                    {reason}
-                                  </li>
-                                ))
-                              ) : (
-                                <li>No active flags — this student is being watched.</li>
-                              )}
-                            </ul>
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </Fragment>
-                  )
-                })}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
+      {noticeOpen && <AttendanceNoticeDialog centreId={targetCentre} studentIds={noticeStudentIds}
+        onClose={() => setNoticeOpen(false)} onSent={result => {
+          setSelected(new Set())
+          setNotice(noticeResultMessage(result))
+          void monitoring.refetch()
+        }} />}
+
+      {!loading && !error && (filtered.length === 0 ? <EmptyState title="No students match this view"
+        description="Try a different risk level or clear the search." /> :
+        <Card className="overflow-hidden py-0"><CardContent className="overflow-x-auto px-0"><Table className="[&_th]:px-4 [&_td]:px-4 [&_td]:py-4 [&_th:first-child]:pl-5 [&_td:first-child]:pl-5 [&_th:last-child]:pr-5 [&_td:last-child]:pr-5">
+          <TableCaption className="sr-only">Live student attendance monitoring</TableCaption>
+          <TableHeader><TableRow>
+            <TableHead className="w-8"><input type="checkbox" className="size-4 accent-[var(--primary)]" checked={allSelected} disabled={!selectable.length}
+              onChange={toggleAll} aria-label="Select all visible students needing attention" /></TableHead>
+            <TableHead>Student</TableHead><TableHead>Risk</TableHead><TableHead className="text-right">Last 5 enrolments</TableHead>
+            <TableHead>Last attended</TableHead><TableHead className="text-right">Details</TableHead>
+          </TableRow></TableHeader>
+          <TableBody>{filtered.map(student => {
+            const isExpanded = expanded === student.id
+            const marked = student.attended + student.missed
+            return <Fragment key={student.id}>
+              <TableRow className="cursor-pointer" onClick={() => setExpanded(isExpanded ? null : student.id)}>
+                <TableCell onClick={event => event.stopPropagation()}><input type="checkbox" className="size-4 accent-[var(--primary)]" checked={selected.has(student.id)}
+                  disabled={student.level !== 'at_risk'}
+                  onChange={() => toggleOne(student.id)} aria-label={`Select ${name(student)} for an attendance notice`} /></TableCell>
+                <TableCell><div className="flex items-center gap-3">
+                  <span className="flex size-8 items-center justify-center rounded-full bg-destructive/10 text-xs font-semibold text-destructive">
+                    {initials(student.first_name, student.last_name)}
+                  </span><div><p className="font-medium">{name(student)}</p>
+                    <p className="text-xs text-muted-foreground">{student.centre_name} · {student.grade}</p></div>
+                </div></TableCell>
+                <TableCell>{student.level === 'unassessed' ? <StatusBadge tone="neutral">Not assessed</StatusBadge> : <RiskBadge level={student.level} />}</TableCell>
+                <TableCell className="text-right tabular-nums">
+                  <p className="font-medium">{student.rate === null ? '—' : formatPercent(student.rate)}</p>
+                  <p className="text-xs text-muted-foreground">{student.attended} attended · {student.missed} missed</p>
+                </TableCell>
+                <TableCell className="text-muted-foreground">{relativeDay(student.last_attended ?? '')}</TableCell>
+                <TableCell className="text-right"><Button type="button" variant="ghost" size="sm"
+                  aria-label={`${isExpanded ? 'Hide' : 'View'} attendance details for ${name(student)}`}
+                  aria-expanded={isExpanded} aria-controls={isExpanded ? `monitoring-details-${student.id}` : undefined}
+                  onClick={event => { event.stopPropagation(); setExpanded(isExpanded ? null : student.id) }}>
+                  {isExpanded ? 'Hide details' : 'View details'}
+                  <ChevronRight className={cn('size-4 transition-transform', isExpanded && 'rotate-90')} aria-hidden="true" />
+                </Button></TableCell>
+              </TableRow>
+              {isExpanded && <TableRow id={`monitoring-details-${student.id}`}><TableCell colSpan={6} className="bg-muted/30">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Attendance assessment</p>
+                <p className="mt-2 text-sm">{student.enrolments} completed enrolments considered · {marked} marked · {student.attended} attended · {student.missed} missed.</p>
+                <p className="mt-1 text-sm text-muted-foreground">{marked === 0
+                  ? 'No marked attendance in these enrolments; risk is not assessed.'
+                  : student.missed >= 2 ? 'Two or more missed classes in the last five enrolments.'
+                    : 'Fewer than two missed classes in the last five enrolments.'}</p>
+              </TableCell></TableRow>}
+            </Fragment>
+          })}</TableBody>
+        </Table></CardContent></Card>)}
     </div>
   )
 }

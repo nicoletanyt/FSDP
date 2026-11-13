@@ -1,5 +1,5 @@
 import { Link, NavLink, useLocation } from 'react-router'
-import { CalendarDays, ClipboardCheck, LayoutDashboard, Presentation, UserCheck, UserCircle } from 'lucide-react'
+import { ClipboardCheck, CreditCard, LayoutDashboard, Presentation, UserCheck, UserCircle } from 'lucide-react'
 import logo from '@/assets/logo.png'
 import ThemeToggle from '@/components/theme-toggle'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -9,8 +9,8 @@ import { cn } from '@/lib/utils'
 
 const routes = [
   { label: 'Dashboard', to: '/dashboard', icon: LayoutDashboard },
-  { label: 'Timetable', to: '/timetable', icon: CalendarDays },
-  { label: 'Attendance', to: '/attendance', icon: UserCheck },
+  { label: 'Credits', to: '/student/credits', icon: CreditCard },
+  { label: 'Timetable', to: '/timetable', icon: UserCheck },
   { label: 'Classes', to: '/classes', icon: Presentation },
   { label: 'Grading', to: '/grading', icon: ClipboardCheck },
 ]
@@ -26,7 +26,12 @@ export default function StudentNavigation() {
 
   return <>
     <MobileNavigation homeTo="/dashboard" links={[
-      ...routes.map(({ label, to, icon }) => ({ label, to, icon, active: pathname === to })),
+      ...routes.map(({ label, to, icon }) => ({
+        label,
+        to,
+        icon,
+        active: pathname === to || (to === '/grading' && pathname.startsWith('/grading/')),
+      })),
       { label: 'Profile', to: '/profile', icon: UserCircle, active: pathname === '/profile' },
     ]} />
     <header className="hidden shrink-0 border-b bg-background lg:block">
@@ -60,7 +65,7 @@ export default function StudentNavigation() {
           {routes.map(({ label, to, icon: Icon }) => <NavLink
             key={to}
             to={to}
-            end
+            end={to !== '/grading'}
             className={({ isActive }) => cn(
               'flex min-h-11 flex-1 items-center justify-center gap-1 rounded-lg px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring sm:gap-2 sm:px-3 sm:text-sm lg:min-h-10 lg:flex-none',
               isActive && 'bg-accent text-accent-foreground',

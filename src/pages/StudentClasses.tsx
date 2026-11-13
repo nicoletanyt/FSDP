@@ -361,7 +361,7 @@ export default function StudentClasses() {
           </p>
         </div>
 
-        <Link to="/attendance" className={buttonVariants({ variant: 'outline' })}>
+        <Link to="/timetable" className={buttonVariants({ variant: 'outline' })}>
           <CalendarDays className="size-4" />
           My schedule
         </Link>
@@ -459,6 +459,7 @@ export function StudentClassBooking() {
 
 function ClassBooking({ type, initialParams }: { type: string; initialParams: URLSearchParams }) {
   const { classes, schedule } = useOutletContext<StudentContext>()
+  const { credits, deductCredit } = useOutletContext<StudentContext>()
   const [params, setParams] = useState(initialParams)
   const [day, setDay] = useState('')
   const [pendingChange, setPendingChange] = useState<{ date: Date } | { params: URLSearchParams } | null>(null)
@@ -558,6 +559,10 @@ function ClassBooking({ type, initialParams }: { type: string; initialParams: UR
     setActionError('')
     try {
       if (action.kind === 'enroll') {
+        if (credits < action.sessions.length) {
+          setActionError('Top up your credits before enrolling in these classes.')
+          return
+        }
         const completed: string[] = []
         const failed: ClassOffering[] = []
         const errors: string[] = []
@@ -567,6 +572,7 @@ function ClassBooking({ type, initialParams }: { type: string; initialParams: UR
             failed.push(session)
             errors.push(`${sessionTime(session)} at ${session.centre}: ${error}`)
           } else {
+            deductCredit()
             completed.push(session.id)
           }
         }
@@ -646,6 +652,7 @@ function ClassBooking({ type, initialParams }: { type: string; initialParams: UR
             </p>
           )}
           <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
+            <Link to="/student/credits" className="text-sm text-primary underline">{credits} credits available</Link>
             <p role="status" className="text-sm text-muted-foreground">
               {selected.length} {selected.length === 1 ? 'class' : 'classes'} selected
             </p>

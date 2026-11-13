@@ -50,6 +50,16 @@ export default function ThemeToggle() {
     return () => media.removeEventListener('change', handleChange)
   }, [])
 
+  // Keep every mounted toggle in sync when one of them changes the theme.
+  useEffect(() => {
+    const root = document.documentElement
+    const observer = new MutationObserver(() => {
+      setTheme(root.classList.contains('dark') ? 'dark' : 'light')
+    })
+    observer.observe(root, { attributes: true, attributeFilter: ['class'] })
+    return () => observer.disconnect()
+  }, [])
+
   function toggleTheme() {
     setTheme((current) => {
       const next = current === 'dark' ? 'light' : 'dark'

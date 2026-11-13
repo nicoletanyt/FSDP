@@ -296,7 +296,7 @@ export default function StudentAttendance() {
         desktop={desktop}
         actions={(
           <>
-            <Button variant="outline" nativeButton={false} render={<Link to="/timetable" />} className="h-10">
+            <Button variant="outline" nativeButton={false} render={<Link to="/classes" />} className="h-10">
               <Plus aria-hidden="true" /> Browse classes
             </Button>
             <Popover>

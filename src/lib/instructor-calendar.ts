@@ -1,6 +1,6 @@
 import type { StudentRank } from "./student-grades";
 
-export type EventType = "training" | "grading";
+export type EventType = "training" | "grading" | "seminar" | "workshop";
 export type ClassType = keyof typeof classTypes;
 export type CalendarEvent = {
     id: string;
@@ -85,7 +85,7 @@ export function subscribeInstructorPhotos(listener: () => void) {
     };
 }
 
-export async function prepareInstructorPhoto(file: File): Promise<string> {
+export async function prepareInstructorPhoto(file: File): Promise<Blob> {
     if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
         throw new Error("Choose a JPG, PNG or WebP image.");
     }
@@ -109,7 +109,9 @@ export async function prepareInstructorPhoto(file: File): Promise<string> {
         context.fillStyle = "#ffffff";
         context.fillRect(0, 0, 512, 512);
         context.drawImage(image, (image.naturalWidth - side) / 2, (image.naturalHeight - side) / 2, side, side, 0, 0, 512, 512);
-        return canvas.toDataURL("image/jpeg", 0.85);
+        return await new Promise<Blob>((resolve, reject) => {
+            canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error("Your browser could not prepare this photo. Please try again.")), "image/jpeg", 0.85);
+        });
     } finally {
         URL.revokeObjectURL(objectUrl);
     }
@@ -243,6 +245,9 @@ export const eventStyles = {
 };
 
 export function getEventStyle(event: Pick<CalendarEvent, "type" | "classType">) {
+    if (event.type === "seminar" || event.type === "workshop") {
+        return { ...eventStyles.training, label: event.type === "seminar" ? "Seminar" : "Workshop" };
+    }
     return event.type === "training" && event.classType
         ? { ...classTypes[event.classType], label: eventStyles.training.label }
         : eventStyles[event.type];
@@ -289,7 +294,9 @@ export function eventsForDate(date: Date): CalendarEvent[] {
 }
 
 export function formatTime(time: string) {
-    const [hours, minutes] = time.split(":").map(Number);
+    if (!/^\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/.test(time)) return time;
+    const [rawHours, minutes] = time.split(":").map(Number);
+    const hours = rawHours % 24;
     return `${hours % 12 || 12}:${String(minutes).padStart(2, "0")} ${hours >= 12 ? "PM" : "AM"}`;
 }
 
@@ -318,12 +325,12 @@ export function findCalendarEvent(id: string | undefined) {
     return date ? eventsForDate(date).find((event) => event.id === id) : undefined;
 }
 
-export function calendarHref(event: CalendarEvent) {
+export function calendarHref(event: Pick<CalendarEvent, "id" | "date">) {
     const params = new URLSearchParams({ date: dateKey(event.date), session: event.id });
     return `/instructor/calendar?${params}`;
 }
 
-export function studentDetailsHref(studentId: string, event?: CalendarEvent, tab?: "overview" | "sessions" | "grading") {
+export function studentDetailsHref(studentId: string, event?: Pick<CalendarEvent, "id" | "date">, tab?: "overview" | "sessions" | "grading") {
     const params = new URLSearchParams();
     if (event) {
         params.set("date", dateKey(event.date));

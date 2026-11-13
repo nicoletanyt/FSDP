@@ -42,9 +42,7 @@ export function StatusBadge({
 
 const riskLabels: Record<RiskLevel, { label: string; tone: BadgeTone }> = {
   healthy: { label: 'Healthy', tone: 'success' },
-  watch: { label: 'Watch', tone: 'warning' },
   at_risk: { label: 'At risk', tone: 'danger' },
-  critical: { label: 'Critical', tone: 'danger' },
 }
 
 export function RiskBadge({ level }: { level: RiskLevel }) {
@@ -120,5 +118,5 @@ const centreStatusLabels: Record<
 
 export function CentreStatusBadge({ status }: { status: CentreStatus }) {
   const config = centreStatusLabels[status]
-  return <StatusBadge tone={config.tone}>{config.label}</StatusBadge>
+  return <StatusBadge tone={config.tone} className={status === 'under_renovation' ? 'text-amber-800 dark:text-warning' : undefined}>{config.label}</StatusBadge>
 }

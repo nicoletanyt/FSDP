@@ -1,6 +1,6 @@
 import { monthsBetween, titleCase, todayIso, yearAgeFromIso } from './format'
 import { getGradeSyllabusItems } from './syllabus'
-import { UNRANKED, gradeTrackForAge, nextGrade } from './types'
+import { UNRANKED, gradeTrackForAge, nextGrade, targetGradeTrack } from './types'
 import type {
   AttendanceRecord,
   EligibilityAssessment,
@@ -22,6 +22,8 @@ export interface GradeRequirement {
   sessions?: number
   /** Minimum age (calendar-year, "by year"), where published. */
   minAge?: number
+  /** Maximum age (calendar-year): Junior Dan is for 14 and below. */
+  maxAge?: number
 }
 
 /**
@@ -30,8 +32,9 @@ export interface GradeRequirement {
  * months against 12th Kyu count from joining.
  *
  * Children's values come from the two children's sheets; adult values from the
- * adult sheet (revised January 2021). The adult sheet prints a minimum age on
- * the 1st Dan and 4th Dan lines and gates 2nd Kyu at 12.
+ * adult sheet (revised January 2021). The children's sheet gates 2nd Kyu at 12;
+ * the adult sheet prints a minimum age on 1st Dan and 4th Dan and limits Junior
+ * Dan to 14 and below.
  */
 export const gradingRequirements: Record<RankedGrade, GradeRequirement> = {
   // Children's grading — 12th Kyu (Red) to 2nd Kyu (Black-Silver)
@@ -52,7 +55,7 @@ export const gradingRequirements: Record<RankedGrade, GradeRequirement> = {
 
   // Adult grading — Blue (6th Kyu) to 4th Dan
   'Black-Gold (1st Kyu)': { minMonths: 9, sessions: 62 },
-  'Junior Dan': { minMonths: 9, sessions: 62 },
+  'Junior Dan': { minMonths: 9, sessions: 62, maxAge: 14 },
   '1st Dan': { minMonths: 9, sessions: 70, minAge: 15 },
   '2nd Dan': { minMonths: 18, sessions: 150 },
   '3rd Dan': { minMonths: 30, sessions: 240 },
@@ -67,10 +70,36 @@ const adultRequirements: Partial<Record<RankedGrade, GradeRequirement>> = {
   'Blue-Gold (5th Kyu)': { minMonths: 0, sessions: 24 },
   'Brown (4th Kyu)': { minMonths: 0, sessions: 32 },
   'Brown-Gold (3rd Kyu)': { minMonths: 6, sessions: 36 },
-  'Black (2nd Kyu)': { minMonths: 6, sessions: 56, minAge: 12 },
+  'Black (2nd Kyu)': { minMonths: 6, sessions: 56 },
 }
 
 const MEMBERSHIP_MONTHS = 3
+
+/** Grades an adult grading can award short of the full target (adult note 7). */
+const INTERMEDIATE_GRADES: Grade[] = [
+  'Green (8th Kyu)',
+  'Purple (7th Kyu)',
+  'Blue-Silver (6th Kyu)',
+  'Brown-Silver (4th Kyu)',
+  'Black-Silver (2nd Kyu)',
+]
+
+/**
+ * Adult note 7: an intermediate grade awarded at the previous Adult's Grading
+ * lets the candidate submit directly for the next one. No record says which
+ * grading awarded it, so it counts as adult when the student was 13 or older
+ * (by year) on their last-graded date.
+ */
+export function isAdultDirectEntry(
+  student: Pick<Student, 'currentGrade' | 'dateOfBirth' | 'lastGradedAt'>,
+): boolean {
+  return (
+    studentTrack(student) === 'adult' &&
+    INTERMEDIATE_GRADES.includes(student.currentGrade) &&
+    student.lastGradedAt !== null &&
+    yearAgeFromIso(student.dateOfBirth, student.lastGradedAt) >= 13
+  )
+}
 
 export function getGradeRequirement(
   grade: Grade,
@@ -124,7 +153,11 @@ export function evaluateEligibility(
       status: 'not_eligible',
     }
   }
-  const spec = getGradeRequirement(grade, track)
+  // A child whose next grade is off the children's ladder (Black-Silver) is
+  // measured against the adult sheet and must reach adult age first.
+  const targetTrack = targetGradeTrack(track, grade)
+  const crossover = targetTrack !== track
+  const spec = getGradeRequirement(grade, targetTrack)
   const sessionsById = new Map(sessions.map((session) => [session.id, session]))
   const gradeStart = student.lastGradedAt ?? student.joinedAt
   const months = monthsBetween(gradeStart)
@@ -157,6 +190,16 @@ export function evaluateEligibility(
     },
   ]
 
+  if (crossover) {
+    requirements.push({
+      key: 'adult-age',
+      label: 'Adult grading age (by year)',
+      actual: `${age} ${age === 1 ? 'year' : 'years'}`,
+      required: '13 years',
+      met: age >= 13,
+    })
+  }
+
   if (spec) {
     if (spec.minAge !== undefined) {
       requirements.push({
@@ -168,7 +211,28 @@ export function evaluateEligibility(
       })
     }
 
-    if (spec.minMonths > 0) {
+    if (spec.maxAge !== undefined) {
+      requirements.push({
+        key: 'max-age',
+        label: 'Maximum age',
+        actual: `${age} ${age === 1 ? 'year' : 'years'}`,
+        required: `${spec.maxAge} years`,
+        met: age <= spec.maxAge,
+      })
+    }
+
+    const directEntry = isAdultDirectEntry(student)
+    if (directEntry && (spec.minMonths > 0 || spec.sessions !== undefined)) {
+      requirements.push({
+        key: 'direct-entry',
+        label: 'Intermediate grade from last adult grading',
+        actual: 'Submit directly',
+        required: 'Submit directly',
+        met: true,
+      })
+    }
+
+    if (spec.minMonths > 0 && !directEntry) {
       requirements.push({
         key: 'time',
         label:
@@ -181,7 +245,7 @@ export function evaluateEligibility(
       })
     }
 
-    if (spec.sessions !== undefined) {
+    if (spec.sessions !== undefined && !directEntry) {
       requirements.push({
         key: 'sessions',
         label: 'Training sessions since last grading',
@@ -195,7 +259,7 @@ export function evaluateEligibility(
   // The club's rule: a student must have every technique in the target
   // grade's syllabus row signed off before they can be invited. Earlier rows
   // stay on record but are not re-checked.
-  const syllabus = getGradeSyllabusItems(grade, track)
+  const syllabus = getGradeSyllabusItems(grade, targetTrack)
   if (syllabus.length > 0) {
     const signed = new Set(
       signOffs

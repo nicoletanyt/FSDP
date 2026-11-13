@@ -3,10 +3,10 @@ import type { LucideIcon } from 'lucide-react'
 import {
   Building2,
   CalendarCheck,
-  FileBarChart,
   GraduationCap,
   LayoutDashboard,
   Menu,
+  Mail,
   UserCog,
 } from 'lucide-react'
 import { NavLink, useLocation } from 'react-router'
@@ -35,13 +35,6 @@ const groups: { label: string; items: NavItem[] }[] = [
       { to: '/admin', label: 'Overview', icon: LayoutDashboard, end: true },
       { to: '/admin/calendar', label: 'Calendar', icon: CalendarCheck },
       { to: '/admin/centres', label: 'Centres', icon: Building2 },
-    ],
-  },
-  {
-    label: 'Grading',
-    items: [
-      { to: '/admin/grading', label: 'Grading', icon: GraduationCap },
-      { to: '/admin/reports', label: 'Reports', icon: FileBarChart },
     ],
   },
 ]
@@ -112,7 +105,22 @@ export default function AdminMobileNav() {
             </div>
           ))}
 
-          <div className="border-t border-border pt-4">
+          <div className="space-y-1 border-t border-border pt-4">
+            <NavLink
+              to="/admin/grading"
+              onClick={() => setOpen(false)}
+              className={({ isActive }) =>
+                cn(
+                  'flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors',
+                  isActive
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                )
+              }
+            >
+              <GraduationCap className="size-4 shrink-0" aria-hidden="true" />
+              Grading
+            </NavLink>
             <NavLink
               to="/admin/instructors"
               onClick={() => setOpen(false)}
@@ -127,6 +135,11 @@ export default function AdminMobileNav() {
             >
               <UserCog className="size-4 shrink-0" aria-hidden="true" />
               Instructors
+            </NavLink>
+            <NavLink to="/admin/email-templates" onClick={() => setOpen(false)}
+              className={({ isActive }) => cn('flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors',
+                isActive ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground')}>
+              <Mail className="size-4 shrink-0" aria-hidden="true" />Email templates
             </NavLink>
           </div>
         </nav>
