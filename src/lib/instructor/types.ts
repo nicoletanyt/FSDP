@@ -111,6 +111,24 @@ export interface GradeTrackRow {
   track: GradeTrack
 }
 
+/** An instructor's endorsement of a student for their next grade. */
+export interface GradingEndorsement {
+  endorsedAt: string
+  endorsedBy: string | null
+}
+
+/** The student's next grade, whether they meet every requirement, and any endorsement for it. */
+export interface GradingEndorsementStatus {
+  targetGradeId: string | null
+  eligible: boolean
+  endorsement: GradingEndorsement | null
+}
+
+export interface EventEndorsement extends GradingEndorsement {
+  studentId: string
+  targetGradeId: string
+}
+
 export interface GradeRequirementRow {
   grade_id: GradeId
   track: GradeTrack

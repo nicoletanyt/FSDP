@@ -319,3 +319,13 @@ test('absent candidates are hidden from the checklist until the "Show absent" sw
   // Clicking the label text toggles the switch off again.
   assert.equal(result.rehidden, result.hidden.columns.length)
 })
+
+test('endorsed candidates show an endorsed icon beside their name in the checklist', async () => {
+  const result = await inPage(1440, `${checklistPath}&fixtureData=grading-endorsed`, async (w, wait) => {
+    await wait(300)
+    const headers = [...w.document.querySelectorAll('thead th[scope="col"]')].slice(1)
+    return headers.map(cell => cell.querySelector('[data-endorsed]')?.getAttribute('aria-label') ?? null)
+  })
+  assert.match(result[0] ?? '', /^Endorsed by Fixture Sensei · /)
+  assert.ok(result.slice(1).every(label => label === null), JSON.stringify(result))
+})

@@ -6,7 +6,8 @@ import { PGlite } from '@electric-sql/pglite'
 const uuid = n => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
 const migration = name => new URL(`../supabase/migrations/${name}.sql`, import.meta.url)
 const year = new Date().getFullYear()
-const [childUser, teenUser, adultUser, blackUser, silverUser, directUser, grownUser] = [1, 2, 3, 4, 5, 6, 7].map(uuid)
+const [childUser, teenUser, adultUser, blackUser, silverUser, directUser, grownUser, instructorUser] = [1, 2, 3, 4, 5, 6, 7, 8].map(uuid)
+const instructor = uuid(50)
 const [centre, child, teen, adult, black, silver, direct, grown, classEvent, gradingEvent] = [20, 31, 32, 33, 34, 35, 36, 37, 100, 101].map(uuid)
 
 test('grading eligibility follows the published sheets (offline PostgreSQL)', async suite => {
@@ -36,7 +37,7 @@ test('grading eligibility follows the published sheets (offline PostgreSQL)', as
       await db.exec(await readFile(migration(name), 'utf8'))
     }
     await db.exec((await readFile(migration('20261104055444_official_grading_schedule'), 'utf8')).split('-- Keep the send history')[0])
-    for (const [id, role] of [[childUser, 'student'], [teenUser, 'student'], [adultUser, 'student'], [blackUser, 'student'], [silverUser, 'student'], [directUser, 'student'], [grownUser, 'student']]) {
+    for (const [id, role] of [[childUser, 'student'], [teenUser, 'student'], [adultUser, 'student'], [blackUser, 'student'], [silverUser, 'student'], [directUser, 'student'], [grownUser, 'student'], [instructorUser, 'instructor']]) {
       await sql('insert into auth.users(id,email,raw_app_meta_data) values($1,$2,$3)', [id, `${id}@example.test`, JSON.stringify({ role })])
     }
     // Pre-fix values: adult 2nd Kyu gated at 12 and Junior Dan open to every age.
@@ -64,6 +65,9 @@ test('grading eligibility follows the published sheets (offline PostgreSQL)', as
     await db.exec(await readFile(migration('20261112160000_grading_eligibility_sheet'), 'utf8'))
     await db.exec(await readFile(migration('20261112170000_grading_adult_crossover'), 'utf8'))
     await db.exec(await readFile(migration('20261112180000_grading_intermediate_direct_entry'), 'utf8'))
+    await db.exec(await readFile(migration('20261113100000_grading_endorsements'), 'utf8'))
+    await db.exec(await readFile(migration('20261113110000_grading_endorsements_surrogate_key'), 'utf8'))
+    await sql("insert into public.instructors(id,user_id,first_name,last_name,email) values($1,$2,'Ada','Sensei','ada@example.test')", [instructor, instructorUser])
 
     await suite.test('sheet values are written to grade_requirements', async () => {
       const { rows } = await sql("select grade_id, min_age_years, max_age_years from public.grade_requirements where track='adult' and grade_id in ('black-2nd-kyu','junior-dan') order by grade_id")
@@ -134,6 +138,41 @@ test('grading eligibility follows the published sheets (offline PostgreSQL)', as
       const own = await as(teenUser, async () => (await sql('select target_grade_id, key from public.my_grading_readiness()')).rows)
       assert.equal(own[0].target_grade_id, 'junior-dan')
       await assert.rejects(as(teenUser, () => sql('select * from public.student_grading_readiness($1)', [adult])), { code: '42501' })
+    })
+
+    await suite.test('instructors endorse only students who meet every requirement, once per target grade', async () => {
+      const status = student => as(instructorUser, async () => (await sql('select public.grading_endorsement_status($1) as data', [student])).rows[0].data)
+      // Endorsements must persist between calls, so these run in committed transactions.
+      const endorse = async (student, grade) => {
+        await db.exec('begin; set local role authenticated;')
+        try {
+          await sql("select set_config('request.jwt.claim.sub',$1,true)", [instructorUser])
+          const data = (await sql('select public.endorse_grading_student($1,$2) as data', [student, grade])).rows[0].data
+          await db.exec('commit')
+          return data
+        } catch (error) { await db.exec('rollback'); throw error }
+      }
+      // The child meets every requirement for Red (12th Kyu).
+      assert.deepEqual(await status(child), { target_grade_id: 'red-12th-kyu', eligible: true, endorsement: null })
+      // Not eligible: the teen lacks months/sessions for Junior Dan.
+      assert.equal((await status(teen)).eligible, false)
+      await assert.rejects(endorse(teen, 'junior-dan'), /does not meet every grading requirement/)
+      // A stale target grade is refused.
+      await assert.rejects(endorse(child, 'black-2nd-kyu'), /next grade has changed/)
+      const endorsed = await endorse(child, 'red-12th-kyu')
+      assert.equal(endorsed.endorsement.endorsed_by, 'Ada Sensei')
+      assert.ok(endorsed.endorsement.endorsed_at)
+      const again = await endorse(child, 'red-12th-kyu')
+      assert.equal(again.endorsement.endorsed_at, endorsed.endorsement.endorsed_at, 'the first endorsement is kept')
+      // Students cannot read or create endorsements.
+      await assert.rejects(as(childUser, () => sql('select public.endorse_grading_student($1,$2)', [child, 'red-12th-kyu'])), /Only instructors/)
+      await assert.rejects(as(childUser, () => sql('select public.grading_endorsement_status($1)', [child])), /Only instructors/)
+      // The grading checklist sees endorsements matching each application's target grade.
+      await sql("insert into public.grading_applications(student_id,grading_event_id,target_grade_id) values($1,$2,'red-12th-kyu')", [child, gradingEvent])
+      const listed = await as(instructorUser, async () => (await sql('select public.grading_event_endorsements($1) as data', [gradingEvent])).rows[0].data)
+      assert.deepEqual(listed.map(row => [row.student_id, row.target_grade_id, row.endorsed_by]), [[child, 'red-12th-kyu', 'Ada Sensei']])
+      await sql('delete from public.grading_applications where student_id = $1', [child])
+      await sql('delete from public.grading_endorsements where student_id = $1', [child])
     })
 
     await suite.test('attended classes since the last grading count toward sessions', async () => {

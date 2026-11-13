@@ -2,7 +2,7 @@ import { parseEntityId, parseInstructorRow, timestampMilliseconds } from './adap
 import { InstructorDataError } from './errors'
 import type {
   AssessmentDetail, AttendanceSaveResult, AttendanceSnapshot, CalendarEntry, CentreRow, ClassTypeRow, EventRow, EventStudentRow,
-  GradeRequirementRow, GradeRow, GradeTrackRow, GradingApplicationRow, GradingRow,
+  EventEndorsement, GradeRequirementRow, GradeRow, GradeTrackRow, GradingApplicationRow, GradingEndorsement, GradingEndorsementStatus, GradingRow,
   InstructorAvailabilityRow, Page, RosterEntry, StudentAttendanceSummary,
   StudentDetail, StudentDirectory, StudentEntry, StudentHistoryEntry, StudentRow,
   SyllabusItemRow, TechniqueSignOffEntry, TechniqueSignOffRow, AssessmentSnapshot, SessionSaveResult,
@@ -133,6 +133,24 @@ export function decodeAttendanceSave(value: unknown): AttendanceSaveResult {
   const result = { requestId: uuid(source.requestId), eventId: eventId(source.eventId), attendance: array(source.attendance, decodeAttendanceSnapshot) }
   if (new Set(result.attendance.map(item => item.studentId)).size !== result.attendance.length) return invalid()
   return result
+}
+
+const decodeEndorsement = (value: unknown): GradingEndorsement => {
+  const source = object(value)
+  return { endorsedAt: timestamp(source.endorsed_at), endorsedBy: nullable(text)(source.endorsed_by ?? null) }
+}
+
+export function decodeEndorsementStatus(value: unknown): GradingEndorsementStatus {
+  const source = object(value)
+  return { targetGradeId: nullable(text)(source.target_grade_id ?? null), eligible: boolean(source.eligible),
+    endorsement: source.endorsement == null ? null : decodeEndorsement(source.endorsement) }
+}
+
+export function decodeEventEndorsements(value: unknown): EventEndorsement[] {
+  return array(value, item => {
+    const source = object(item)
+    return { ...decodeEndorsement(source), studentId: text(source.student_id), targetGradeId: text(source.target_grade_id) }
+  })
 }
 
 export const decodeStudent = row<StudentRow>({

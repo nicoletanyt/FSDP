@@ -7,6 +7,7 @@ import {
   decodeSummary, decodeSyllabusItem, decodeTechniqueSignOff, array, decodeAttendanceSave, decodeAttendanceSnapshot,
   decodeSessionSave, decodeAssessmentSnapshot,
   decodeGradingBatch, decodeGradingSignature, decodeAvailabilitySave, decodeAvailabilitySnapshot,
+  decodeEndorsementStatus, decodeEventEndorsements,
 } from './decoders'
 import { InstructorDataError, toInstructorDataError } from './errors'
 import { createInstructorProfileApi } from './profile'
@@ -505,6 +506,24 @@ export function createInstructorApi(client: InstructorClient) {
     },
 
     // One grading day with a session per target grade. Panel members and admins only.
+    async getEndorsementStatus(id: StudentId, signal?: AbortSignal) {
+      const studentId = parseEntityId(id, 'student')
+      return decodeEndorsementStatus(await rpc('grading_endorsement_status', { target_student: studentId }, signal,
+        'Unable to load the endorsement. Please try again.'))
+    },
+
+    async endorseStudent(id: StudentId, targetGradeId: string) {
+      const studentId = parseEntityId(id, 'student')
+      return decodeEndorsementStatus(await rpc('endorse_grading_student', { target_student: studentId, expected_grade: targetGradeId },
+        undefined, 'Unable to endorse this student. Please try again.'))
+    },
+
+    async getEventEndorsements(id: string, signal?: AbortSignal) {
+      const eventId = parseEntityId(id, 'event')
+      return decodeEventEndorsements(await rpc('grading_event_endorsements', { target_event: eventId }, signal,
+        'Unable to load endorsements. Please try again.'))
+    },
+
     async getGradingDay(id: string, signal?: AbortSignal) {
       const eventId = parseEntityId(id, 'event')
       await getCurrentInstructor(signal)

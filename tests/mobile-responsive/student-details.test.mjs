@@ -450,3 +450,36 @@ test('the student avatar shows initials above the student name', async t => {
     assert.equal(result.fits, true)
   })
 })
+
+test('an Endorse button appears only once every requirement is met, and endorsing records who endorsed', async () => {
+  const eligible = await inDetail(1280, async (w, wait) => {
+    const d = w.document
+    await wait(300)
+    const card = [...d.querySelectorAll('[aria-label="Next grading"]')].find(e => e.getClientRects().length)
+    const button = card?.querySelector('[data-endorse]')
+    const before = { button: button?.textContent.trim() ?? null, endorsement: !!card?.querySelector('[data-endorsement]') }
+    const dialogButton = text => [...(d.querySelector('[data-endorse-dialog]')?.querySelectorAll('button') ?? [])].find(e => e.textContent.trim() === text)
+    // Clicking Endorse only opens the confirmation; Cancel sends nothing.
+    button?.click(); await wait(300)
+    const dialog = { title: d.querySelector('[data-endorse-dialog] h2')?.textContent.trim() ?? null, requests: w.endorseRequestsFixture.length }
+    dialogButton('Cancel')?.click(); await wait(300)
+    const cancelled = { open: !!d.querySelector('[data-endorse-dialog]'), requests: w.endorseRequestsFixture.length, button: !!card?.querySelector('[data-endorse]') }
+    card?.querySelector('[data-endorse]')?.click(); await wait(300)
+    dialogButton('Confirm endorsement')?.click(); await wait(500)
+    return { before, dialog, cancelled, after: card?.querySelector('[data-endorsement]')?.textContent.trim() ?? null,
+      closed: !d.querySelector('[data-endorse-dialog]'), buttonGone: !card?.querySelector('[data-endorse]'), requests: w.endorseRequestsFixture.map(r => r.targetGradeId) }
+  }, { query: '?fixtureData=endorse-eligible' })
+  assert.deepEqual(eligible.before, { button: 'Endorse', endorsement: false })
+  assert.match(eligible.dialog.title ?? '', /^Endorse .+ for Stored next grade\?$/)
+  assert.equal(eligible.dialog.requests, 0)
+  assert.deepEqual(eligible.cancelled, { open: false, requests: 0, button: true })
+  assert.equal(eligible.closed, true)
+  assert.match(eligible.after ?? '', /^Endorsed by Fixture Sensei · /)
+  assert.equal(eligible.buttonGone, true)
+  assert.deepEqual(eligible.requests, ['stored-target-grade'])
+  const ineligible = await inDetail(1280, async (w, wait) => {
+    await wait(300)
+    return { buttons: w.document.querySelectorAll('[data-endorse]').length }
+  })
+  assert.equal(ineligible.buttons, 0)
+})

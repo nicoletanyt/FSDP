@@ -18,7 +18,7 @@ export interface ChecklistItem {
 // Students across, techniques down. Each category is named once above its
 // techniques, and comments are the last row. The technique column stays put
 // while the table scrolls sideways.
-export default function GradingChecklistTable<S extends ChecklistStudent, I extends ChecklistItem>({ students, items, cell, comment, headerBadge, columnDisabled, label = 'Grading checklist table' }: {
+export default function GradingChecklistTable<S extends ChecklistStudent, I extends ChecklistItem>({ students, items, cell, comment, headerBadge, nameAdornment, columnDisabled, label = 'Grading checklist table' }: {
   label?: string
   students: S[]
   items: I[]
@@ -26,6 +26,8 @@ export default function GradingChecklistTable<S extends ChecklistStudent, I exte
   comment: (student: S) => ReactNode
   /** Optional pill above a student's candidate number (e.g. Absent). */
   headerBadge?: (student: S) => ReactNode
+  /** Optional icon after a student's name in the header (e.g. Endorsed). */
+  nameAdornment?: (student: S) => ReactNode
   /** Greys out a student's whole column; the cell renderers disable its inputs. */
   columnDisabled?: (student: S) => boolean
 }) {
@@ -43,7 +45,7 @@ export default function GradingChecklistTable<S extends ChecklistStudent, I exte
                 className={`min-w-36 border-b border-l px-3 py-3 text-center align-bottom font-medium ${muted(student)}`}>
                 {headerBadge?.(student)}
                 <span className="block text-xs tabular-nums text-muted-foreground" data-candidate-number>{student.candidate_number}</span>
-                {student.name}
+                <span className="inline-flex items-center justify-center gap-1">{student.name}{nameAdornment?.(student)}</span>
               </th>
             ))}
           </tr>

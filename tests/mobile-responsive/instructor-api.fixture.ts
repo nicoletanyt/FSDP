@@ -11,6 +11,7 @@ import { createDirectoryFixtureReader } from './instructor-directory.fixture'
 import { createDetailFixtureReads } from './instructor-detail.fixture'
 import { createGradingFixtureReads } from './instructor-grading.fixture'
 import { createGradingBatchFixture, fixtureGradingSessions } from './instructor-grading-batches.fixture'
+import { createEndorsementFixture } from './instructor-endorsements.fixture'
 import { createSessionFixtureReads } from './instructor-session.fixture'
 import { createSessionWriteFixture } from './instructor-session-writes.fixture'
 import { attendanceEditable, attendanceSnapshot, editableAttendanceRows } from '../../src/lib/instructor/attendance'
@@ -170,6 +171,7 @@ export function createCalendarFixtureApi(account = 'audit'): InstructorApi {
     ...createSessionFixtureReads(mode, (...args) => api.getEvent(...args), (...args) => api.getRoster(...args), sessionWrites),
     ...sessionWrites.methods,
     ...createGradingBatchFixture(account, mode, () => api),
+    ...createEndorsementFixture(mode, () => api),
     async saveAttendance(input) {
       attendanceRequests.push(structuredClone(input))
       await new Promise(resolve => setTimeout(resolve, mode === 'attendance-slow' ? 1600 : 150))

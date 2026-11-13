@@ -1,10 +1,12 @@
 import { useCallback, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useParams, useSearchParams } from "react-router";
-import { CalendarDays, Clock3, MapPin, UserX, Users } from "lucide-react";
+import { BadgeCheck, CalendarDays, Clock3, MapPin, UserX, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { historyDate } from "@/lib/instructor/student-detail";
 import DatabaseGradeBadge from "@/components/instructor/DatabaseGradeBadge";
 import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
 import GradingSignatureDialog from "@/components/instructor/GradingSignatureDialog";
@@ -61,6 +63,11 @@ function GradingTable({
         .sort((a, b) => gradeOrder.get(a.grade_id)! - gradeOrder.get(b.grade_id)! || a.category.localeCompare(b.category)
             || a.sort_order - b.sort_order || a.id.localeCompare(b.id));
     const [signatureOpen, setSignatureOpen] = useState(false);
+    // Endorsements are informational: a failed read leaves the checklist usable.
+    const api = useInstructorApi();
+    const loadEndorsements = useCallback((signal: AbortSignal) => api.getEventEndorsements(session.event.id, signal), [api, session.event.id]);
+    const endorsementQuery = useInstructorQuery((userId) => keys.eventEndorsements(userId, session.event.id), loadEndorsements, times.roster);
+    const endorsements = new Map((endorsementQuery.data ?? []).map((item) => [`${item.studentId}:${item.targetGradeId}`, item]));
     const batch = useInstructorGradingBatch({ session, entries, identity, sessionId, candidateGrades, techniques });
     const canSave = Boolean(gradingSession && batch.ready && batch.students.length && batch.items.length && !batch.pending && !batch.readOnly && !batch.needsReload);
     const facts = [
@@ -174,6 +181,21 @@ function GradingTable({
                                 />
                             )}
                             columnDisabled={(student) => absent.has(student.student_id)}
+                            nameAdornment={(student) => {
+                                const endorsement = endorsements.get(`${student.student_id}:${student.target_grade_id}`);
+                                if (!endorsement) return null;
+                                const label = `Endorsed${endorsement.endorsedBy ? ` by ${endorsement.endorsedBy}` : ""} · ${historyDate(endorsement.endorsedAt)}`;
+                                return (
+                                    <TooltipProvider>
+                                        <Tooltip>
+                                            <TooltipTrigger render={<span role="img" aria-label={label} data-endorsed className="inline-flex text-emerald-700 dark:text-emerald-400" />}>
+                                                <BadgeCheck aria-hidden="true" className="size-4" />
+                                            </TooltipTrigger>
+                                            <TooltipContent>{label}</TooltipContent>
+                                        </Tooltip>
+                                    </TooltipProvider>
+                                );
+                            }}
                             headerBadge={(student) => absent.has(student.student_id) && (
                                 <span className="mb-1 inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-2xs font-medium text-destructive" data-absent>
                                     <UserX aria-hidden="true" className="size-3" />Absent

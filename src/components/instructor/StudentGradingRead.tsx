@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Accordion as AccordionPrimitive } from "@base-ui/react/accordion";
 import { Checkbox as CheckboxPrimitive } from "@base-ui/react/checkbox";
 import {
+    BadgeCheck,
     Check,
     CheckCircle2,
     ChevronDown,
@@ -11,6 +12,10 @@ import {
 } from "lucide-react";
 import { cn } from "cn";
 import { Button } from "@/components/ui/button";
+import {
+    AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+    AlertDialogFooter, AlertDialogHeader, AlertDialogMedia, AlertDialogTitle, AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Card, CardContent } from "@/components/ui/card";
 import GradeBadge from "./DatabaseGradeBadge";
 import InstructorDataStatus from "./InstructorDataStatus";
@@ -27,6 +32,7 @@ import type {
     StudentHistoryEntry,
 } from "@/lib/instructor/types";
 import type { QueryState } from "@/hooks/use-instructor-data";
+import { useGradingEndorsement } from "@/hooks/use-grading-endorsement";
 
 type GradingView = ReturnType<typeof studentGrading>;
 type Section =
@@ -97,6 +103,54 @@ function ReadinessStatus({ view }: { view: GradingView }) {
         >
             {view.status}
         </span>
+    );
+}
+
+// Shown once the server confirms every grading requirement is met; after
+// endorsing it records who endorsed the student and when.
+function Endorsement({ detail, view }: { detail: StudentDetail; view: GradingView }) {
+    const { status, endorse, pending, error, clearError } = useGradingEndorsement(detail.student.id);
+    const [open, setOpen] = useState(false);
+    if (status.status !== "success") return null;
+    const { endorsement, eligible, targetGradeId } = status.data;
+    if (!targetGradeId) return null;
+    if (endorsement) {
+        return (
+            <p role="status" data-endorsement className={cn("detail-meta flex items-center gap-2 text-sm font-medium", success)}>
+                <BadgeCheck aria-hidden="true" className="size-4 shrink-0" />
+                Endorsed{endorsement.endorsedBy ? ` by ${endorsement.endorsedBy}` : ""} · {historyDate(endorsement.endorsedAt)}
+            </p>
+        );
+    }
+    if (!eligible) return null;
+    const name = [detail.student.first_name, detail.student.last_name].filter(Boolean).join(" ") || "this student";
+    const grade = view.target?.id === targetGradeId ? view.target.label : "their next grade";
+    return (
+        <AlertDialog open={open} onOpenChange={(value) => { if (!pending) { setOpen(value); clearError(); } }}>
+            <AlertDialogTrigger render={<Button size="touch" className="w-full gap-2" data-endorse />}>
+                <BadgeCheck aria-hidden="true" />
+                Endorse
+            </AlertDialogTrigger>
+            <AlertDialogContent className="data-[size=default]:sm:max-w-md" data-endorse-dialog>
+                <AlertDialogHeader>
+                    <AlertDialogMedia className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                        <BadgeCheck aria-hidden="true" />
+                    </AlertDialogMedia>
+                    <AlertDialogTitle>Endorse {name} for {grade}?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        Your name and today’s date are recorded with the endorsement and shown on the grading checklist. It can’t be undone here.
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+                <AlertDialogFooter>
+                    <AlertDialogCancel className="min-h-11" disabled={pending}>Cancel</AlertDialogCancel>
+                    <AlertDialogAction disabled={pending} className="min-h-11"
+                        onClick={() => void endorse().then((saved) => { if (saved) setOpen(false); })}>
+                        {pending ? "Endorsing…" : "Confirm endorsement"}
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
     );
 }
 
@@ -460,6 +514,7 @@ export default function StudentGradingRead({
                         </div>
                         <ReadinessProgress view={view} />
                         <MissingGradingData view={view} />
+                        <Endorsement detail={detail} view={view} />
                         {title === "Grading eligibility" ? (
                             <>
                                 <RequirementRows view={view} />
