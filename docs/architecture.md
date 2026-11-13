@@ -37,6 +37,7 @@
 | Student directory, filters, track | `src/pages/Instructor/InstructorStudents.tsx`, `src/lib/instructor/directory.ts` |
 | Student detail, contacts, history | `src/pages/Instructor/InstructorStudentDetails.tsx`, `src/components/instructor/StudentSessionHistory.tsx`, `src/lib/instructor/student-detail.ts` |
 | Grade badge, eligibility, syllabus | `src/components/instructor/DatabaseGradeBadge.tsx`, `src/components/instructor/StudentGradingRead.tsx`, `src/lib/instructor/grading.ts` |
+| Student dashboard grading-application tile | `src/hooks/use-dashboard-grading.ts`, `src/lib/dashboard-grading.ts` — reads caller-owned drafts and linked-student applications; deduplicates checkout retries and refreshes on page entry/focus. Other dashboard mock metrics are unchanged. |
 | Reports and assessment | `src/pages/Instructor/InstructorStudentReports.tsx`, `src/pages/Instructor/InstructorGradingAssessment.tsx`, `src/components/instructor/ReportEditor.tsx`, `src/lib/instructor/session-reads.ts`, `src/hooks/use-instructor-session-save.ts`, `src/lib/instructor/session-writes.ts` |
 | QR check-in / kiosk | `src/pages/Instructor/InstructorCheckIn.tsx`, `src/components/instructor/CheckInScanner.tsx`, `src/hooks/use-qr-camera.ts`, `src/lib/instructor-check-in.ts` |
 | Instructor profile, photo, password | `src/pages/Instructor/InstructorProfile.tsx`, `src/components/ui/avatar.tsx`, `src/lib/instructor-calendar.ts` |

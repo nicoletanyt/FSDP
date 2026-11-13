@@ -10,11 +10,13 @@ export async function confirmGradingPreview(session: Stripe.Checkout.Session) {
     !session.client_reference_id || session.metadata.grading_preview_user_id !== session.client_reference_id) {
     throw new Error('Invalid grading preview payment.')
   }
-  const { data, error } = await adminClient().from('grading_application_drafts')
-    .update({ status: 'preview_paid', updated_at: new Date().toISOString() })
-    .eq('id', draft).eq('user_id', session.client_reference_id)
-    .eq('stripe_session_id', session.id).eq('base_fee_cents', session.amount_total!)
-    .eq('target_grade_id', session.metadata.target_grade_id ?? '').select('id').maybeSingle()
+  const intent = typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id ?? null
+  const { data, error } = await adminClient().rpc('finalize_grading_preview_payment', {
+    draft, owner_user: session.client_reference_id, stripe_session: session.id,
+    paid_amount: session.amount_total, paid_currency: session.currency,
+    target_grade: session.metadata.target_grade_id ?? '', stripe_live: session.livemode,
+    payment_intent: intent,
+  })
   if (error) throw error
   if (!data) throw new Error('Grading preview does not match a saved draft.')
   return true

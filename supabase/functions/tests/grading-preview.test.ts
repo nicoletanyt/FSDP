@@ -5,7 +5,7 @@ import { cryptoProvider, getStripe } from '../_shared/stripe.ts'
 
 Deno.test('grading preview is test-only, database-priced, account-scoped, and never writes eligibility records', async (test) => {
   const env = { APP_URL: 'http://localhost:5173', SUPABASE_URL: 'https://example.supabase.co',
-    SUPABASE_ANON_KEY: 'test_anon', SUPABASE_SERVICE_ROLE_KEY: 'test_service', STRIPE_SECRET_KEY: 'sk_test_unit_test' }
+    SUPABASE_ANON_KEY: 'test_anon', SUPABASE_SERVICE_ROLE_KEY: 'test_service', STRIPE_SECRET_KEY: 'sk_test_unit_test', STRIPE_WEBHOOK_SECRET: 'whsec_unit_test' }
   const previous = new Map(Object.keys(env).map((key) => [key, Deno.env.get(key)]))
   for (const [key, value] of Object.entries(env)) Deno.env.set(key, value)
   const original = globalThis.fetch
@@ -23,6 +23,16 @@ Deno.test('grading preview is test-only, database-priced, account-scoped, and ne
     const url = new URL(request.url)
     if (url.pathname === '/auth/v1/user') return Response.json({ id: user })
     if (url.pathname === '/rest/v1/users') return Response.json({ role: 'student' })
+    if (url.pathname === '/rest/v1/rpc/finalize_grading_preview_payment') {
+      const body = await request.json()
+      assert.equal(body.owner_user, user)
+      assert.equal(body.draft, draftId)
+      assert.equal(body.stripe_session, 'cs_test_preview')
+      assert.equal(body.paid_amount, 5500)
+      assert.equal(body.stripe_live, false)
+      draft = { ...draft, status: 'pending_review' }
+      return Response.json('00000000-0000-4000-8000-000000000005')
+    }
     if (url.pathname === '/rest/v1/grading_application_drafts') {
       if (failSave) return Response.json({ message: 'Draft storage unavailable' }, { status: 500 })
       if (request.method === 'POST') {
@@ -33,6 +43,7 @@ Deno.test('grading preview is test-only, database-priced, account-scoped, and ne
         draft = { ...draft, ...(await request.json()) }
         return Response.json({ id: draftId })
       }
+      if (url.searchParams.has('status')) return Response.json(draft && ['preview_paid', 'pending_review'].includes(String(draft.status)) ? { id: draftId } : null)
       return Response.json(draft)
     }
     if (url.pathname.startsWith('/rest/v1/')) {
@@ -92,9 +103,23 @@ Deno.test('grading preview is test-only, database-priced, account-scoped, and ne
       assert.equal((await (await handleRequest(request(status))).json()).paid, false)
       paid = true
       assert.equal((await (await handleRequest(request(status))).json()).paid, true)
-      assert.equal(draft?.status, 'preview_paid')
+      assert.equal(draft?.status, 'pending_review')
       sessionUser = nonce
       assert.equal((await handleRequest(request(status))).status, 404)
+    })
+    await test.step('already-paid grades cannot start another checkout', async () => {
+      assert.equal((await handleRequest(request({ ...body, request_id: user }))).status, 409)
+      assert.equal(creates.length, 1)
+    })
+    await test.step('verified paid webhooks persist through the same receipt transaction', async () => {
+      sessionUser = user
+      const payload = JSON.stringify({ id: 'evt_receipt', type: 'checkout.session.completed', livemode: false,
+        data: { object: { id: 'cs_test_preview', mode: 'payment', payment_status: 'paid',
+          metadata: { grading_preview: 'true', grading_draft_id: draftId } } } })
+      const signature = await getStripe().webhooks.generateTestHeaderStringAsync({ payload, secret: 'whsec_unit_test', cryptoProvider })
+      assert.equal((await webhook(new Request('http://localhost', { method: 'POST', body: payload,
+        headers: { 'stripe-signature': signature } }))).status, 200)
+      assert.equal(draft?.status, 'pending_review')
     })
     await test.step('a database save failure cannot redirect to Stripe with an unsaved form', async () => {
       failSave = true

@@ -362,13 +362,19 @@ session, **Proceed to Payment** offers a clearly labelled Stripe test checkout
 for the next grade's base fee. The server independently resolves the signed-in
 student's next grade and price, rejects live secret keys and verifies return
 sessions against their owner. These preview sessions never create formal
-applications, payment records, membership activation or training records.
+applications, real-money payment records, membership activation or training records.
 Preview checkout now saves the form to `grading_application_drafts` before
 redirecting. The row contains the authenticated owner, student, current/target
 grades, track, fee, request ID and Stripe session. Verified preview payments
-update only its `preview_paid` status; formal applications remain separate.
+atomically create a `grading_payment_receipts` record and move the request to
+`pending_review`. The dashboard shows “payment confirmed — awaiting dojo review”,
+not an unpaid draft. These receipts retain `livemode=false`; they are not counted
+as real-money payments or accepted grading-event applications. A paid request
+blocks another checkout for the same target grade. Legacy `preview_paid` flags
+must be reconciled against Stripe before they can claim a saved receipt.
 Saved drafts reload on `/grading`. Owners and administrators can read drafts;
 only server code can write them. Apply
-`20261113135904_grading_application_drafts.sql`, deploy both
+`20261113135904_grading_application_drafts.sql` and
+`20261113144249_grading_payment_receipts.sql`, deploy both
 `create-grading-checkout` and `stripe-webhook`, and rebuild the frontend with
 the test publishable key. Never enter real card information in test mode.

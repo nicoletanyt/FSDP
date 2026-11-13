@@ -212,17 +212,18 @@ test('Proceed to Payment opens Stripe test checkout without an eligible formal s
 
 test('test success is verified without claiming a formal application was submitted', async () => {
   await open(390, '?empty=1&appRoute=' + encodeURIComponent('/grading?checkout=test-success&session_id=cs_test_preview'))
-  await until(`document.body.textContent.includes('Payment preview completed.')`)
-  assert.match(await evaluate(`document.body.textContent`), /no formal grading application was submitted/)
+  await until(`document.body.textContent.includes('Payment confirmed and recorded.')`)
+  assert.match(await evaluate(`document.body.textContent`), /awaiting dojo eligibility review/)
   assert.equal(await evaluate(`document.body.textContent.includes('Application submitted:')`), false)
-  await until(`document.body.textContent.includes('Application draft saved:')`)
-  assert.match(await evaluate(`document.body.textContent`), /Your application draft has been saved/)
+  await until(`document.body.textContent.includes('Payment confirmed:')`)
+  assert.equal(await evaluate(`Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Payment Confirmed')).disabled`), true)
 })
 
-test('previously saved application drafts reload from the database on a fresh visit', async () => {
+test('previously recorded payments reload as paid and prevent repeat payment', async () => {
   await open(390, '?empty=1&savedDraft=1&appRoute=%2Fgrading')
-  await until(`document.body.textContent.includes('Application draft saved:')`)
-  assert.match(await evaluate(`document.body.textContent`), /Blue-Gold \(5th Kyu\).*Payment preview completed/)
+  await until(`document.body.textContent.includes('Payment confirmed:')`)
+  assert.match(await evaluate(`document.body.textContent`), /Blue-Gold \(5th Kyu\).*awaiting dojo eligibility review/)
+  assert.equal(await evaluate(`Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Payment Confirmed')).disabled`), true)
 })
 
 test('test checkout errors preserve a retry without pretending payment succeeded', async () => {

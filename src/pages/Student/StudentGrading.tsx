@@ -11,7 +11,7 @@ import { gradingProgression } from '@/lib/grading-progression'
 import { getGradingQuote, getGradingCheckoutUrl, getGradingTestCheckoutUrl, gradingCheckoutRequest, type GradingCheckoutOption } from '@/lib/grading-checkout'
 
 type Readiness = { target_grade_id: string; key: string; label: string; actual: string; required: string; met: boolean }
-type ApplicationDraft = { id: string; target_grade_id: string; status: string; created_at: string }
+type ApplicationDraft = { id: string; target_grade_id: string; status: string; created_at: string; base_fee_cents: number }
 
 export default function GradingApplication() {
   const { profile } = useAuth()
@@ -29,6 +29,10 @@ export default function GradingApplication() {
   const submitting = useRef(false)
   const testRequestId = useRef(crypto.randomUUID())
   const targetBelt = progression?.target?.id ?? ''
+  const targetDrafts = drafts.filter((draft) => draft.target_grade_id === targetBelt)
+  const paidRequest = targetDrafts.find((draft) => draft.status === 'pending_review')
+  const verifyingRequest = targetDrafts.find((draft) => draft.status === 'preview_paid')
+  const savedDraft = paidRequest ?? verifyingRequest ?? targetDrafts[0]
   const studentName = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ')
   const available = options.filter((option) => !option.applied && option.target_grade === targetBelt)
   const matching = available.filter((option) => option.target_grade === targetBelt)
@@ -36,13 +40,13 @@ export default function GradingApplication() {
   const selectedRule = Boolean(selected)
   const checks = readiness.filter((check) => check.target_grade_id === targetBelt)
   const isEligible = Boolean(selected)
-  const testCheckout = !selected && Boolean(progression?.target && progression.feeCents) &&
+  const testCheckout = !selected && !paidRequest && !verifyingRequest && Boolean(progression?.target && progression.feeCents) &&
     (import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? '').startsWith('pk_test_') &&
     !options.some((option) => option.applied && option.target_grade === targetBelt)
-  const baseFee = (selected?.base_amount ?? 0) / 100
+  const baseFee = (paidRequest?.base_fee_cents ?? selected?.base_amount ?? 0) / 100
   const lateFee = (selected?.late_amount ?? 0) / 100
   const isLateSubmission = lateFee > 0
-  const totalFee = (selected?.total_amount ?? (testCheckout ? progression?.feeCents : 0) ?? 0) / 100
+  const totalFee = (paidRequest?.base_fee_cents ?? selected?.total_amount ?? (testCheckout ? progression?.feeCents : 0) ?? 0) / 100
   const testReturn = params.get('checkout') === 'test-success'
   const sessionId = params.get('checkout') === 'success' || testReturn ? params.get('session_id') : null
 
@@ -63,8 +67,8 @@ export default function GradingApplication() {
       supabase.from('grades').select('id,label,sort_order').abortSignal(controller.signal),
       supabase.from('grade_tracks').select('grade_id,track').abortSignal(controller.signal),
       supabase.from('grade_requirements').select('grade_id,track,fee_cents').abortSignal(controller.signal),
-      supabase.from('grading_application_drafts').select('id,target_grade_id,status,created_at')
-        .eq('user_id', profile.id).order('created_at', { ascending: false }).limit(5).abortSignal(controller.signal),
+      supabase.from('grading_application_drafts').select('id,target_grade_id,status,created_at,base_fee_cents')
+        .eq('user_id', profile.id).order('created_at', { ascending: false }).abortSignal(controller.signal),
     ]).then(([events, ready, student, grades, tracks, requirements, savedDrafts]) => {
       if (controller.signal.aborted) return
       if ([events, ready, student, grades, tracks, requirements, savedDrafts].some((result) => result.error)) {
@@ -89,10 +93,13 @@ export default function GradingApplication() {
     setPayment(testReturn ? 'Confirming your payment preview…' : 'Confirming your Stripe payment… Your application will appear after verification.')
     async function check() {
       try {
-        const result = await gradingCheckoutRequest<{ paid: boolean; draftSaved?: boolean }>({ action: testReturn ? 'test-status' : 'status', session_id: sessionId })
+        const result = await gradingCheckoutRequest<{ paid: boolean; draftSaved?: boolean; paymentRecorded?: boolean }>({ action: testReturn ? 'test-status' : 'status', session_id: sessionId })
         if (!active) return
         if (result.paid) {
-          setPayment(testReturn ? `Payment preview completed. ${result.draftSaved ? 'Your application draft has been saved. ' : ''}No charge was made and no formal grading application was submitted.` : 'Payment confirmed. Your grading application has been submitted.')
+          setPayment(testReturn ? result.paymentRecorded
+            ? 'Payment confirmed and recorded. Your grading request is awaiting dojo eligibility review. No real charge was made.'
+            : 'Your checkout completed, but the payment record could not be verified. Contact your dojo; do not pay again.'
+            : 'Payment confirmed. Your grading application has been submitted.')
           setRevision((previous) => previous + 1)
         } else if (++attempts < 30) timer = setTimeout(() => void check(), 2000)
         else setPayment('Payment verification is taking longer than expected. Refresh shortly; do not pay again.')
@@ -105,7 +112,7 @@ export default function GradingApplication() {
   }, [sessionId, profile?.id, testReturn])
 
   const handleProceedToPayment = async () => {
-    if ((!selected && !testCheckout) || submitting.current) return
+    if (paidRequest || verifyingRequest || (!selected && !testCheckout) || submitting.current) return
     submitting.current = true
     setProcessing(true)
     setError('')
@@ -141,7 +148,10 @@ export default function GradingApplication() {
       {loading && <p role="status" className="mb-6 text-sm text-muted-foreground">Loading your grading opportunities…</p>}
       {!loading && !error && available.length === 0 && <p className="mb-6 text-sm text-muted-foreground">No eligible grading applications are open for your account. Your dojo must confirm your membership and training requirements before a formal grading application.</p>}
       {options.filter((option) => option.applied).map((option) => <p key={option.id} className="mb-4 rounded-xl border p-4 text-sm"><CheckCircle2 className="mr-2 inline size-4 text-primary" />Application submitted: {option.grade_label} · {option.name}</p>)}
-      {!loading && drafts.filter((draft) => draft.target_grade_id === targetBelt).slice(0, 1).map((draft) => <p key={draft.id} role="status" className="mb-4 rounded-lg border p-4 text-sm">Application draft saved: {progression?.target?.label}. {draft.status === 'preview_paid' ? 'Payment preview completed.' : 'Not submitted.'} Formal submission requires an eligible grading session.</p>)}
+      {!loading && savedDraft && <p role="status" className="mb-4 rounded-lg border p-4 text-sm">{paidRequest
+        ? `Payment confirmed: ${progression?.target?.label}. Your request is awaiting dojo eligibility review. Do not pay again.`
+        : verifyingRequest ? 'Payment verification pending. Do not pay again; contact your dojo if this persists.'
+          : `Application draft saved: ${progression?.target?.label}. Not submitted. Formal submission requires an eligible grading session.`}</p>}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* 👈 左侧：选择与条件核对 */}
@@ -204,7 +214,7 @@ export default function GradingApplication() {
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-500">Base Fee</span>
-                <span className="font-medium">{selected ? money.format(baseFee) : progression?.feeCents != null ? money.format(progression.feeCents / 100) : '—'}</span>
+                <span className="font-medium">{selected || paidRequest ? money.format(baseFee) : progression?.feeCents != null ? money.format(progression.feeCents / 100) : '—'}</span>
               </div>
               {/* 逾期费提示 */}
               {isLateSubmission && (
@@ -216,17 +226,17 @@ export default function GradingApplication() {
             </div>
 
             <div className="flex justify-between items-end mb-6">
-              <span className="text-gray-900 font-bold">Total Due</span>
-              <span className="text-3xl font-extrabold text-[#2c3f67]">{selected || testCheckout ? money.format(totalFee) : '—'}</span>
+              <span className="text-gray-900 font-bold">{paidRequest ? 'Amount Paid' : 'Total Due'}</span>
+              <span className="text-3xl font-extrabold text-[#2c3f67]">{selected || testCheckout || paidRequest ? money.format(totalFee) : '—'}</span>
             </div>
 
             <Button
               onClick={() => void handleProceedToPayment()}
-              disabled={(!isEligible && !testCheckout) || loading || processing || Boolean(error)}
+              disabled={Boolean(paidRequest || verifyingRequest) || (!isEligible && !testCheckout) || loading || processing || Boolean(error)}
               aria-describedby={testCheckout ? 'payment-preview-note' : undefined}
               className="w-full h-12 bg-[#2c3f67] hover:bg-[#1f2d4a] text-white text-base font-medium"
             >
-              {processing ? <><Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> Redirecting to Stripe…</> : 'Proceed to Payment'}
+              {paidRequest ? 'Payment Confirmed' : verifyingRequest ? 'Verifying Payment' : processing ? <><Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> Redirecting to Stripe…</> : 'Proceed to Payment'}
             </Button>
 
             <p className="text-xs text-center text-muted-foreground mt-4 flex items-center justify-center gap-1">

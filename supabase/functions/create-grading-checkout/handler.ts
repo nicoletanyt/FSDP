@@ -17,7 +17,7 @@ export async function handleRequest(request: Request): Promise<Response> {
     const body = await request.json().catch(() => null)
     const db = adminClient()
 
-    // Test-key-only previews save drafts, never formal applications or payments.
+    // Test-key-only checkout saves requests/receipts separately from real payments.
     if (body?.action === 'test-checkout') {
       const stripe = getStripe() // Rejects live keys before any Stripe request.
       if (!UUID.test(body.request_id ?? '') || !Number.isInteger(body.expected_amount)) {
@@ -46,6 +46,11 @@ export async function handleRequest(request: Request): Promise<Response> {
       if (body.target_grade_id !== target.id || body.expected_amount !== fee) {
         return Response.json({ error: 'Your grade or fee changed. Refresh and review before paying.' }, { status: 409, headers })
       }
+      const { data: paidRequest, error: paidRequestError } = await db.from('grading_application_drafts')
+        .select('id').eq('user_id', user).eq('target_grade_id', target.id)
+        .in('status', ['preview_paid', 'pending_review']).limit(1).maybeSingle()
+      if (paidRequestError) throw paidRequestError
+      if (paidRequest) return Response.json({ error: 'Payment has already been completed for this grade. Your request is awaiting dojo review; do not pay again.' }, { status: 409, headers })
       // Save before redirecting: a cancelled checkout still has a durable draft.
       const { error: draftError } = await db.from('grading_application_drafts').upsert({
         user_id: user, student_id: student.data!.id, request_id: body.request_id,
@@ -56,7 +61,7 @@ export async function handleRequest(request: Request): Promise<Response> {
         .select('id,target_grade_id,base_fee_cents,status,stripe_session_id')
         .eq('user_id', user).eq('request_id', body.request_id).single()
       if (readError) throw readError
-      if (draft.target_grade_id !== target.id || draft.base_fee_cents !== fee || draft.status === 'preview_paid') {
+      if (draft.target_grade_id !== target.id || draft.base_fee_cents !== fee || ['preview_paid', 'pending_review'].includes(draft.status)) {
         return Response.json({ error: 'This saved draft has changed or is already paid. Refresh before continuing.' }, { status: 409, headers })
       }
       const origin = request.headers.get('origin') ?? config.appOrigin
@@ -65,14 +70,14 @@ export async function handleRequest(request: Request): Promise<Response> {
         line_items: [{ quantity: 1, price_data: { currency: 'sgd', unit_amount: fee,
           product_data: { name: `Test only — Grading examination — ${target.label}` } } }],
         metadata: { grading_preview: 'true', grading_preview_user_id: user, target_grade_id: target.id, grading_draft_id: draft.id },
-        custom_text: { submit: { message: 'Test payment only. No formal grading application will be submitted.' } },
+        custom_text: { submit: { message: 'Test payment only. Your payment will be recorded and your request sent for dojo eligibility review.' } },
         success_url: `${origin}/grading?checkout=test-success&session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${origin}/grading?checkout=test-cancel`,
       }, { idempotencyKey: `grading-preview-${user}-${body.request_id}-${target.id}-${fee}` })
       if (session.livemode || !session.url) throw new Error('Invalid test Checkout session.')
       const { data: saved, error: saveError } = await db.from('grading_application_drafts')
         .update({ stripe_session_id: session.id, status: 'checkout_open', updated_at: new Date().toISOString() })
-        .eq('id', draft.id).eq('user_id', user).neq('status', 'preview_paid').select('id').maybeSingle()
+        .eq('id', draft.id).eq('user_id', user).in('status', ['draft', 'checkout_open']).select('id').maybeSingle()
       if (saveError) throw saveError
       if (!saved) throw new Error('Unable to save checkout to your application draft.')
       return Response.json({ url: session.url, draft_id: saved.id }, { headers })
@@ -89,7 +94,7 @@ export async function handleRequest(request: Request): Promise<Response> {
       }
       const paid = session.payment_status === 'paid'
       const draftSaved = paid ? await confirmGradingPreview(session) : Boolean(session.metadata?.grading_draft_id)
-      return Response.json({ paid, draftSaved }, { headers })
+      return Response.json({ paid, draftSaved, paymentRecorded: paid && draftSaved }, { headers })
     }
 
     if (body?.action === 'status') {

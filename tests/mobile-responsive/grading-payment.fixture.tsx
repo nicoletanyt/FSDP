@@ -48,7 +48,7 @@ Object.defineProperty(supabase, 'from', { value: (table: string) => {
     grade_requirements: trackRows.map((row) => ({ ...row, fee_cents: row.grade_id === 'blue-gold-5th-kyu' ? 5500 : 5000 })),
     grading_application_drafts: params.has('savedDraft') || params.get('appRoute')?.includes('test-success') ? [{
       id: '33333333-3333-4333-8333-333333333333', target_grade_id: 'blue-gold-5th-kyu',
-      status: 'preview_paid', created_at: '2026-11-13T13:00:00Z',
+      status: 'pending_review', created_at: '2026-11-13T13:00:00Z', base_fee_cents: 5500,
     }] : [],
   }
   if (table !== 'students') {
@@ -71,7 +71,7 @@ Object.defineProperty(supabase, 'functions', { value: { invoke: async (_name: st
     lateFeeCents: late ? 2200 : 0, totalCents: price, applicationDeadline: deadline,
   } }, error: null }
   if (body.action === 'checkout' || body.action === 'test-checkout') return { data: { url: 'https://checkout.stripe.com/c/pay/fixture_grading' }, error: null }
-  if (body.action === 'test-status') return { data: { paid: true, draftSaved: true }, error: null }
+  if (body.action === 'test-status') return { data: { paid: true, draftSaved: true, paymentRecorded: true }, error: null }
   if (body.action === 'status') {
     confirmed = ++statusCalls > 1
     return { data: { paid: confirmed }, error: null }
