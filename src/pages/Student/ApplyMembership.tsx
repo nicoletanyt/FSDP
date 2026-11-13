@@ -7,7 +7,9 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { startMembershipCheckout } from '@/lib/stripe'
 import { supabase } from '@/lib/supabase'
 import {
+  DATE_OF_BIRTH_STORAGE_KEY,
   MEMBERSHIP_TYPES,
+  MEMBERSHIP_TYPE_STORAGE_KEY,
   calculateAge,
   membershipLabel,
 } from '@/lib/membership'
@@ -88,6 +90,8 @@ export default function ApplyMembership() {
       .order('name')
       .then(({ data }) => setCentres(data ?? []))
   }, [])
+
+  const centreName = centres.find((c) => c.id === formData.principalDojo)?.name
 
   const age = calculateAge(formData.dob)
   const isMinor = age !== null && age < 18
@@ -181,6 +185,14 @@ export default function ApplyMembership() {
     } else {
       const [firstName, ...rest] = formData.fullName.trim().split(/\s+/)
       setIsSubmitting(true)
+      // The Credits page picks class passes from these. Save them before leaving
+      // for Stripe; blocked storage (e.g. private browsing) must not stop checkout.
+      try {
+        localStorage.setItem(DATE_OF_BIRTH_STORAGE_KEY, formData.dob)
+        localStorage.setItem(MEMBERSHIP_TYPE_STORAGE_KEY, formData.membershipType)
+      } catch {
+        // The Credits page falls back to the date of birth or adult passes.
+      }
       try {
         await startMembershipCheckout({
           first_name: firstName,
@@ -597,7 +609,7 @@ export default function ApplyMembership() {
                   <button onClick={() => setCurrentStep(2)} className="text-xs sm:text-sm text-[#e62128] font-semibold hover:underline">Edit</button>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-2 sm:gap-y-3 text-xs sm:text-sm">
-                  <div><span className="text-gray-500 block text-[10px] sm:text-xs">Dojo</span>{formData.principalDojo || '-'}</div>
+                  <div><span className="text-gray-500 block text-[10px] sm:text-xs">Dojo</span>{centreName || '-'}</div>
                   <div><span className="text-gray-500 block text-[10px] sm:text-xs">Type</span>{formData.membershipType ? membershipLabel(formData.membershipType) : '-'}</div>
                   <div><span className="text-gray-500 block text-[10px] sm:text-xs">Belt</span>{formData.currentBelt || '-'}</div>
                   <div><span className="text-gray-500 block text-[10px] sm:text-xs">Emergency Contact</span>{formData.emergencyName || '-'}</div>
@@ -643,7 +655,7 @@ export default function ApplyMembership() {
           ) : <div />}
           
           <Button onClick={handleNext} disabled={isSubmitting} className="bg-[#2c3f67] hover:bg-[#1f2d4a] text-white px-6 sm:px-10 h-10 sm:h-12 rounded-md text-sm sm:text-base">
-            {isSubmitting ? 'Processing...' : (currentStep === 4 ? 'Submit Application' : 'Next')}
+            {currentStep < 4 ? 'Next' : isSubmitting ? 'Redirecting to payment…' : 'Submit & Pay'}
           </Button>
         </div>
 
