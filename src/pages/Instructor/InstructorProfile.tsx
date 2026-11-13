@@ -418,7 +418,7 @@ export default function InstructorProfile() {
                                         
                                         showCloseButton={!addressPending}
                                     >
-                                        <DialogHeader className="pr-10">
+                                        <DialogHeader>
                                             <DialogTitle>Edit address</DialogTitle>
                                             <DialogDescription>
                                                 Update the address associated with your instructor

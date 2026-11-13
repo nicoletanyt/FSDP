@@ -49,7 +49,7 @@ function DialogContent({
             <DialogPrimitive.Popup
                 data-slot="dialog-content"
                 className={cn(
-                    "fixed top-1/2 left-1/2 z-50 grid h-[80dvh] max-h-[80dvh] w-[80vw] max-w-[80vw] content-start -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto overscroll-contain rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+                    "fixed top-1/2 left-1/2 z-50 grid h-[80dvh] max-h-[80dvh] w-[80vw] max-w-[80vw] content-start -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto lg:gap-5 lg:p-6 overscroll-contain rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
                     className,
                 )}
                 {...props}
@@ -61,7 +61,7 @@ function DialogContent({
                         render={
                             <Button
                                 variant="ghost"
-                                className="absolute top-4 right-4 size-11 lg:top-2 lg:right-2 lg:size-8.75"
+                                className="absolute top-2 right-2 size-11 lg:top-4 lg:right-4 lg:size-8.75"
                                 size="icon-sm"
                             />
                         }
@@ -79,7 +79,7 @@ function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
     return (
         <div
             data-slot="dialog-header"
-            className={cn("flex flex-col gap-2", className)}
+            className={cn("flex flex-col gap-2 pr-10", className)}
             {...props}
         />
     );
@@ -95,7 +95,7 @@ function DialogFooter({
         <div
             data-slot="dialog-footer"
             className={cn(
-                "-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl p-4 sm:flex-row sm:justify-end",
+                "-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t px-4 py-3 sm:flex-row sm:justify-end lg:-mx-6 lg:-mb-6 lg:px-6 lg:py-4",
                 className,
             )}
             {...props}

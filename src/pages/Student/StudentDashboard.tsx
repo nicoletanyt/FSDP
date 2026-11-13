@@ -271,7 +271,7 @@ export default function StudentDashboard() {
                     </span>
                   </span>
                 </DialogTrigger>
-                <DialogContent className="p-4 lg:p-6">
+                <DialogContent>
                   <div className="grid justify-items-center gap-5 py-2 text-center">
                     <div>
                       <DialogTitle className="text-xl font-semibold">

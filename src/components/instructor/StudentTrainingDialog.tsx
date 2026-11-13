@@ -50,7 +50,7 @@ function StudentTrainingContent({ student }: { student: StudentEntry }) {
 
     return (
         <>
-            <DialogHeader className="shrink-0 gap-2 border-b p-4 sm:p-6">
+            <DialogHeader className="shrink-0 gap-2 border-b p-4 lg:p-6">
                 <div className="flex items-start justify-between gap-4">
                     <DialogTitle className="min-w-0 break-words">
                         {profile.name}
@@ -72,7 +72,7 @@ function StudentTrainingContent({ student }: { student: StudentEntry }) {
                     {profile.memberNo}
                 </DialogDescription>
             </DialogHeader>
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-4 sm:p-6">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-4 lg:p-6">
                 {detail.status !== "success" ? (
                     <InstructorDataStatus
                         loading={detail.status === "loading"}

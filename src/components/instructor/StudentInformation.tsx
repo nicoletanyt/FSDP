@@ -97,7 +97,7 @@ export function StudentInformationActions({ detail, showDetailsLink = true }: { 
                             )}
                         </DialogTrigger>
                         <DialogContent showCloseButton={false} className="student-detail-view overflow-y-auto">
-                            <DialogHeader className="flex-row items-center justify-between gap-4">
+                            <DialogHeader className="flex-row items-center justify-between gap-4 pr-0">
                                 <DialogTitle>{action === "contact" ? "Contact details" : "Medical alerts"}</DialogTitle>
                                 <DialogClose render={<Button variant="ghost" size="icon-touch" className="-my-2 -mr-2" />}>
                                     <X aria-hidden="true" /><span className="sr-only">Close</span>

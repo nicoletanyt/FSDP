@@ -69,7 +69,7 @@ export function AvailabilityDialog({ initial, editingId, slots, getEvents, onSav
 
     return (
         <Dialog open onOpenChange={(open) => { if (!open && !busy.current) onClose(); }}>
-            <DialogContent showCloseButton={!pending} className="p-4 lg:p-6 [&_[data-slot=dialog-close]]:size-11 lg:[&_[data-slot=dialog-close]]:size-10 [&_[data-slot=dialog-close]_svg]:size-6">
+            <DialogContent showCloseButton={!pending} className="[&_[data-slot=dialog-close]]:size-11 lg:[&_[data-slot=dialog-close]]:size-10 [&_[data-slot=dialog-close]_svg]:size-6">
                 <form className="grid gap-5" aria-busy={Boolean(pending)} onSubmit={async (event) => {
                     event.preventDefault();
                     if (locked || busy.current || confirmDelete || !onSave) return;
@@ -104,7 +104,7 @@ export function AvailabilityDialog({ initial, editingId, slots, getEvents, onSav
                         const slot = await onReload();
                         if (active.current) setRecorded(slot);
                     })}>{pending === "reload" ? "Reloading…" : "Reload saved record"}</Button>}
-                    <DialogFooter className="-mx-4 -mb-4 gap-3 p-4 lg:-mx-6 lg:-mb-6 lg:p-5">
+                    <DialogFooter className="gap-3">
                         {confirmDelete ? <>
                             <Button type="button" variant="outline" disabled={Boolean(pending) || Boolean(retry)} onClick={() => setConfirmDelete(false)} className="h-11 px-4 lg:h-10">Keep availability</Button>
                             <Button type="button" variant="destructive" disabled={locked || !onDelete} onClick={() => onDelete && void perform("delete", onDelete)} className="h-11 gap-2 px-4 lg:h-10"><Trash2 aria-hidden="true" />{pending === "delete" ? "Deleting…" : "Confirm delete"}</Button>

@@ -186,7 +186,7 @@ export default function EmailTemplates() {
     <Dialog open={!!editing} onOpenChange={changeOpen}>
       {/* Full screen on phones (the one exception to the 80% dialog size), so there is room to write. */}
       <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto] max-sm:h-dvh max-sm:max-h-dvh max-sm:w-screen max-sm:max-w-none max-sm:rounded-none max-sm:pt-[max(1rem,env(safe-area-inset-top))] max-sm:ring-0 max-sm:[&>[data-slot=dialog-footer]]:pb-[max(1rem,env(safe-area-inset-bottom))]">
-        <DialogHeader className="pr-10">
+        <DialogHeader>
           <DialogTitle>{selected?.title}</DialogTitle>
           <DialogDescription>{selected?.description}</DialogDescription>
         </DialogHeader>
@@ -230,7 +230,7 @@ export default function EmailTemplates() {
           )}
         </div>
         {/* One row at every size: Preview and Undo shrink to icons on phones. */}
-        <DialogFooter className="flex-row flex-wrap items-center justify-end border-t border-border bg-popover">
+        <DialogFooter className="flex-row flex-wrap items-center justify-end bg-popover">
           <Button type="button" variant="ghost" className="mr-auto" aria-label={previewing ? 'Edit' : 'Preview'}
             onClick={() => setPreviewing(value => !value)}>
             {previewing ? <PencilLine aria-hidden="true" /> : <Eye aria-hidden="true" />}

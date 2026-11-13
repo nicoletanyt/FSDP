@@ -381,7 +381,7 @@ export default function GradingEligibility() {
             {/* Preview and send only. The wording is edited in Settings › Emails. */}
             <Dialog open={notifyOpen} onOpenChange={changeNotifyOpen}>
                 <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto]">
-                    <DialogHeader className="pr-10">
+                    <DialogHeader>
                         <DialogTitle>Email eligible students</DialogTitle>
                         {/* The loading message shows once, in the body. */}
                         <DialogDescription className={preview ? undefined : "sr-only"}>
@@ -424,7 +424,7 @@ export default function GradingEligibility() {
                             </section>
                         )}
                     </div>
-                    <DialogFooter className="flex-row flex-wrap items-center justify-end border-t border-border bg-popover">
+                    <DialogFooter className="flex-row flex-wrap items-center justify-end bg-popover">
                         <Button
                             variant="ghost"
                             className="mr-auto"
@@ -457,10 +457,10 @@ export default function GradingEligibility() {
                     if (!open) setSelectedStudentId(null);
                 }}
             >
-                <DialogContent className="grid-rows-[auto_minmax(0,1fr)] gap-6 overflow-hidden p-5 sm:p-6">
+                <DialogContent className="grid-rows-[auto_minmax(0,1fr)] overflow-hidden">
                     {selectedStudent && (
                         <>
-                            <DialogHeader className="pr-10">
+                            <DialogHeader>
                                 <DialogTitle>{studentName(selectedStudent)}</DialogTitle>
                                 <DialogDescription className="flex flex-wrap items-center gap-2">
                                     <LiveGrade

@@ -141,7 +141,7 @@ export default function ChangePasswordDialog({ accountType }: { accountType: str
                     className="overflow-y-auto"
                     showCloseButton={!pending}
                 >
-                    <DialogHeader className="pr-8">
+                    <DialogHeader>
                         <DialogTitle>Change password</DialogTitle>
                         <DialogDescription>
                             Choose a new password for your {accountType} account.
