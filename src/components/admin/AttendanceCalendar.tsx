@@ -10,7 +10,7 @@ import {
 import LiveClassDetails from '@/components/admin/LiveClassDetails'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import type { CalendarDisplayMode as CalendarDisplay, CalendarRange as CalendarView } from '@/components/calendar/CalendarToolbar'
+import type { CalendarDisplayMode as CalendarDisplay, CalendarRange as CalendarView } from '@/components/shared/calendar/CalendarToolbar'
 import type { AdminCalendarEvent } from '@/lib/admin/attendance-calendar'
 import {
   dateKey,

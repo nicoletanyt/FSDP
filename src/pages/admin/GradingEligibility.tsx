@@ -14,11 +14,11 @@ import {
     PencilLine,
     XCircle,
 } from "lucide-react";
-import { GradeLabelBadge } from "@/components/admin/AdminGradeBadge";
-import FilterPopover, { FilterField } from "@/components/FilterPopover";
-import EmptyState from "@/components/admin/EmptyState";
-import RetryAlert from "@/components/admin/RetryAlert";
-import SearchInput from "@/components/SearchInput";
+import { GradeLabelBadge } from "@/components/shared/grade/GradeBadge";
+import FilterPopover, { FilterField } from "@/components/shared/filters/FilterPopover";
+import EmptyState from "@/components/shared/layout/EmptyState";
+import RetryAlert from "@/components/shared/layout/RetryAlert";
+import SearchInput from "@/components/shared/filters/SearchInput";
 import EligibilityChecklist from "@/components/grading/EligibilityChecklist";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";

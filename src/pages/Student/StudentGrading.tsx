@@ -10,8 +10,8 @@ import { calculateGradingFee } from '@/lib/grading-fees'
 import { money } from '@/lib/format'
 import EligibilityChecklist from '@/components/grading/EligibilityChecklist'
 import type { ChecklistRequirement } from '@/components/grading/EligibilityChecklist'
-import { GradeLabelBadge } from '@/components/admin/AdminGradeBadge'
-import DatabaseGradeBadge, { gradeFromId } from '@/components/instructor/DatabaseGradeBadge'
+import { GradeLabelBadge } from '@/components/shared/grade/GradeBadge'
+import { DatabaseGradeBadge, gradeFromId } from '@/components/shared/grade/GradeBadge'
 
 type Readiness = { targetLabel: string; requirements: ChecklistRequirement[] }
 

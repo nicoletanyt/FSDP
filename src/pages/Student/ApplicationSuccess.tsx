@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link, useLocation } from 'react-router'
 import { buttonVariants } from '@/components/ui/button'
 import { CheckCircle2, Copy, Check, Calendar, Award } from 'lucide-react'
-import { GradeLabelBadge } from '@/components/admin/AdminGradeBadge'
+import { GradeLabelBadge } from '@/components/shared/grade/GradeBadge'
 
 export default function ApplicationSuccess() {
   const [copied, setCopied] = useState(false)

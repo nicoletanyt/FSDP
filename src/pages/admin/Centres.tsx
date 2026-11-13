@@ -1,14 +1,14 @@
 import { useMemo } from 'react'
 import { Building2, CircleCheck, CircleX, Construction, MapPin } from 'lucide-react'
 import { Navigate, useSearchParams } from 'react-router'
-import EmptyState from '@/components/admin/EmptyState'
-import PageHeader from '@/components/admin/PageHeader'
-import StatCard from '@/components/admin/StatCard'
-import { CentreStatusBadge } from '@/components/admin/StatusBadge'
-import FilterPopover, { FilterField } from '@/components/FilterPopover'
+import EmptyState from '@/components/shared/layout/EmptyState'
+import PageHeader from '@/components/shared/layout/PageHeader'
+import StatCard from '@/components/shared/layout/StatCard'
+import { CentreStatusBadge } from '@/components/shared/status/StatusBadge'
+import FilterPopover, { FilterField } from '@/components/shared/filters/FilterPopover'
 import { useAdminData } from '@/lib/admin/admin-data-context'
 import type { Centre } from '@/lib/admin/types'
-import SearchInput from '@/components/SearchInput'
+import SearchInput from '@/components/shared/filters/SearchInput'
 
 const dojoStatusOptions = [
   { value: 'all', label: 'All statuses' },

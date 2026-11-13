@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Info } from "lucide-react";
-import AdminGradeBadge from "@/components/admin/AdminGradeBadge";
-import FilterCombobox from "@/components/FilterCombobox";
+import { AdminGradeBadge } from "@/components/shared/grade/GradeBadge";
+import FilterCombobox from "@/components/shared/filters/FilterCombobox";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {

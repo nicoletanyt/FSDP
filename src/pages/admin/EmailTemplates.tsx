@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronRight, Eye, Mail, PencilLine, Plus, Undo2 } from 'lucide-react'
-import RetryAlert from '@/components/admin/RetryAlert'
+import RetryAlert from '@/components/shared/layout/RetryAlert'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'

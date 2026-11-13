@@ -8,7 +8,7 @@ import PaymentStatusBadge from "@/components/student/PaymentStatusBadge";
 import { useAuth } from "@/hooks/use-auth";
 import { formatDate, money } from "@/lib/format";
 import { mockProfile, type Payment, type Profile } from "@/lib/student-profile";
-import GradeBadge from "@/components/GradeBadge";
+import GradeBadge from "@/components/shared/grade/GradeBadge";
 
 /* ---------- Helpers ---------- */
 const PREVIEW_COUNT = 3;

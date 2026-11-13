@@ -3,7 +3,7 @@ import { ClipboardCheck, CreditCard, LayoutDashboard, Presentation, UserCheck, U
 import logo from '@/assets/logo.png'
 import ThemeToggle from '@/components/theme-toggle'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import MobileNavigation from '@/components/MobileNavigation'
+import MobileNavigation from '@/components/shared/layout/MobileNavigation'
 import { useAuth } from '@/hooks/use-auth'
 import { pageWidth } from '@/lib/page-width'
 import { cn } from '@/lib/utils'

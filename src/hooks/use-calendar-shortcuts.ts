@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import type { CalendarDisplayMode, CalendarRange } from "@/components/calendar/CalendarToolbar";
+import type { CalendarDisplayMode, CalendarRange } from "@/components/shared/calendar/CalendarToolbar";
 
 type Handlers = {
     /** Turns the shortcuts off, e.g. while a dialog of the page's own is open. */

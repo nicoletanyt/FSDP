@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogClose, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Link } from "react-router";
-import GradeBadge from "./DatabaseGradeBadge";
+import { DatabaseGradeBadge as GradeBadge } from "@/components/shared/grade/GradeBadge";
 import { directoryStudent, singaporeToday } from "@/lib/instructor/directory";
 import { studentDetailsHref } from "@/lib/instructor-calendar";
 import type { StudentDetail } from "@/lib/instructor/types";

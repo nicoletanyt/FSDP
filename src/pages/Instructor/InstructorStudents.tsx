@@ -8,8 +8,8 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import FilterPopover, { FilterField } from "@/components/FilterPopover";
-import GradeBadge from "@/components/instructor/DatabaseGradeBadge";
+import FilterPopover, { FilterField } from "@/components/shared/filters/FilterPopover";
+import { DatabaseGradeBadge as GradeBadge } from "@/components/shared/grade/GradeBadge";
 import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
 import { useAuth } from "@/hooks/use-auth";
 import { useInstructorQuery } from "@/hooks/use-instructor-data";
@@ -28,7 +28,7 @@ import {
     loadDirectorySnapshot,
     singaporeToday,
 } from "@/lib/instructor/directory";
-import SearchInput from "@/components/SearchInput";
+import SearchInput from "@/components/shared/filters/SearchInput";
 
 export default function InstructorStudents() {
     const api = useInstructorApi();

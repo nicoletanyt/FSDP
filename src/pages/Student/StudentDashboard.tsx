@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 
 import { buttonVariants } from "@/components/student/button";
-import GradeBadge from "@/components/GradeBadge";
+import GradeBadge from "@/components/shared/grade/GradeBadge";
 import { Card } from "@/components/ui/card";
 import {
   Dialog,

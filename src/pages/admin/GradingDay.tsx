@@ -3,13 +3,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useParams } from 'react-router'
 import { ArrowRightLeft, Ellipsis } from 'lucide-react'
 import GradingPanelDialog from '@/components/admin/GradingPanelDialog'
-import RetryAlert from '@/components/admin/RetryAlert'
+import RetryAlert from '@/components/shared/layout/RetryAlert'
 import SplitSessionDialog from '@/components/admin/SplitSessionDialog'
 import GradingDayView from '@/components/grading/GradingDayView'
 import type { MoveControl, SessionControl } from '@/components/grading/GradingDayView'
 import ScheduleNotice from '@/components/grading/ScheduleNotice'
 import { GradingBackLink, GradingNote } from '@/components/grading/GradingParts'
-import DatabaseGradeBadge from '@/components/instructor/DatabaseGradeBadge'
+import { DatabaseGradeBadge } from '@/components/shared/grade/GradeBadge'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,

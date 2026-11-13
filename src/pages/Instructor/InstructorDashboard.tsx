@@ -9,11 +9,11 @@ import {
 } from "lucide-react";
 import ClassSessionDetails from "@/components/instructor/ClassSessionDetails";
 import CoverInvitationDialog from "@/components/instructor/CoverInvitationDialog";
-import DayClassDetails from "@/components/instructor/DayClassDetails";
+import DayClassDetails from "@/components/shared/calendar/DayClassDetails";
 import SelectedClassIndicator from "@/components/instructor/SelectedClassIndicator";
 import CalendarTimeline from "@/components/instructor/CalendarTimeline";
 import CalendarDaySelector from "@/components/instructor/CalendarDaySelector";
-import CalendarToolbar from "@/components/calendar/CalendarToolbar";
+import CalendarToolbar from "@/components/shared/calendar/CalendarToolbar";
 import { useCalendarShortcuts } from "@/hooks/use-calendar-shortcuts";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { useInstructorCalendarRange, useInstructorSelectedEvent } from "@/hooks/use-instructor-class-queries";

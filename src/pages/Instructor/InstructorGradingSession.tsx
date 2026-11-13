@@ -25,7 +25,7 @@ import {
     PopoverTitle,
     PopoverTrigger,
 } from "@/components/ui/popover";
-import DatabaseGradeBadge from "@/components/instructor/DatabaseGradeBadge";
+import { DatabaseGradeBadge } from "@/components/shared/grade/GradeBadge";
 import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
 import GradingSignatureDialog from "@/components/instructor/GradingSignatureDialog";
 import GradingChecklistTable from "@/components/grading/GradingChecklistTable";

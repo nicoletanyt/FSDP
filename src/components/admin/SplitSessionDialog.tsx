@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import DatabaseGradeBadge from '@/components/instructor/DatabaseGradeBadge'
+import { DatabaseGradeBadge } from '@/components/shared/grade/GradeBadge'
 import { Button } from '@/components/ui/button'
 import {
   Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,

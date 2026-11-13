@@ -17,7 +17,7 @@ import {
     AlertDialogFooter, AlertDialogHeader, AlertDialogMedia, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Card, CardContent } from "@/components/ui/card";
-import GradeBadge from "./DatabaseGradeBadge";
+import { DatabaseGradeBadge as GradeBadge } from "@/components/shared/grade/GradeBadge";
 import InstructorDataStatus from "./InstructorDataStatus";
 import { gradingEventDate } from "@/lib/instructor/adapters";
 import { singaporeToday } from "@/lib/instructor/directory";

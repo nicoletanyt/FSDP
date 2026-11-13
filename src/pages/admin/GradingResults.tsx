@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useParams } from 'react-router'
 import SessionChecklistsView from '@/components/grading/SessionChecklistsView'
 import { GradingBackLink, GradingNote } from '@/components/grading/GradingParts'
-import RetryAlert from '@/components/admin/RetryAlert'
+import RetryAlert from '@/components/shared/layout/RetryAlert'
 import { adminGradingKeys, loadAdminGradingDay, loadSessionResults } from '@/lib/admin/grading-results'
 
 export default function AdminGradingResults() {

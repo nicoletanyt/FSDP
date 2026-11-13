@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useOutletContext } from "react-router";
 import { ChevronDown, LogOut, Maximize, UserCheck } from "lucide-react";
 import CheckInScanner from "@/components/instructor/CheckInScanner";
-import GradeBadge from "@/components/GradeBadge";
+import GradeBadge from "@/components/shared/grade/GradeBadge";
 import type { ScanFeedback } from "@/components/instructor/CheckInScanner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";

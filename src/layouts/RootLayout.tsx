@@ -1,7 +1,7 @@
 import { Suspense, useState } from 'react'
 import { Link, Outlet, useLocation, useMatch } from 'react-router'
 import { LayoutDashboard, LogIn, UserPlus } from 'lucide-react'
-import MobileNavigation from '@/components/MobileNavigation'
+import MobileNavigation from '@/components/shared/layout/MobileNavigation'
 import StudentNavigation from '@/components/student/StudentNavigation'
 import ThemeToggle from '@/components/theme-toggle'
 import { Button } from '@/components/ui/button'

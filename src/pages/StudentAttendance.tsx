@@ -22,7 +22,7 @@ import {
   prettyDate
 } from '@/lib/student-schedule'
 import type { ClassOffering } from '@/lib/student-schedule'
-import FilterPopover, { FilterField } from '@/components/FilterPopover'
+import FilterPopover, { FilterField } from '@/components/shared/filters/FilterPopover'
 
 type Pending =
   | { kind: 'cancel'; id: string }

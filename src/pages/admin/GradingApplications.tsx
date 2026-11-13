@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Download } from "lucide-react";
-import EmptyState from "@/components/admin/EmptyState";
-import GradeBadge from "@/components/instructor/DatabaseGradeBadge";
+import EmptyState from "@/components/shared/layout/EmptyState";
+import { DatabaseGradeBadge as GradeBadge } from "@/components/shared/grade/GradeBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -17,7 +17,7 @@ import { downloadCsv } from "@/lib/admin/export";
 import { formatDate } from "@/lib/admin/format";
 import type { GradeRow } from "@/lib/instructor/types";
 import { supabase } from "@/lib/supabase";
-import SearchInput from "@/components/SearchInput";
+import SearchInput from "@/components/shared/filters/SearchInput";
 
 interface Application {
     id: string;

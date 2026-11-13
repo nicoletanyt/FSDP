@@ -1,6 +1,6 @@
 import { Outlet } from 'react-router'
-import PageHeader from '@/components/admin/PageHeader'
-import SectionTabs from '@/components/admin/SectionTabs'
+import PageHeader from '@/components/shared/layout/PageHeader'
+import SectionTabs from '@/components/shared/layout/SectionTabs'
 import { useAtRiskCount } from '@/lib/admin/section-counts'
 
 const baseTabs = [

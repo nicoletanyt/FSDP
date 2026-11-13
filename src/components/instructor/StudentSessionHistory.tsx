@@ -28,7 +28,7 @@ import type {
     StudentId,
 } from "@/lib/instructor/types";
 import { cn } from "cn";
-import FilterPopover, { FilterField } from "@/components/FilterPopover";
+import FilterPopover, { FilterField } from "@/components/shared/filters/FilterPopover";
 
 const PAGE_SIZE = 20;
 

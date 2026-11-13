@@ -16,8 +16,8 @@ import {
     PopoverTitle,
     PopoverTrigger,
 } from "@/components/ui/popover";
-import AttendanceStateBadge from "@/components/instructor/AttendanceStateBadge";
-import GradeBadge from "@/components/instructor/DatabaseGradeBadge";
+import AttendanceStateBadge from "@/components/shared/status/AttendanceStateBadge";
+import { DatabaseGradeBadge as GradeBadge } from "@/components/shared/grade/GradeBadge";
 import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
 import StudentTrainingDialog from "./StudentTrainingDialog";
 import ClassUnavailableDialog from "./ClassUnavailableDialog";

@@ -3,7 +3,7 @@ import { Link } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import GradeBadge from './DatabaseGradeBadge'
+import { DatabaseGradeBadge as GradeBadge } from '@/components/shared/grade/GradeBadge'
 import BackToCalendarLink from './BackToCalendarLink'
 import type { StudentEntry } from '@/lib/instructor/types'
 

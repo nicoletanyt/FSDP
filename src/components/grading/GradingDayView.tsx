@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router'
 import { CalendarDays, ChevronRight, Clock3, MapPin } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import GradeBadge from '@/components/instructor/DatabaseGradeBadge'
+import { DatabaseGradeBadge as GradeBadge } from '@/components/shared/grade/GradeBadge'
 import {
   ExaminerPanel, GradingCardFooter, GradingFacts, GradingNote, GradingPageHeader, GradingStatusPill, Segmented, gradingActionClass,
 } from '@/components/grading/GradingParts'

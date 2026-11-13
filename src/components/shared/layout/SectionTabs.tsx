@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { NavLink } from 'react-router'
-import CountBadge from '@/components/CountBadge'
+import CountBadge from '@/components/shared/filters/CountBadge'
 import { cn } from 'cn'
 
 export interface SectionTab {

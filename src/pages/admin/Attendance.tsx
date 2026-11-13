@@ -1,5 +1,5 @@
 import { Outlet } from 'react-router'
-import PageHeader from '@/components/admin/PageHeader'
+import PageHeader from '@/components/shared/layout/PageHeader'
 
 export default function Attendance() {
   return (

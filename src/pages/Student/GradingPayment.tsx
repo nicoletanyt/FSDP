@@ -36,8 +36,8 @@ import {
   type GradingPaymentLocationState,
   type GradingPaymentRecord,
 } from '@/lib/grading-payment'
-import { GradeLabelBadge } from '@/components/admin/AdminGradeBadge'
-import GradeBadge from '@/components/GradeBadge'
+import { GradeLabelBadge } from '@/components/shared/grade/GradeBadge'
+import GradeBadge from '@/components/shared/grade/GradeBadge'
 import type { RankId } from '@/lib/student-grades'
 
 type PaymentStatus = 'idle' | 'processing' | 'success'

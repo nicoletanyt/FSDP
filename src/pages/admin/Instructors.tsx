@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { CheckCircle2, Mail, Plus, X } from 'lucide-react'
 import CreateInstructorForm from '@/components/auth/CreateInstructorForm'
-import PageHeader from '@/components/admin/PageHeader'
-import EmptyState from '@/components/admin/EmptyState'
+import PageHeader from '@/components/shared/layout/PageHeader'
+import EmptyState from '@/components/shared/layout/EmptyState'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
@@ -10,10 +10,10 @@ import type { UserProfile } from '@/lib/auth'
 import { fullName, initials } from '@/lib/admin/format'
 import type { InstructorAccount } from '@/lib/instructors'
 import { supabase } from '@/lib/supabase'
-import GradeBadge from '@/components/instructor/DatabaseGradeBadge'
+import { DatabaseGradeBadge as GradeBadge } from '@/components/shared/grade/GradeBadge'
 import type { GradeRow } from '@/lib/instructor/types'
 import { setExaminer } from '@/lib/admin/grading-panels'
-import SearchInput from '@/components/SearchInput'
+import SearchInput from '@/components/shared/filters/SearchInput'
 
 type InstructorProfile = Pick<UserProfile, 'id' | 'first_name' | 'last_name' | 'email'> & {
   instructors: { id: string; is_examiner: boolean; grade: GradeRow | null } | null

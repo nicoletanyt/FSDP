@@ -27,8 +27,8 @@ import {
 import type {
   ClassOffering
 } from '@/lib/student-schedule'
-import FilterPopover, { FilterField } from '@/components/FilterPopover'
-import { GradeLabelBadge } from '@/components/admin/AdminGradeBadge'
+import FilterPopover, { FilterField } from '@/components/shared/filters/FilterPopover'
+import { GradeLabelBadge } from '@/components/shared/grade/GradeBadge'
 
 type Action =
   | { kind: 'enroll'; sessions: ClassOffering[] }

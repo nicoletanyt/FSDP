@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { CalendarDays, ChevronRight, Clock3, History, MapPin, Users } from 'lucide-react'
-import EmptyState from '@/components/admin/EmptyState'
+import EmptyState from '@/components/shared/layout/EmptyState'
 import GradingPanelDialog from '@/components/admin/GradingPanelDialog'
-import RetryAlert from '@/components/admin/RetryAlert'
+import RetryAlert from '@/components/shared/layout/RetryAlert'
 import {
   ExaminerPanel, GradingFacts, GradingStatusPill, GradingWarnings, Segmented, gradingActionClass,
 } from '@/components/grading/GradingParts'

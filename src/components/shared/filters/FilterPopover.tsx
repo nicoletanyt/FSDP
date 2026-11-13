@@ -1,8 +1,8 @@
 import { useId, useRef, useState } from "react";
 import type { ComponentProps, ReactNode } from "react";
 import { SlidersHorizontal } from "lucide-react";
-import CountBadge from "@/components/CountBadge";
-import FilterCombobox from "@/components/FilterCombobox";
+import CountBadge from "@/components/shared/filters/CountBadge";
+import FilterCombobox from "@/components/shared/filters/FilterCombobox";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {

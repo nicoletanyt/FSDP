@@ -3,8 +3,8 @@ import { CalendarDays, Nfc, ScanLine, ShieldCheck, UserCircle, Users } from "luc
 import logo from "@/assets/logo.png";
 import ThemeToggle from "@/components/theme-toggle";
 import InstructorAccountMenu from "@/components/instructor/InstructorAccountMenu";
-import MobileNavigation from "@/components/MobileNavigation";
-import OverflowNav from "@/components/OverflowNav";
+import MobileNavigation from "@/components/shared/layout/MobileNavigation";
+import OverflowNav from "@/components/shared/layout/OverflowNav";
 import { pageWidth } from "@/lib/page-width";
 import { cn } from "@/lib/utils";
 import { useMyGradingPanels } from "@/hooks/use-my-grading-panels";
