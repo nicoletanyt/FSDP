@@ -7,11 +7,9 @@ import type {
   FollowUpStatus,
   NewNotificationInput,
   NewOpportunityInput,
-  NewSessionInput,
 } from './types'
 
 interface AdminDataContextValue extends AdminData {
-  createSession: (input: NewSessionInput) => void
   saveAttendance: (
     sessionId: string,
     entries: { studentId: string; status: AttendanceStatus }[],
@@ -36,13 +34,6 @@ function newId(prefix: string): string {
 
 export function AdminDataProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<AdminData>(initialAdminData)
-
-  const createSession = useCallback((input: NewSessionInput) => {
-    setData((current) => ({
-      ...current,
-      sessions: [...current.sessions, { ...input, id: newId('ses') }],
-    }))
-  }, [])
 
   const saveAttendance = useCallback(
     (
@@ -158,7 +149,6 @@ export function AdminDataProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       ...data,
-      createSession,
       saveAttendance,
       createOpportunity,
       sendNotification,
@@ -168,7 +158,6 @@ export function AdminDataProvider({ children }: { children: ReactNode }) {
     }),
     [
       data,
-      createSession,
       saveAttendance,
       createOpportunity,
       sendNotification,

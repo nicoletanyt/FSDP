@@ -19,7 +19,6 @@ const AdminCentres = lazy(() => import('./pages/admin/Centres'))
 const AdminStudentDetail = lazy(() => import('./pages/admin/StudentDetail'))
 const AdminAttendance = lazy(() => import('./pages/admin/Attendance'))
 const AdminAttendanceRegister = lazy(() => import('./pages/admin/LiveAttendanceRegister'))
-const AdminAttendanceRecords = lazy(() => import('./pages/admin/AttendanceRecords'))
 const AdminAttendanceMonitoring = lazy(() => import('./pages/admin/AttendanceMonitoring'))
 const AdminGrading = lazy(() => import('./pages/admin/Grading'))
 const AdminGradingEligibility = lazy(() => import('./pages/admin/GradingEligibility'))
@@ -142,8 +141,8 @@ export default function App() {
               <Route path="centres" element={<AdminCentres />} />
               <Route path="calendar" element={<AdminAttendance />}>
                 <Route index element={<AdminAttendanceRegister />} />
-                <Route path="records" element={<AdminAttendanceRecords />} />
               </Route>
+              <Route path="calendar/records" element={<Navigate to="/admin/calendar" replace />} />
               <Route path="calendar/monitoring" element={<MovedRoute to="/admin/students/attendance" />} />
               <Route path="grading" element={<AdminGrading />}>
                 <Route index element={<Navigate to="opportunities" replace />} />

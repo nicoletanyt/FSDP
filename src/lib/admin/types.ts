@@ -307,18 +307,6 @@ export interface NotificationEntry {
   failedCount: number
 }
 
-export interface NewSessionInput {
-  centreId: string
-  instructorId: string
-  title: string
-  date: string
-  startTime: string
-  durationMinutes: number
-  type: SessionType
-  isExternal: boolean
-  externalLocation?: string
-}
-
 export interface NewOpportunityInput {
   title: string
   centreId: string

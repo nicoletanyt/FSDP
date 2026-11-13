@@ -2,12 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import {
     ChevronDown,
-    ChevronLeft,
-    ChevronRight,
     Clock3,
-    CalendarDays as CalendarDaysIcon,
-    Info,
-    List,
     MapPin,
     Plus,
     Users,
@@ -18,6 +13,8 @@ import DayClassDetails from "@/components/instructor/DayClassDetails";
 import SelectedClassIndicator from "@/components/instructor/SelectedClassIndicator";
 import CalendarTimeline from "@/components/instructor/CalendarTimeline";
 import CalendarDaySelector from "@/components/instructor/CalendarDaySelector";
+import CalendarToolbar from "@/components/calendar/CalendarToolbar";
+import { useCalendarShortcuts } from "@/hooks/use-calendar-shortcuts";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { useInstructorCalendarRange, useInstructorSelectedEvent } from "@/hooks/use-instructor-class-queries";
 import { useInstructorPrefetch } from "@/hooks/use-instructor-prefetch";
@@ -35,21 +32,6 @@ import {
 import InstructorAvailabilityEditor from "@/components/instructor/InstructorAvailabilityEditor";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Kbd } from "@/components/ui/kbd";
-import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@/components/ui/popover";
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuRadioGroup,
-    DropdownMenuRadioItem,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-    Tooltip,
-    TooltipContent,
-    TooltipProvider,
-    TooltipTrigger,
-} from "@/components/ui/tooltip";
 import type { AvailabilityRange, AvailabilitySlot } from "@/lib/instructor-availability";
 import { availabilityError, minutesTime } from "@/lib/instructor-availability";
 import {
@@ -673,52 +655,29 @@ export default function InstructorDashboard() {
         setSearchParams(next);
     }, [searchParams, selectedDateKey, setSearchParams]);
 
-    useEffect(() => {
-        function handleCalendarShortcut(event: KeyboardEvent) {
-            if (
-                event.defaultPrevented || event.repeat || event.isComposing ||
-                event.ctrlKey || event.metaKey || event.altKey || availabilityDialog
-            ) return;
-            const target = event.target;
-            if (target instanceof HTMLElement && (
-                target.isContentEditable || target.closest('input, textarea, select, [role="textbox"], [role="combobox"]')
-            )) return;
-            // Hidden overlays such as the closed chatbot stay mounted in the page.
-            const hasOpenOverlay = Array.from(document.querySelectorAll<HTMLElement>(
-                '[role="dialog"], [role="alertdialog"], [role="menu"]',
-            )).some((overlay) => {
-                if (overlay.closest('[hidden], [inert], [aria-hidden="true"], [data-closed]')) return false;
-                const style = window.getComputedStyle(overlay);
-                return overlay.getClientRects().length > 0 && style.visibility === "visible" && style.opacity !== "0";
+    useCalendarShortcuts({
+        disabled: Boolean(availabilityDialog),
+        onEscape: () => {
+            if (!expandedClassId) return false;
+            setSearchParams((params) => {
+                const next = new URLSearchParams(params);
+                next.set("date", selectedDateKey);
+                next.delete("session");
+                next.delete("class");
+                return next;
             });
-            if (hasOpenOverlay) return;
-
-            const key = event.key.toLowerCase();
-            const nextView = key === "w" ? "week" : key === "d" ? "day" : key === "m" ? "month" : null;
-            if (key === "escape" && expandedClassId) {
-                event.preventDefault();
-                setSearchParams((params) => {
-                    const next = new URLSearchParams(params);
-                    next.set("date", selectedDateKey);
-                    next.delete("session");
-                    next.delete("class");
-                    return next;
-                });
-            } else if (nextView) {
-                event.preventDefault();
-                setMobileList(false);
-                changeView(nextView);
-            } else if (key === "t" || key === "l") {
-                event.preventDefault();
-                setMobileList(key === "l");
-                updateDisplayMode(view === "day" ? "day" : "week", key === "t" ? "timeline" : "list");
-                if (view === "month") changeView("week");
-            }
-        }
-
-        window.addEventListener("keydown", handleCalendarShortcut);
-        return () => window.removeEventListener("keydown", handleCalendarShortcut);
-    }, [availabilityDialog, changeView, expandedClassId, selectedDateKey, setSearchParams, updateDisplayMode, view]);
+            return true;
+        },
+        onView: (nextView) => {
+            setMobileList(false);
+            changeView(nextView);
+        },
+        onDisplayMode: (mode) => {
+            setMobileList(mode === "list");
+            updateDisplayMode(view === "day" ? "day" : "week", mode);
+            if (view === "month") changeView("week");
+        },
+    });
 
     const heading =
         view === "week"
@@ -794,143 +753,40 @@ export default function InstructorDashboard() {
                 </h1>
             </header>
             <section className="flex flex-col gap-4 lg:min-h-0 lg:flex-1">
-                <div className="flex shrink-0 flex-wrap items-center justify-between gap-4">
-                    <div className="flex min-w-0 w-full flex-wrap items-center gap-3 lg:w-auto lg:gap-4">
-                        <div
-                            role="group"
-                            aria-label={`${view[0].toUpperCase()}${view.slice(1)} navigation`}
-                            className="flex items-center gap-2"
-                        >
-                            <Button
-                                variant="outline"
-                                onClick={() => {
-                                    const now = singaporeClock();
-                                    setNow(now);
-                                    setTimelineFocusRequest(request => request + 1);
-                                    updateSelection(
-                                        new Date(
-                                            now.getFullYear(),
-                                            now.getMonth(),
-                                            now.getDate(),
-                                        ),
-                                    );
-                                }}
-                                className="mr-1 h-11 px-4 lg:h-10"
-                            >
-                                Today
-                            </Button>
-                            <Button
-                                variant="ghost"
-                                size="icon-lg"
-                                className="size-11 lg:size-10"
-                                aria-label={`Previous ${view}`}
-                                onClick={() => navigateDate(-1)}
-                            >
-                                <ChevronLeft aria-hidden="true" />
-                            </Button>
-                            <Button
-                                variant="ghost"
-                                size="icon-lg"
-                                className="size-11 lg:size-10"
-                                aria-label={`Next ${view}`}
-                                onClick={() => navigateDate(1)}
-                            >
-                                <ChevronRight aria-hidden="true" />
-                            </Button>
-                        </div>
-                        <h2 className="w-full text-sm font-medium lg:w-auto" aria-live="polite">
-                            {heading}
-                        </h2>
-                    </div>
-                    <div className="grid w-full grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-2 sm:flex sm:flex-wrap sm:gap-3 lg:w-auto">
-                        {canUseAvailability && <Button variant="outline" onClick={addAvailability} className="col-span-full h-11 w-full gap-2 px-4 sm:w-auto lg:h-10">
-                            <Plus aria-hidden="true" />Add Availability
-                        </Button>}
-                        <DropdownMenu>
-                            <DropdownMenuTrigger
-                                render={<Button variant="outline" className="h-11 min-w-0 justify-between gap-1 px-2 sm:min-w-28 sm:gap-3 sm:px-4 lg:h-10" />}
-                                aria-label={`Calendar date range: ${view}`}
-                            >
-                                {view[0].toUpperCase()}{view.slice(1)}
-                                <ChevronDown aria-hidden="true" />
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent className="p-1.5">
-                                <DropdownMenuRadioGroup value={view} onValueChange={changeView} aria-label="Calendar date range">
-                                    <DropdownMenuRadioItem value="day" closeOnClick aria-keyshortcuts="d" className="py-2.5 pr-4 pl-9">
-                                        Day<Kbd className="ml-auto" aria-hidden="true">D</Kbd>
-                                    </DropdownMenuRadioItem>
-                                    <DropdownMenuRadioItem value="week" closeOnClick aria-keyshortcuts="w" className="py-2.5 pr-4 pl-9">
-                                        Week<Kbd className="ml-auto" aria-hidden="true">W</Kbd>
-                                    </DropdownMenuRadioItem>
-                                    <DropdownMenuRadioItem value="month" closeOnClick aria-keyshortcuts="m" className="py-2.5 pr-4 pl-9">
-                                        Month<Kbd className="ml-auto" aria-hidden="true">M</Kbd>
-                                    </DropdownMenuRadioItem>
-                                </DropdownMenuRadioGroup>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                        {view !== "month" && <TooltipProvider>
-                            <DropdownMenu>
-                                <Tooltip>
-                                    <TooltipTrigger render={
-                                        <DropdownMenuTrigger
-                                            render={<Button variant="outline" className="h-11 min-w-0 justify-between gap-1 px-2 sm:min-w-28 sm:gap-3 sm:px-4 lg:h-10" />}
-                                            aria-label={`Calendar display mode: ${activeDisplayMode}`}
-                                        />
-                                    }>
-                                        {activeDisplayMode === "timeline" ? <CalendarDaysIcon aria-hidden="true" /> : <List aria-hidden="true" />}
-                                        {activeDisplayMode === "timeline" ? "Timeline" : "List"}
-                                        <ChevronDown aria-hidden="true" />
-                                    </TooltipTrigger>
-                                    <TooltipContent>Calendar display mode</TooltipContent>
-                                </Tooltip>
-                                <DropdownMenuContent className="p-1.5">
-                                    <DropdownMenuRadioGroup
-                                        aria-label="Calendar display mode"
-                                        value={activeDisplayMode}
-                                        onValueChange={(value) => {
-                                            if (value === "timeline" || value === "list") {
-                                                updateDisplayMode(view === "day" ? "day" : "week", value);
-                                            }
-                                        }}
-                                    >
-                                        <DropdownMenuRadioItem value="timeline" closeOnClick aria-keyshortcuts="t" className="gap-3 py-2.5 pr-4 pl-9">
-                                            <CalendarDaysIcon aria-hidden="true" className="size-4" />Timeline<Kbd className="ml-auto" aria-hidden="true">T</Kbd>
-                                        </DropdownMenuRadioItem>
-                                        <DropdownMenuRadioItem value="list" closeOnClick aria-keyshortcuts="l" className="gap-3 py-2.5 pr-4 pl-9">
-                                            <List aria-hidden="true" className="size-4" />List<Kbd className="ml-auto" aria-hidden="true">L</Kbd>
-                                        </DropdownMenuRadioItem>
-                                    </DropdownMenuRadioGroup>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-                        </TooltipProvider>}
-                        <Popover>
-                            <PopoverTrigger
-                                render={<Button variant="ghost" size="icon-lg" className="size-11 lg:size-10" />}
-                                aria-label="Calendar information"
-                                title="Calendar information"
-                            >
-                                <Info aria-hidden="true" className="size-5" />
-                            </PopoverTrigger>
-                            <PopoverContent className="max-h-[min(36rem,calc(100dvh-3rem))] w-96 overflow-y-auto">
-                                <PopoverTitle>Calendar legend</PopoverTitle>
-                                <p className="-mt-2 text-xs text-muted-foreground">Classes · Singapore time</p>
-                                {catalogueStatus}
-                                {calendar.status === 'success' && !calendar.data.classTypes.length && <p className="text-xs text-muted-foreground">No class types recorded.</p>}
-                                <ul className="space-y-3 text-xs">
-                                    {(calendar.data?.classTypes ?? []).map(type => (
-                                        <li key={type.id} className="grid gap-1 sm:grid-cols-[9.5rem_minmax(0,1fr)] sm:items-center sm:gap-3">
-                                            <span className={cn("w-fit rounded-full border px-2 py-1 text-[10px] uppercase", calendarClassStyle(type.id).badge)}>{type.label}</span>
-                                            <span className="text-muted-foreground">{type.description}</span>
-                                        </li>
-                                    ))}
-                                </ul>
-                                {canUseAvailability && <ul className="flex flex-wrap gap-4 border-t pt-3 text-xs text-muted-foreground">
-                                    <li className="flex items-center gap-2"><span aria-hidden="true" className="size-2 rounded-full bg-emerald-500" />Availability</li>
-                                </ul>}
-                            </PopoverContent>
-                        </Popover>
-                    </div>
-                </div>
+                <CalendarToolbar
+                    view={view}
+                    onViewChange={changeView}
+                    displayMode={activeDisplayMode}
+                    onDisplayModeChange={(mode) => updateDisplayMode(view === "day" ? "day" : "week", mode)}
+                    heading={heading}
+                    onToday={() => {
+                        const now = singaporeClock();
+                        setNow(now);
+                        setTimelineFocusRequest(request => request + 1);
+                        updateSelection(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
+                    }}
+                    onPrevious={() => navigateDate(-1)}
+                    onNext={() => navigateDate(1)}
+                    actions={canUseAvailability && <Button variant="outline" onClick={addAvailability} className="col-span-full h-11 w-full gap-2 px-4 sm:w-auto lg:h-10">
+                        <Plus aria-hidden="true" />Add Availability
+                    </Button>}
+                    legend={<>
+                        <p className="-mt-2 text-xs text-muted-foreground">Classes · Singapore time</p>
+                        {catalogueStatus}
+                        {calendar.status === 'success' && !calendar.data.classTypes.length && <p className="text-xs text-muted-foreground">No class types recorded.</p>}
+                        <ul className="space-y-3 text-xs">
+                            {(calendar.data?.classTypes ?? []).map(type => (
+                                <li key={type.id} className="grid gap-1 sm:grid-cols-[9.5rem_minmax(0,1fr)] sm:items-center sm:gap-3">
+                                    <span className={cn("w-fit rounded-full border px-2 py-1 text-[10px] uppercase", calendarClassStyle(type.id).badge)}>{type.label}</span>
+                                    <span className="text-muted-foreground">{type.description}</span>
+                                </li>
+                            ))}
+                        </ul>
+                        {canUseAvailability && <ul className="flex flex-wrap gap-4 border-t pt-3 text-xs text-muted-foreground">
+                            <li className="flex items-center gap-2"><span aria-hidden="true" className="size-2 rounded-full bg-emerald-500" />Availability</li>
+                        </ul>}
+                    </>}
+                />
                 <div className={cn(
                     "flex flex-col lg:min-h-0 lg:flex-1",
                     showSidePanel && "lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:grid-rows-1 lg:gap-3 lg:overflow-hidden",

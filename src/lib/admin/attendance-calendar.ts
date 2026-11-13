@@ -1,11 +1,5 @@
 import { toIsoDate } from './format'
-import type {
-  AttendanceRecord,
-  Centre,
-  Instructor,
-  Session,
-  Student,
-} from './types'
+import type { Session, Student } from './types'
 
 export interface AdminCalendarEvent {
   id: string
@@ -161,67 +155,4 @@ export function layoutTimelineItems<
   }
   flush()
   return result
-}
-
-export function endTime(startTime: string, durationMinutes: number): string {
-  const [hours, minutes] = startTime.split(':').map(Number)
-  if (Number.isNaN(hours) || Number.isNaN(minutes)) return startTime
-  const total = hours * 60 + minutes + durationMinutes
-  const endHours = Math.floor(total / 60) % 24
-  const endMinutes = total % 60
-  return `${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}`
-}
-
-export function rosterForSession(
-  students: Student[],
-  attendance: AttendanceRecord[],
-  session: Session,
-): Student[] {
-  const base = students
-    .filter((student) => student.homeCentreId === session.centreId)
-    .sort((left, right) => left.firstName.localeCompare(right.firstName))
-  const baseIds = new Set(base.map((student) => student.id))
-  const recordedIds = new Set(
-    attendance
-      .filter((record) => record.sessionId === session.id)
-      .map((record) => record.studentId),
-  )
-  const guests = students
-    .filter(
-      (student) => !baseIds.has(student.id) && recordedIds.has(student.id),
-    )
-    .sort((left, right) => left.firstName.localeCompare(right.firstName))
-  return [...base, ...guests]
-}
-
-export function buildCalendarEvent({
-  session,
-  centres,
-  instructors,
-  students,
-  attendance,
-}: {
-  session: Session
-  centres: Centre[]
-  instructors: Instructor[]
-  students: Student[]
-  attendance: AttendanceRecord[]
-}): AdminCalendarEvent {
-  const centre = centres.find((item) => item.id === session.centreId)
-  const instructor = instructors.find(
-    (item) => item.id === session.instructorId,
-  )
-  return {
-    id: session.id,
-    session,
-    date: parseIsoDate(session.date) ?? new Date(),
-    startTime: session.startTime,
-    endTime: endTime(session.startTime, session.durationMinutes),
-    name: session.title,
-    centreName: centre?.name ?? 'Unknown centre',
-    instructorName: instructor
-      ? `${instructor.firstName} ${instructor.lastName}`
-      : 'Unassigned',
-    roster: rosterForSession(students, attendance, session),
-  }
 }

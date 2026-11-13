@@ -11,6 +11,7 @@ import AttendanceClassDetails from '@/components/admin/AttendanceClassDetails'
 import LiveClassDetails from '@/components/admin/LiveClassDetails'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import type { CalendarDisplayMode as CalendarDisplay, CalendarRange as CalendarView } from '@/components/calendar/CalendarToolbar'
 import type { AdminCalendarEvent } from '@/lib/admin/attendance-calendar'
 import {
   dateKey,
@@ -26,9 +27,6 @@ import {
 } from '@/lib/admin/attendance-calendar'
 import { getSessionStyle } from '@/lib/admin/session-styles'
 import { cn } from 'cn'
-
-export type CalendarView = 'day' | 'week' | 'month'
-export type CalendarDisplay = 'timeline' | 'list'
 
 type EventLayout = 'day' | 'week' | 'panel'
 
