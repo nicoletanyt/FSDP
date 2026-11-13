@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { gradingEligibilityKey, loadGradingEligibility } from '@/lib/admin/section-counts'
 import { ArrowRight, Bell, CheckCircle2, ChevronRight, XCircle } from 'lucide-react'
 import { GradeLabelBadge } from '@/components/admin/AdminGradeBadge'
 import FilterPopover, { FilterField } from '@/components/FilterPopover'
@@ -158,14 +159,9 @@ export default function GradingEligibility() {
   }, [notifyOpen])
 
   const eligibility = useQuery({
-    queryKey: ['admin', 'grading-eligibility', session?.user.id, eventId],
+    queryKey: gradingEligibilityKey(session?.user.id, eventId),
     enabled: !!session,
-    queryFn: async (): Promise<LiveEligibleStudent[]> => {
-      const { data, error } = await supabase.rpc('admin_grading_eligibility', { target_event: eventId || null })
-      if (error) throw error
-      if (!Array.isArray(data)) throw new Error('No eligibility results were returned.')
-      return data as LiveEligibleStudent[]
-    },
+    queryFn: () => loadGradingEligibility<LiveEligibleStudent>(eventId),
     refetchOnWindowFocus: true,
   })
   const eligible = eligibility.data ?? []

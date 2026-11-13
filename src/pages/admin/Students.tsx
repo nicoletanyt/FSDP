@@ -1,17 +1,20 @@
 import { Outlet } from 'react-router'
 import PageHeader from '@/components/admin/PageHeader'
 import SectionTabs from '@/components/admin/SectionTabs'
+import { useAtRiskCount } from '@/lib/admin/section-counts'
 
-const tabs = [
+const baseTabs = [
   { to: '/admin/students', label: 'All students', end: true },
   { to: '/admin/students/attendance', label: 'Attendance watch' },
 ]
 
 export default function Students() {
+  const count = useAtRiskCount()
+  const tabs = baseTabs.map(tab => tab.to === '/admin/students/attendance' ? { ...tab, count } : tab)
   return (
     <div className="space-y-6">
       <PageHeader title="Students" />
-      <SectionTabs label="Student sections" tabs={tabs} />
+      <SectionTabs tabs={tabs} label="Student sections" />
       <Outlet />
     </div>
   )

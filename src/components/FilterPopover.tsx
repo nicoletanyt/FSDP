@@ -1,6 +1,7 @@
 import { useId, useRef, useState } from "react";
 import type { ComponentProps, ReactNode } from "react";
 import { SlidersHorizontal } from "lucide-react";
+import CountBadge from "@/components/CountBadge";
 import FilterCombobox from "@/components/FilterCombobox";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -58,14 +59,7 @@ export default function FilterPopover({
             >
                 <SlidersHorizontal aria-hidden="true" className="size-4" />
                 <span>Filter</span>
-                {activeCount > 0 && (
-                    <span
-                        aria-hidden="true"
-                        className="directory-filter-count flex size-5 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground"
-                    >
-                        {activeCount}
-                    </span>
-                )}
+                {activeCount > 0 && <CountBadge count={activeCount} />}
             </PopoverTrigger>
             <PopoverContent
                 align="end"

@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { attendanceMonitoringKey, loadAttendanceMonitoring } from '@/lib/admin/section-counts'
 import { AlertTriangle, Bell, CheckCircle2, ChevronRight } from 'lucide-react'
 import AttendanceNoticeDialog, { noticeResultMessage } from '@/components/admin/AttendanceNoticeDialog'
 import EmptyState from '@/components/admin/EmptyState'
@@ -15,7 +16,6 @@ import { useAuth } from '@/hooks/use-auth'
 import { formatPercent, initials, relativeDay } from '@/lib/admin/format'
 import { loadCalendarCentres } from '@/lib/admin/live-class-calendar'
 import type { RiskLevel } from '@/lib/admin/types'
-import { supabase } from '@/lib/supabase'
 import { cn } from 'cn'
 import FilterPopover, { FilterField } from '@/components/FilterPopover'
 import SearchInput from '@/components/SearchInput'
@@ -57,13 +57,8 @@ export default function AttendanceMonitoring() {
   const validCentre = centreId === 'all' || centresQuery.data?.some(centre => centre.id === centreId)
   const targetCentre = validCentre && centreId !== 'all' ? centreId : null
   const monitoring = useQuery({
-    queryKey: ['admin', 'attendance-monitoring-recent-enrolments', session?.user.id, targetCentre],
-    queryFn: async (): Promise<MonitoredStudent[]> => {
-      const { data, error } = await supabase.rpc('admin_attendance_monitoring', { target_centre: targetCentre })
-      if (error) throw error
-      if (!Array.isArray(data)) throw new Error('No monitoring data was returned.')
-      return data as MonitoredStudent[]
-    },
+    queryKey: attendanceMonitoringKey(session?.user.id, targetCentre),
+    queryFn: () => loadAttendanceMonitoring<MonitoredStudent>(targetCentre),
     enabled: !!session && centresQuery.isSuccess && !!validCentre,
     refetchOnWindowFocus: true,
   })
