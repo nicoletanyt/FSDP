@@ -37,37 +37,30 @@ export default function StatCard({
   to?: string
 }) {
   const content = (
-    <>
-      <div className="flex items-start justify-between gap-3">
-        <p className="text-sm font-medium text-muted-foreground">{label}</p>
-        <span className={cn('flex size-8 items-center justify-center rounded-lg', toneClasses[tone])}>
-          <Icon className="size-4" aria-hidden="true" />
-        </span>
+    <div className="flex items-center justify-between gap-3">
+      <div className="min-w-0">
+        <p className="text-xs font-medium text-muted-foreground">{label}</p>
+        <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+          <p className="text-2xl leading-tight font-semibold tracking-tight tabular-nums">{value}</p>
+          {change !== undefined && (
+            <span className={cn('inline-flex items-center gap-0.5 text-xs font-medium',
+              change > 0 ? 'text-success' : change < 0 ? 'text-destructive' : 'text-muted-foreground')}>
+              {change > 0 ? <ArrowUpRight className="size-3" aria-hidden="true" />
+                : change < 0 ? <ArrowDownRight className="size-3" aria-hidden="true" /> : null}
+              {formatSignedPercent(change)}
+            </span>
+          )}
+          {detail && <span className="text-xs text-muted-foreground">{detail}</span>}
+        </div>
       </div>
-      <p className="mt-3 text-3xl font-semibold tracking-tight tabular-nums">{value}</p>
-      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-        {change !== undefined && (
-          <span
-            className={cn(
-              'inline-flex items-center gap-0.5 font-medium',
-              change > 0 ? 'text-success' : change < 0 ? 'text-destructive' : 'text-muted-foreground',
-            )}
-          >
-            {change > 0 ? (
-              <ArrowUpRight className="size-3" aria-hidden="true" />
-            ) : change < 0 ? (
-              <ArrowDownRight className="size-3" aria-hidden="true" />
-            ) : null}
-            {formatSignedPercent(change)}
-          </span>
-        )}
-        {detail && <span>{detail}</span>}
-      </div>
-    </>
+      <span className={cn('flex size-8 shrink-0 items-center justify-center rounded-lg', toneClasses[tone])}>
+        <Icon className="size-4" aria-hidden="true" />
+      </span>
+    </div>
   )
 
   const className = cn(
-    'block rounded-xl p-5 ring-1',
+    'block rounded-xl p-3 ring-1 sm:px-4',
     surfaceClasses[tone],
     to && 'transition-colors hover:ring-primary/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
   )

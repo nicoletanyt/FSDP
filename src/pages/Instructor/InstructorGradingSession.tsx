@@ -1,9 +1,8 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useParams } from "react-router";
-import { CalendarDays, MapPin } from "lucide-react";
+import { Link, useParams, useSearchParams } from "react-router";
+import { CalendarDays, ChevronLeft, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import BackToCalendarLink from "@/components/instructor/BackToCalendarLink";
 import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
 import GradingSignatureDialog from "@/components/instructor/GradingSignatureDialog";
 import { useInstructorApi } from "@/lib/instructor/data-context";
@@ -14,10 +13,8 @@ import {
     instructorQueryKeys as keys,
     instructorQueryTimes as times,
 } from "@/lib/instructor/query-keys";
-import {
-    sessionCalendarHref,
-    sessionDateLabel,
-} from "@/lib/instructor/session-reads";
+import { sessionDateLabel } from "@/lib/instructor/session-reads";
+import type { GradingDay } from "@/lib/instructor/grading-panels";
 import type {
     CalendarEntry,
     InstructorReferenceData,
@@ -32,15 +29,27 @@ function GradingTable({
     reference,
     identity,
     initialBatch,
+    day,
+    requestedGrade,
 }: {
     session: CalendarEntry;
     entries: RosterEntry[];
     reference: InstructorReferenceData;
     identity: InstructorIdentity;
     initialBatch: GradingBatch | null;
+    day: GradingDay;
+    requestedGrade: string | null;
 }) {
-    const [track, setTrack] = useState<"" | "children" | "adult">(initialBatch?.track ?? session.grading?.track ?? "");
-    const [grade, setGrade] = useState(initialBatch?.target_grade_id ?? "");
+    const requested = requestedGrade && day.grades.some((item) => item.grade.id === requestedGrade) ? requestedGrade : null;
+    const [track, setTrack] = useState<"" | "children" | "adult">(
+        requested ? (session.grading?.track ?? initialBatch?.track ?? "") : (initialBatch?.track ?? session.grading?.track ?? ""));
+    const [grade, setGrade] = useState(requested ?? initialBatch?.target_grade_id ?? "");
+    // Each target grade is its own session: only its applicants are graded.
+    const candidateCounts = new Map(day.grades.map((item) => [item.grade.id, item.candidates.length]));
+    const gradeEntries = useMemo(() => {
+        const ids = new Set(day.grades.find((item) => item.grade.id === grade)?.candidates.map((candidate) => candidate.studentId) ?? []);
+        return entries.filter((entry) => ids.has(entry.record.student_id));
+    }, [day, entries, grade]);
     const [signatureOpen, setSignatureOpen] = useState(false);
     const grades = reference.grades
         .filter((item) =>
@@ -58,7 +67,7 @@ function GradingTable({
                 a.sort_order - b.sort_order ||
                 a.id.localeCompare(b.id),
         );
-    const batch = useInstructorGradingBatch({ session, entries, identity, track, grade, techniques });
+    const batch = useInstructorGradingBatch({ session, entries: gradeEntries, identity, track, grade, techniques });
     const canSave = Boolean(grade && batch.ready && batch.students.length && batch.items.length && !batch.pending && !batch.readOnly && !batch.needsReload);
     const date = session.event.starts_at
         ? `${new Intl.DateTimeFormat("en-SG", { dateStyle: "full", timeStyle: "short", timeZone: "Asia/Singapore" }).format(new Date(session.event.starts_at))} (Singapore time)`
@@ -132,11 +141,14 @@ function GradingTable({
                             className="h-10 rounded-md border border-input bg-background px-3 text-sm disabled:opacity-50"
                         >
                             <option value="">Select grade</option>
-                            {grades.map((item) => (
-                                <option key={item.id} value={item.id}>
-                                    {item.label}
-                                </option>
-                            ))}
+                            {grades.map((item) => {
+                                const count = candidateCounts.get(item.id) ?? 0;
+                                return (
+                                    <option key={item.id} value={item.id} disabled={!count && item.id !== grade}>
+                                        {item.label} ({count === 1 ? "1 candidate" : `${count} candidates`})
+                                    </option>
+                                );
+                            })}
                         </select>
                     </label>
                 </div>
@@ -148,7 +160,7 @@ function GradingTable({
                     <InstructorDataStatus loading={batch.query.status !== "error"} error={batch.query.error} onRetry={batch.query.retry} variant="roster" />
                 ) : !batch.students.length ? (
                     <p className="rounded-lg border p-4 text-sm text-muted-foreground">
-                        No students are registered for this grading session.
+                        No candidates are attempting this grade.
                     </p>
                 ) : !batch.items.length ? (
                     <p className="rounded-lg border p-4 text-sm text-muted-foreground">
@@ -269,25 +281,35 @@ export default function InstructorGradingSession() {
                 parseEntityId(eventId, "event"),
                 signal,
             );
-            const [reference, identity, initialBatch] = await Promise.all([
+            if (roster.session.event.event_type !== "grading") return { ...roster, day: null, reference: null, identity: null, initialBatch: null };
+            // The grading day also checks panel membership: non-examiners get an error here.
+            const [reference, identity, initialBatch, day] = await Promise.all([
                 api.getReferenceData(signal), api.getCurrentInstructor(signal),
-                roster.session.event.event_type === "grading" ? api.getLatestGradingBatch(roster.session.event.id, signal) : Promise.resolve(null),
+                api.getLatestGradingBatch(roster.session.event.id, signal),
+                api.getGradingDay(roster.session.event.id, signal),
             ]);
             signal.throwIfAborted();
             if (initialBatch) client.setQueryData<GradingBatch>(keys.gradingBatch(identity.userId, roster.session.event.id, initialBatch.track, initialBatch.target_grade_id),
                 current => !current || current.version <= initialBatch.version ? initialBatch : current);
-            return { ...roster, reference, identity, initialBatch };
+            return { ...roster, reference, identity, initialBatch, day };
         },
         [api, eventId, client],
     );
+    const [search] = useSearchParams();
+    const requestedGrade = search.get("grade");
     const query = useInstructorQuery(
         (userId) => keys.gradingSession(userId, eventId ?? ""),
         load,
         times.roster,
     );
     return (
-        <section className="mx-auto w-full max-w-7xl space-y-6">
-            <BackToCalendarLink to={query.status === "success" ? sessionCalendarHref(query.data.session) : undefined} />
+        <section className="w-full space-y-4">
+            <Link
+                to={eventId ? `/instructor/gradings/${eventId}` : "/instructor/gradings"}
+                className="inline-flex min-h-11 items-center gap-1 rounded-sm text-sm text-muted-foreground hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+            >
+                <ChevronLeft aria-hidden="true" className="size-4" /> Back to grading sessions
+            </Link>
             {query.status !== "success" ? (
                 <InstructorDataStatus
                     loading={query.status === "loading"}
@@ -295,12 +317,14 @@ export default function InstructorGradingSession() {
                     onRetry={query.retry}
                     variant="grading"
                 />
-            ) : query.data.session.event.event_type !== "grading" ? (
+            ) : query.data.session.event.event_type !== "grading" || !query.data.day || !query.data.reference || !query.data.identity ? (
                 <h1 className="text-2xl font-semibold">
                     Grading session not found
                 </h1>
             ) : (
-                <GradingTable key={eventId} {...query.data} />
+                <GradingTable key={`${eventId}:${requestedGrade ?? ""}`} session={query.data.session} entries={query.data.entries}
+                    reference={query.data.reference} identity={query.data.identity} initialBatch={query.data.initialBatch}
+                    day={query.data.day} requestedGrade={requestedGrade} />
             )}
         </section>
     );

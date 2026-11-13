@@ -6,7 +6,7 @@ import { InstructorDataError } from '../../src/lib/instructor/errors'
 declare global { interface Window { gradingBatchRequestsFixture: GradingBatchSaveInput[] } }
 const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
 
-export function createGradingBatchFixture(account: string, mode: string | null, getApi: () => InstructorApi): Pick<InstructorApi, 'getGradingBatch' | 'getLatestGradingBatch' | 'saveGradingBatch'> {
+export function createGradingBatchFixture(account: string, mode: string | null, getApi: () => InstructorApi): Pick<InstructorApi, 'getGradingBatch' | 'getLatestGradingBatch' | 'saveGradingBatch' | 'getGradingDay'> {
   const key = `test-only-grading-batches:${account}`
   const batches = new Map<string, GradingBatch>(mode === 'batch-persistence' ? JSON.parse(sessionStorage.getItem(key) ?? '[]') : [])
   const receipts = new Map<string, { input: string; result: GradingBatch }>()
@@ -14,6 +14,24 @@ export function createGradingBatchFixture(account: string, mode: string | null, 
   const instructorId = uuid(account === 'audit' ? 1 : 2) as InstructorId
   window.gradingBatchRequestsFixture = []
   return {
+    // Fixture gradings have no applications: every rostered student is a
+    // candidate for every grade, matching how fixture saves snapshot the roster.
+    async getGradingDay(eventId, signal) {
+      const api = getApi()
+      const controller = signal ?? new AbortController().signal
+      const roster = await api.getAttendanceRoster(eventId as Parameters<InstructorApi['getAttendanceRoster']>[0], controller)
+      const reference = await api.getReferenceData(controller)
+      const event = roster.session.event
+      const candidates = roster.entries.map(({ record, student }) => ({ studentId: student.student.id,
+        name: [student.student.first_name, student.student.last_name].filter(Boolean).join(' ') || student.student.email,
+        memberNo: null, candidateNumber: record.candidate_number ?? null, currentGrade: null }))
+      return { eventId: event.id, name: event.name, status: event.status, track: roster.session.grading?.track ?? null,
+        gradingDate: (event.starts_at ?? '2026-01-01').slice(0, 10),
+        startsAt: event.starts_at, endsAt: event.ends_at, reportingTime: null, isChief: true,
+        centre: { name: roster.session.centre?.name ?? 'Centre', address: '' },
+        panel: [{ instructorId, name: 'Fixture examiner', isChief: true }],
+        grades: reference.grades.map(grade => ({ grade, candidates, myBatch: null })) }
+    },
     async getLatestGradingBatch(eventId, signal) {
       await new Promise(resolve => setTimeout(resolve, 30))
       signal?.throwIfAborted()

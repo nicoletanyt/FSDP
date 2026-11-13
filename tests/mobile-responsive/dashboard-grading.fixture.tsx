@@ -28,7 +28,9 @@ createRoot(document.getElementById('root')!).render(
   <AuthContext.Provider value={auth}>
     <MemoryRouter initialEntries={['/dashboard']}>
       <Routes>
-        <Route element={<Outlet context={{ credits: 12 }} />}>
+        <Route element={<Outlet context={{ creditAccount: {
+          credits: 12, unlimited: false, loading: false, error: null, payment: null, retry: () => {},
+        } }} />}>
           <Route path="/dashboard" element={<StudentDashboard />} />
         </Route>
       </Routes>

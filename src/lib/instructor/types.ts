@@ -399,12 +399,23 @@ export interface InstructorReferenceData {
   classTypes: ClassTypeRow[]
 }
 
+// One target grade's own grading session within a grading event.
+export interface GradeSessionTime {
+  grade: GradeRow
+  startsAt: Timestamp | null
+  endsAt: Timestamp | null
+  candidates: number
+}
+
 export interface CalendarEntry {
   event: EventRow
   centre: CentreRow | null
   classType: ClassTypeRow | null
   grading: GradingRow | null
   targetGrades: GradeRow[]
+  // Per-grade sessions; empty for non-gradings. onPanel: the caller examines it.
+  gradeSessions: GradeSessionTime[]
+  onPanel: boolean
   seminar: SeminarRow | null
   workshop: WorkshopRow | null
   rosterCount: number

@@ -64,6 +64,9 @@ Deno.test('verified paid grading session finalizes once per webhook delivery; un
       return Response.json({ id: 'cs_test_grading', object: 'checkout.session', mode: 'payment',
         payment_status: 'paid', amount_total: amount, currency: 'sgd', metadata: { grading_attempt_id: attempt } })
     }
+    if (request.url.includes('/rest/v1/grading_checkout_attempts')) {
+      return Response.json({ amount_cents: expectedAmount })
+    }
     if (request.url.includes('/rest/v1/rpc/finalize_grading_checkout')) {
       finalized++
       const payload = await request.json()
@@ -95,6 +98,9 @@ Deno.test('verified paid grading session finalizes once per webhook delivery; un
     amount = expectedAmount = 7700
     assert.equal((await webhook(await signed(true))).status, 200)
     assert.equal(finalized, 3)
+    amount = expectedAmount = 4500
+    assert.equal((await webhook(await signed(true))).status, 200)
+    assert.equal(finalized, 4) // Preserve both late-fee and per-grade fee coverage.
   } finally {
     globalThis.fetch = originalFetch
     names.forEach((name, index) => previous[index] === undefined ? Deno.env.delete(name) : Deno.env.set(name, previous[index]!))
@@ -158,7 +164,7 @@ Deno.test('admin grading preview does not send; confirmation sends one email wit
       application_deadline: '2026-11-29', reporting_release_on: '2026-12-06', reporting_time: null,
       events: { name: 'Adult grading', centres: { name: 'ASK Headquarters Dojo', address: '9 Sin Ming Road' } },
     }] : [])])
-    if (url.pathname === '/rest/v1/grading_invitation_settings') return Response.json({
+    if (url.pathname === '/rest/v1/admin_email_templates') return Response.json({
       subject: savedSubject,
       body: invitationBody,
     })

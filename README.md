@@ -56,6 +56,7 @@ server secrets with `VITE_`.
 | `npm run test:auth-seed` | Test the administrator seed without cloud access |
 | `npm run seed:admin` | Create the development administrator using root `.env` |
 | `npm run seed:instructor-calendar -- --instructor-email EMAIL` | Add marked calendar test classes and event rosters for an existing instructor, in the current Singapore week |
+| `npm run seed:grading-sessions -- --yes` | **Delete every grading session** and create three upcoming ones (this week and next) with examiner panels |
 | `npx shadcn@latest add <component>` | Add a shadcn/ui component |
 
 ## Authentication
@@ -67,8 +68,13 @@ server secrets with `VITE_`.
   keep their current passwords. Email/password fields start empty on reload.
 - Staff: `/staff/login`; instructor dashboard: `/instructor`; administrator
   dashboard: `/admin`, including instructor account creation.
-- Instructor passwords are generated server-side and displayed to the creating
-  administrator after success. Save them then; they are not saved to browser storage.
+- Instructor passwords are generated server-side and sent in a plain-text login
+  email (staff login URL, email username, password) through EmailJS. The admin
+  page shows only that the account was created; it does not display the password
+  or email-delivery status. EmailJS acceptance is not a delivery guarantee. If
+  sending fails, the account still exists: do not create it again. An account
+  created with a non-deliverable email needs an authorized Auth password reset
+  before its owner can sign in. The password is not saved to browser storage.
 - After the instructor-availability migration is applied, trusted instructor
   profile creation also inserts a linked `public.instructors` row (`user_id`
   references the account). Existing unlinked instructors can open their calendar;
@@ -104,6 +110,28 @@ npm run seed:instructor-calendar -- --instructor-email INSTRUCTOR_EMAIL --week-o
 
 This is a development data script rather than a schema migration. It does not
 create students, centres, instructors, grading events or application records.
+
+To reset grading sessions for development, preview first and then run:
+
+```sh
+npm run seed:grading-sessions
+npm run seed:grading-sessions -- --yes
+```
+
+Without `--yes`, the script only prints what it would delete and create.
+`--yes` **deletes every grading session**, along with its applications,
+checkout attempts, rosters, grading batches, reviews, technique sign-offs and
+panels. It then creates three official gradings in the current or next
+Monday–Sunday Singapore week: an adult session this Saturday, then a children's
+session and an adult session next week, skipping dates that have already
+passed. Each session targets every grade on its track. Every instructor marked
+as an examiner who has an instructor login sits on each panel, and the chief examiner rotates between
+sessions. The new sessions have no candidates. Use `--today YYYY-MM-DD` to plan
+from another date.
+
+The deletes run one request at a time, starting with dependent rows. If one
+fails, the database is left with fewer rows but no broken references, and
+rerunning the script finishes the reset.
 
 ## Administrator console
 
@@ -304,6 +332,20 @@ npx vercel@latest deploy --prod
 
 ### Edge Functions — Supabase Cloud
 
+Instructor provisioning requires `EMAILJS_SERVICE_ID`, `EMAILJS_TEMPLATE_ID`,
+and `EMAILJS_PUBLIC_KEY` before an account can be created. The EmailJS template
+must have To `{{to_email}}`, Subject `{{email_subject}}`, and a **plain-text**
+body `{{email_body}}` (no BCC field). `create-instructor` creates the account
+once, then makes one email attempt; if the provider rejects it or the outcome
+is uncertain, the account still exists and must not be created again. Apply
+`20261112114518_instructor_account_email_template.sql`
+before deploying the updated function. Administrators can then edit the
+**Instructor account creation** subject and body on `/admin/email-templates`.
+Keep `{{first_name}}`, `{{login_url}}`, `{{email}}`, and `{{password}}` in the body;
+the function resolves them only when creating an account. This saved copy is
+separate from the EmailJS transport template. A missing or invalid saved
+template blocks account creation. Never log or persist the generated password.
+
 Replace `YOUR_PROJECT_REF` with your Supabase project reference. Configure
 `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID`,
 `STRIPE_GRADING_FEE_ID`, `APP_URL`, `AUTH_ALLOWED_ORIGINS`,
@@ -321,6 +363,7 @@ npx supabase@latest functions deploy create-checkout-session --project-ref YOUR_
 npx supabase@latest functions deploy stripe-webhook --project-ref YOUR_PROJECT_REF --use-api
 npx supabase@latest functions deploy send-grading-invitation --project-ref YOUR_PROJECT_REF --use-api
 npx supabase@latest functions deploy create-grading-checkout --project-ref YOUR_PROJECT_REF --use-api
+npx supabase@latest functions deploy create-credit-checkout --project-ref YOUR_PROJECT_REF --use-api
 ```
 
 Set `APP_URL` to the frontend origin for Checkout redirects and CORS. Configure
@@ -328,6 +371,24 @@ Stripe's test-mode webhook destination as
 `https://YOUR_PROJECT_REF.supabase.co/functions/v1/stripe-webhook` for
 `checkout.session.completed` and `checkout.session.async_payment_succeeded`.
 Store its signing secret as `STRIPE_WEBHOOK_SECRET` in Supabase.
+
+Credit purchases use `credit_accounts` (balance) and `credit_purchases` (one
+receipt per Stripe session). The verified webhook calls
+`finalize_credit_checkout` to save the receipt and increment the balance in one
+transaction. Re-delivering the same event cannot add credits twice. The student
+dashboard reads the account from Supabase, and after Checkout it waits for that
+session's receipt before showing payment confirmation. Deploy the frontend as
+well as the functions; older dashboards use a browser-local credit balance.
+
+`stripe-webhook` is shared by credit, membership, and grading payments. Preserve
+all three branches when merging/deploying it: deploying an older branch can
+acknowledge credit payments without topping up their accounts. Check
+`Credit purchase finalized` in function logs and the corresponding receipt row;
+the generic Stripe metadata flag `checkout_payment_verified` alone does not
+prove credits were granted. For a verified paid checkout missing its receipt,
+use Stripe's **Resend** event action after fixing the webhook; do not ask the
+student to purchase again. Run `node --test tests/credit-checkout-db.test.mjs`
+and the function tests before deployment.
 
 Create a **new** EmailJS template (keep the old one unchanged) with To
 `{{to_email}}`, BCC `{{bcc_emails}}`, Subject `{{email_subject}}`, and the body:

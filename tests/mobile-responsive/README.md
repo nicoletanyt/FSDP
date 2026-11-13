@@ -63,6 +63,11 @@ redirecting directly to Stripe, legacy review links, errors, missing application
 context and waiting for verified payment status on return. Stripe navigation is
 intercepted by the test; no real charge or Supabase write occurs.
 
+`student-credits.test.mjs` uses the same Chrome setup and port 5180 to check the
+real dashboard's database-backed balance at mobile and desktop sizes. It covers
+waiting for the checkout receipt, the updated balance, database failures/retry,
+and unlimited accounts. Its fixture never contacts Supabase or charges a card.
+
 The NFC suite simulates Android Chrome 89+, tablets, Edge, missing Web NFC,
 old Chrome, iPhones and insecure contexts without using real NFC hardware or
 calling Supabase. It checks ready/QR-only states, the compatible-device list,

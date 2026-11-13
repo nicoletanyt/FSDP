@@ -41,8 +41,12 @@ export async function handleRequest(request: Request): Promise<Response> {
     }
 
     console.log(`Stripe event ${event.type} (${event.id})`)
-    // Keep the membership and credit handling already deployed in production.
-    if (event.type === 'checkout.session.expired' || event.type === 'checkout.session.async_payment_failed') {
+
+    // Preserve membership cleanup from the deployed webhook.
+    if (
+      event.type === 'checkout.session.expired' ||
+      event.type === 'checkout.session.async_payment_failed'
+    ) {
       const session = event.data.object
       if (session.metadata?.membership_student_id) {
         const { error } = await adminClient().from('payments').delete()
@@ -69,6 +73,7 @@ export async function handleRequest(request: Request): Promise<Response> {
         if (session.metadata?.grading_attempt_id) {
           const verified = await stripe.checkout.sessions.retrieve(session.id)
           const db = adminClient()
+          // The live grading flow fixes a per-grade fee on the checkout attempt.
           const { data: attemptRow, error: attemptError } = await db.from('grading_checkout_attempts')
             .select('amount_cents').eq('id', session.metadata.grading_attempt_id).maybeSingle()
           if (attemptError) throw attemptError
@@ -84,7 +89,9 @@ export async function handleRequest(request: Request): Promise<Response> {
           if (error) throw error
           return Response.json({ received: true })
         }
+
         if (session.metadata?.membership_student_id) {
+          // Preserve the newer deployed membership flow when adding credit handling.
           const verified = await stripe.checkout.sessions.retrieve(session.id)
           const studentId = verified.metadata?.membership_student_id
           const db = adminClient()
@@ -94,32 +101,59 @@ export async function handleRequest(request: Request): Promise<Response> {
           const expectedAmount = pending
             ? (pending.student_id === studentId ? pending.amount_cents : null)
             : (await stripe.prices.retrieve(requireEnv('STRIPE_MEMBERSHIP_PRICE_ID'))).unit_amount
-          if (verified.payment_status !== 'paid' || verified.currency !== 'sgd' || !expectedAmount ||
-            verified.amount_total !== expectedAmount || !studentId || studentId !== session.metadata.membership_student_id ||
-            verified.client_reference_id !== studentId) return new Response('Membership payment mismatch.', { status: 400 })
+          if (verified.payment_status !== 'paid' || verified.currency !== 'sgd' ||
+            !expectedAmount || verified.amount_total !== expectedAmount || !studentId ||
+            studentId !== session.metadata.membership_student_id ||
+            verified.client_reference_id !== studentId) {
+            return new Response('Membership payment mismatch.', { status: 400 })
+          }
           const { error } = await db.rpc('finalize_membership_checkout', {
-            student: studentId, stripe_session: session.id, paid_amount: verified.amount_total, paid_currency: verified.currency,
+            student: studentId, stripe_session: session.id,
+            paid_amount: verified.amount_total, paid_currency: verified.currency,
           })
           if (error) throw error
           return Response.json({ received: true })
         }
+
         if (session.metadata?.credit_pass === 'true') {
           const verified = await stripe.checkout.sessions.retrieve(session.id)
           const metadata = verified.metadata ?? {}
+          const credits = Number(metadata.credit_pass_credits)
           const expected = resolveCreditPass(metadata.credit_pass_id, metadata.credit_membership_type)
-          if (verified.payment_status !== 'paid' || verified.currency !== 'sgd' || metadata.credit_pass !== 'true' ||
-            !metadata.credit_user_id || verified.client_reference_id !== metadata.credit_user_id || !expected ||
-            expected.amountCents !== verified.amount_total || expected.credits !== Number(metadata.credit_pass_credits) ||
-            String(expected.unlimited) !== metadata.credit_pass_unlimited) return new Response('Credit payment mismatch.', { status: 400 })
+          const unlimited = metadata.credit_pass_unlimited === 'true'
+
+          if (
+            verified.payment_status !== 'paid' ||
+            verified.currency !== 'sgd' ||
+            !verified.amount_total || verified.amount_total <= 0 ||
+            metadata.credit_pass !== 'true' ||
+            !metadata.credit_user_id ||
+            verified.client_reference_id !== metadata.credit_user_id ||
+            !expected ||
+            expected.amountCents !== verified.amount_total ||
+            expected.credits !== credits ||
+            expected.unlimited !== unlimited ||
+            (metadata.credit_pass_unlimited !== 'true' && metadata.credit_pass_unlimited !== 'false')
+          ) {
+            return new Response('Credit payment mismatch.', { status: 400 })
+          }
+
           const { error } = await adminClient().rpc('finalize_credit_checkout', {
-            auth_user: metadata.credit_user_id, stripe_session: session.id, pass_id: expected.id, pass_title: expected.title,
-            credits: expected.credits, unlimited: expected.unlimited, membership_type: expected.membershipType,
-            paid_amount: verified.amount_total, paid_currency: verified.currency,
+            auth_user: metadata.credit_user_id,
+            stripe_session: session.id,
+            pass_id: expected.id,
+            pass_title: expected.title,
+            credits: expected.credits,
+            unlimited: expected.unlimited,
+            membership_type: expected.membershipType,
+            paid_amount: verified.amount_total,
+            paid_currency: verified.currency,
           })
           if (error) throw error
           console.log(`Credit purchase finalized (${session.id})`)
           return Response.json({ received: true })
         }
+
         // A fixed assignment stays idempotent even after Stripe's key expires.
         // Both event types use the same key, including concurrent deliveries.
         await stripe.checkout.sessions.update(session.id, {

@@ -1,9 +1,20 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0'
+import { instructorTitleLabels, isInstructorTitle, isTitleAllowed, titleRequirement } from '../_shared/instructor-titles.ts'
 
 function requiredEnv(name: string) {
   const value = Deno.env.get(name)?.trim()
   if (!value) throw new Error(`Missing environment variable: ${name}`)
   return value
+}
+
+const instructorPlaceholders = ['first_name', 'login_url', 'email', 'password'] as const
+
+function validInstructorTemplate(template: { subject: string; body: string } | null): template is { subject: string; body: string } {
+  if (!template || typeof template.subject !== 'string' || typeof template.body !== 'string' ||
+    !template.subject.trim() || template.subject.length > 150 || /[\r\n]/.test(template.subject) ||
+    !template.body.trim() || template.body.length > 5000) return false
+  return instructorPlaceholders.every(key => template.body.includes(`{{${key}}}`)) &&
+    !template.body.replace(/\{\{(first_name|login_url|email|password)\}\}/g, '').match(/\{\{[^}]*\}\}/)
 }
 
 export async function handleRequest(request: Request): Promise<Response> {
@@ -82,13 +93,22 @@ export async function handleRequest(request: Request): Promise<Response> {
     const firstName = typeof details.first_name === 'string' ? details.first_name.trim() : ''
     const lastName = typeof details.last_name === 'string' ? details.last_name.trim() : ''
     const email = typeof details.email === 'string' ? details.email.trim().toLowerCase() : ''
-    const gradeId = details.grade_id == null ? null : typeof details.grade_id === 'string' ? details.grade_id.trim() : ''
+    const gradeId = typeof details.grade_id === 'string' ? details.grade_id.trim() : ''
+    const title = details.instructor_title
+    // Optional; omitted means not an examiner.
+    const isExaminer = details.is_examiner ?? false
     if (
       !firstName || firstName.length > 100 || !lastName || lastName.length > 100 ||
-      email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || gradeId === ''
+      email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !gradeId ||
+      !isInstructorTitle(title) || typeof isExaminer !== 'boolean'
     ) {
       return Response.json({
-        error: 'Provide both names, a valid email address and a valid grade.',
+        error: 'Provide both names, a valid email address, a grade and an instructor title.',
+      }, { status: 400, headers })
+    }
+    if (title !== 'none' && !isTitleAllowed(gradeId, title)) {
+      return Response.json({
+        error: `${instructorTitleLabels[title]} ${titleRequirement(title).replace(/^Requires/, 'requires')}.`,
       }, { status: 400, headers })
     }
 
@@ -103,9 +123,21 @@ export async function handleRequest(request: Request): Promise<Response> {
       auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
     })
     if (gradeId) {
-      const { data: grade, error: gradeError } = await admin.from('grades').select('id').eq('id', gradeId).maybeSingle()
+      const { data: grade, error: gradeError } = await admin.from('grades').select('id, is_ranked').eq('id', gradeId).maybeSingle()
       if (gradeError) return Response.json({ error: 'Unable to verify the grade. Please try again.' }, { status: 500, headers })
-      if (!grade) return Response.json({ error: 'Select a valid grade.' }, { status: 400, headers })
+      if (!grade || grade.is_ranked !== true) return Response.json({ error: 'Select a valid grade.' }, { status: 400, headers })
+    }
+    // Do not create an account if the delivery pipeline cannot even be attempted.
+    const serviceId = Deno.env.get('EMAILJS_SERVICE_ID')?.trim()
+    const templateId = Deno.env.get('EMAILJS_TEMPLATE_ID')?.trim()
+    const publicKey = Deno.env.get('EMAILJS_PUBLIC_KEY')?.trim()
+    if (!serviceId || !templateId || !publicKey) {
+      return Response.json({ error: 'Instructor email delivery is not configured. No account was created.' }, { status: 503, headers })
+    }
+    const { data: template, error: templateError } = await admin.from('admin_email_templates')
+      .select('subject,body').eq('id', 'instructor_account').single()
+    if (templateError || !validInstructorTemplate(template)) {
+      return Response.json({ error: 'Instructor login email template is unavailable. No account was created.' }, { status: 503, headers })
     }
     const { data, error } = await admin.auth.admin.createUser({
       email,
@@ -113,7 +145,12 @@ export async function handleRequest(request: Request): Promise<Response> {
       email_confirm: true,
       user_metadata: { first_name: firstName, last_name: lastName },
       // Never accept a role from the request body.
-      app_metadata: { role: 'instructor', ...(gradeId ? { instructor_grade_id: gradeId } : {}) },
+      app_metadata: {
+        role: 'instructor',
+        instructor_grade_id: gradeId,
+        instructor_title: title,
+        instructor_is_examiner: isExaminer,
+      },
     })
     if (error || !data.user) {
       return Response.json({
@@ -121,7 +158,40 @@ export async function handleRequest(request: Request): Promise<Response> {
       }, { status: 400, headers })
     }
 
-    return Response.json({ id: data.user.id, email: data.user.email, password }, {
+    // The account already exists at this point. A rejected or ambiguous provider
+    // response must not be presented as a provisioning failure and retried.
+    const instructorEmail = data.user.email ?? email
+    const values: Record<(typeof instructorPlaceholders)[number], string> = {
+      first_name: firstName,
+      login_url: new URL('/staff/login', requiredEnv('APP_URL')).toString(),
+      email: instructorEmail,
+      password,
+    }
+    const emailBody = template.body.replace(/\{\{(first_name|login_url|email|password)\}\}/g,
+      (_, key: (typeof instructorPlaceholders)[number]) => values[key])
+    let emailStatus: 'accepted' | 'failed' | 'uncertain' = 'uncertain'
+    try {
+      const response = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(15000),
+        body: JSON.stringify({
+          service_id: serviceId, template_id: templateId, user_id: publicKey,
+          ...(Deno.env.get('EMAILJS_PRIVATE_KEY') ? { accessToken: Deno.env.get('EMAILJS_PRIVATE_KEY') } : {}),
+          template_params: {
+            to_email: instructorEmail,
+            email_subject: template.subject,
+            email_body: emailBody,
+          },
+        }),
+      })
+      emailStatus = response.ok ? 'accepted' : 'failed'
+    } catch {
+      // The provider may have received the request; never retry automatically.
+      emailStatus = 'uncertain'
+    }
+
+    return Response.json({ id: data.user.id, email: instructorEmail, password, email_status: emailStatus }, {
       status: 201, headers,
     })
   } catch {

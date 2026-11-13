@@ -103,3 +103,50 @@ test('grading loaders follow every recorded assessment page; partial failures/ca
   const controller = new AbortController(); controller.abort()
   await assert.rejects(loadStudentGrading(api, 'student', controller.signal), { name: 'AbortError' })
 })
+
+test('gradings the caller examines split into one calendar block per timed grade session', () => {
+  const eventId = '00000000-0000-4000-8000-000000000101'
+  const centreId = '00000000-0000-4000-8000-000000000102'
+  const grade = (id, label, sort_order) => ({ id, label, colour: 'Blue', is_ranked: true, sort_order })
+  const raw = (overrides = {}) => ({
+    id: eventId, centre_id: centreId, instructor_id: null, event_type: 'grading', name: 'Adult grading — 14 Nov 2026',
+    starts_at: '2026-11-14T02:00:00Z', ends_at: '2026-11-14T04:00:00Z', status: 'scheduled',
+    created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
+    centre: { id: centreId, name: 'HQ', short_name: 'hq', address: '', timezone: 'Asia/Singapore', status: 'active', capacity: null,
+      created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' },
+    class: null, seminar: null, workshop: null, participants: [{ count: 3 }], on_panel: true,
+    grading: { event_id: eventId, track: 'adult', application_deadline: '2026-11-13', application_status: 'open', grading_date: '2026-11-14',
+      application_opens_on: '2026-10-28', reporting_release_on: '2026-11-12', reporting_time: '10:00:00', official_schedule: true,
+      target_grades: [
+        { grade: grade('blue-6th-kyu', 'Blue (6th Kyu)', 7), starts_at: '2026-11-14T02:00:00Z', ends_at: '2026-11-14T02:30:00Z', candidates: 2 },
+        { grade: grade('brown-4th-kyu', 'Brown (4th Kyu)', 10), starts_at: '2026-11-14T02:30:00Z', ends_at: '2026-11-14T03:00:00Z', candidates: 1 },
+        { grade: grade('1st-dan', '1st Dan', 17), starts_at: null, ends_at: null, candidates: 0 },
+      ] },
+    ...overrides,
+  })
+  const entry = decoders.decodeCalendarEntry(raw())
+  assert.equal(entry.onPanel, true)
+  assert.deepEqual(entry.targetGrades.map(row => row.id), ['blue-6th-kyu', 'brown-4th-kyu', '1st-dan'])
+  assert.deepEqual(entry.gradeSessions.map(row => [row.grade.id, row.candidates, row.startsAt]),
+    [['blue-6th-kyu', 2, '2026-11-14T02:00:00Z'], ['brown-4th-kyu', 1, '2026-11-14T02:30:00Z'], ['1st-dan', 0, null]])
+  const blocks = calendarView.toCalendarViewEvents(entry)
+  assert.deepEqual(blocks.map(block => [block.name, block.startTime, block.endTime, block.rosterCount]), [
+    ['Blue (6th Kyu) · Adult grading', '10:00', '10:30', 2],
+    ['Brown (4th Kyu) · Adult grading', '10:30', '11:00', 1],
+  ])
+  assert.deepEqual(blocks.map(block => block.gradeSession), [
+    { eventId, gradeId: 'blue-6th-kyu' }, { eventId, gradeId: 'brown-4th-kyu' }])
+  assert.equal(new Set(blocks.map(block => block.id)).size, 2)
+  assert.equal(calendarView.calendarEventsForDate(blocks, new Date(2026, 10, 14)).length, 2)
+  // Not on the panel, or older responses without times: one grading block as before.
+  for (const other of [raw({ on_panel: false }), (() => { const item = raw(); delete item.on_panel
+    item.grading.target_grades = item.grading.target_grades.map(row => ({ grade: row.grade })); return item })()]) {
+    const [single, ...rest] = calendarView.toCalendarViewEvents(decoders.decodeCalendarEntry(other))
+    assert.equal(rest.length, 0)
+    assert.equal(single.id, eventId)
+    assert.equal(single.gradeSession, undefined)
+  }
+  for (const bad of [raw({ on_panel: 'yes' }), (() => { const item = raw(); item.grading.target_grades[0].ends_at = null; return item })()]) {
+    assert.throws(() => decoders.decodeCalendarEntry(bad), { code: 'invalid_data' })
+  }
+})
