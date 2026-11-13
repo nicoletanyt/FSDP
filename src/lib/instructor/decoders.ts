@@ -96,7 +96,7 @@ export function decodeGradingBatch(value: unknown): GradingBatch {
     signature: nullable(decodeGradingSignature), submitted_at: nullable(timestamp), updated_at: timestamp,
     students: v => array(v, row({ student_id: studentId, candidate_number: count, name: text, notes: nullable(text), target_grade_id: text })),
     items: v => array(v, row({ syllabus_item_id: text, category: text, label: text, sort_order: count, grade_id: text })),
-    results: v => array(v, row({ student_id: studentId, syllabus_item_id: text, checked: boolean })),
+    results: v => array(v, row({ student_id: studentId, syllabus_item_id: text, grade: nullable(enumeration('A', 'B', 'C')) })),
   })(source)
   const students = new Set(result.students.map(s => s.student_id))
   const items = new Set(result.items.map(i => i.syllabus_item_id))

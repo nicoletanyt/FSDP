@@ -8,7 +8,12 @@ import { supabase } from '../../src/lib/supabase'
 import '../../src/index.css'
 
 declare global {
-  interface Window { nfcFixtureCalls: number }
+  interface Window {
+    nfcFixtureCalls: number
+    nfcFixtureScans: number
+    nfcFixtureEmit: (token?: string, kind?: 'url' | 'text') => void
+    nfcFixtureRespond: (status: string) => void
+  }
 }
 
 const params = new URLSearchParams(location.search)
@@ -20,7 +25,30 @@ const userAgent = device === 'ios' ? 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 li
       : device === 'edge' ? `${android} EdgA/131.0.0.0` : android
 Object.defineProperty(navigator, 'userAgent', { configurable: true, value: userAgent })
 Object.defineProperty(navigator, 'userAgentData', { configurable: true, value: undefined })
-Object.defineProperty(window, 'NDEFReader', { configurable: true, value: ['no-api', 'ios', 'desktop'].includes(device) ? undefined : function NDEFReader() {} })
+type FixtureReader = { onreading: ((event: { message: { records: { recordType: string; data: DataView }[] } }) => void) | null }
+let reader: FixtureReader | null = null
+window.nfcFixtureScans = 0
+window.nfcFixtureEmit = (token = 'a'.repeat(64), kind = 'url') => {
+  const data = kind === 'url' ? `${location.origin}/instructor/nfc_checkin?tag=${token}` : token
+  const bytes = new TextEncoder().encode(data)
+  reader?.onreading?.({ message: { records: [{ recordType: kind, data: new DataView(bytes.buffer) }] } })
+}
+let responseStatus = 'no_class'
+window.nfcFixtureRespond = status => { responseStatus = status }
+class MockNdefReader {
+  onreading: FixtureReader['onreading'] = null
+  onreadingerror: (() => void) | null = null
+  async scan({ signal }: { signal: AbortSignal }) {
+    if (signal.aborted) throw new DOMException('Aborted', 'AbortError')
+    reader = this
+    window.nfcFixtureScans++
+    signal.addEventListener('abort', () => { if (reader === this) reader = null }, { once: true })
+  }
+}
+Object.defineProperty(window, 'NDEFReader', { configurable: true, value: ['no-api', 'ios', 'desktop', 'old-chrome'].includes(device) ? undefined : MockNdefReader })
+Object.defineProperty(navigator, 'permissions', { configurable: true, value: {
+  query: async () => ({ state: device === 'granted' ? 'granted' : 'prompt' }),
+} })
 if (device === 'insecure') Object.defineProperty(window, 'isSecureContext', { configurable: true, value: false })
 
 sessionStorage.removeItem(pendingNfcTagKey)
@@ -29,7 +57,9 @@ window.nfcFixtureCalls = 0
 Object.defineProperty(supabase, 'functions', { configurable: true, value: {
   invoke: async () => {
     window.nfcFixtureCalls++
-    return { data: { status: 'no_class', student_name: 'Test student' }, error: null }
+    return { data: responseStatus === 'select_class'
+      ? { status: 'select_class', student_name: 'Test student', classes: [{ event_id: 'class-1', class_name: 'Demo class', starts_at: '2026-11-13T09:00:00Z', ends_at: '2026-11-13T10:00:00Z' }] }
+      : { status: 'no_class', student_name: 'Test student' }, error: null }
   },
 } })
 

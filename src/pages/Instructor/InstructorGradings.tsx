@@ -3,7 +3,7 @@ import { CalendarDays, ChevronRight, Clock3, MapPin, Users } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
 import {
-    ExaminerPanel, GradingCardFooter, GradingFacts, GradingNote, GradingStatusBadge, gradingActionClass,
+    ExaminerPanel, GradingCardFooter, GradingFacts, GradingNote, GradingStatusBadge, GradingStatusPill, gradingActionClass,
 } from "@/components/grading/GradingParts";
 import { useMyGradingPanels } from "@/hooks/use-my-grading-panels";
 import { useExaminerPhotos } from "@/hooks/use-examiner-photos";
@@ -23,7 +23,11 @@ function SessionCard({ session, photos }: { session: ExaminerSession; photos: Re
                             {gradingTitle(session)}
                         </Link>
                     </CardTitle>
-                    <GradingStatusBadge status={session.status} />
+                    {/* The same lifecycle pill as the admin schedule, once the application window is known. */}
+                    {session.applicationDeadline || session.applicationOpensOn
+                        ? <GradingStatusPill status={session.status} opensOn={session.applicationOpensOn}
+                            closesOn={session.applicationDeadline} gradingDate={session.gradingDate} />
+                        : <GradingStatusBadge status={session.status} />}
                 </div>
                 <GradingFacts items={[
                     { key: "date", icon: CalendarDays, label: gradingDate(session.gradingDate) },

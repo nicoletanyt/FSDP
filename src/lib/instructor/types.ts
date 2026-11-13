@@ -227,7 +227,9 @@ export interface EventStudentRow {
 }
 
 export interface GradingSignature { version: 1; strokes: { x: number; y: number }[][] }
-export interface GradingBatchCell { student_id: StudentId; syllabus_item_id: string; checked: boolean }
+// A technique is marked A, B or C; null is blank (allowed in drafts, not on submission).
+export type GradingMark = 'A' | 'B' | 'C'
+export interface GradingBatchCell { student_id: StudentId; syllabus_item_id: string; grade: GradingMark | null }
 export interface GradingBatch {
   id: string
   event_id: EventId

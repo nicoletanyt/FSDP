@@ -872,7 +872,7 @@ test('clicking a grading session opens the side panel with that session\'s detai
         assert.equal(result.targetsList, false);
         // View Grading sits at the bottom of the card.
         assert.equal(result.linkAfterRoster, true);
-        assert.match(result.gradingHref, new RegExp(`^/instructor/grading/[0-9a-f-]{36}\\?session=${sessionId}$`));
+        assert.match(result.gradingHref, new RegExp(`^/instructor/grading/session/${sessionId}$`));
         if (width < 1024) assert.equal(result.title, 'Grading session details');
         assert.equal(result.fits, true);
     }
