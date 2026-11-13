@@ -2,8 +2,6 @@ import type { ReactNode } from 'react'
 import { cn } from 'cn'
 import { Badge } from '@/components/ui/badge'
 import type {
-  ApplicationStatus,
-  AttendanceStatus,
   CentreStatus,
   EligibilityStatus,
   FollowUpStatus,
@@ -61,18 +59,6 @@ export function EligibilityBadge({ status }: { status: EligibilityStatus }) {
   return <StatusBadge tone={config.tone}>{config.label}</StatusBadge>
 }
 
-const attendanceLabels: Record<AttendanceStatus, { label: string; tone: BadgeTone }> = {
-  present: { label: 'Present', tone: 'success' },
-  late: { label: 'Late', tone: 'warning' },
-  absent: { label: 'Absent', tone: 'danger' },
-  excused: { label: 'Excused', tone: 'neutral' },
-}
-
-export function AttendanceBadge({ status }: { status: AttendanceStatus }) {
-  const config = attendanceLabels[status]
-  return <StatusBadge tone={config.tone}>{config.label}</StatusBadge>
-}
-
 const membershipLabels: Record<MembershipStatus, { label: string; tone: BadgeTone }> = {
   active: { label: 'Active', tone: 'success' },
   expired: { label: 'Expired', tone: 'danger' },
@@ -81,17 +67,6 @@ const membershipLabels: Record<MembershipStatus, { label: string; tone: BadgeTon
 
 export function MembershipBadge({ status }: { status: MembershipStatus }) {
   const config = membershipLabels[status]
-  return <StatusBadge tone={config.tone}>{config.label}</StatusBadge>
-}
-
-const applicationLabels: Record<ApplicationStatus, { label: string; tone: BadgeTone }> = {
-  submitted: { label: 'Submitted', tone: 'info' },
-  under_review: { label: 'Under review', tone: 'warning' },
-  withdrawn: { label: 'Withdrawn', tone: 'neutral' },
-}
-
-export function ApplicationBadge({ status }: { status: ApplicationStatus }) {
-  const config = applicationLabels[status]
   return <StatusBadge tone={config.tone}>{config.label}</StatusBadge>
 }
 

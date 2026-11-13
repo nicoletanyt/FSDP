@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router'
 import AttendanceCalendar, { EventCard } from '@/components/admin/AttendanceCalendar'
-import CentreCombobox from '@/components/admin/CentreCombobox'
+import FilterPopover, { FilterField } from '@/components/FilterPopover'
 import CalendarToolbar from '@/components/calendar/CalendarToolbar'
 import type { CalendarDisplayMode, CalendarRange } from '@/components/calendar/CalendarToolbar'
 import DayClassDetails from '@/components/instructor/DayClassDetails'
@@ -16,6 +16,10 @@ import type { AdminCalendarEvent } from '@/lib/admin/attendance-calendar'
 import { loadCalendarCentres, loadCalendarClasses, singaporeDate } from '@/lib/admin/live-class-calendar'
 import { sessionTypeStyles } from '@/lib/admin/session-styles'
 import { cn } from 'cn'
+
+function unique(values: string[]) {
+  return [...new Set(values)].sort().map(value => ({ value, label: value }))
+}
 
 export default function LiveAttendanceRegister() {
   const { session } = useAuth()
@@ -44,17 +48,27 @@ export default function LiveAttendanceRegister() {
     enabled: Boolean(session), staleTime: 60_000, retry: false,
   })
   const centres = centresQuery.data ?? []
-  const centreId = searchParams.get('centre')
-  const centre = centres.find(item => item.id === centreId) ?? centres[0]
+  // Filters, kept in the URL: dojo (loads only that dojo), class name and instructor.
+  const centre = centres.find(item => item.id === searchParams.get('centre')) ?? null
+  const titleFilter = searchParams.get('title') ?? ''
+  const instructorFilter = searchParams.get('instructor') ?? ''
   const days = view === 'day' ? [selectedDate] : view === 'week' ? weekDates(selectedDate) : monthDates(selectedDate)
   const first = dateKey(days[0])
   const afterLast = dateKey(addDays(days[days.length - 1], 1))
   const classesQuery = useQuery({
-    queryKey: ['admin', session?.user.id, 'calendar-classes', centre?.id, first, afterLast],
-    queryFn: ({ signal }) => loadCalendarClasses(centre!, first, afterLast, signal),
-    enabled: Boolean(session && centre), staleTime: 30_000, refetchInterval: 30_000, retry: false,
+    queryKey: ['admin', session?.user.id, 'calendar-classes', centre?.id ?? 'all', first, afterLast],
+    queryFn: ({ signal }) => loadCalendarClasses(centres, centre?.id ?? null, first, afterLast, signal),
+    enabled: Boolean(session && centresQuery.isSuccess), staleTime: 30_000, refetchInterval: 30_000, retry: false,
   })
-  const events = classesQuery.data ?? []
+  const loadedEvents = classesQuery.data ?? []
+  const events = loadedEvents.filter(event =>
+    (!titleFilter || event.name === titleFilter) && (!instructorFilter || event.instructorName === instructorFilter))
+  const filterFields = [
+    { key: 'centre', label: 'Dojo', all: 'All dojos', value: centre?.id ?? '', options: centres.map(item => ({ value: item.id, label: item.name })) },
+    { key: 'title', label: 'Class', all: 'All classes', value: titleFilter, options: unique(loadedEvents.map(event => event.name)) },
+    { key: 'instructor', label: 'Instructor', all: 'All instructors', value: instructorFilter, options: unique(loadedEvents.map(event => event.instructorName)) },
+  ]
+  const filterCount = [centre?.id, titleFilter, instructorFilter].filter(Boolean).length
   const selectedEvent = useMemo(() => events.find(item => item.id === searchParams.get('session')), [events, searchParams])
   if (selectedEvent) lastSelected.current = selectedEvent
 
@@ -121,7 +135,7 @@ export default function LiveAttendanceRegister() {
       {centresQuery.isPending && <p role="status" className="text-sm text-muted-foreground">Loading dojos…</p>}
       {centresQuery.isError && <div role="alert" className="flex flex-wrap items-center gap-3 text-sm text-destructive">Unable to load dojos. <Button variant="outline" size="sm" onClick={() => void centresQuery.refetch()}>Retry</Button></div>}
       {centresQuery.isSuccess && !centres.length && <p role="status" className="text-sm text-muted-foreground">No dojos are available.</p>}
-      {centre && <>
+      {centresQuery.isSuccess && <>
         <CalendarToolbar
           view={view}
           onViewChange={changeView}
@@ -131,11 +145,20 @@ export default function LiveAttendanceRegister() {
           onToday={goToday}
           onPrevious={() => move(-1)}
           onNext={() => move(1)}
-          actions={<CentreCombobox id="attendance-centre" centres={centres} value={centre.id}
-            onChange={id => navigate({ centre: id, session: null })} ariaLabel="Calendar dojo"
-            includeAll={false} className="col-span-full h-11 w-full sm:w-56 lg:h-10" />}
+          actions={<FilterPopover
+            title="Filter classes"
+            activeCount={filterCount}
+            onReset={() => navigate({ centre: null, title: null, instructor: null, session: null })}
+            className="col-span-full lg:h-10"
+          >
+            {filterFields.map(({ key, label, options, all, value }) => (
+              <FilterField key={key} label={label} value={value} ariaLabel={`${label} filter`}
+                onChange={next => navigate({ [key]: next || null, session: null })}
+                options={[{ value: '', label: all }, ...options]} />
+            ))}
+          </FilterPopover>}
           legend={<>
-            <p className="-mt-2 text-xs text-muted-foreground">{centre.name} · Singapore time</p>
+            <p className="-mt-2 text-xs text-muted-foreground">{centre?.name ?? 'All dojos'} · Singapore time</p>
             <ul className="space-y-3 text-xs">
               {Object.entries(sessionTypeStyles).map(([type, style]) => (
                 <li key={type} className="grid gap-1 sm:grid-cols-[9.5rem_minmax(0,1fr)] sm:items-center sm:gap-3">
@@ -153,13 +176,13 @@ export default function LiveAttendanceRegister() {
           'flex flex-col lg:min-h-0 lg:flex-1',
           showSidePanel && isDesktop && 'lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:grid-rows-1 lg:gap-3 lg:overflow-hidden',
         )}>
-          {classesQuery.isPending && <p role="status" className="py-4 text-sm text-muted-foreground">Loading classes for {centre.name}…</p>}
-          {classesQuery.isError && <div role="alert" className="flex flex-wrap items-center gap-3 text-sm text-destructive">Unable to load classes for {centre.name}. <Button variant="outline" size="sm" onClick={() => void classesQuery.refetch()}>Retry</Button></div>}
+          {classesQuery.isPending && <p role="status" className="py-4 text-sm text-muted-foreground">Loading classes…</p>}
+          {classesQuery.isError && <div role="alert" className="flex flex-wrap items-center gap-3 text-sm text-destructive">Unable to load classes. <Button variant="outline" size="sm" onClick={() => void classesQuery.refetch()}>Retry</Button></div>}
           {classesQuery.isSuccess && <AttendanceCalendar date={selectedDate} today={today} now={now} focusRequest={focusRequest}
             view={view} display={displayMode} events={events} selectedSessionId={selectedEvent?.id ?? null}
             expandSelectedDay={view === 'day' || !weekOverview || Boolean(selectedEvent)}
             onSelectDate={chooseDate}
-            onToggleSession={event => navigate({ centre: event.session.centreId, date: event.session.date,
+            onToggleSession={event => navigate({ date: event.session.date,
               session: selectedEvent?.id === event.id ? null : event.id })} />}
           {isDesktop && details && (view === 'day'
             ? <DayClassDetails onClose={closeDetails}>{details}</DayClassDetails>

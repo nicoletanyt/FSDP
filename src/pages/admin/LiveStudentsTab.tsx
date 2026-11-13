@@ -19,7 +19,7 @@ import { supabase } from '@/lib/supabase'
 import { cn } from 'cn'
 import FilterCombobox from '@/components/FilterCombobox'
 
-type DirectoryStudent = {
+export type DirectoryStudent = {
   id: string
   member_no: string
   first_name: string
@@ -39,7 +39,7 @@ type DirectoryStudent = {
   grading_status: 'eligible' | 'not_eligible' | 'no_open_gradings'
 }
 
-const studentName = (student: DirectoryStudent) => `${student.first_name} ${student.last_name}`.trim()
+export const studentName = (student: DirectoryStudent) => `${student.first_name} ${student.last_name}`.trim()
 
 function SummaryTile({ label, value, tone }: { label: string; value: number; tone?: string }) {
   return <div className="rounded-xl bg-card p-3 ring-1 ring-foreground/10">
@@ -48,25 +48,35 @@ function SummaryTile({ label, value, tone }: { label: string; value: number; ton
   </div>
 }
 
-function StudentRisk({ level }: { level: DirectoryStudent['risk_level'] }) {
+export function StudentRisk({ level }: { level: DirectoryStudent['risk_level'] }) {
   return level === 'unassessed'
     ? <StatusBadge tone="neutral">Not assessed</StatusBadge>
     : <RiskBadge level={level} />
 }
 
-function GradingStatus({ status }: { status: DirectoryStudent['grading_status'] }) {
+export function GradingStatus({ status }: { status: DirectoryStudent['grading_status'] }) {
   return status === 'no_open_gradings'
     ? <StatusBadge tone="neutral">No open gradings</StatusBadge>
     : <EligibilityBadge status={status} />
 }
 
-function StudentGrade({ label }: { label: string }) {
+export function StudentGrade({ label }: { label: string }) {
   if (label !== UNRANKED && !grades.includes(label as (typeof grades)[number])) {
     return <span className="inline-flex rounded-md border bg-background px-2 py-0.5 text-2xs font-semibold">{label}</span>
   }
   const grade = label as Grade
   const track = getGradeMeta(grade)?.tracks.includes('adult') ? 'adult' : 'children'
   return <AdminGradeBadge grade={grade} track={track} />
+}
+
+export const studentDirectoryKey = (userId: string | undefined, centreId: string | null) =>
+  ['admin', 'student-directory', userId, centreId] as const
+
+export async function loadStudentDirectory(centreId: string | null): Promise<DirectoryStudent[]> {
+  const { data, error } = await supabase.rpc('admin_student_directory', { target_centre: centreId })
+  if (error) throw error
+  if (!Array.isArray(data)) throw new Error('No student directory was returned.')
+  return data as DirectoryStudent[]
 }
 
 export default function LiveStudentsTab() {
@@ -87,13 +97,8 @@ export default function LiveStudentsTab() {
   const validCentre = centreId === 'all' || centresQuery.data?.some(centre => centre.id === centreId)
   const selectedCentre = validCentre && centreId !== 'all' ? centreId : null
   const directory = useQuery({
-    queryKey: ['admin', 'student-directory', session?.user.id, selectedCentre],
-    queryFn: async (): Promise<DirectoryStudent[]> => {
-      const { data, error } = await supabase.rpc('admin_student_directory', { target_centre: selectedCentre })
-      if (error) throw error
-      if (!Array.isArray(data)) throw new Error('No student directory was returned.')
-      return data as DirectoryStudent[]
-    },
+    queryKey: studentDirectoryKey(session?.user.id, selectedCentre),
+    queryFn: () => loadStudentDirectory(selectedCentre),
     enabled: !!session && centresQuery.isSuccess && !!validCentre,
     refetchOnWindowFocus: true,
   })
@@ -162,11 +167,14 @@ export default function LiveStudentsTab() {
           </div>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             <FilterCombobox value={risk} onChange={value => updateParam('risk', value)} ariaLabel="Filter by attendance risk"
-              options={[{ value: 'all', label: 'All risk levels' }, { value: 'at_risk', label: 'At risk' }, { value: 'healthy', label: 'Healthy' }, { value: 'unassessed', label: 'Not assessed' }]} />
+              options={[{ value: 'all', label: 'All risk levels' }, { value: 'at_risk', label: 'At risk' }, { value: 'healthy', label: 'Healthy' }, { value: 'unassessed', label: 'Not assessed' }]}
+              renderOption={option => option.value === 'all' ? option.label : <StudentRisk level={option.value as DirectoryStudent['risk_level']} />} />
             <FilterCombobox value={eligibility} onChange={value => updateParam('eligibility', value)} ariaLabel="Filter by grading eligibility"
-              options={[{ value: 'all', label: 'All eligibility' }, { value: 'eligible', label: 'Eligible' }, { value: 'not_eligible', label: 'Not eligible' }, { value: 'no_open_gradings', label: 'No open gradings' }]} />
+              options={[{ value: 'all', label: 'All eligibility' }, { value: 'eligible', label: 'Eligible' }, { value: 'not_eligible', label: 'Not eligible' }, { value: 'no_open_gradings', label: 'No open gradings' }]}
+              renderOption={option => option.value === 'all' ? option.label : <GradingStatus status={option.value as DirectoryStudent['grading_status']} />} />
             <FilterCombobox value={membership} onChange={value => updateParam('membership', value)} ariaLabel="Filter by membership"
-              options={[{ value: 'all', label: 'All memberships' }, { value: 'active', label: 'Active' }, { value: 'expired', label: 'Expired' }, { value: 'pending', label: 'Pending' }]} />
+              options={[{ value: 'all', label: 'All memberships' }, { value: 'active', label: 'Active' }, { value: 'expired', label: 'Expired' }, { value: 'pending', label: 'Pending' }]}
+              renderOption={option => option.value === 'all' ? option.label : <MembershipBadge status={option.value as MembershipStatus} />} />
           </div>
           <Button variant="outline" size="sm" onClick={exportStudents} disabled={filtered.length === 0} className="w-full shrink-0 lg:w-auto">
             <Download />Export CSV

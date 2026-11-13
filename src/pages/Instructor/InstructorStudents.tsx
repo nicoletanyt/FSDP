@@ -1,16 +1,15 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams, Link } from "react-router";
 import {
     ChevronLeft,
     ChevronRight,
     MapPin,
     Search,
-    SlidersHorizontal,
     Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import FilterCombobox from "@/components/FilterCombobox";
+import FilterPopover, { FilterField } from "@/components/FilterPopover";
 import { Input } from "@/components/ui/input";
 import GradeBadge from "@/components/instructor/DatabaseGradeBadge";
 import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
@@ -20,14 +19,7 @@ import { instructorQueryKeys, instructorQueryTimes } from "@/lib/instructor/quer
 import type { QueryState } from "@/hooks/use-instructor-data";
 import { toInstructorDataError } from "@/lib/instructor/errors";
 import { useInstructorApi } from "@/lib/instructor/data-context";
-import type { GradeRow, StudentDirectory } from "@/lib/instructor/types";
-import { Label } from "@/components/ui/label";
-import {
-    Popover,
-    PopoverContent,
-    PopoverTitle,
-    PopoverTrigger,
-} from "@/components/ui/popover";
+import type { StudentDirectory } from "@/lib/instructor/types";
 import { studentDetailsHref } from "@/lib/instructor-calendar";
 import {
     changeDirectoryFilter,
@@ -39,81 +31,11 @@ import {
     singaporeToday,
 } from "@/lib/instructor/directory";
 
-function DirectoryFilter({
-    label,
-    value,
-    options,
-    onValueChange,
-}: {
-    label: "Dojo";
-    value: string;
-    options: { value: string; label: string }[];
-    onValueChange: (value: string) => void;
-}) {
-    const inputId = useId();
-
-    return (
-        <div className="grid min-w-0 gap-1.5">
-            <Label htmlFor={inputId} className="shrink-0 text-sm text-muted-foreground">
-                {label}
-            </Label>
-            <FilterCombobox
-                id={inputId}
-                value={value}
-                onChange={onValueChange}
-                ariaLabel={`${label} filter`}
-                emptyText="No dojo found."
-                className="directory-control h-11 lg:h-10"
-                contentClassName="student-directory-filter-menu"
-                options={[{ value: "", label: "All dojos" }, ...options]}
-            />
-        </div>
-    );
-}
-
-// One grade filter drawn with the same GradeBadge the list uses, in ladder order.
-function GradeFilter({
-    value,
-    grades,
-    onValueChange,
-}: {
-    value: string;
-    grades: GradeRow[];
-    onValueChange: (value: string) => void;
-}) {
-    const inputId = useId();
-    const byId = new Map(grades.map((grade) => [grade.id, grade]));
-
-    return (
-        <div className="grid min-w-0 gap-1.5">
-            <Label htmlFor={inputId} className="shrink-0 text-sm text-muted-foreground">
-                Grade
-            </Label>
-            <FilterCombobox
-                id={inputId}
-                value={value}
-                onChange={onValueChange}
-                ariaLabel="Grade filter"
-                emptyText="No grade found."
-                className="directory-control h-11 lg:h-10"
-                contentClassName="student-directory-filter-menu"
-                options={[{ value: "", label: "All grades" }, ...grades.map((grade) => ({ value: grade.id, label: grade.label }))]}
-                renderOption={(option) => {
-                    const grade = byId.get(option.value);
-                    return grade ? <GradeBadge grade={grade} showBeltLabel /> : option.label;
-                }}
-            />
-        </div>
-    );
-}
-
 export default function InstructorStudents() {
     const api = useInstructorApi();
     const { session, profile } = useAuth();
     const [params, setParams] = useSearchParams();
     const searchRef = useRef<HTMLInputElement>(null);
-    const filterTriggerRef = useRef<HTMLButtonElement>(null);
-    const [filtersOpen, setFiltersOpen] = useState(false);
     const query = params.get("q") ?? "";
     const rank = params.get("rank") ?? "";
     const dojo = params.get("dojo") ?? "";
@@ -227,73 +149,39 @@ export default function InstructorStudents() {
                         className="directory-control h-11 bg-background pl-9 lg:h-10"
                     />
                 </div>
-                <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>
-                    <PopoverTrigger
-                        ref={filterTriggerRef}
-                        render={
-                            <Button
-                                variant="outline"
-                                size="touch"
-                                className="directory-control gap-2"
-                            />
-                        }
-                        aria-label={
-                            activeFilterCount
-                                ? `Filter students, ${activeFilterCount} active filters`
-                                : "Filter students"
-                        }
-                    >
-                        <SlidersHorizontal aria-hidden="true" className="size-4" />
-                        <span>Filter</span>
-                        {activeFilterCount > 0 && (
-                            <span
-                                aria-hidden="true"
-                                className="directory-filter-count flex size-5 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground"
-                            >
-                                {activeFilterCount}
-                            </span>
-                        )}
-                    </PopoverTrigger>
-                    <PopoverContent
-                        className="student-directory-filters w-80 gap-3"
-                        finalFocus={filterTriggerRef}
-                    >
-                        <div className="space-y-1">
-                            <PopoverTitle className="directory-popover-title">
-                                Filter students
-                            </PopoverTitle>
-                        </div>
-                        <GradeFilter
-                            value={rank}
-                            grades={grades}
-                            onValueChange={(value) => updateFilter("rank", value)}
-                        />
-                        <DirectoryFilter
-                            label="Dojo"
-                            value={dojo}
-                            options={dojos}
-                            onValueChange={(value) => updateFilter("dojo", value)}
-                        />
-                        <div className="flex flex-wrap justify-between gap-2 border-t pt-4">
-                            <Button
-                                variant="ghost"
-                                size="touch"
-                                className="directory-control h-auto min-h-11 max-w-full whitespace-normal py-2 lg:min-h-10"
-                                disabled={!activeFilterCount}
-                                onClick={resetFilters}
-                            >
-                                Reset filters
-                            </Button>
-                            <Button
-                                size="touch"
-                                className="directory-control h-auto min-h-11 max-w-full whitespace-normal py-2 lg:min-h-10"
-                                onClick={() => setFiltersOpen(false)}
-                            >
-                                Done
-                            </Button>
-                        </div>
-                    </PopoverContent>
-                </Popover>
+                <FilterPopover
+                    title="Filter students"
+                    activeCount={activeFilterCount}
+                    onReset={resetFilters}
+                    controlClassName="directory-control"
+                    contentClassName="student-directory-filters"
+                    titleClassName="directory-popover-title"
+                >
+                    <FilterField
+                        label="Grade"
+                        value={rank}
+                        onChange={(value) => updateFilter("rank", value)}
+                        ariaLabel="Grade filter"
+                        emptyText="No grade found."
+                        className="directory-control h-11 lg:h-10"
+                        contentClassName="student-directory-filter-menu"
+                        options={[{ value: "", label: "All grades" }, ...grades.map((grade) => ({ value: grade.id, label: grade.label }))]}
+                        renderOption={(option) => {
+                            const grade = grades.find((item) => item.id === option.value);
+                            return grade ? <GradeBadge grade={grade} showBeltLabel /> : option.label;
+                        }}
+                    />
+                    <FilterField
+                        label="Dojo"
+                        value={dojo}
+                        onChange={(value) => updateFilter("dojo", value)}
+                        ariaLabel="Dojo filter"
+                        emptyText="No dojo found."
+                        className="directory-control h-11 lg:h-10"
+                        contentClassName="student-directory-filter-menu"
+                        options={[{ value: "", label: "All dojos" }, ...dojos]}
+                    />
+                </FilterPopover>
             </div>
             <div className="space-y-4">
                 <div className="flex min-h-11 flex-wrap items-center justify-between gap-2">

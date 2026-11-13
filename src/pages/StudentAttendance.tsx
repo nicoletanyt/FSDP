@@ -1,11 +1,10 @@
 import { useMemo, useState } from 'react'
 import { Link, useOutletContext } from 'react-router'
-import { Clock3, MapPin, Plus, SlidersHorizontal, UserRound, X } from 'lucide-react'
+import { Clock3, MapPin, Plus, UserRound, X } from 'lucide-react'
 import AttendanceCalendar, { attendanceClassStyle, AttendanceToolbar } from '@/components/student/AttendanceCalendar'
 import type { AttendanceEntry, AttendanceView } from '@/components/student/AttendanceCalendar'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Drawer, DrawerBody, DrawerClose, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from '@/components/ui/drawer'
-import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from '@/components/ui/popover'
 import { useMediaQuery } from '@/hooks/use-media-query'
 import { addDays, addMonths, dateKey } from '@/lib/instructor-calendar'
 import { cn } from '@/lib/utils'
@@ -23,7 +22,7 @@ import {
   prettyDate
 } from '@/lib/student-schedule'
 import type { ClassOffering } from '@/lib/student-schedule'
-import FilterCombobox from '@/components/FilterCombobox'
+import FilterPopover, { FilterField } from '@/components/FilterPopover'
 
 type Pending =
   | { kind: 'cancel'; id: string }
@@ -95,10 +94,10 @@ export default function StudentAttendance() {
   )
 
   const filterFields = [
-    { key: 'centre', label: 'Centre', options: classes.map(session => session.centre) },
-    { key: 'title', label: 'Class', options: classes.map(session => session.title) },
-    { key: 'instructor', label: 'Instructor', options: classes.map(session => session.instructor) },
-    { key: 'status', label: 'Attendance status', options: ['Enrolled', 'Make-up class', 'Attended', 'Absent', 'Late', 'Excused', 'Cancelled', 'Past · not marked'] }
+    { key: 'centre', label: 'Dojo', all: 'All dojos', options: classes.map(session => session.centre) },
+    { key: 'title', label: 'Class', all: 'All classes', options: classes.map(session => session.title) },
+    { key: 'instructor', label: 'Instructor', all: 'All instructors', options: classes.map(session => session.instructor) },
+    { key: 'status', label: 'Attendance status', all: 'All statuses', options: ['Enrolled', 'Make-up class', 'Attended', 'Absent', 'Late', 'Excused', 'Cancelled', 'Past · not marked'] }
   ] as const
   const filterCount = Object.values(filters).filter(Boolean).length
 
@@ -300,36 +299,29 @@ export default function StudentAttendance() {
             <Button variant="outline" nativeButton={false} render={<Link to="/classes" />} className="h-10">
               <Plus aria-hidden="true" /> Browse classes
             </Button>
-            <Popover>
-              <PopoverTrigger render={<Button variant="outline" className="h-10" />}>
-                <SlidersHorizontal aria-hidden="true" />
-                Filters{filterCount > 0 && <span className="rounded-full bg-primary px-1.5 text-xs text-primary-foreground">{filterCount}</span>}
-              </PopoverTrigger>
-              <PopoverContent align="end" className="w-64">
-                <div className="flex items-center justify-between gap-2">
-                  <PopoverTitle>Calendar filters</PopoverTitle>
-                  <Button variant="ghost" size="sm" disabled={!filterCount} onClick={() => {
-                    setFilters(emptyFilters)
+            <FilterPopover
+              title="Filter classes"
+              activeCount={filterCount}
+              onReset={() => {
+                setFilters(emptyFilters)
+                setSelectedId(null)
+              }}
+              className="lg:h-10"
+            >
+              {filterFields.map(({ key, label, all, options }) => (
+                <FilterField
+                  key={key}
+                  label={label}
+                  ariaLabel={`${label} filter`}
+                  value={filters[key]}
+                  onChange={value => {
+                    setFilters(previous => ({ ...previous, [key]: value }))
                     setSelectedId(null)
-                  }}>Reset</Button>
-                </div>
-                {filterFields.map(({ key, label, options }) => (
-                  <div key={key} className="grid gap-1 text-sm">
-                    <label htmlFor={`attendance-filter-${key}`} className="font-medium">{label}</label>
-                    <FilterCombobox
-                      id={`attendance-filter-${key}`}
-                      value={filters[key]}
-                      onChange={value => {
-                        setFilters(previous => ({ ...previous, [key]: value }))
-                        setSelectedId(null)
-                      }}
-                      className="h-9 font-normal"
-                      options={[{ value: '', label: 'All' }, ...[...new Set(options)].sort().map(option => ({ value: option, label: option }))]}
-                    />
-                  </div>
-                ))}
-              </PopoverContent>
-            </Popover>
+                  }}
+                  options={[{ value: '', label: all }, ...[...new Set(options)].sort().map(option => ({ value: option, label: option }))]}
+                />
+              ))}
+            </FilterPopover>
           </>
         )}
         onViewChange={nextView => {

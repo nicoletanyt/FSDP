@@ -19,6 +19,14 @@ type NearbyInstructor = {
   distance_km: number
 }
 
+// The database only previews cover for an upcoming class that still needs it.
+function coverErrorMessage(error: unknown) {
+  const code = (error as { code?: string } | null)?.code
+  if (code === '22023') return 'Cover preview is not available for this class.'
+  if (code === '42501') return 'Only administrators can check cover instructors.'
+  return 'Unable to check instructors.'
+}
+
 export default function CoverCandidatePreview({ eventId, className, startsAt, endsAt }: {
   eventId: string; className: string; startsAt: string; endsAt: string
 }) {
@@ -55,7 +63,7 @@ export default function CoverCandidatePreview({ eventId, className, startsAt, en
     <h5 className="font-semibold">Nearby instructor preview</h5>
     {preview.isPending && <p role="status">Checking linked instructors…</p>}
     {preview.isError && <div role="alert" className="flex flex-wrap items-center gap-2 text-destructive">
-      Unable to check instructors. <Button size="sm" variant="outline" onClick={() => void preview.refetch()}>Retry</Button>
+      {coverErrorMessage(preview.error)} <Button size="sm" variant="outline" onClick={() => void preview.refetch()}>Retry</Button>
     </div>}
     {preview.isSuccess && preview.data.length === 0 && <p>No available nearby instructors for this class.</p>}
     {preview.isSuccess && preview.data.length > 0 && <ul className="divide-y divide-foreground/10">

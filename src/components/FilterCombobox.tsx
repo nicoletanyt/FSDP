@@ -45,7 +45,7 @@ export default function FilterCombobox({
   disabled?: boolean
   className?: string
   contentClassName?: string
-  /** Custom item content, e.g. a badge; the field still shows the plain label. */
+  /** Custom content for an option, e.g. a status pill, in the list and the field. */
   renderOption?: (option: FilterOption) => ReactNode
 }) {
   const items = useMemo(() => options.map((option) => option.value), [options])
@@ -73,7 +73,9 @@ export default function FilterCombobox({
           />
         }
       >
-        <span className="min-w-0 truncate">{selectedLabel}</span>
+        <span className="flex min-w-0 items-center truncate">
+          {renderOption && byValue.has(selected) ? renderOption(byValue.get(selected)!) : selectedLabel}
+        </span>
       </ComboboxTrigger>
       <ComboboxContent className={cn('min-w-56 p-1.5 *:data-[slot=input-group]:m-0 *:data-[slot=input-group]:mb-1.5 *:data-[slot=input-group]:h-10', contentClassName)}>
         <ComboboxInput showTrigger={false} placeholder="Search" aria-label="Search" className="[&_input]:px-2">

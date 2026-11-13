@@ -1,5 +1,4 @@
 import { Outlet, useLocation } from 'react-router'
-import AdminFilterBar from '@/components/admin/AdminFilterBar'
 import AdminNavbar from '@/components/admin/AdminNavbar'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AdminDataProvider } from '@/lib/admin/admin-data-context'
@@ -10,9 +9,6 @@ import { cn } from 'cn'
 function AdminShell() {
   const { pathname } = useLocation()
   const isCalendar = pathname === '/admin/calendar'
-  // The shared filter bar is only used on a student's detail page.
-  const showFilters =
-    pathname.startsWith('/admin/students/') && pathname !== '/admin/students/attendance'
 
   return (
     <div
@@ -31,7 +27,6 @@ function AdminShell() {
             : 'space-y-6 py-6 sm:py-8',
         )}
       >
-        {showFilters && <AdminFilterBar />}
         <Outlet />
       </main>
     </div>

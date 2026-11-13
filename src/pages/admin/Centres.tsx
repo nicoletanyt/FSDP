@@ -106,6 +106,7 @@ export default function Centres() {
                   onChange={(value) => updateParam('dojoStatus', value)}
                   ariaLabel="Filter by dojo status"
                   options={dojoStatusOptions}
+                  renderOption={(option) => option.value === 'all' ? option.label : <CentreStatusBadge status={option.value as Centre['status']} />}
                 />
               </div>
               {dojoFiltersActive > 0 && (

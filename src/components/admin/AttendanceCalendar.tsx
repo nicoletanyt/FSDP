@@ -7,7 +7,6 @@ import {
   UserRound,
   Users,
 } from 'lucide-react'
-import AttendanceClassDetails from '@/components/admin/AttendanceClassDetails'
 import LiveClassDetails from '@/components/admin/LiveClassDetails'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -60,14 +59,12 @@ export function EventCard({
   onToggle,
   layout = 'week',
   detailsInPanel = false,
-  focusStudentId,
 }: {
   event: AdminCalendarEvent
   expanded: boolean
   onToggle: () => void
   layout?: EventLayout
   detailsInPanel?: boolean
-  focusStudentId?: string
 }) {
   const showSummary = layout !== 'week'
   return (
@@ -76,7 +73,7 @@ export function EventCard({
       className={cn(
         'gap-0 rounded-lg border py-0 text-inherit shadow-none ring-0 transition-[border-color,box-shadow] duration-200 hover:border-foreground/25 has-focus-visible:ring-2 has-focus-visible:ring-ring',
         eventCardStyle(event),
-        layout === 'panel' && 'h-full min-h-0',
+        layout === 'panel' && 'border-0 lg:h-full lg:min-h-0 lg:border',
         expanded &&
           (detailsInPanel
             ? 'relative z-10 border-primary ring-2 ring-primary ring-offset-2 ring-offset-background'
@@ -138,17 +135,15 @@ export function EventCard({
             </span>
           </span>
           <span className="flex items-center gap-1.5 text-2xs font-normal opacity-80">
-            <UserRound aria-hidden="true" className="size-3 shrink-0" />
-            <span className="min-w-0 truncate">{event.instructorName}</span>
-          </span>
-        </div>
-
-        {showSummary && (
-          <span className="flex items-center gap-1.5 text-2xs font-normal opacity-80">
             <MapPin aria-hidden="true" className="size-3 shrink-0" />
             <span className="min-w-0 wrap-break-word">{event.centreName}</span>
           </span>
-        )}
+        </div>
+
+        <span className="flex items-center gap-1.5 text-2xs font-normal opacity-80">
+          <UserRound aria-hidden="true" className="size-3 shrink-0" />
+          <span className="min-w-0 truncate">{event.instructorName}</span>
+        </span>
 
         {needsCover(event) &&
           <span className="w-fit rounded-md border border-destructive/30 bg-destructive/10 px-2 py-1 text-xs font-medium text-destructive">
@@ -164,8 +159,7 @@ export function EventCard({
 
       {!detailsInPanel &&
         (layout === 'panel' ? (
-          event.liveDetails ? <LiveClassDetails event={event} fillHeight /> :
-            <AttendanceClassDetails event={event} focusStudentId={focusStudentId} fillHeight />
+          <LiveClassDetails event={event} fillHeight />
         ) : (
           <div
             id={`attendance-details-${event.id}`}
@@ -179,8 +173,7 @@ export function EventCard({
             )}
           >
             <div className="min-h-0 overflow-hidden">
-              {event.liveDetails ? <LiveClassDetails event={event} /> :
-                <AttendanceClassDetails event={event} focusStudentId={focusStudentId} />}
+              <LiveClassDetails event={event} />
             </div>
           </div>
         ))}

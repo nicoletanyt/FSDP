@@ -135,7 +135,10 @@ export default function AttendanceMonitoring() {
             ariaLabel="Filter monitored students by centre" className="w-full sm:w-56" />
         </div>
         <div className="w-40"><FilterCombobox value={levelFilter} onChange={setLevelFilter} ariaLabel="Filter by risk level"
-          options={[{ value: 'at_risk', label: 'At risk' }, { value: 'all', label: 'All levels' }, { value: 'healthy', label: 'Healthy' }, { value: 'unassessed', label: 'Not assessed' }]} /></div>
+          options={[{ value: 'at_risk', label: 'At risk' }, { value: 'all', label: 'All levels' }, { value: 'healthy', label: 'Healthy' }, { value: 'unassessed', label: 'Not assessed' }]}
+          renderOption={option => option.value === 'all' ? option.label
+            : option.value === 'unassessed' ? <StatusBadge tone="neutral">Not assessed</StatusBadge>
+            : <RiskBadge level={option.value as RiskLevel} />} /></div>
         <Button className="ml-auto" variant="outline" onClick={openNotice} disabled={!!error || loading}>
           <Bell aria-hidden="true" />Follow Up
         </Button>
