@@ -24,7 +24,7 @@ const AdminGrading = lazy(() => import('./pages/admin/Grading'))
 const AdminGradingEligibility = lazy(() => import('./pages/admin/GradingEligibility'))
 const AdminGradingOpportunities = lazy(() => import('./pages/admin/GradingOpportunities'))
 const AdminGradingApplications = lazy(() => import('./pages/admin/GradingApplications'))
-const AdminGradingSyllabus = lazy(() => import('./pages/admin/Syllabus'))
+const AdminBeltRequirements = lazy(() => import('./pages/admin/BeltRequirements'))
 const AdminGradingRules = lazy(() => import('./pages/admin/GradingRules'))
 const AdminGradingDay = lazy(() => import('./pages/admin/GradingDay'))
 const AdminGradingResults = lazy(() => import('./pages/admin/GradingResults'))
@@ -149,7 +149,8 @@ export default function App() {
                 <Route path="eligibility" element={<AdminGradingEligibility />} />
                 <Route path="opportunities" element={<AdminGradingOpportunities />} />
                 <Route path="applications" element={<AdminGradingApplications />} />
-                <Route path="syllabus" element={<AdminGradingSyllabus />} />
+                <Route path="belt-requirements" element={<AdminBeltRequirements />} />
+                <Route path="syllabus" element={<MovedRoute to="/admin/grading/belt-requirements" />} />
               </Route>
               <Route path="grading/rules" element={<MovedRoute to="/admin/settings/grading-rules" />} />
               {/* A grading's own pages sit outside the section tabs. */}
@@ -161,7 +162,7 @@ export default function App() {
                 <Route path="email-templates" element={<AdminEmailTemplates />} />
                 <Route path="email-log" element={<AdminNotifications />} />
                 <Route path="grading-rules" element={<AdminGradingRules />} />
-                <Route path="syllabus" element={<MovedRoute to="/admin/grading/syllabus" />} />
+                <Route path="syllabus" element={<MovedRoute to="/admin/grading/belt-requirements" />} />
               </Route>
               <Route path="notifications" element={<MovedRoute to="/admin/settings/email-log" />} />
               <Route path="email-templates" element={<MovedRoute to="/admin/settings/email-templates" />} />
