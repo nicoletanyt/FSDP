@@ -60,7 +60,7 @@ export default function ClassUnavailableDialog({ eventId }: { eventId: string })
             <AlertDialogTrigger render={<Button variant="destructive" className="min-h-11 w-full" disabled={status.isPending || status.isError} />}>
                 I’m unavailable
             </AlertDialogTrigger>
-            <AlertDialogContent className="data-[size=default]:sm:max-w-md">
+            <AlertDialogContent >
                 <AlertDialogHeader className="flex flex-row items-center justify-start gap-3 text-left">
                     <AlertDialogMedia className="mb-0 shrink-0 bg-destructive/10 text-destructive"><CircleAlert aria-hidden="true" /></AlertDialogMedia>
                     <AlertDialogTitle className="translate-y-1">Report unavailable for this class?</AlertDialogTitle>

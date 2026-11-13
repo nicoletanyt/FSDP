@@ -1,8 +1,9 @@
+import type { GradingSystemId, RankId } from "@/lib/student-grades";
 export type Student = {
   firstName: string;
   membershipStatus: "Active" | "Expired" | "Pending";
-  belt: { name: string; colour: string; hex: string };
-  nextBelt: { name: string; colour: string };
+  belt: { name: string; colour: string; hex: string; rank: RankId; system: GradingSystemId };
+  nextBelt: { name: string; colour: string; rank: RankId; system: GradingSystemId };
   requirements: {
     sessions: { done: number; required: number };
     monthsInRank: { done: number; required: number };
@@ -23,8 +24,8 @@ export type Student = {
 export const mockStudent: Student = {
   firstName: "Jess",
   membershipStatus: "Active",
-  belt: { name: "5th Kyu", colour: "Yellow", hex: "#e8b923" },
-  nextBelt: { name: "4th Kyu", colour: "Orange" },
+  belt: { name: "5th Kyu", colour: "Yellow", hex: "#e8b923", rank: "5-kyu", system: "adults" },
+  nextBelt: { name: "4th Kyu", colour: "Orange", rank: "4-kyu", system: "adults" },
   requirements: {
     sessions: { done: 18, required: 24 },
     monthsInRank: { done: 6, required: 6 },

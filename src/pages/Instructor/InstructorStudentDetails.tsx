@@ -18,15 +18,18 @@ import {
 } from "@/components/ui/popover";
 import { StudentInformationCards, StudentInformationActions } from "@/components/instructor/StudentInformation";
 import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
+import StudentAvatar from "@/components/instructor/StudentAvatar";
 import InstructorLoadingBoundary from "@/components/instructor/InstructorLoadingBoundary";
 import { InstructorSkeleton } from "@/components/instructor/InstructorSkeletons";
 import StudentSessionHistory from "@/components/instructor/StudentSessionHistory";
 import StudentGradingRead from "@/components/instructor/StudentGradingRead";
+import StudentApplications from "@/components/instructor/StudentApplications";
 import { useAuth } from "@/hooks/use-auth";
 import { useInstructorQuery } from "@/hooks/use-instructor-data";
 import { instructorQueryKeys as queryKeys, instructorQueryTimes as queryTimes } from "@/lib/instructor/query-keys";
 import { useInstructorApi } from "@/lib/instructor/data-context";
 import { gradingEventDate, parseEntityId } from "@/lib/instructor/adapters";
+import { calendarEventId } from "@/lib/instructor/calendar-view";
 import { loadStudentGrading } from "@/lib/instructor/grading";
 import { directoryStudent, singaporeToday } from "@/lib/instructor/directory";
 import { cachedStudentPreview } from "@/lib/instructor/student-preview";
@@ -149,7 +152,7 @@ function StudentDetailContent({ detail }: { detail: StudentDetail }) {
     const requestedContext = params.get("session") ?? params.get("class");
     const loadContext = useCallback(
         (signal: AbortSignal) =>
-            loadStudentContext(api, parseEntityId(requestedContext, "event"), signal),
+            loadStudentContext(api, parseEntityId(requestedContext && calendarEventId(requestedContext), "event"), signal),
         [api, requestedContext],
     );
     const context = useInstructorQuery(
@@ -303,9 +306,10 @@ function StudentDetailContent({ detail }: { detail: StudentDetail }) {
                         className="hidden space-y-4 md:block"
                     >
                         <div>
+                            <StudentAvatar name={profile.name} className="mb-3" />
                             <h1 className="text-xl font-semibold">{profile.name}</h1>
                             <p className="detail-meta mt-1 text-sm text-muted-foreground">
-                                {profile.memberNo}
+                                {profile.memberNo}{profile.age !== null && ` · Age ${profile.age}`}
                             </p>
                         </div>
                         <StudentInformationCards detail={detail} />
@@ -341,14 +345,16 @@ function StudentDetailContent({ detail }: { detail: StudentDetail }) {
                             <div className="detail-section-header">
                                 <h2>Details</h2>
                             </div>
+                            <StudentAvatar name={profile.name} />
                             <p className="detail-meta text-sm text-muted-foreground">
-                                {profile.memberNo}
+                                {profile.memberNo}{profile.age !== null && ` · Age ${profile.age}`}
                             </p>
                             <StudentInformationCards detail={detail} />
                             <StudentInformationActions detail={detail} showDetailsLink={false} />
                         </section>
                         <AttendanceSummary studentId={detail.student.id} />
                         <StudentGradingRead title="Next grading" detail={detail} reads={grading} onRetry={grading.retry} onViewGrading={() => selectTab("grading")} />
+                        <StudentApplications studentId={detail.student.id} today={singaporeToday()} />
                         <StudentGradingRead title="Technique checklist" detail={detail} reads={grading} onRetry={grading.retry} />
                     </TabsContent>
                     <TabsContent value="sessions">
@@ -359,6 +365,7 @@ function StudentDetailContent({ detail }: { detail: StudentDetail }) {
                     </TabsContent>
                     <TabsContent value="grading" className="space-y-6">
                         <StudentGradingRead title="Grading eligibility" detail={detail} reads={grading} onRetry={grading.retry} />
+                        <StudentApplications studentId={detail.student.id} today={singaporeToday()} />
                         <StudentGradingRead title="Grading history" detail={detail} reads={grading} onRetry={grading.retry} />
                     </TabsContent>
                 </Tabs>
@@ -410,7 +417,7 @@ function StudentDetailPage() {
                     <ChevronLeft aria-hidden="true" />
                     Back to students
                 </Button>
-                <h1 className="text-2xl font-semibold">Student not found</h1>
+                <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Student not found</h1>
                 <p className="text-sm text-muted-foreground">
                     This student record is unavailable.
                 </p>

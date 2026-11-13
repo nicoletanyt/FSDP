@@ -8,8 +8,8 @@ test('grade badges show a colour swatch alongside the rank and retain an accessi
   const server = await createServer({ configFile: false, resolve: { alias: { '@': new URL('../src', import.meta.url).pathname } },
     server: { middlewareMode: true }, appType: 'custom', logLevel: 'silent' })
   try {
-    const { default: DatabaseGradeBadge } = await server.ssrLoadModule('/src/components/instructor/DatabaseGradeBadge.tsx')
-    const { default: GradeBadge } = await server.ssrLoadModule('/src/components/GradeBadge.tsx')
+    const { DatabaseGradeBadge } = await server.ssrLoadModule('/src/components/shared/grade/GradeBadge.tsx')
+    const { default: GradeBadge } = await server.ssrLoadModule('/src/components/shared/grade/GradeBadge.tsx')
     const grade = { id: 'blue-6th-kyu', label: 'Blue (6th Kyu)', colour: 'Blue', is_ranked: true, sort_order: 7 }
     const database = renderToStaticMarkup(React.createElement(DatabaseGradeBadge, { grade }))
     assert.match(database, /6th Kyu/)

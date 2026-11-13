@@ -44,6 +44,11 @@ test('directory projections retain member numbers, database grade labels and mis
   assert.equal(result.grade.label, 'Unranked')
   assert.equal(result.principalDojo, 'Dojo not recorded')
   assert.equal(result.trackLabel, "Adults' grading")
+  // Born 31 Dec 2000: still 25 on 5 Nov 2026 (birthday-based), though 26 by year.
+  assert.equal(result.age, 25)
+  assert.equal(directory.studentAge('2000-11-05', '2026-11-05'), 26)
+  assert.equal(directory.studentAge('2000-11-06', '2026-11-05'), 25)
+  assert.equal(directory.studentAge('2027-01-01', '2026-11-05'), null)
   const missing = directoryStudent({ ...entry, grade: null }, '2026-11-05')
   assert.equal(missing.grade, null)
   assert.equal(directoryStudent({ ...entry, student: { ...entry.student, first_name: '', last_name: '' } }, '2026-11-05').name, entry.student.email)

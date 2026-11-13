@@ -24,7 +24,7 @@ export function createGradingFixtureReads(account: string, mode: string | null):
       const grades = [...new Map(directoryEntries().map(entry => [entry.grade!.id, entry.grade!])).values(), target]
       const reference: InstructorReferenceData = { centres: [], classTypes: [], grades,
         gradeTracks: grades.flatMap(grade => (['children', 'adult'] as const).map(track => ({ grade_id: grade.id, track }))),
-        gradeRequirements: grades.flatMap(grade => (['children', 'adult'] as const).map(track => ({ grade_id: grade.id, track, min_months: 3, max_months: null, min_sessions: 10, min_age_years: null }))),
+        gradeRequirements: grades.flatMap(grade => (['children', 'adult'] as const).map(track => ({ grade_id: grade.id, track, min_months: 3, max_months: null, min_sessions: 10, min_age_years: null, max_age_years: null }))),
         syllabusItems: (['children', 'adult'] as const).map(track => ({ ...syllabus, track, id: `${track}/${syllabus.id}` })),
       }
       // Only the current and target grades participate in these fixture ladders.

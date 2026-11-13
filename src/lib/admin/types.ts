@@ -162,7 +162,9 @@ export function nextGrade(
   }
 
   if (track === 'children') {
-    return childrenNext[grade] ?? null
+    // Top of the children's ladder: the next grade is the adult crossover grade,
+    // taken once the student turns 13 (by year).
+    return childrenNext[grade] ?? adultEntryFromChildren[grade] ?? null
   }
 
   if (grade === 'Black-Gold (1st Kyu)') {
@@ -171,6 +173,15 @@ export function nextGrade(
   if (grade === 'Junior Dan') return '1st Dan'
 
   return adultNext[grade] ?? adultEntryFromChildren[grade] ?? null
+}
+
+/**
+ * Track whose sheet and syllabus a target grade is measured against. A child
+ * whose next grade is off the children's ladder (Black-Silver → Black-Gold)
+ * is graded on the adult sheet.
+ */
+export function targetGradeTrack(track: GradeTrack, target: Grade): GradeTrack {
+  return track === 'children' && target !== UNRANKED && !childrenLadder.includes(target) ? 'adult' : track
 }
 
 export function gradeTrackForAge(age: number): GradeTrack {
@@ -294,18 +305,6 @@ export interface NotificationEntry {
   sentAt: string
   deliveredCount: number
   failedCount: number
-}
-
-export interface NewSessionInput {
-  centreId: string
-  instructorId: string
-  title: string
-  date: string
-  startTime: string
-  durationMinutes: number
-  type: SessionType
-  isExternal: boolean
-  externalLocation?: string
 }
 
 export interface NewOpportunityInput {

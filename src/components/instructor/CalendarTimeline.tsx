@@ -202,7 +202,7 @@ export default function CalendarTimeline({
                     {!isDay && (
                         <div
                             ref={headerRef}
-                            className="sticky top-0 left-0 z-30 border-r border-b bg-card p-2 text-[10px] text-muted-foreground"
+                            className="sticky top-0 left-0 z-30 border-r border-b bg-card p-2 text-3xs text-muted-foreground"
                         />
                     )}
                     {!isDay &&
@@ -250,7 +250,7 @@ export default function CalendarTimeline({
                         ).map((minute) => (
                             <span
                                 key={minute}
-                                className="absolute right-2 text-[10px] text-muted-foreground tabular-nums"
+                                className="absolute right-2 text-3xs text-muted-foreground tabular-nums"
                                 style={{
                                     top: (minute - timelineStart) * pixelsPerMinute,
                                     transform:
@@ -437,7 +437,7 @@ export default function CalendarTimeline({
                                                     selectedId === item.id &&
                                                     "z-[15] ring-2 ring-primary ring-offset-2 ring-offset-card",
                                                     isDay &&
-                                                    "rounded-lg px-2.5 py-[3px] text-[12px] leading-tight",
+                                                    "rounded-lg px-2.5 py-[3px] text-2xs leading-tight",
                                                     isDay &&
                                                     !isClass &&
                                                     "bg-emerald-50/80 dark:bg-emerald-950/80",
@@ -469,12 +469,12 @@ export default function CalendarTimeline({
                                                         {isClass ? item.event.name : "Available"}
                                                     </span>
                                                 </span>
-                                                <span className="block text-[10px] leading-tight">
+                                                <span className="block text-3xs leading-tight">
                                                     {formatTime(item.startTime)} –{" "}
                                                     {formatTime(item.endTime)}
                                                 </span>
                                                 {isClass && isDay && (
-                                                    <span className="flex max-w-full items-center gap-1 text-[10px] leading-tight opacity-80">
+                                                    <span className="flex max-w-full items-center gap-1 text-3xs leading-tight opacity-80">
                                                         <MapPin
                                                             aria-hidden="true"
                                                             className="size-3 shrink-0"
@@ -483,7 +483,7 @@ export default function CalendarTimeline({
                                                     </span>
                                                 )}
                                                 {isClass && end - start >= 60 && !isDay && (
-                                                    <span className="mt-1 flex w-full items-center justify-between gap-2 text-[10px] opacity-80">
+                                                    <span className="mt-1 flex w-full items-center justify-between gap-2 text-3xs opacity-80">
                                                         <span className="min-w-0 truncate">
                                                             {item.event.dojo}
                                                         </span>

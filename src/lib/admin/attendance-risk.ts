@@ -267,21 +267,3 @@ export function getOverallAttendanceRate(
   return total === 0 ? 0 : (attended / total) * 100
 }
 
-export function getStudentHistory(
-  records: AttendanceRecord[],
-  sessions: Session[],
-  studentId: string,
-) {
-  const sessionsById = sessionMap(sessions)
-  return records
-    .filter((record) => record.studentId === studentId)
-    .map((record) => ({ record, session: sessionsById.get(record.sessionId) }))
-    .filter((entry): entry is { record: AttendanceRecord; session: Session } =>
-      Boolean(entry.session),
-    )
-    .sort((left, right) =>
-      `${right.session.date}T${right.session.startTime}`.localeCompare(
-        `${left.session.date}T${left.session.startTime}`,
-      ),
-    )
-}

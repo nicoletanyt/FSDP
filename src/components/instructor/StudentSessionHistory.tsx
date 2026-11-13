@@ -1,22 +1,14 @@
-import { useCallback, useEffect, useId, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
     CalendarDays,
     Clock3,
-    Filter,
     MapPin,
     ChevronLeft,
     ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import {
-    Popover,
-    PopoverContent,
-    PopoverTitle,
-    PopoverTrigger,
-} from "@/components/ui/popover";
 import InstructorDataStatus from "./InstructorDataStatus";
 import { useInstructorQuery } from "@/hooks/use-instructor-data";
 import { useAuth } from "@/hooks/use-auth";
@@ -36,6 +28,7 @@ import type {
     StudentId,
 } from "@/lib/instructor/types";
 import { cn } from "cn";
+import FilterPopover, { FilterField } from "@/components/shared/filters/FilterPopover";
 
 const PAGE_SIZE = 20;
 
@@ -70,7 +63,7 @@ function SessionHistoryCard({
         >
             <CardHeader className="gap-3">
                 <div className="flex items-start justify-between gap-4">
-                    <CardTitle className="min-w-0 text-base font-semibold">
+                    <CardTitle className="min-w-0">
                         <h3>{session.event.name}</h3>
                     </CardTitle>
                     <span
@@ -114,72 +107,6 @@ function SessionHistoryCard({
                 )}
             </CardHeader>
         </Card>
-    );
-}
-
-function SessionFilters({
-    attendance,
-    sort,
-    onAttendanceChange,
-    onSortChange,
-    onReset,
-    inline = false,
-}: {
-    attendance: AttendanceState | "all";
-    sort: string;
-    onAttendanceChange: (value: AttendanceState | "all") => void;
-    onSortChange: (value: string) => void;
-    onReset: () => void;
-    inline?: boolean;
-}) {
-    const id = useId();
-    const selectClassName =
-        "detail-body h-11 min-w-0 rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50 lg:h-9";
-    return (
-        <div className={inline ? "flex flex-wrap items-end gap-3" : "grid gap-3"}>
-            <div className="flex min-w-0 flex-col gap-1.5">
-                <Label htmlFor={`${id}-attendance`} className="detail-label">
-                    Attendance
-                </Label>
-                <select
-                    id={`${id}-attendance`}
-                    value={attendance}
-                    onChange={(event) =>
-                        onAttendanceChange(event.target.value as AttendanceState | "all")
-                    }
-                    className={selectClassName}
-                >
-                    <option value="all">All attendance</option>
-                    {(["present", "late", "absent", "excused", "unmarked"] as const).map(
-                        (value) => (
-                            <option key={value} value={value}>
-                                {value[0].toUpperCase()}
-                                {value.slice(1)}
-                            </option>
-                        ),
-                    )}
-                </select>
-            </div>
-            <div className="flex min-w-0 flex-col gap-1.5">
-                <Label htmlFor={`${id}-sort`} className="detail-label">
-                    Date order
-                </Label>
-                <select
-                    id={`${id}-sort`}
-                    value={sort}
-                    onChange={(event) => onSortChange(event.target.value)}
-                    className={selectClassName}
-                >
-                    <option value="newest">Newest first</option>
-                    <option value="oldest">Oldest first</option>
-                </select>
-            </div>
-            {(attendance !== "all" || sort !== "newest") && (
-                <Button variant="ghost" size="touch" onClick={onReset}>
-                    Reset filters
-                </Button>
-            )}
-        </div>
     );
 }
 
@@ -263,37 +190,32 @@ export default function StudentSessionHistory({
         <section aria-label="Session history" aria-busy={history.isPlaceholderData} className="detail-section">
             {history.isPlaceholderData && <p role="status" className="sr-only">Loading requested page. Showing page {displayedPage + 1}.</p>}
             <div className="detail-section-header">
-                <h2 className="font-semibold">Session history</h2>
-                <div className="hidden lg:block">
-                    <SessionFilters {...filters} inline />
-                </div>
-                <Popover>
-                    <PopoverTrigger
-                        render={
-                            <Button
-                                variant={activeCount ? "secondary" : "outline"}
-                                size="touch"
-                                className="lg:hidden"
-                                aria-label={`Filter sessions${activeCount ? `, ${activeCount} active` : ""}`}
-                            />
-                        }
-                    >
-                        <Filter aria-hidden="true" />
-                        Filter
-                        {activeCount > 0 && (
-                            <span className="detail-status rounded-full bg-primary px-1.5 py-0.5 text-primary-foreground">
-                                {activeCount}
-                            </span>
-                        )}
-                    </PopoverTrigger>
-                    <PopoverContent
-                        align="end"
-                        className="student-detail-view w-72 gap-3 lg:hidden"
-                    >
-                        <PopoverTitle>Filter sessions</PopoverTitle>
-                        <SessionFilters {...filters} />
-                    </PopoverContent>
-                </Popover>
+                <h2 className="text-base font-medium">Session history</h2>
+                <FilterPopover title="Filter sessions" activeCount={activeCount} onReset={filters.onReset}>
+                    <FilterField
+                        label="Attendance"
+                        value={attendance}
+                        onChange={(value) => filters.onAttendanceChange(value as AttendanceState | "all")}
+                        ariaLabel="Attendance filter"
+                        options={[
+                            { value: "all", label: "All attendance" },
+                            ...(["present", "late", "absent", "excused", "unmarked"] as const).map((value) => ({
+                                value,
+                                label: `${value[0].toUpperCase()}${value.slice(1)}`,
+                            })),
+                        ]}
+                    />
+                    <FilterField
+                        label="Date order"
+                        value={sort}
+                        onChange={filters.onSortChange}
+                        ariaLabel="Date order"
+                        options={[
+                            { value: "newest", label: "Newest first" },
+                            { value: "oldest", label: "Oldest first" },
+                        ]}
+                    />
+                </FilterPopover>
             </div>
             {history.status !== "success" ? (
                 <InstructorDataStatus

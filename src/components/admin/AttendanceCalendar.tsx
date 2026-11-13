@@ -7,10 +7,10 @@ import {
   UserRound,
   Users,
 } from 'lucide-react'
-import AttendanceClassDetails from '@/components/admin/AttendanceClassDetails'
 import LiveClassDetails from '@/components/admin/LiveClassDetails'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import type { CalendarDisplayMode as CalendarDisplay, CalendarRange as CalendarView } from '@/components/shared/calendar/CalendarToolbar'
 import type { AdminCalendarEvent } from '@/lib/admin/attendance-calendar'
 import {
   dateKey,
@@ -26,9 +26,6 @@ import {
 } from '@/lib/admin/attendance-calendar'
 import { getSessionStyle } from '@/lib/admin/session-styles'
 import { cn } from 'cn'
-
-export type CalendarView = 'day' | 'week' | 'month'
-export type CalendarDisplay = 'timeline' | 'list'
 
 type EventLayout = 'day' | 'week' | 'panel'
 
@@ -62,14 +59,12 @@ export function EventCard({
   onToggle,
   layout = 'week',
   detailsInPanel = false,
-  focusStudentId,
 }: {
   event: AdminCalendarEvent
   expanded: boolean
   onToggle: () => void
   layout?: EventLayout
   detailsInPanel?: boolean
-  focusStudentId?: string
 }) {
   const showSummary = layout !== 'week'
   return (
@@ -78,7 +73,7 @@ export function EventCard({
       className={cn(
         'gap-0 rounded-lg border py-0 text-inherit shadow-none ring-0 transition-[border-color,box-shadow] duration-200 hover:border-foreground/25 has-focus-visible:ring-2 has-focus-visible:ring-ring',
         eventCardStyle(event),
-        layout === 'panel' && 'h-full min-h-0',
+        layout === 'panel' && 'border-0 lg:h-full lg:min-h-0 lg:border',
         expanded &&
           (detailsInPanel
             ? 'relative z-10 border-primary ring-2 ring-primary ring-offset-2 ring-offset-background'
@@ -140,17 +135,15 @@ export function EventCard({
             </span>
           </span>
           <span className="flex items-center gap-1.5 text-2xs font-normal opacity-80">
-            <UserRound aria-hidden="true" className="size-3 shrink-0" />
-            <span className="min-w-0 truncate">{event.instructorName}</span>
-          </span>
-        </div>
-
-        {showSummary && (
-          <span className="flex items-center gap-1.5 text-2xs font-normal opacity-80">
             <MapPin aria-hidden="true" className="size-3 shrink-0" />
             <span className="min-w-0 wrap-break-word">{event.centreName}</span>
           </span>
-        )}
+        </div>
+
+        <span className="flex items-center gap-1.5 text-2xs font-normal opacity-80">
+          <UserRound aria-hidden="true" className="size-3 shrink-0" />
+          <span className="min-w-0 truncate">{event.instructorName}</span>
+        </span>
 
         {needsCover(event) &&
           <span className="w-fit rounded-md border border-destructive/30 bg-destructive/10 px-2 py-1 text-xs font-medium text-destructive">
@@ -166,8 +159,7 @@ export function EventCard({
 
       {!detailsInPanel &&
         (layout === 'panel' ? (
-          event.liveDetails ? <LiveClassDetails event={event} fillHeight /> :
-            <AttendanceClassDetails event={event} focusStudentId={focusStudentId} fillHeight />
+          <LiveClassDetails event={event} fillHeight />
         ) : (
           <div
             id={`attendance-details-${event.id}`}
@@ -181,8 +173,7 @@ export function EventCard({
             )}
           >
             <div className="min-h-0 overflow-hidden">
-              {event.liveDetails ? <LiveClassDetails event={event} /> :
-                <AttendanceClassDetails event={event} focusStudentId={focusStudentId} />}
+              <LiveClassDetails event={event} />
             </div>
           </div>
         ))}
@@ -491,7 +482,7 @@ function CalendarMonth({
                       aria-pressed={selected}
                       onClick={() => onToggleSession(event)}
                       className={cn(
-                         'h-auto min-h-5 w-full min-w-0 cursor-pointer flex-col items-start gap-0 rounded border-0 px-1 py-0.5 text-left text-[11px] leading-tight xl:flex-row xl:items-center xl:gap-1',
+                         'h-auto min-h-5 w-full min-w-0 cursor-pointer flex-col items-start gap-0 rounded border-0 px-1 py-0.5 text-left text-3xs leading-tight xl:flex-row xl:items-center xl:gap-1',
                          eventCardStyle(event),
                         selected &&
                           'relative z-[1] pr-5 ring-2 ring-primary ring-offset-1 ring-offset-background',
@@ -627,7 +618,7 @@ function CalendarTimeline({
           {!isDay && (
             <div
               ref={headerRef}
-              className="sticky top-0 left-0 z-40 border-r border-b bg-card p-2 text-[10px] text-muted-foreground"
+              className="sticky top-0 left-0 z-40 border-r border-b bg-card p-2 text-3xs text-muted-foreground"
             />
           )}
           {!isDay && days.map((day) => {
@@ -673,7 +664,7 @@ function CalendarTimeline({
             ).map((minute) => (
               <span
                 key={minute}
-                className="absolute right-2 text-[10px] text-muted-foreground tabular-nums"
+                className="absolute right-2 text-3xs text-muted-foreground tabular-nums"
                 style={{
                   top: (minute - timelineStart) * pixelsPerMinute,
                   transform:
@@ -745,7 +736,7 @@ function CalendarTimeline({
                            eventCardStyle(item),
                           selected &&
                             'z-[15] ring-2 ring-primary ring-offset-2 ring-offset-card',
-                          isDay && 'rounded-lg px-2.5 py-[3px] text-[12px] leading-tight',
+                          isDay && 'rounded-lg px-2.5 py-[3px] text-2xs leading-tight',
                         )}
                         style={{
                           top: (start - timelineStart) * pixelsPerMinute,
@@ -765,18 +756,18 @@ function CalendarTimeline({
                         >
                           {item.name}
                         </span>
-                        <span className="block text-[10px] leading-tight">
+                        <span className="block text-3xs leading-tight">
                           {formatTime(item.startTime)} –{' '}
                           {formatTime(item.endTime)}
                         </span>
                         {isDay && (
-                          <span className="flex max-w-full items-center gap-1 text-[10px] leading-tight opacity-80">
+                          <span className="flex max-w-full items-center gap-1 text-3xs leading-tight opacity-80">
                             <MapPin aria-hidden="true" className="size-3 shrink-0" />
                             <span className="truncate">{item.centreName}</span>
                           </span>
                         )}
                         {end - start >= 60 && !isDay && (
-                          <span className="mt-1 flex w-full flex-col gap-0.5 text-[10px] leading-tight opacity-80">
+                          <span className="mt-1 flex w-full flex-col gap-0.5 text-3xs leading-tight opacity-80">
                             <span className="min-w-0 truncate">
                               {item.instructorName}
                             </span>

@@ -3,7 +3,9 @@ import { CalendarDays, Nfc, ScanLine, ShieldCheck, UserCircle, Users } from "luc
 import logo from "@/assets/logo.png";
 import ThemeToggle from "@/components/theme-toggle";
 import InstructorAccountMenu from "@/components/instructor/InstructorAccountMenu";
-import MobileNavigation from "@/components/MobileNavigation";
+import MobileNavigation from "@/components/shared/layout/MobileNavigation";
+import OverflowNav from "@/components/shared/layout/OverflowNav";
+import { pageWidth } from "@/lib/page-width";
 import { cn } from "@/lib/utils";
 import { useMyGradingPanels } from "@/hooks/use-my-grading-panels";
 
@@ -22,13 +24,7 @@ export function instructorNavigation(onGradingPanel: boolean) {
         : baseNavigation;
 }
 
-export default function InstructorNavigation({
-    calendarTo,
-    contentWidthClassName = "w-[calc(100%-2rem)] lg:w-[80%]",
-}: {
-    calendarTo: string;
-    contentWidthClassName?: string;
-}) {
+export default function InstructorNavigation({ calendarTo }: { calendarTo: string }) {
     const { pathname } = useLocation();
     const panels = useMyGradingPanels();
     const navigation = instructorNavigation(Boolean(panels.data?.length));
@@ -45,14 +41,11 @@ export default function InstructorNavigation({
         ]} />
         <header className="hidden shrink-0 border-b bg-background lg:block">
             <div
-                className={cn(
-                    "mx-auto flex flex-wrap items-center gap-y-2 py-3 lg:justify-between lg:gap-x-6 lg:gap-y-3 lg:px-6 lg:py-5",
-                    contentWidthClassName,
-                )}
+                className={cn(pageWidth, "flex items-center gap-6 py-5")}
             >
                 <Link
                     to={calendarTo}
-                    className="mr-auto flex min-h-11 min-w-0 items-center rounded-sm font-semibold tracking-tight focus-visible:outline-2 focus-visible:outline-ring lg:mr-0 lg:min-h-0"
+                    className="flex shrink-0 items-center rounded-sm font-semibold tracking-tight focus-visible:outline-2 focus-visible:outline-ring"
                 >
                     <img
                         src={logo}
@@ -71,32 +64,19 @@ export default function InstructorNavigation({
                         </p>
                     </div>
                 </Link>
-                <div className="contents lg:flex lg:min-w-0 lg:flex-wrap lg:items-center lg:justify-between lg:gap-1">
-                    <nav
-                        aria-label="Instructor navigation"
-                        className="hidden items-center gap-1 lg:flex"
-                    >
-                        {navigation.map(({ label, to, icon: Icon }) => {
-                            const active =
-                                pathname === to ||
-                                pathname.startsWith(`${to}/`) ||
-                                (label === "Calendar" && isCalendarRelated);
-                            return (
-                                <Link
-                                    key={to}
-                                    to={label === "Calendar" ? calendarTo : to}
-                                    aria-current={active ? "page" : undefined}
-                                    className={cn(
-                                        "flex min-h-11 min-w-0 flex-1 items-center justify-center gap-1 rounded-lg px-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring sm:gap-2 sm:px-3 sm:text-sm lg:min-h-10 lg:flex-none lg:px-3",
-                                        active && "bg-accent text-accent-foreground",
-                                    )}
-                                >
-                                    <Icon aria-hidden="true" className="size-4" />
-                                    {label}
-                                </Link>
-                            );
-                        })}
-                    </nav>
+                <OverflowNav
+                    label="Instructor navigation"
+                    items={navigation.map(({ label, to, icon }) => ({
+                        label,
+                        to: label === "Calendar" ? calendarTo : to,
+                        icon,
+                        active:
+                            pathname === to ||
+                            pathname.startsWith(`${to}/`) ||
+                            (label === "Calendar" && isCalendarRelated),
+                    }))}
+                />
+                <div className="flex shrink-0 items-center gap-1">
                     <ThemeToggle />
                     <InstructorAccountMenu />
                 </div>

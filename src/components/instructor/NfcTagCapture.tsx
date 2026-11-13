@@ -27,5 +27,8 @@ export default function NfcTagCapture() {
 
   // Keep the child unmounted until the token is in sessionStorage. A new tap
   // (or a second tag in this tab) gets a fresh route key and a fresh scan page.
-  return hasTag && capturedKey !== location.key ? null : <Outlet key={location.key} />
+  // Only the check-in page remounts per navigation: elsewhere every URL change
+  // (e.g. a search keystroke) would tear the page down and lose focus.
+  const isCheckIn = location.pathname === '/instructor/nfc_checkin'
+  return hasTag && capturedKey !== location.key ? null : <Outlet key={isCheckIn ? location.key : 'instructor'} />
 }

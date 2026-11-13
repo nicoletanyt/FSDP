@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useLocation } from 'react-router'
 import { buttonVariants } from '@/components/ui/button'
 import { CheckCircle2, Copy, Check, Calendar, Award } from 'lucide-react'
+import { GradeLabelBadge } from '@/components/shared/grade/GradeBadge'
 
 export default function ApplicationSuccess() {
   const [copied, setCopied] = useState(false)
@@ -143,7 +144,7 @@ export default function ApplicationSuccess() {
                   <Award className="w-3.5 h-3.5" />
                   <span className="text-[10px] sm:text-xs font-medium">Initial Rank</span>
                 </div>
-                <span className="text-sm sm:text-base font-bold text-gray-800 dark:text-gray-200">{beltRank}</span>
+                <GradeLabelBadge label={beltRank} />
               </div>
             </div>
           </div>

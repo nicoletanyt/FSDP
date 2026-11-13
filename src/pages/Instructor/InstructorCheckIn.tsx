@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useOutletContext } from "react-router";
 import { ChevronDown, LogOut, Maximize, UserCheck } from "lucide-react";
 import CheckInScanner from "@/components/instructor/CheckInScanner";
-import GradeBadge from "@/components/GradeBadge";
+import GradeBadge from "@/components/shared/grade/GradeBadge";
 import type { ScanFeedback } from "@/components/instructor/CheckInScanner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -233,7 +233,7 @@ export default function InstructorCheckIn() {
                     className={cn("min-h-0 min-w-0 gap-0 py-0", isKiosk && "hidden")}
                 >
                     <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b px-4 py-3">
-                        <h2 className="text-sm font-semibold">Recent check-ins</h2>
+                        <h2 className="text-sm font-medium">Recent check-ins</h2>
                         <p
                             aria-live="polite"
                             aria-atomic="true"

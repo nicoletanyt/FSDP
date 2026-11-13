@@ -1,5 +1,5 @@
 import { lazy } from 'react'
-import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router'
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from 'react-router'
 import { GuestRoute, InstructorIndexRedirect, ProtectedRoute } from '@/components/auth/AuthGate'
 import NfcTagCapture from '@/components/instructor/NfcTagCapture'
 import AuthLayout from './layouts/AuthLayout'
@@ -19,17 +19,22 @@ const AdminCentres = lazy(() => import('./pages/admin/Centres'))
 const AdminStudentDetail = lazy(() => import('./pages/admin/StudentDetail'))
 const AdminAttendance = lazy(() => import('./pages/admin/Attendance'))
 const AdminAttendanceRegister = lazy(() => import('./pages/admin/LiveAttendanceRegister'))
-const AdminAttendanceRecords = lazy(() => import('./pages/admin/AttendanceRecords'))
 const AdminAttendanceMonitoring = lazy(() => import('./pages/admin/AttendanceMonitoring'))
 const AdminGrading = lazy(() => import('./pages/admin/Grading'))
 const AdminGradingEligibility = lazy(() => import('./pages/admin/GradingEligibility'))
 const AdminGradingOpportunities = lazy(() => import('./pages/admin/GradingOpportunities'))
 const AdminGradingApplications = lazy(() => import('./pages/admin/GradingApplications'))
-const AdminGradingSyllabus = lazy(() => import('./pages/admin/Syllabus'))
+const AdminBeltRequirements = lazy(() => import('./pages/admin/BeltRequirements'))
+const AdminGradingRules = lazy(() => import('./pages/admin/GradingRules'))
+const AdminGradingDay = lazy(() => import('./pages/admin/GradingDay'))
+const AdminGradingResults = lazy(() => import('./pages/admin/GradingResults'))
 const AdminNotifications = lazy(() => import('./pages/admin/Notifications'))
 const AdminInstructors = lazy(() => import('./pages/admin/Instructors'))
 const AdminEmailTemplates = lazy(() => import('./pages/admin/EmailTemplates'))
 const AdminProfile = lazy(() => import('./pages/admin/Profile'))
+const AdminStudents = lazy(() => import('./pages/admin/Students'))
+const AdminStudentDirectory = lazy(() => import('./pages/admin/LiveStudentsTab'))
+const AdminSettings = lazy(() => import('./pages/admin/Settings'))
 
 const ForgetPassword = lazy(() => import('./pages/ForgetPassword')) 
 const ApplyMembership = lazy(() => import('./pages/Student/ApplyMembership'))
@@ -37,11 +42,13 @@ const ApplicationSuccess = lazy(() => import('./pages/Student/ApplicationSuccess
 
 const StudentDashboard = lazy(() => import('./pages/Student/StudentDashboard'))
 const StudentClasses = lazy(() => import('./pages/StudentClasses'))
+const StudentClassBooking = lazy(() => import('./pages/StudentClasses').then(module => ({ default: module.StudentClassBooking })))
 const StudentAttendance = lazy(() => import('./pages/StudentAttendance'))
 const StudentProfile = lazy(() => import('./pages/Student/StudentProfile'))
 const StudentPayments = lazy(() => import('./pages/Student/StudentPayments'))
 const StudentCredits = lazy(() => import('./pages/Student/StudentCredits'))
 const StudentGrading = lazy(() => import('./pages/Student/StudentGrading'))
+const GradingPayment = lazy(() => import('./pages/Student/GradingPayment'))
 
 const InstructorDashboard = lazy(() => import('./pages/Instructor/InstructorDashboard'))
 const InstructorStudents = lazy(() => import('./pages/Instructor/InstructorStudents'))
@@ -52,6 +59,14 @@ const InstructorStudentDetails = lazy(() => import('./pages/Instructor/Instructo
 const InstructorGradingSession = lazy(() => import('./pages/Instructor/InstructorGradingSession'))
 const InstructorGradings = lazy(() => import('./pages/Instructor/InstructorGradings'))
 const InstructorGradingDay = lazy(() => import('./pages/Instructor/InstructorGradingDay'))
+const InstructorGradingSessionPage = lazy(() => import('./pages/Instructor/InstructorGradingSession').then(module => ({ default: module.InstructorGradingSessionPage })))
+const LegacySessionChecklistsRedirect = lazy(() => import('./pages/Instructor/InstructorGradingSession').then(module => ({ default: module.LegacySessionChecklistsRedirect })))
+
+/** Redirect a moved route, keeping its query string. */
+function MovedRoute({ to }: { to: string }) {
+  const { search } = useLocation()
+  return <Navigate to={`${to}${search}`} replace />
+}
 
 function LegacyCoverInvitationRedirect() {
   const { invitationId } = useParams()
@@ -79,10 +94,14 @@ export default function App() {
               <Route path="dashboard" element={<StudentDashboard />} />
               <Route path="classes" element={<StudentClasses />} />
               <Route path="timetable" element={<StudentAttendance />} />
+              <Route path="attendance" element={<Navigate to="/timetable" replace />} />
+              <Route path="classes/choose" element={<StudentClassBooking />} />
               <Route path="profile" element={<StudentProfile />} />
               <Route path="payments" element={<StudentPayments />} />
               <Route path="student/credits" element={<StudentCredits />} />
-              <Route path="grading" element={<StudentGrading />} />
+              <Route path="grading" element={<GradingPayment />} />
+              <Route path="grading/applications" element={<StudentGrading />} />
+              <Route path="grading/payment" element={<GradingPayment />} />
             </Route>
           </Route>
           <Route path="instructor" element={<NfcTagCapture />}>
@@ -104,6 +123,8 @@ export default function App() {
                 <Route path="reports/:eventId" element={<Navigate to="/instructor/calendar" replace />} />
                 <Route path="gradings" element={<InstructorGradings />} />
                 <Route path="gradings/:eventId" element={<InstructorGradingDay />} />
+                <Route path="gradings/:eventId/sessions/:sessionId" element={<LegacySessionChecklistsRedirect />} />
+                <Route path="grading/session/:sessionId" element={<InstructorGradingSessionPage />} />
                 <Route path="grading/:eventId" element={<InstructorGradingSession />} />
                 <Route path="profile" element={<InstructorProfile />} />
               </Route>
@@ -112,25 +133,39 @@ export default function App() {
           <Route element={<ProtectedRoute role="administrator" />}>
             <Route path="admin" element={<AdminLayout />}>
               <Route index element={<AdminOverview />} />
-              // is rerouting students to centres really needed?
-              <Route path="students" element={<Navigate to="/admin/centres" replace />} />
+              <Route path="students" element={<AdminStudents />}>
+                <Route index element={<AdminStudentDirectory />} />
+                <Route path="attendance" element={<AdminAttendanceMonitoring />} />
+              </Route>
               <Route path="students/:studentId" element={<AdminStudentDetail />} />
               <Route path="centres" element={<AdminCentres />} />
               <Route path="calendar" element={<AdminAttendance />}>
                 <Route index element={<AdminAttendanceRegister />} />
-                <Route path="records" element={<AdminAttendanceRecords />} />
-                <Route path="monitoring" element={<AdminAttendanceMonitoring />} />
               </Route>
+              <Route path="calendar/records" element={<Navigate to="/admin/calendar" replace />} />
+              <Route path="calendar/monitoring" element={<MovedRoute to="/admin/students/attendance" />} />
               <Route path="grading" element={<AdminGrading />}>
                 <Route index element={<Navigate to="opportunities" replace />} />
                 <Route path="eligibility" element={<AdminGradingEligibility />} />
                 <Route path="opportunities" element={<AdminGradingOpportunities />} />
                 <Route path="applications" element={<AdminGradingApplications />} />
-                <Route path="syllabus" element={<AdminGradingSyllabus />} />
+                <Route path="belt-requirements" element={<AdminBeltRequirements />} />
+                <Route path="syllabus" element={<MovedRoute to="/admin/grading/belt-requirements" />} />
               </Route>
-              <Route path="notifications" element={<AdminNotifications />} />
+              <Route path="grading/rules" element={<MovedRoute to="/admin/settings/grading-rules" />} />
+              {/* A grading's own pages sit outside the section tabs. */}
+              <Route path="grading/days/:eventId" element={<AdminGradingDay />} />
+              <Route path="grading/days/:eventId/:sessionId" element={<AdminGradingResults />} />
               <Route path="instructors" element={<AdminInstructors />} />
-              <Route path="email-templates" element={<AdminEmailTemplates />} />
+              <Route path="settings" element={<AdminSettings />}>
+                <Route index element={<Navigate to="email-templates" replace />} />
+                <Route path="email-templates" element={<AdminEmailTemplates />} />
+                <Route path="email-log" element={<AdminNotifications />} />
+                <Route path="grading-rules" element={<AdminGradingRules />} />
+                <Route path="syllabus" element={<MovedRoute to="/admin/grading/belt-requirements" />} />
+              </Route>
+              <Route path="notifications" element={<MovedRoute to="/admin/settings/email-log" />} />
+              <Route path="email-templates" element={<MovedRoute to="/admin/settings/email-templates" />} />
               <Route path="profile" element={<AdminProfile />} />
             </Route>
           </Route>

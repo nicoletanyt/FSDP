@@ -1,3 +1,4 @@
+import type { GradingSystemId, RankId } from "@/lib/student-grades";
 export type Payment = {
   id: string;
   date: string; // ISO date
@@ -12,7 +13,7 @@ export type Profile = {
   memberId: string;
   fullName: string;
   photoUrl: string | null;
-  belt: { name: string; colour: string; hex: string };
+  belt: { name: string; colour: string; hex: string; rank: RankId; system: GradingSystemId };
   homeDojo: string;
   memberSince: string; // ISO date
   membership: {
@@ -28,7 +29,7 @@ export const mockProfile: Profile = {
   memberId: "ASK-2025-0142",
   fullName: "Jess Tan",
   photoUrl: null,
-  belt: { name: "5th Kyu", colour: "Yellow", hex: "#e8b923" },
+  belt: { name: "5th Kyu", colour: "Yellow", hex: "#e8b923", rank: "5-kyu", system: "adults" },
   homeDojo: "Bishan Dojo",
   memberSince: "2025-03-10",
   membership: {

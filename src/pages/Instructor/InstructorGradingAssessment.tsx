@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import GradeBadge from "@/components/instructor/DatabaseGradeBadge";
+import { DatabaseGradeBadge as GradeBadge } from "@/components/shared/grade/GradeBadge";
 import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
 import InstructorLoadingBoundary from "@/components/instructor/InstructorLoadingBoundary";
 import { useInstructorApi } from "@/lib/instructor/data-context";
@@ -47,7 +47,7 @@ function AssessmentForm({ detail }: { detail: AssessmentDetail }) {
                 <p className="mb-2 text-xs text-muted-foreground">
                     Recorded assessment{!canEdit && " · Read-only"}
                 </p>
-                <h1 className="text-3xl font-semibold tracking-tight [overflow-wrap:anywhere]">
+                <h1 className="text-2xl font-semibold tracking-tight md:text-3xl [overflow-wrap:anywhere]">
                     Assess {name}
                 </h1>
                 <p className="mt-2 text-sm text-muted-foreground">
@@ -177,7 +177,7 @@ function GradingAssessmentPage() {
                 <Link to="/instructor/calendar" className="text-sm underline">
                     Back to calendar
                 </Link>
-                <h1 className="text-2xl font-semibold">Assessment not found</h1>
+                <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Assessment not found</h1>
                 <p className="text-sm text-muted-foreground">
                     Open a candidate’s assessment from a grading session in the calendar.
                 </p>

@@ -1,5 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
+import { Link } from "react-router";
 import {
+    ArrowUpRight,
     Bot,
     Maximize2,
     MessageCircle,
@@ -23,6 +25,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 import { createInstructorChatClient } from "@/lib/instructor/chat";
+import type { ChatAction, ChatSource } from "@/lib/instructor/chat";
 import {
     followUpChatTopics,
     instructorChatTopics,
@@ -30,6 +33,7 @@ import {
 } from "@/lib/instructor/chat-topics";
 import type { InstructorChatTopic } from "@/lib/instructor/chat-topics";
 import ChatMarkdown from "@/components/instructor/ChatMarkdown";
+import ChatActionCard from "@/components/instructor/ChatActionCard";
 
 type ChatMessage = {
     id: string;
@@ -37,6 +41,9 @@ type ChatMessage = {
     content: string;
     timestamp: Date;
     topic?: InstructorChatTopic;
+    // Display-only extras on assistant replies; never sent back to the model.
+    sources?: ChatSource[];
+    actions?: ChatAction[];
 };
 
 const requestReply = createInstructorChatClient(supabase);
@@ -91,6 +98,25 @@ function TopicSuggestions({
                 </button>
             ))}
         </div>
+    );
+}
+
+// Validated internal routes only (see chat.ts), shown as navigation chips.
+function RelatedPages({ sources, onNavigate }: { sources: ChatSource[]; onNavigate: () => void }) {
+    return (
+        <nav aria-label="Related pages" className="mt-3 flex flex-wrap gap-1.5">
+            {sources.map((source) => (
+                <Link
+                    key={source.href}
+                    to={source.href}
+                    onClick={onNavigate}
+                    className="inline-flex min-h-8 max-w-full items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-foreground transition-colors hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 [overflow-wrap:anywhere]"
+                >
+                    {source.label}
+                    <ArrowUpRight aria-hidden="true" className="size-3 shrink-0" />
+                </Link>
+            ))}
+        </nav>
     );
 }
 
@@ -196,6 +222,8 @@ export default function FloatingChatbot({ userId }: { userId: string }) {
             const reply = {
                 ...createMessage("assistant", result.reply),
                 topic: history.at(-1)?.topic,
+                sources: result.sources,
+                actions: result.actions,
             };
             setMessages((current) => [...current, reply]);
         } catch (failure) {
@@ -378,6 +406,19 @@ export default function FloatingChatbot({ userId }: { userId: string }) {
                                             <p className="whitespace-pre-wrap">{message.content}</p>
                                         )}
                                     </div>
+                                    {message.actions?.map((action) => (
+                                        <ChatActionCard
+                                            key={`${action.kind}:${action.studentId}`}
+                                            action={action}
+                                            userId={userId}
+                                        />
+                                    ))}
+                                    {!!message.sources?.length && (
+                                        <RelatedPages
+                                            sources={message.sources}
+                                            onNavigate={() => setIsExpanded(false)}
+                                        />
+                                    )}
                                     {message.id === lastMessage.id && message.role === "assistant" && !isTyping && !error && (
                                         <TopicSuggestions
                                             topics={message.id === greeting.id ? starterChatTopics : followUpChatTopics(message.topic)}
@@ -543,7 +584,7 @@ export default function FloatingChatbot({ userId }: { userId: string }) {
                     data-expanded-chat
                     initialFocus={inputRef}
                     finalFocus={false}
-                    className="flex h-[min(52rem,calc(100dvh-2rem-env(safe-area-inset-top)-env(safe-area-inset-bottom)))] max-w-[calc(100vw-2rem)] flex-col gap-0 overflow-hidden rounded-3xl bg-card p-0 text-card-foreground sm:max-w-4xl"
+                    className="flex flex-col gap-0 overflow-hidden rounded-3xl bg-card p-0 text-card-foreground"
                 >
                     {chatContent}
                 </DialogContent>

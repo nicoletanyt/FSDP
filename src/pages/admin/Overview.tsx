@@ -3,11 +3,12 @@ import { useQuery } from '@tanstack/react-query'
 import { AlertTriangle, Bell, CheckCircle2, GraduationCap, Users } from 'lucide-react'
 import { Link } from 'react-router'
 import AttendanceNoticeDialog, { noticeResultMessage } from '@/components/admin/AttendanceNoticeDialog'
+import { GradeLabelBadge } from '@/components/shared/grade/GradeBadge'
 import AttendanceTrend from '@/components/admin/AttendanceTrend'
-import CentreCombobox from '@/components/admin/CentreCombobox'
-import PageHeader from '@/components/admin/PageHeader'
-import StatCard from '@/components/admin/StatCard'
-import { StatusBadge } from '@/components/admin/StatusBadge'
+import FilterPopover, { FilterField } from '@/components/shared/filters/FilterPopover'
+import PageHeader from '@/components/shared/layout/PageHeader'
+import StatCard from '@/components/shared/layout/StatCard'
+import { StatusBadge } from '@/components/shared/status/StatusBadge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -78,11 +79,14 @@ export default function Overview() {
     : 1
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-4">
       <PageHeader
-        title="Dojo operations"
+        title="Overview"
         actions={centresQuery.isSuccess
-          ? <CentreCombobox centres={activeCentres} value={centreId} onChange={setCentreId} />
+          ? <FilterPopover title="Filter overview" activeCount={selectedCentre ? 1 : 0} onReset={() => setCentreId('all')}>
+            <FilterField label="Dojo" value={selectedCentre ?? 'all'} onChange={setCentreId} ariaLabel="Dojo filter"
+              options={[{ value: 'all', label: 'All dojos' }, ...activeCentres.map(centre => ({ value: centre.id, label: centre.name }))]} />
+          </FilterPopover>
           : undefined}
       />
 
@@ -100,20 +104,21 @@ export default function Overview() {
       )}
       {notice && <Alert role="status"><CheckCircle2 className="size-4 text-success" aria-hidden="true" /><AlertDescription>{notice}</AlertDescription></Alert>}
 
-      <section aria-label="Key figures" className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
+      <section aria-label="Key figures" className="grid grid-cols-3 gap-2 sm:gap-3">
         <StatCard label="Active students" value={snapshot ? String(snapshot.active_students) : '—'}
           detail={snapshot ? `of ${snapshot.total_students} students` : undefined} icon={Users}
-          to={snapshot ? '/admin/centres?tab=students&membership=active' : undefined} />
+          to={snapshot ? '/admin/students?membership=active' : undefined} />
         <StatCard label="Needs attention" value={snapshot ? String(snapshot.attention_count) : '—'}
           icon={AlertTriangle}
           tone={snapshot?.attention_count ? 'danger' : 'default'}
-          to={snapshot ? '/admin/centres?tab=students&risk=at_risk' : undefined} />
+          to={snapshot ? '/admin/students?risk=at_risk' : undefined} />
         <StatCard label="Eligible to grade" value={snapshot ? String(snapshot.eligible_count) : '—'}
           detail={snapshot ? `${snapshot.application_count} applications received` : undefined} icon={GraduationCap}
-          to={snapshot ? '/admin/centres?tab=students&eligibility=eligible' : undefined} />
+          to={snapshot ? '/admin/students?eligibility=eligible' : undefined} />
       </section>
 
-      <Card>
+      {/* On phones the students needing attention come before the trend chart. */}
+      <Card className="order-last xl:order-none">
         <CardHeader>
           <CardTitle>Attendance trend</CardTitle>
           <CardDescription>Completed classes over the last 12 weeks {selectedCentre ? 'at the selected centre' : 'across all centres'}.</CardDescription>
@@ -136,7 +141,7 @@ export default function Overview() {
                   </span>
                   <div className="min-w-0">
                     <p className="truncate font-medium">{student.first_name} {student.last_name}</p>
-                    <p className="truncate text-xs text-muted-foreground">{centreNames.get(student.centre_id) ?? 'Centre'} · {student.grade}</p>
+                    <p className="mt-0.5 flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-muted-foreground"><span className="truncate">{centreNames.get(student.centre_id) ?? 'Centre'}</span> <GradeLabelBadge label={student.grade} /></p>
                     <p className="text-xs text-muted-foreground">
                       {student.missed} missed of {student.enrolments} completed enrolments
                     </p>
@@ -166,7 +171,7 @@ export default function Overview() {
             <PipelineRow label="Invitation recipients (all centres)" value={snapshot?.invitation_recipients} max={maxPipeline} tone="bg-warning" />
             <PipelineRow label="Applications" value={snapshot?.application_count} max={maxPipeline} tone="bg-success" />
             <div className="flex gap-2 pt-1">
-              <Button variant="outline" size="sm" render={<Link to="/admin/notifications" />}>Send history</Button>
+              <Button variant="outline" size="sm" render={<Link to="/admin/settings/email-log" />}>Send history</Button>
               <Button variant="outline" size="sm" render={<Link to="/admin/grading/applications" />}>Applications</Button>
             </div>
           </CardContent>

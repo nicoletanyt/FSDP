@@ -91,7 +91,7 @@ export default function AttendanceNoticeDialog({ centreId, studentIds, onClose, 
   }
 
   return <Dialog open onOpenChange={open => { if (!open && !busy) onClose() }}>
-    <DialogContent className="max-h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)_auto] sm:max-w-2xl">
+    <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto]">
       <DialogHeader><DialogTitle>Follow Up</DialogTitle></DialogHeader>
       <div className="min-h-0 space-y-4 overflow-y-auto px-1">
         {error && <Alert variant="destructive" role="alert"><AlertDescription>{error}</AlertDescription></Alert>}
@@ -120,7 +120,7 @@ export default function AttendanceNoticeDialog({ centreId, studentIds, onClose, 
           <p className="text-xs text-muted-foreground">Edit this wording in Email templates. One email goes to suroul29@gmail.com with students BCC'd; {'{{student_name}}'} becomes “students” for the group.</p>
         </div>
       </div>
-      <DialogFooter className="items-center border-t border-border bg-popover">
+      <DialogFooter className="items-center bg-popover">
         <Button type="button" disabled={busy || recipients.isFetching || recipients.isError || !template.data || !recipients.data?.count || recipients.data.over_limit || !recipients.data.send_ready}
           onClick={() => void sendNotice()}>{busy ? 'Sending…' : 'Send email'}</Button>
       </DialogFooter>

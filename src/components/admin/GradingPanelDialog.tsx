@@ -73,7 +73,7 @@ export default function GradingPanelDialog({ eventId, gradingLabel, panel, onSav
       <Pencil className="size-4" aria-hidden="true" />
       Edit panel
     </DialogTrigger>
-    <DialogContent className="sm:max-w-lg" showCloseButton={!saving}>
+    <DialogContent showCloseButton={!saving}>
       <DialogHeader>
         <DialogTitle>Grading panel</DialogTitle>
         <DialogDescription>

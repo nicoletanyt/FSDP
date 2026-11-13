@@ -1,19 +1,19 @@
 import { useCallback, useEffect, useState } from 'react'
-import { CheckCircle2, Mail, Plus, Search, X } from 'lucide-react'
+import { CheckCircle2, Mail, Plus, X } from 'lucide-react'
 import CreateInstructorForm from '@/components/auth/CreateInstructorForm'
-import PageHeader from '@/components/admin/PageHeader'
-import EmptyState from '@/components/admin/EmptyState'
+import PageHeader from '@/components/shared/layout/PageHeader'
+import EmptyState from '@/components/shared/layout/EmptyState'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
 import type { UserProfile } from '@/lib/auth'
 import { fullName, initials } from '@/lib/admin/format'
 import type { InstructorAccount } from '@/lib/instructors'
 import { supabase } from '@/lib/supabase'
-import GradeBadge from '@/components/instructor/DatabaseGradeBadge'
+import { DatabaseGradeBadge as GradeBadge } from '@/components/shared/grade/GradeBadge'
 import type { GradeRow } from '@/lib/instructor/types'
 import { setExaminer } from '@/lib/admin/grading-panels'
+import SearchInput from '@/components/shared/filters/SearchInput'
 
 type InstructorProfile = Pick<UserProfile, 'id' | 'first_name' | 'last_name' | 'email'> & {
   instructors: { id: string; is_examiner: boolean; grade: GradeRow | null } | null
@@ -87,23 +87,19 @@ export default function Instructors() {
       <PageHeader title="Instructors" />
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="relative min-w-0 flex-1">
-          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-          <Input
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search by name or email"
-            aria-label="Search instructors by name or email"
-            className="pl-9"
-          />
-        </div>
+        <SearchInput
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search by name or email"
+          aria-label="Search instructors by name or email"
+          wrapperClassName="min-w-0"
+        />
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger render={<Button type="button" />}>
             <Plus className="size-4" aria-hidden="true" />
             Create instructor
           </DialogTrigger>
-          <DialogContent className="sm:max-w-lg">
+          <DialogContent >
             <DialogHeader>
               <DialogTitle>Create instructor</DialogTitle>
               <DialogDescription>

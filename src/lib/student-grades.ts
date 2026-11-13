@@ -134,6 +134,7 @@ export type GradingSyllabus = {
     maxMonths?: number;
     sessions?: number;
     minAge?: number;
+    maxAge?: number;
     categories: TechniqueCategory[];
 };
 
@@ -300,7 +301,7 @@ const adultSyllabus: Partial<Record<RankId, RawSyllabus>> = {
         ],
     },
     "2-kyu": {
-        grade: "Black (2nd Kyu)", minMonths: 6, sessions: 56, minAge: 12,
+        grade: "Black (2nd Kyu)", minMonths: 6, sessions: 56,
         categories: [
             ["Ikkyo", "Yokomenuchi", "Ushiro Ryotedori"], ["Nikyo", "Yokomenuchi", "Ushiro Ryotedori"],
             ["Sankyo", "Yokomenuchi", "Ushiro Ryotedori"], ["Yonkyo", "Yokomenuchi", "Ushiro Ryotedori"],
@@ -321,7 +322,7 @@ const adultSyllabus: Partial<Record<RankId, RawSyllabus>> = {
         ],
     },
     "junior-dan": {
-        grade: "Junior Dan", minMonths: 9, sessions: 62,
+        grade: "Junior Dan", minMonths: 9, sessions: 62, maxAge: 14,
         categories: [["Basics", "Unarmed techniques in Techiwaza, Suwariwaza & Hanmihandachi", "Take 20 Ukemis", "Achieve a 3-point average on the scoring system"]],
     },
     "1-dan": {

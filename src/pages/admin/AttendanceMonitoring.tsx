@@ -1,11 +1,11 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { AlertTriangle, Bell, CheckCircle2, ChevronRight, Search } from 'lucide-react'
+import { attendanceMonitoringKey, loadAttendanceMonitoring } from '@/lib/admin/section-counts'
+import { AlertTriangle, Bell, CheckCircle2, ChevronRight } from 'lucide-react'
 import AttendanceNoticeDialog, { noticeResultMessage } from '@/components/admin/AttendanceNoticeDialog'
-import CentreCombobox from '@/components/admin/CentreCombobox'
-import EmptyState from '@/components/admin/EmptyState'
-import { RiskBadge, StatusBadge } from '@/components/admin/StatusBadge'
-import { NativeSelect } from '@/components/admin/form-controls'
+import EmptyState from '@/components/shared/layout/EmptyState'
+import { RiskBadge, StatusBadge } from '@/components/shared/status/StatusBadge'
+import { GradeLabelBadge } from '@/components/shared/grade/GradeBadge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -16,8 +16,9 @@ import { useAuth } from '@/hooks/use-auth'
 import { formatPercent, initials, relativeDay } from '@/lib/admin/format'
 import { loadCalendarCentres } from '@/lib/admin/live-class-calendar'
 import type { RiskLevel } from '@/lib/admin/types'
-import { supabase } from '@/lib/supabase'
 import { cn } from 'cn'
+import FilterPopover, { FilterField } from '@/components/shared/filters/FilterPopover'
+import SearchInput from '@/components/shared/filters/SearchInput'
 
 type MonitoredStudent = {
   id: string
@@ -56,13 +57,8 @@ export default function AttendanceMonitoring() {
   const validCentre = centreId === 'all' || centresQuery.data?.some(centre => centre.id === centreId)
   const targetCentre = validCentre && centreId !== 'all' ? centreId : null
   const monitoring = useQuery({
-    queryKey: ['admin', 'attendance-monitoring-recent-enrolments', session?.user.id, targetCentre],
-    queryFn: async (): Promise<MonitoredStudent[]> => {
-      const { data, error } = await supabase.rpc('admin_attendance_monitoring', { target_centre: targetCentre })
-      if (error) throw error
-      if (!Array.isArray(data)) throw new Error('No monitoring data was returned.')
-      return data as MonitoredStudent[]
-    },
+    queryKey: attendanceMonitoringKey(session?.user.id, targetCentre),
+    queryFn: () => loadAttendanceMonitoring<MonitoredStudent>(targetCentre),
     enabled: !!session && centresQuery.isSuccess && !!validCentre,
     refetchOnWindowFocus: true,
   })
@@ -124,23 +120,23 @@ export default function AttendanceMonitoring() {
       {loading && !error && <p role="status" className="text-sm text-muted-foreground">Loading live attendance monitoring…</p>}
 
       <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-48 flex-1">
-          <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-          <input type="search" value={search} onChange={event => setSearch(event.target.value)}
-            placeholder="Find a student" aria-label="Search monitored students"
-            className="h-10 w-full rounded-lg border border-input bg-background pr-2.5 pl-8 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30" />
-        </div>
-        <div className="w-full sm:w-auto">
-          <CentreCombobox centres={centresQuery.data ?? []} value={centreId} onChange={setCentreId}
-            ariaLabel="Filter monitored students by centre" className="w-full sm:w-56" />
-        </div>
-        <div className="w-40"><NativeSelect className="h-10" value={levelFilter} onChange={event => setLevelFilter(event.target.value)} aria-label="Filter by risk level">
-          <option value="at_risk">At risk</option><option value="all">All levels</option><option value="healthy">Healthy</option>
-          <option value="unassessed">Not assessed</option>
-        </NativeSelect></div>
-        <Button className="ml-auto" variant="outline" onClick={openNotice} disabled={!!error || loading}>
+        <SearchInput value={search} onChange={event => setSearch(event.target.value)}
+          placeholder="Find a student" aria-label="Search monitored students" />
+        <Button variant="outline" size="touch" onClick={openNotice} disabled={!!error || loading}>
           <Bell aria-hidden="true" />Follow Up
         </Button>
+        {/* The watch list opens on at-risk students, so that is the default the reset restores. */}
+        <FilterPopover title="Filter students"
+          activeCount={(targetCentre ? 1 : 0) + (levelFilter !== 'at_risk' ? 1 : 0)}
+          onReset={() => { setCentreId('all'); setLevelFilter('at_risk') }}>
+          <FilterField label="Dojo" value={targetCentre ?? 'all'} onChange={setCentreId} ariaLabel="Dojo filter"
+            options={[{ value: 'all', label: 'All dojos' }, ...(centresQuery.data ?? []).map(centre => ({ value: centre.id, label: centre.name }))]} />
+          <FilterField label="Risk level" value={levelFilter} onChange={setLevelFilter} ariaLabel="Risk level filter"
+            options={[{ value: 'at_risk', label: 'At risk' }, { value: 'all', label: 'All levels' }, { value: 'healthy', label: 'Healthy' }, { value: 'unassessed', label: 'Not assessed' }]}
+            renderOption={option => option.value === 'all' ? option.label
+              : option.value === 'unassessed' ? <StatusBadge tone="neutral">Not assessed</StatusBadge>
+              : <RiskBadge level={option.value as RiskLevel} />} />
+        </FilterPopover>
       </div>
 
       {noticeOpen && <AttendanceNoticeDialog centreId={targetCentre} studentIds={noticeStudentIds}
@@ -157,8 +153,8 @@ export default function AttendanceMonitoring() {
           <TableHeader><TableRow>
             <TableHead className="w-8"><input type="checkbox" className="size-4 accent-[var(--primary)]" checked={allSelected} disabled={!selectable.length}
               onChange={toggleAll} aria-label="Select all visible students needing attention" /></TableHead>
-            <TableHead>Student</TableHead><TableHead>Risk</TableHead><TableHead className="text-right">Last 5 enrolments</TableHead>
-            <TableHead>Last attended</TableHead><TableHead className="text-right">Details</TableHead>
+            <TableHead>Student</TableHead><TableHead>Risk</TableHead><TableHead className="hidden md:table-cell text-right">Last 5 enrolments</TableHead>
+            <TableHead className="hidden md:table-cell">Last attended</TableHead><TableHead className="text-right"><span className="sr-only md:not-sr-only">Details</span></TableHead>
           </TableRow></TableHeader>
           <TableBody>{filtered.map(student => {
             const isExpanded = expanded === student.id
@@ -172,24 +168,25 @@ export default function AttendanceMonitoring() {
                   <span className="flex size-8 items-center justify-center rounded-full bg-destructive/10 text-xs font-semibold text-destructive">
                     {initials(student.first_name, student.last_name)}
                   </span><div><p className="font-medium">{name(student)}</p>
-                    <p className="text-xs text-muted-foreground">{student.centre_name} · {student.grade}</p></div>
+                    <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">{student.centre_name} <GradeLabelBadge label={student.grade} /></p></div>
                 </div></TableCell>
                 <TableCell>{student.level === 'unassessed' ? <StatusBadge tone="neutral">Not assessed</StatusBadge> : <RiskBadge level={student.level} />}</TableCell>
-                <TableCell className="text-right tabular-nums">
+                <TableCell className="hidden md:table-cell text-right tabular-nums">
                   <p className="font-medium">{student.rate === null ? '—' : formatPercent(student.rate)}</p>
                   <p className="text-xs text-muted-foreground">{student.attended} attended · {student.missed} missed</p>
                 </TableCell>
-                <TableCell className="text-muted-foreground">{relativeDay(student.last_attended ?? '')}</TableCell>
+                <TableCell className="hidden md:table-cell text-muted-foreground">{relativeDay(student.last_attended ?? '')}</TableCell>
                 <TableCell className="text-right"><Button type="button" variant="ghost" size="sm"
                   aria-label={`${isExpanded ? 'Hide' : 'View'} attendance details for ${name(student)}`}
                   aria-expanded={isExpanded} aria-controls={isExpanded ? `monitoring-details-${student.id}` : undefined}
                   onClick={event => { event.stopPropagation(); setExpanded(isExpanded ? null : student.id) }}>
-                  {isExpanded ? 'Hide details' : 'View details'}
+                  <span className="hidden md:inline">{isExpanded ? 'Hide details' : 'View details'}</span>
                   <ChevronRight className={cn('size-4 transition-transform', isExpanded && 'rotate-90')} aria-hidden="true" />
                 </Button></TableCell>
               </TableRow>
               {isExpanded && <TableRow id={`monitoring-details-${student.id}`}><TableCell colSpan={6} className="bg-muted/30">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Attendance assessment</p>
+                <p className="text-sm font-medium">Attendance assessment</p>
+                <p className="mt-2 text-sm md:hidden">Last attended {relativeDay(student.last_attended ?? '')}{student.rate === null ? '' : ` · ${formatPercent(student.rate)} of the last 5`}</p>
                 <p className="mt-2 text-sm">{student.enrolments} completed enrolments considered · {marked} marked · {student.attended} attended · {student.missed} missed.</p>
                 <p className="mt-1 text-sm text-muted-foreground">{marked === 0
                   ? 'No marked attendance in these enrolments; risk is not assessed.'

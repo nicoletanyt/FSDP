@@ -49,6 +49,25 @@ Use `FSDP_BASE_URL` and `WEBDRIVER_URL` if those services run elsewhere. The
 WebDriver service must be free to create a new session. Run the suites
 sequentially when sharing a driver.
 
+`grading-payment.html` mounts the student grading payment page with a fixed
+profile and a stubbed `record_grading_payment` RPC for manual responsive/state
+checks (idle, processing, success, sync failure). Use `?rpc=fail` or
+`?rpc=slow` to exercise the failure and saving states. It never contacts
+Supabase or charges a card.
+
+Add `?appRoute=%2Fgrading` to check the actual app route, student navigation,
+protected gate and layout using the fixture account. The Grading tab now opens
+the payment page directly; the opportunity list remains at `/grading/applications`.
+
+`grading-payment.test.mjs` uses installed headless Chrome over CDP (no browser
+package required). Start Vite on port 5180, then run
+`node --test tests/mobile-responsive/grading-payment.test.mjs`. Override
+`FSDP_BASE_URL` and `CHROME_PATH` as needed. It checks 320–1440px routes,
+all three methods, per-grade totals, S$22 late fees, demo-only receipts,
+application-context saving and sync failure. Fixture options: `?grade=4-dan`,
+`?deadline=2020-01-01`, and `?application=1` (stubbed application write).
+Without `application=1`, previews must never write to the database.
+
 The NFC suite simulates Android Chrome 89+, tablets, Edge, missing Web NFC,
 old Chrome, iPhones and insecure contexts without using real NFC hardware or
 calling Supabase. It checks ready/QR-only states, the compatible-device list,
@@ -69,7 +88,7 @@ resubmission requires a new signature and each prior signed receipt is retained.
 Timestamp checks verify "Last saved" / "Last submitted" appears below the table.
 
 The chatbot suite opts into `fixtureChat=true`, mocks the existing Supabase
-session/function methods in the fixture only, and never contacts Ollama or writes
+session/function methods in the fixture only, and never contacts OpenRouter or writes
 database records. It covers instructor-only visibility, send/retry/hidden sources,
 Escape/focus return, stop/clear, late replies after account switches, and panel
 bounds at 320px, 390px, short landscape and desktop sizes.
@@ -118,8 +137,8 @@ The directory suite checks:
 
 - No horizontal overflow at 320/390/640/768/1024/1280/1440px, a same-row search and
   Filter toolbar at every width and 44px mobile control targets. Directory and
-  detail pages share 24px main padding below `lg`, and 92% width capped at 1200px
-  with 32px vertical padding at `lg` and above. Cross-route geometry checks also
+  detail pages share 24px main padding below `lg`, and the shared 80% page width
+  (10% each side) with 32px vertical padding at `lg` and above. Cross-route geometry checks also
   compare navigation bounds, 16px card insets and section spacing.
 - Directory rows use 16px horizontal and 12px vertical padding. Top-level gaps
   match detail's 8px mobile / 24px desktop rhythm, result-count-to-card spacing is
@@ -262,7 +281,4 @@ Only explicit persistence test modes keep
 fixture row overrides in test-scoped `sessionStorage`. Production drafts and save
 requests stay in component memory, with authoritative Supabase reads after saves.
 
-Known data-only-phase limitation: at 1024px and 200% root text, the existing
-student-page navbar's `calc(92% + 3rem)` width exceeds the usable viewport. The
-directory row contents remain contained; the suite reports the page overflow
-rather than weakening that assertion or changing application styling.
+

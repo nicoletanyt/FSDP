@@ -1,29 +1,46 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { CalendarDays, ChevronLeft, ChevronRight, List } from 'lucide-react'
 import { useSearchParams } from 'react-router'
-import AttendanceCalendar from '@/components/admin/AttendanceCalendar'
-import type { CalendarDisplay, CalendarView } from '@/components/admin/AttendanceCalendar'
-import AttendanceSessionPanel from '@/components/admin/AttendanceSessionPanel'
-import CentreCombobox from '@/components/admin/CentreCombobox'
+import AttendanceCalendar, { EventCard } from '@/components/admin/AttendanceCalendar'
+import FilterPopover, { FilterField } from '@/components/shared/filters/FilterPopover'
+import CalendarToolbar from '@/components/shared/calendar/CalendarToolbar'
+import type { CalendarDisplayMode, CalendarRange } from '@/components/shared/calendar/CalendarToolbar'
+import DayClassDetails from '@/components/shared/calendar/DayClassDetails'
 import { Button } from '@/components/ui/button'
+import { Drawer, DrawerBody, DrawerClose, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from '@/components/ui/drawer'
 import { useAuth } from '@/hooks/use-auth'
+import { useCalendarShortcuts } from '@/hooks/use-calendar-shortcuts'
+import { useMediaQuery } from '@/hooks/use-media-query'
 import { addDays, addMonths, dateKey, monthDates, parseIsoDate, weekDates, weekLabel } from '@/lib/admin/attendance-calendar'
+import type { AdminCalendarEvent } from '@/lib/admin/attendance-calendar'
 import { loadCalendarCentres, loadCalendarClasses, singaporeDate } from '@/lib/admin/live-class-calendar'
+import { sessionTypeStyles } from '@/lib/admin/session-styles'
+import { cn } from 'cn'
+
+function unique(values: string[]) {
+  return [...new Set(values)].sort().map(value => ({ value, label: value }))
+}
 
 export default function LiveAttendanceRegister() {
   const { session } = useAuth()
+  const isDesktop = useMediaQuery('(min-width: 1024px)')
   const [searchParams, setSearchParams] = useSearchParams()
   const [now, setNow] = useState(() => new Date())
+  const [focusRequest, setFocusRequest] = useState(0)
+  const [weekOverview, setWeekOverview] = useState(false)
+  const lastSelected = useRef<AdminCalendarEvent | null>(null)
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 60_000)
     return () => window.clearInterval(timer)
   }, [])
   const today = parseIsoDate(singaporeDate(now)) ?? new Date()
   const selectedDate = parseIsoDate(searchParams.get('date')) ?? today
-  const view: CalendarView = searchParams.get('view') === 'day' || searchParams.get('view') === 'month'
-    ? searchParams.get('view') as CalendarView : 'week'
-  const display: CalendarDisplay = searchParams.get('display') === 'list' ? 'list' : 'timeline'
+  const view: CalendarRange = searchParams.get('view') === 'day' || searchParams.get('view') === 'month'
+    ? searchParams.get('view') as CalendarRange : 'week'
+  // Same defaults as the instructor calendar: weeks open as a list, days as a timeline.
+  const displayMode: CalendarDisplayMode = view === 'day'
+    ? searchParams.get('dayDisplay') === 'list' ? 'list' : 'timeline'
+    : searchParams.get('display') === 'timeline' ? 'timeline' : 'list'
 
   const centresQuery = useQuery({
     queryKey: ['admin', session?.user.id, 'calendar-centres'],
@@ -31,81 +48,163 @@ export default function LiveAttendanceRegister() {
     enabled: Boolean(session), staleTime: 60_000, retry: false,
   })
   const centres = centresQuery.data ?? []
-  const centreId = searchParams.get('centre')
-  const centre = centres.find(item => item.id === centreId) ?? centres[0]
+  // Filters, kept in the URL: dojo (loads only that dojo), class name and instructor.
+  const centre = centres.find(item => item.id === searchParams.get('centre')) ?? null
+  const titleFilter = searchParams.get('title') ?? ''
+  const instructorFilter = searchParams.get('instructor') ?? ''
   const days = view === 'day' ? [selectedDate] : view === 'week' ? weekDates(selectedDate) : monthDates(selectedDate)
   const first = dateKey(days[0])
   const afterLast = dateKey(addDays(days[days.length - 1], 1))
   const classesQuery = useQuery({
-    queryKey: ['admin', session?.user.id, 'calendar-classes', centre?.id, first, afterLast],
-    queryFn: ({ signal }) => loadCalendarClasses(centre!, first, afterLast, signal),
-    enabled: Boolean(session && centre), staleTime: 30_000, refetchInterval: 30_000, retry: false,
+    queryKey: ['admin', session?.user.id, 'calendar-classes', centre?.id ?? 'all', first, afterLast],
+    queryFn: ({ signal }) => loadCalendarClasses(centres, centre?.id ?? null, first, afterLast, signal),
+    enabled: Boolean(session && centresQuery.isSuccess), staleTime: 30_000, refetchInterval: 30_000, retry: false,
   })
-  const events = classesQuery.data ?? []
+  const loadedEvents = classesQuery.data ?? []
+  const events = loadedEvents.filter(event =>
+    (!titleFilter || event.name === titleFilter) && (!instructorFilter || event.instructorName === instructorFilter))
+  const filterFields = [
+    { key: 'centre', label: 'Dojo', all: 'All dojos', value: centre?.id ?? '', options: centres.map(item => ({ value: item.id, label: item.name })) },
+    { key: 'title', label: 'Class', all: 'All classes', value: titleFilter, options: unique(loadedEvents.map(event => event.name)) },
+    { key: 'instructor', label: 'Instructor', all: 'All instructors', value: instructorFilter, options: unique(loadedEvents.map(event => event.instructorName)) },
+  ]
+  const filterCount = [centre?.id, titleFilter, instructorFilter].filter(Boolean).length
   const selectedEvent = useMemo(() => events.find(item => item.id === searchParams.get('session')), [events, searchParams])
+  if (selectedEvent) lastSelected.current = selectedEvent
 
-  function navigate(updates: Record<string, string | null>) {
+  function navigate(updates: Record<string, string | null>, overview = false) {
+    setWeekOverview(overview)
     const next = new URLSearchParams(searchParams)
     for (const [key, value] of Object.entries(updates)) {
       if (value) next.set(key, value)
       else next.delete(key)
     }
-    setSearchParams(next)
+    if (next.toString() !== searchParams.toString()) setSearchParams(next)
+  }
+  function closeDetails() {
+    navigate({ session: null })
+  }
+  function changeView(nextView: CalendarRange) {
+    navigate({ view: nextView, date: dateKey(selectedDate), session: null })
+  }
+  function changeDisplayMode(mode: CalendarDisplayMode) {
+    navigate({ [view === 'day' ? 'dayDisplay' : 'display']: mode, ...(view === 'month' ? { view: 'week' } : {}) })
   }
   function chooseDate(date: Date) {
-    navigate({ date: dateKey(date), session: null, view: view === 'month' ? 'day' : view })
+    if (view === 'month') navigate({ date: dateKey(date), session: null, view: 'day' })
+    else navigate({ date: dateKey(date), session: dateKey(date) === dateKey(selectedDate) ? selectedEvent?.id ?? null : null })
   }
-  function move(amount: number) {
-    const next = view === 'month' ? addMonths(selectedDate, amount) : addDays(selectedDate, amount * (view === 'week' ? 7 : 1))
-    navigate({ date: dateKey(next), session: null })
+  function move(direction: number) {
+    if (view !== 'week') {
+      const next = view === 'month' ? addMonths(selectedDate, direction) : addDays(selectedDate, direction)
+      navigate({ date: dateKey(next), session: null })
+      return
+    }
+    // Moving onto the current week lands on today, like the instructor calendar.
+    const next = addDays(selectedDate, direction * 7)
+    const includesToday = weekDates(next).some(day => dateKey(day) === dateKey(today))
+    navigate({ date: dateKey(includesToday ? today : next), session: null }, !includesToday)
   }
+  function goToday() {
+    const current = new Date()
+    setNow(current)
+    setFocusRequest(request => request + 1)
+    navigate({ date: singaporeDate(current), session: null })
+  }
+
+  useCalendarShortcuts({
+    onEscape: () => {
+      if (!selectedEvent) return false
+      closeDetails()
+      return true
+    },
+    onView: changeView,
+    onDisplayMode: changeDisplayMode,
+  })
 
   const heading = view === 'week' ? weekLabel(selectedDate) : selectedDate.toLocaleDateString('en-GB', {
     ...(view === 'day' ? { weekday: 'long', day: 'numeric' } : {}), month: 'long', year: 'numeric',
   })
+  const showSidePanel = Boolean(selectedEvent)
+  const details = selectedEvent && (
+    <EventCard key={selectedEvent.id} event={selectedEvent} layout="panel" expanded onToggle={closeDetails} />
+  )
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4">
-      <h1 className="text-3xl font-semibold tracking-tight">Calendar</h1>
+    <section aria-busy={classesQuery.isFetching} className="flex flex-col gap-4 lg:min-h-0 lg:flex-1">
       {centresQuery.isPending && <p role="status" className="text-sm text-muted-foreground">Loading dojos…</p>}
       {centresQuery.isError && <div role="alert" className="flex flex-wrap items-center gap-3 text-sm text-destructive">Unable to load dojos. <Button variant="outline" size="sm" onClick={() => void centresQuery.refetch()}>Retry</Button></div>}
       {centresQuery.isSuccess && !centres.length && <p role="status" className="text-sm text-muted-foreground">No dojos are available.</p>}
-      {centre && <>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-3">
-            <CentreCombobox id="attendance-centre" centres={centres} value={centre.id}
-              onChange={id => navigate({ centre: id, session: null })} ariaLabel="Calendar dojo"
-              includeAll={false} className="h-10 w-56" />
-            <Button variant="outline" onClick={() => navigate({ date: dateKey(today), session: null })}>Today</Button>
-            <Button variant="ghost" size="icon-lg" aria-label={`Previous ${view}`} onClick={() => move(-1)}><ChevronLeft aria-hidden="true" /></Button>
-            <Button variant="ghost" size="icon-lg" aria-label={`Next ${view}`} onClick={() => move(1)}><ChevronRight aria-hidden="true" /></Button>
-            <h2 className="text-sm font-medium" aria-live="polite">{heading}</h2>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <div role="group" aria-label="Calendar date range" className="flex gap-1">
-              {(['day', 'week', 'month'] as const).map(nextView =>
-                <Button key={nextView} size="sm" variant={view === nextView ? 'secondary' : 'outline'}
-                  aria-pressed={view === nextView} onClick={() => navigate({ view: nextView, session: null })}
-                  className="capitalize">{nextView}</Button>)}
-            </div>
-            {view !== 'month' && <div role="group" aria-label="Calendar display mode" className="flex gap-1">
-              <Button size="sm" variant={display === 'timeline' ? 'secondary' : 'outline'} aria-pressed={display === 'timeline'} onClick={() => navigate({ display: 'timeline' })}><CalendarDays aria-hidden="true" /> Timeline</Button>
-              <Button size="sm" variant={display === 'list' ? 'secondary' : 'outline'} aria-pressed={display === 'list'} onClick={() => navigate({ display: 'list' })}><List aria-hidden="true" /> List</Button>
-            </div>}
-          </div>
-        </div>
-        {classesQuery.isPending && <p role="status" className="py-4 text-sm text-muted-foreground">Loading classes for {centre.name}…</p>}
-        {classesQuery.isError && <div role="alert" className="flex flex-wrap items-center gap-3 text-sm text-destructive">Unable to load classes for {centre.name}. <Button variant="outline" size="sm" onClick={() => void classesQuery.refetch()}>Retry</Button></div>}
-        {classesQuery.isSuccess && <div className={selectedEvent
-          ? 'flex min-h-0 flex-1 flex-col gap-3 lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:overflow-hidden'
-          : 'flex min-h-0 flex-1 flex-col'}>
-          <AttendanceCalendar date={selectedDate} today={today} now={now} view={view} display={display}
-            events={events} selectedSessionId={selectedEvent?.id ?? null} expandSelectedDay
+      {centresQuery.isSuccess && <>
+        <CalendarToolbar
+          view={view}
+          onViewChange={changeView}
+          displayMode={displayMode}
+          onDisplayModeChange={changeDisplayMode}
+          heading={heading}
+          onToday={goToday}
+          onPrevious={() => move(-1)}
+          onNext={() => move(1)}
+          filter={<FilterPopover
+            title="Filter classes"
+            activeCount={filterCount}
+            onReset={() => navigate({ centre: null, title: null, instructor: null, session: null })}
+            className="lg:h-10"
+          >
+            {filterFields.map(({ key, label, options, all, value }) => (
+              <FilterField key={key} label={label} value={value} ariaLabel={`${label} filter`}
+                onChange={next => navigate({ [key]: next || null, session: null })}
+                options={[{ value: '', label: all }, ...options]} />
+            ))}
+          </FilterPopover>}
+          legend={<>
+            <p className="-mt-2 text-xs text-muted-foreground">{centre?.name ?? 'All dojos'} · Singapore time</p>
+            <ul className="space-y-3 text-xs">
+              {Object.entries(sessionTypeStyles).map(([type, style]) => (
+                <li key={type} className="grid gap-1 sm:grid-cols-[9.5rem_minmax(0,1fr)] sm:items-center sm:gap-3">
+                  <span className={cn('w-fit rounded-full border px-2 py-1 text-2xs font-medium', style.badge)}>{style.label}</span>
+                  <span className="text-muted-foreground">{style.description}</span>
+                </li>
+              ))}
+            </ul>
+            <ul className="flex flex-wrap gap-4 border-t pt-3 text-xs text-muted-foreground">
+              <li className="flex items-center gap-2"><span aria-hidden="true" className="size-2 rounded-full bg-red-500" />Cover needed</li>
+            </ul>
+          </>}
+        />
+        <div className={cn(
+          'flex flex-col lg:min-h-0 lg:flex-1',
+          showSidePanel && isDesktop && 'lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:grid-rows-1 lg:gap-3 lg:overflow-hidden',
+        )}>
+          {classesQuery.isPending && <p role="status" className="py-4 text-sm text-muted-foreground">Loading classes…</p>}
+          {classesQuery.isError && <div role="alert" className="flex flex-wrap items-center gap-3 text-sm text-destructive">Unable to load classes. <Button variant="outline" size="sm" onClick={() => void classesQuery.refetch()}>Retry</Button></div>}
+          {classesQuery.isSuccess && <AttendanceCalendar date={selectedDate} today={today} now={now} focusRequest={focusRequest}
+            view={view} display={displayMode} events={events} selectedSessionId={selectedEvent?.id ?? null}
+            expandSelectedDay={view === 'day' || !weekOverview || Boolean(selectedEvent)}
             onSelectDate={chooseDate}
-            onToggleSession={event => navigate({ centre: event.session.centreId, date: event.session.date,
-              session: selectedEvent?.id === event.id ? null : event.id })} />
-          {selectedEvent && <AttendanceSessionPanel event={selectedEvent} onClose={() => navigate({ session: null })} dayView={view === 'day'} />}
-        </div>}
+            onToggleSession={event => navigate({ date: event.session.date,
+              session: selectedEvent?.id === event.id ? null : event.id })} />}
+          {isDesktop && details && (view === 'day'
+            ? <DayClassDetails onClose={closeDetails}>{details}</DayClassDetails>
+            : <aside aria-label="Calendar selection details" className="flex min-h-0 min-w-0 flex-col overflow-hidden">{details}</aside>)}
+        </div>
       </>}
-    </div>
+      {!isDesktop && <Drawer open={showSidePanel} onOpenChange={(open) => { if (!open) closeDetails() }}>
+        <DrawerContent>
+          <DrawerHeader>
+            <div className="min-w-0">
+              <DrawerTitle className="text-base font-medium">Class details</DrawerTitle>
+              <DrawerDescription className="text-xs text-muted-foreground">
+                {lastSelected.current?.date.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}
+              </DrawerDescription>
+            </div>
+            <DrawerClose render={<Button variant="ghost" className="h-11 rounded-full px-3 text-sm text-primary" />}>Done</DrawerClose>
+          </DrawerHeader>
+          <DrawerBody className="pb-[max(1rem,env(safe-area-inset-bottom))]">
+            {lastSelected.current && <EventCard key={lastSelected.current.id} event={lastSelected.current} layout="panel" expanded onToggle={closeDetails} />}
+          </DrawerBody>
+        </DrawerContent>
+      </Drawer>}
+    </section>
   )
 }
