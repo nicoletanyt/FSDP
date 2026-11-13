@@ -299,6 +299,18 @@ function SessionFilters({
   )
 }
 
+function isRecommendedForGrade(type: string, grade: string | null | undefined) {
+  if (!grade) return false
+  if (type === 'Mixed/Family') return true
+
+  const kyu = grade.match(/\b(\d+)(?:st|nd|rd|th)?\s+kyu\b/i)
+  const isDan = /\b(?:\d+(?:st|nd|rd|th)?|junior)\s+dan\b/i.test(grade)
+  const minimumKyu = type === 'Advanced' ? 1 : type === 'Intermediate' ? 4 : undefined
+
+  // Age-restricted classes cannot be recommended from grade alone.
+  return minimumKyu !== undefined && (isDan || (kyu !== null && Number(kyu[1]) <= minimumKyu))
+}
+
 export default function StudentClasses() {
   const { classes, schedule } = useOutletContext<StudentContext>()
 
@@ -345,8 +357,11 @@ export default function StudentClasses() {
       grouped.set(type, sessions)
     }
 
-    return [...grouped].sort(([left], [right]) => left.localeCompare(right))
-  }, [matching])
+    const recommended = (type: string) => Number(isRecommendedForGrade(type, schedule.grade))
+    return [...grouped].sort(([left], [right]) =>
+      recommended(right) - recommended(left) || left.localeCompare(right)
+    )
+  }, [matching, schedule.grade])
 
 
   return (
@@ -390,7 +405,14 @@ export default function StudentClasses() {
             return (
               <Card key={type} className="gap-5 py-6 sm:py-7">
                 <CardHeader>
-                  <CardTitle className="text-lg">{type}</CardTitle>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <CardTitle className="text-lg">{type}</CardTitle>
+                    {isRecommendedForGrade(type, schedule.grade) && (
+                      <span className="rounded-full bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
+                        Recommended for your grade
+                      </span>
+                    )}
+                  </div>
                   {sessions[0]?.level && <p className="text-sm text-muted-foreground">{sessions[0].level}</p>}
                 </CardHeader>
                 <CardContent>
