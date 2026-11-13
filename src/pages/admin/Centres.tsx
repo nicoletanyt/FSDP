@@ -1,15 +1,14 @@
 import { useMemo } from 'react'
-import { MapPin, Search, X } from 'lucide-react'
-import { Link, Navigate, useSearchParams } from 'react-router'
+import { Building2, CircleCheck, CircleX, Construction, MapPin } from 'lucide-react'
+import { Navigate, useSearchParams } from 'react-router'
 import EmptyState from '@/components/admin/EmptyState'
 import PageHeader from '@/components/admin/PageHeader'
+import StatCard from '@/components/admin/StatCard'
 import { CentreStatusBadge } from '@/components/admin/StatusBadge'
-import FilterCombobox from '@/components/FilterCombobox'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
+import FilterPopover, { FilterField } from '@/components/FilterPopover'
 import { useAdminData } from '@/lib/admin/admin-data-context'
 import type { Centre } from '@/lib/admin/types'
-import { cn } from 'cn'
+import SearchInput from '@/components/SearchInput'
 
 const dojoStatusOptions = [
   { value: 'all', label: 'All statuses' },
@@ -32,17 +31,6 @@ export default function Centres() {
     else next.set(key, value)
     setSearchParams(next, { replace: true })
   }
-
-  function clearDojoFilters() {
-    const next = new URLSearchParams(searchParams)
-    next.delete('dojoQ')
-    next.delete('dojoStatus')
-    setSearchParams(next, { replace: true })
-  }
-
-  const dojoFiltersActive = [dojoQuery, dojoStatus].filter(
-    (value) => value && value !== 'all',
-  ).length
 
   const filteredDojos = useMemo(() => {
     const needle = dojoQuery.trim().toLowerCase()
@@ -74,59 +62,35 @@ export default function Centres() {
       <PageHeader title="Centres" />
         <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <SummaryTile label="Dojos" value={`${centres.length}`} />
-            <SummaryTile label="Active" value={`${activeCount}`} tone="text-success" />
-            <SummaryTile label="Closed" value={`${closedCount}`} tone="text-destructive" />
-            <SummaryTile
-              label="Under renovation"
-              value={`${renovationCount}`}
-              tone="text-warning-foreground dark:text-warning"
-            />
+            <StatCard label="Dojos" value={`${centres.length}`} icon={Building2} />
+            <StatCard label="Active" value={`${activeCount}`} icon={CircleCheck} tone="success" />
+            <StatCard label="Closed" value={`${closedCount}`} icon={CircleX} tone="danger" />
+            <StatCard label="Under renovation" value={`${renovationCount}`} icon={Construction} tone="warning" />
           </div>
 
-          <Card>
-            <CardContent className="flex flex-col gap-2 lg:flex-row lg:items-center">
-              <div className="relative min-w-48 flex-1">
-                <Search
-                  className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
-                  aria-hidden="true"
-                />
-                <input
-                  type="search"
-                  value={dojoQuery}
-                  onChange={(event) => updateParam('dojoQ', event.target.value)}
-                  placeholder="Search by dojo or address"
-                  aria-label="Search dojos"
-                  className="h-10 w-full rounded-lg border border-input bg-background pr-2.5 pl-8 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
-                />
-              </div>
-              <div className="w-full sm:w-48">
-                <FilterCombobox
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <SearchInput
+                value={dojoQuery}
+                onChange={(event) => updateParam('dojoQ', event.target.value)}
+                placeholder="Search by dojo or address"
+                aria-label="Search dojos"
+              />
+              <FilterPopover title="Filter dojos" activeCount={dojoStatus !== 'all' ? 1 : 0}
+                onReset={() => updateParam('dojoStatus', 'all')}>
+                <FilterField
+                  label="Status"
                   value={dojoStatus}
                   onChange={(value) => updateParam('dojoStatus', value)}
-                  ariaLabel="Filter by dojo status"
+                  ariaLabel="Status filter"
                   options={dojoStatusOptions}
                   renderOption={(option) => option.value === 'all' ? option.label : <CentreStatusBadge status={option.value as Centre['status']} />}
                 />
-              </div>
-              {dojoFiltersActive > 0 && (
-                <Button
-                  variant="ghost"
-                  size="xs"
-                  onClick={clearDojoFilters}
-                >
-                  <X />
-                  Clear filters
-                </Button>
-              )}
-            </CardContent>
-          </Card>
+              </FilterPopover>
+          </div>
 
+          <div className="space-y-2">
           <p className="text-xs text-muted-foreground">
             Showing {filteredDojos.length} of {centres.length} dojos
-            {dojoFiltersActive > 0
-              ? ` · ${dojoFiltersActive} filter${dojoFiltersActive === 1 ? '' : 's'} active`
-              : ''}
           </p>
 
           {filteredDojos.length === 0 ? (
@@ -135,25 +99,21 @@ export default function Centres() {
               description="Try another name, address, or operating status."
             />
           ) : (
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid auto-rows-fr gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {filteredDojos.map((centre) => (
                 <DojoCard key={centre.id} centre={centre} />
               ))}
             </div>
           )}
+          </div>
         </div>
     </div>
   )
 }
 
 function DojoCard({ centre }: { centre: Centre }) {
-  const cardClass = cn(
-    'flex flex-col gap-3 rounded-xl bg-card p-4 ring-1 ring-foreground/10',
-    centre.status === 'active' &&
-      'cursor-pointer transition-colors hover:bg-accent/40 hover:ring-primary/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
-  )
-  const content = (
-    <>
+  return (
+    <div className="flex h-full flex-col gap-3 rounded-xl bg-card p-4 ring-1 ring-foreground/10">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <h3 className="text-sm font-medium">{centre.name}</h3>
@@ -161,56 +121,10 @@ function DojoCard({ centre }: { centre: Centre }) {
         </div>
         <CentreStatusBadge status={centre.status} />
       </div>
-      {centre.status === 'active' ? (
-        <p className="flex items-start gap-1.5 text-sm text-muted-foreground">
-          <MapPin className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-          <span>{centre.address}</span>
-        </p>
-      ) : (
-        <div className="space-y-1.5">
-          <p className={cn(
-            'text-sm font-medium',
-            centre.status === 'closed'
-              ? 'text-destructive'
-              : 'text-amber-800 dark:text-warning',
-          )}>
-            {centre.status === 'closed' ? 'This dojo is closed' : 'This dojo is under renovation'}
-          </p>
-          <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
-            <MapPin className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-            <span>{centre.address}</span>
-          </p>
-        </div>
-      )}
-    </>
-  )
-
-  if (centre.status !== 'active') return <div className={cardClass}>{content}</div>
-
-  return (
-    <Link
-      to={`/admin/calendar?centre=${encodeURIComponent(centre.id)}`}
-      aria-label={`View ${centre.name} in calendar`}
-      className={cardClass}
-    >
-      {content}
-    </Link>
-  )
-}
-
-function SummaryTile({
-  label,
-  value,
-  tone,
-}: {
-  label: string
-  value: string
-  tone?: string
-}) {
-  return (
-    <div className="rounded-xl bg-card p-3 ring-1 ring-foreground/10">
-      <p className="text-xs font-medium text-muted-foreground">{label}</p>
-      <p className={`mt-1 text-xl font-semibold tabular-nums ${tone ?? ''}`}>{value}</p>
+      <p className="flex items-start gap-1.5 text-sm text-muted-foreground">
+        <MapPin className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+        <span className="min-w-0 [overflow-wrap:anywhere]">{centre.address}</span>
+      </p>
     </div>
   )
 }

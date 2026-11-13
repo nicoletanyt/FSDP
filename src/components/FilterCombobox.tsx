@@ -1,6 +1,6 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import { Search } from 'lucide-react'
+import { RotateCcw, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Combobox,
@@ -35,6 +35,7 @@ export default function FilterCombobox({
   className,
   contentClassName,
   renderOption,
+  resetValue,
 }: {
   options: FilterOption[]
   value: string
@@ -47,11 +48,14 @@ export default function FilterCombobox({
   contentClassName?: string
   /** Custom content for an option, e.g. a status pill, in the list and the field. */
   renderOption?: (option: FilterOption) => ReactNode
+  /** Shows a "Reset filter" button under the list that restores this value. */
+  resetValue?: string
 }) {
   const items = useMemo(() => options.map((option) => option.value), [options])
   const byValue = useMemo(() => new Map(options.map((option) => [option.value, option])), [options])
   const selected = byValue.has(value) ? value : (options[0]?.value ?? '')
   const selectedLabel = byValue.get(selected)?.label ?? ''
+  const [open, setOpen] = useState(false)
 
   return (
     <Combobox
@@ -61,6 +65,8 @@ export default function FilterCombobox({
       itemToStringLabel={(item) => byValue.get(item)?.label ?? ''}
       isItemEqualToValue={(item, current) => item === current}
       disabled={disabled}
+      open={open}
+      onOpenChange={setOpen}
     >
       <ComboboxTrigger
         id={id}
@@ -94,6 +100,24 @@ export default function FilterCombobox({
             )
           }}
         </ComboboxList>
+        {resetValue !== undefined && (
+          <div className="mt-1.5 border-t pt-1.5">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-9 w-full justify-start px-3 font-normal"
+              disabled={selected === resetValue}
+              onClick={() => {
+                onChange(resetValue)
+                setOpen(false)
+              }}
+            >
+              <RotateCcw aria-hidden="true" />
+              Reset filter
+            </Button>
+          </div>
+        )}
       </ComboboxContent>
     </Combobox>
   )

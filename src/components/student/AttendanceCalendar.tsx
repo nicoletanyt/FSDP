@@ -44,13 +44,15 @@ export function attendanceClassStyle(title: string) {
 }
 
 export function AttendanceToolbar({
-  date, view, list, desktop, actions, onViewChange, onListChange, onNavigate, onToday
+  date, view, list, desktop, actions, filter, onViewChange, onListChange, onNavigate, onToday
 }: {
   date: Date
   view: AttendanceView
   list: boolean
   desktop: boolean
   actions: ReactNode
+  /** The Filter button, always last (far right). */
+  filter?: ReactNode
   onViewChange: (view: AttendanceView) => void
   onListChange: (list: boolean) => void
   onNavigate: (direction: number) => void
@@ -135,6 +137,7 @@ export function AttendanceToolbar({
             </ul>
           </PopoverContent>
         </Popover>
+        {filter}
       </div>
     </div>
   )

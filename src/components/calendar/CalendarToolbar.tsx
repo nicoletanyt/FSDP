@@ -38,6 +38,7 @@ export default function CalendarToolbar({
     onNext,
     actions,
     legend,
+    filter,
 }: {
     view: CalendarRange;
     onViewChange: (view: CalendarRange) => void;
@@ -51,6 +52,8 @@ export default function CalendarToolbar({
     actions?: ReactNode;
     /** Body of the "Calendar legend" popover. */
     legend: ReactNode;
+    /** The Filter button, always last (far right). */
+    filter?: ReactNode;
 }) {
     const viewLabel = `${view[0].toUpperCase()}${view.slice(1)}`;
     return (
@@ -159,6 +162,7 @@ export default function CalendarToolbar({
                         {legend}
                     </PopoverContent>
                 </Popover>
+                {filter}
             </div>
         </div>
     );

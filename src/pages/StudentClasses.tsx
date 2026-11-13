@@ -4,8 +4,6 @@ import { Link, useLocation, useOutletContext, useSearchParams } from 'react-rout
 import {
   ArrowLeft,
   CalendarDays,
-  ChevronDown,
-  SlidersHorizontal
 } from 'lucide-react'
 import { Button, buttonVariants } from '@/components/student/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
@@ -29,7 +27,7 @@ import {
 import type {
   ClassOffering
 } from '@/lib/student-schedule'
-import FilterCombobox from '@/components/FilterCombobox'
+import FilterPopover, { FilterField } from '@/components/FilterPopover'
 import { GradeLabelBadge } from '@/components/admin/AdminGradeBadge'
 
 type Action =
@@ -181,7 +179,6 @@ function SessionFilters({
   const day = params.get('day') ?? 'all'
   const period = params.get('period') ?? 'all'
   const instructor = params.get('instructor') ?? 'all'
-  const [showAdvanced, setShowAdvanced] = useState(period !== 'all' || instructor !== 'all')
   const centres = [...new Set(sessions.map(session => session.centre))].sort()
   const instructors = [...new Set(sessions.map(session => session.instructor))].sort()
 
@@ -191,6 +188,8 @@ function SessionFilters({
     else next.set(name, value)
     onChange(next)
   }
+
+  const activeCount = [centre, day, period, instructor].filter(value => value !== 'all').length
 
   return (
     <Card className="gap-3">
@@ -202,84 +201,34 @@ function SessionFilters({
       </CardHeader>
 
       <CardContent>
-        <fieldset disabled={disabled} className="min-w-0 space-y-3">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <label className="space-y-1 text-sm">
-              <span>Centre</span>
-              <FilterCombobox
-                value={centre}
-                onChange={value => setFilter('centre', value)}
-                disabled={disabled}
-                options={[{ value: 'all', label: 'All centres' }, ...centres.map(c => ({ value: c, label: c }))]}
-              />
-            </label>
-
-            <label className="space-y-1 text-sm">
-              <span>Day</span>
-              <FilterCombobox
-                value={String(day)}
-                onChange={value => setFilter('day', value)}
-                disabled={disabled}
-                options={[{ value: 'all', label: 'Any day' }, ...days.map((d, i) => ({ value: String(i), label: d }))]}
-              />
-            </label>
-
-          </div>
-
-          <button
-            type="button"
-            className="flex items-center gap-2 text-sm font-medium text-primary hover:underline"
-            onClick={() => setShowAdvanced(v => !v)}
-            aria-expanded={showAdvanced}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <span className="text-sm text-muted-foreground">
+            {count} upcoming {count === 1 ? 'session' : 'sessions'}
+          </span>
+          <FilterPopover
+            title="Filter classes"
+            activeCount={activeCount}
+            onReset={() => {
+              const next = new URLSearchParams(params)
+              for (const key of ['centre', 'day', 'period', 'instructor']) next.delete(key)
+              onChange(next)
+            }}
           >
-            <SlidersHorizontal className="size-4" />
-            More filters
-            <ChevronDown
-              className={`size-4 transition-transform ${
-                showAdvanced ? 'rotate-180' : ''
-              }`}
-            />
-          </button>
-
-          {showAdvanced && (
-            <div className="grid gap-3 border-t pt-3 sm:grid-cols-2 lg:grid-cols-3">
-              <label className="space-y-1 text-sm">
-                <span>Time of day</span>
-                <FilterCombobox
-                  value={period}
-                  onChange={value => setFilter('period', value)}
-                  disabled={disabled}
-                  options={[
-                    { value: 'all', label: 'Any time' },
-                    { value: 'morning', label: 'Morning' },
-                    { value: 'afternoon', label: 'Afternoon' },
-                    { value: 'evening', label: 'Evening' },
-                  ]}
-                />
-              </label>
-
-              <label className="space-y-1 text-sm">
-                <span>Instructor</span>
-                <FilterCombobox
-                  value={instructor}
-                  onChange={value => setFilter('instructor', value)}
-                  disabled={disabled}
-                  options={[{ value: 'all', label: 'All instructors' }, ...instructors.map(i => ({ value: i, label: i }))]}
-                />
-              </label>
-
-            </div>
-          )}
-
-          <div className="flex items-center justify-between border-t pt-3">
-            <span className="text-sm text-muted-foreground">
-              {count} upcoming {count === 1 ? 'session' : 'sessions'}
-            </span>
-            <Button variant="ghost" size="sm" disabled={disabled || !params.size} onClick={() => onChange(new URLSearchParams())}>
-              Clear filters
-            </Button>
-          </div>
-        </fieldset>
+            <FilterField label="Dojo" value={centre} onChange={value => setFilter('centre', value)} disabled={disabled}
+              ariaLabel="Dojo filter" options={[{ value: 'all', label: 'All dojos' }, ...centres.map(c => ({ value: c, label: c }))]} />
+            <FilterField label="Day" value={String(day)} onChange={value => setFilter('day', value)} disabled={disabled}
+              ariaLabel="Day filter" options={[{ value: 'all', label: 'Any day' }, ...days.map((d, i) => ({ value: String(i), label: d }))]} />
+            <FilterField label="Time of day" value={period} onChange={value => setFilter('period', value)} disabled={disabled}
+              ariaLabel="Time of day filter" options={[
+                { value: 'all', label: 'Any time' },
+                { value: 'morning', label: 'Morning' },
+                { value: 'afternoon', label: 'Afternoon' },
+                { value: 'evening', label: 'Evening' },
+              ]} />
+            <FilterField label="Instructor" value={instructor} onChange={value => setFilter('instructor', value)} disabled={disabled}
+              ariaLabel="Instructor filter" options={[{ value: 'all', label: 'All instructors' }, ...instructors.map(i => ({ value: i, label: i }))]} />
+          </FilterPopover>
+        </div>
       </CardContent>
     </Card>
   )

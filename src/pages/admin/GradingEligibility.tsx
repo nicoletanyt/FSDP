@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowRight, Bell, CheckCircle2, ChevronRight, XCircle } from 'lucide-react'
 import { GradeLabelBadge } from '@/components/admin/AdminGradeBadge'
-import FilterCombobox from '@/components/FilterCombobox'
+import FilterPopover, { FilterField } from '@/components/FilterPopover'
 import EmptyState from '@/components/admin/EmptyState'
 import EligibilityChecklist from '@/components/grading/EligibilityChecklist'
 import { EligibilityBadge } from '@/components/admin/StatusBadge'
@@ -172,6 +172,12 @@ export default function GradingEligibility() {
   const selectedStudent = eligible.find((student) => student.id === selectedStudentId)
   const selectedRequirements = selectedStudent ? liveRequirements(selectedStudent) : []
   const wordingChanged = !!wording && (subject !== wording.subject || message !== wording.body)
+  function selectEvent(value: string) {
+    setEventId(value)
+    setPreview(null)
+    setSelectedStudentId(null)
+  }
+
   function changeNotifyOpen(open: boolean) {
     if (!open) {
       if (pendingAction || savingWording) return
@@ -251,15 +257,15 @@ export default function GradingEligibility() {
         </Alert>
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="w-full sm:w-72">
-          <FilterCombobox value={eventId} onChange={(value) => { setEventId(value); setPreview(null); setSelectedStudentId(null) }} ariaLabel="Select persisted grading event"
-            options={[{ value: '', label: 'All eligible students' }, ...events.map((event) => ({ value: event.id, label: event.name }))]} />
-        </div>
-        <Button className="ml-auto" variant="outline" onClick={() => { setPreview(null); setNotice(''); setNotifyOpen(true) }} disabled={pendingAction !== null || savingWording}>
+      <div className="flex flex-wrap items-center justify-end gap-3">
+        <Button variant="outline" size="touch" onClick={() => { setPreview(null); setNotice(''); setNotifyOpen(true) }} disabled={pendingAction !== null || savingWording}>
           <Bell />
           Notify Students
         </Button>
+        <FilterPopover title="Filter students" activeCount={eventId ? 1 : 0} onReset={() => selectEvent('')}>
+          <FilterField label="Grading" value={eventId} onChange={selectEvent} ariaLabel="Grading filter"
+            options={[{ value: '', label: 'All eligible students' }, ...events.map((event) => ({ value: event.id, label: event.name }))]} />
+        </FilterPopover>
       </div>
       <Dialog open={notifyOpen} onOpenChange={changeNotifyOpen}>
         <DialogContent className="max-h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)_auto] sm:max-w-2xl">

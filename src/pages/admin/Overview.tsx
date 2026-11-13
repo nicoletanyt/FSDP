@@ -5,7 +5,7 @@ import { Link } from 'react-router'
 import AttendanceNoticeDialog, { noticeResultMessage } from '@/components/admin/AttendanceNoticeDialog'
 import { GradeLabelBadge } from '@/components/admin/AdminGradeBadge'
 import AttendanceTrend from '@/components/admin/AttendanceTrend'
-import CentreCombobox from '@/components/admin/CentreCombobox'
+import FilterPopover, { FilterField } from '@/components/FilterPopover'
 import PageHeader from '@/components/admin/PageHeader'
 import StatCard from '@/components/admin/StatCard'
 import { StatusBadge } from '@/components/admin/StatusBadge'
@@ -83,7 +83,10 @@ export default function Overview() {
       <PageHeader
         title="Overview"
         actions={centresQuery.isSuccess
-          ? <CentreCombobox centres={activeCentres} value={centreId} onChange={setCentreId} />
+          ? <FilterPopover title="Filter overview" activeCount={selectedCentre ? 1 : 0} onReset={() => setCentreId('all')}>
+            <FilterField label="Dojo" value={selectedCentre ?? 'all'} onChange={setCentreId} ariaLabel="Dojo filter"
+              options={[{ value: 'all', label: 'All dojos' }, ...activeCentres.map(centre => ({ value: centre.id, label: centre.name }))]} />
+          </FilterPopover>
           : undefined}
       />
 

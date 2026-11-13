@@ -299,30 +299,32 @@ export default function StudentAttendance() {
             <Button variant="outline" nativeButton={false} render={<Link to="/classes" />} className="h-10">
               <Plus aria-hidden="true" /> Browse classes
             </Button>
-            <FilterPopover
-              title="Filter classes"
-              activeCount={filterCount}
-              onReset={() => {
-                setFilters(emptyFilters)
-                setSelectedId(null)
-              }}
-              className="lg:h-10"
-            >
-              {filterFields.map(({ key, label, all, options }) => (
-                <FilterField
-                  key={key}
-                  label={label}
-                  ariaLabel={`${label} filter`}
-                  value={filters[key]}
-                  onChange={value => {
-                    setFilters(previous => ({ ...previous, [key]: value }))
-                    setSelectedId(null)
-                  }}
-                  options={[{ value: '', label: all }, ...[...new Set(options)].sort().map(option => ({ value: option, label: option }))]}
-                />
-              ))}
-            </FilterPopover>
           </>
+        )}
+        filter={(
+          <FilterPopover
+            title="Filter classes"
+            activeCount={filterCount}
+            onReset={() => {
+              setFilters(emptyFilters)
+              setSelectedId(null)
+            }}
+            className="lg:h-10"
+          >
+            {filterFields.map(({ key, label, all, options }) => (
+              <FilterField
+                key={key}
+                label={label}
+                ariaLabel={`${label} filter`}
+                value={filters[key]}
+                onChange={value => {
+                  setFilters(previous => ({ ...previous, [key]: value }))
+                  setSelectedId(null)
+                }}
+                options={[{ value: '', label: all }, ...[...new Set(options)].sort().map(option => ({ value: option, label: option }))]}
+              />
+            ))}
+          </FilterPopover>
         )}
         onViewChange={nextView => {
           setView(nextView)

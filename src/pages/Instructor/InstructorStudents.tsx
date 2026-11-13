@@ -4,13 +4,11 @@ import {
     ChevronLeft,
     ChevronRight,
     MapPin,
-    Search,
     Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import FilterPopover, { FilterField } from "@/components/FilterPopover";
-import { Input } from "@/components/ui/input";
 import GradeBadge from "@/components/instructor/DatabaseGradeBadge";
 import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
 import { useAuth } from "@/hooks/use-auth";
@@ -30,6 +28,7 @@ import {
     loadDirectorySnapshot,
     singaporeToday,
 } from "@/lib/instructor/directory";
+import SearchInput from "@/components/SearchInput";
 
 export default function InstructorStudents() {
     const api = useInstructorApi();
@@ -133,22 +132,16 @@ export default function InstructorStudents() {
                 <h1 className="text-3xl font-semibold tracking-tight">Students</h1>
             </header>
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                <div className="relative min-w-0 flex-1 basis-32">
-                    <Search
-                        aria-hidden="true"
-                        className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
-                    />
-                    <Input
-                        type="search"
-                        ref={searchRef}
-                        aria-label="Search by name or student ID"
-                        placeholder="Name or ID…"
-                        value={query}
-                        maxLength={200}
-                        onChange={(event) => updateFilter("q", event.target.value)}
-                        className="directory-control h-11 bg-background pl-9 lg:h-10"
-                    />
-                </div>
+                <SearchInput
+                    ref={searchRef}
+                    aria-label="Search by name or student ID"
+                    placeholder="Name or ID…"
+                    value={query}
+                    maxLength={200}
+                    onChange={(event) => updateFilter("q", event.target.value)}
+                    className="directory-control"
+                    wrapperClassName="min-w-0 basis-32"
+                />
                 <FilterPopover
                     title="Filter students"
                     activeCount={activeFilterCount}

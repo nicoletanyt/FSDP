@@ -145,11 +145,11 @@ export default function LiveAttendanceRegister() {
           onToday={goToday}
           onPrevious={() => move(-1)}
           onNext={() => move(1)}
-          actions={<FilterPopover
+          filter={<FilterPopover
             title="Filter classes"
             activeCount={filterCount}
             onReset={() => navigate({ centre: null, title: null, instructor: null, session: null })}
-            className="col-span-full lg:h-10"
+            className="lg:h-10"
           >
             {filterFields.map(({ key, label, options, all, value }) => (
               <FilterField key={key} label={label} value={value} ariaLabel={`${label} filter`}

@@ -1,8 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { AlertTriangle, Bell, CheckCircle2, ChevronRight, Search } from 'lucide-react'
+import { AlertTriangle, Bell, CheckCircle2, ChevronRight } from 'lucide-react'
 import AttendanceNoticeDialog, { noticeResultMessage } from '@/components/admin/AttendanceNoticeDialog'
-import CentreCombobox from '@/components/admin/CentreCombobox'
 import EmptyState from '@/components/admin/EmptyState'
 import { RiskBadge, StatusBadge } from '@/components/admin/StatusBadge'
 import { GradeLabelBadge } from '@/components/admin/AdminGradeBadge'
@@ -18,7 +17,8 @@ import { loadCalendarCentres } from '@/lib/admin/live-class-calendar'
 import type { RiskLevel } from '@/lib/admin/types'
 import { supabase } from '@/lib/supabase'
 import { cn } from 'cn'
-import FilterCombobox from '@/components/FilterCombobox'
+import FilterPopover, { FilterField } from '@/components/FilterPopover'
+import SearchInput from '@/components/SearchInput'
 
 type MonitoredStudent = {
   id: string
@@ -125,24 +125,23 @@ export default function AttendanceMonitoring() {
       {loading && !error && <p role="status" className="text-sm text-muted-foreground">Loading live attendance monitoring…</p>}
 
       <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-48 flex-1">
-          <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-          <input type="search" value={search} onChange={event => setSearch(event.target.value)}
-            placeholder="Find a student" aria-label="Search monitored students"
-            className="h-10 w-full rounded-lg border border-input bg-background pr-2.5 pl-8 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30" />
-        </div>
-        <div className="w-full sm:w-auto">
-          <CentreCombobox centres={centresQuery.data ?? []} value={centreId} onChange={setCentreId}
-            ariaLabel="Filter monitored students by centre" className="w-full sm:w-56" />
-        </div>
-        <div className="w-40"><FilterCombobox value={levelFilter} onChange={setLevelFilter} ariaLabel="Filter by risk level"
-          options={[{ value: 'at_risk', label: 'At risk' }, { value: 'all', label: 'All levels' }, { value: 'healthy', label: 'Healthy' }, { value: 'unassessed', label: 'Not assessed' }]}
-          renderOption={option => option.value === 'all' ? option.label
-            : option.value === 'unassessed' ? <StatusBadge tone="neutral">Not assessed</StatusBadge>
-            : <RiskBadge level={option.value as RiskLevel} />} /></div>
-        <Button className="ml-auto" variant="outline" onClick={openNotice} disabled={!!error || loading}>
+        <SearchInput value={search} onChange={event => setSearch(event.target.value)}
+          placeholder="Find a student" aria-label="Search monitored students" />
+        <Button variant="outline" size="touch" onClick={openNotice} disabled={!!error || loading}>
           <Bell aria-hidden="true" />Follow Up
         </Button>
+        {/* The watch list opens on at-risk students, so that is the default the reset restores. */}
+        <FilterPopover title="Filter students"
+          activeCount={(targetCentre ? 1 : 0) + (levelFilter !== 'at_risk' ? 1 : 0)}
+          onReset={() => { setCentreId('all'); setLevelFilter('at_risk') }}>
+          <FilterField label="Dojo" value={targetCentre ?? 'all'} onChange={setCentreId} ariaLabel="Dojo filter"
+            options={[{ value: 'all', label: 'All dojos' }, ...(centresQuery.data ?? []).map(centre => ({ value: centre.id, label: centre.name }))]} />
+          <FilterField label="Risk level" value={levelFilter} onChange={setLevelFilter} ariaLabel="Risk level filter"
+            options={[{ value: 'at_risk', label: 'At risk' }, { value: 'all', label: 'All levels' }, { value: 'healthy', label: 'Healthy' }, { value: 'unassessed', label: 'Not assessed' }]}
+            renderOption={option => option.value === 'all' ? option.label
+              : option.value === 'unassessed' ? <StatusBadge tone="neutral">Not assessed</StatusBadge>
+              : <RiskBadge level={option.value as RiskLevel} />} />
+        </FilterPopover>
       </div>
 
       {noticeOpen && <AttendanceNoticeDialog centreId={targetCentre} studentIds={noticeStudentIds}
