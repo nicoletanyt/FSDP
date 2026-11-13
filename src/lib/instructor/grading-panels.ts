@@ -68,27 +68,62 @@ export function groupExaminerSessions(sessions: ExaminerSession[], today: string
   return { upcoming, past }
 }
 
+export type GradingGrade = { id: string; label: string; colour: string | null; is_ranked: boolean; sort_order: number }
+
 export interface GradingCandidate {
+  applicationId: string
   studentId: string
   name: string
   memberNo: string | null
   candidateNumber: number | null
-  currentGrade: GradeSession['grade'] | null
+  currentGrade: GradingGrade | null
 }
 
-export interface GradeSession {
-  grade: { id: string; label: string; colour: string | null; is_ranked: boolean; sort_order: number }
-  candidates: GradingCandidate[]
+// Every applicant for the day, sorted into a session or not.
+export interface DayStudent extends GradingCandidate {
+  targetGrade: GradingGrade
+  sessionId: string | null
+}
+
+// A time slot on the grading day; it can hold several target grades.
+export interface GradingSessionSummary {
+  id: string
+  position: number
   startsAt: string | null
   endsAt: string | null
+  grades: { grade: GradingGrade; candidates: GradingCandidate[] }[]
+  // Each current grade -> target grade in the session, with its scheduled length.
+  transitions: { from: GradingGrade | null; to: GradingGrade; candidates: number; minutes: number }[]
   myBatch: { status: 'draft' | 'submitted'; updatedAt: string; submittedAt: string | null } | null
 }
 
-// One grading day from examiner_grading_day(): the session, its panel, and a
-// grading session per target grade on its track.
-export interface GradingDay extends Omit<ExaminerSession, 'candidates'> {
-  grades: GradeSession[]
+// One grading day from examiner_grading_day(): the session, its panel, every
+// applicant and, once an administrator has sorted them, its sessions.
+export type ScheduleWarningCode = 'overflow' | 'over_capacity' | 'mixed_lengths' | 'empty_session' | 'unscheduled' | 'default_capacity'
+
+// Something about the draft schedule an administrator should check (admins and the chief only).
+export interface ScheduleWarning {
+  code: ScheduleWarningCode
+  message: string
+  sessionIds: string[]
 }
+
+export interface GradingDay extends Omit<ExaminerSession, 'candidates'> {
+  applicationDeadline: string | null
+  gradingStarted: boolean
+  // Private gradings are scheduled by hand rather than by the scheduler.
+  isPrivate: boolean
+  // Null while the schedule is a draft. Only admins and the chief see draft sessions.
+  publishedAt: string | null
+  capacity: number | null
+  warnings: ScheduleWarning[]
+  students: DayStudent[]
+  sessions: GradingSessionSummary[]
+}
+
+export const sessionLabel = (position: number) => `Session ${position}`
+export const sessionCandidates = (session: Pick<GradingSessionSummary, 'grades'>) =>
+  session.grades.reduce((sum, item) => sum + item.candidates.length, 0)
 
 const optionalInteger = (value: unknown) => {
   if (value === null || value === undefined) return null
@@ -96,38 +131,74 @@ const optionalInteger = (value: unknown) => {
   return value as number
 }
 
-function decodeGrade(value: unknown): GradeSession['grade'] {
+function decodeGrade(value: unknown): GradingGrade {
   const grade = record(value)
   if (!Number.isInteger(grade.sort_order)) throw invalid()
   return { id: text(grade.id), label: text(grade.label), colour: optionalText(grade.colour),
     is_ranked: flag(grade.is_ranked), sort_order: grade.sort_order as number }
 }
 
+const warningCodes: ScheduleWarningCode[] = ['overflow', 'over_capacity', 'mixed_lengths', 'empty_session', 'unscheduled', 'default_capacity']
+
+function decodeWarning(value: unknown): ScheduleWarning {
+  const warning = record(value)
+  const code = text(warning.code)
+  if (!warningCodes.includes(code as ScheduleWarningCode) || !Array.isArray(warning.session_ids)) throw invalid()
+  return { code: code as ScheduleWarningCode, message: text(warning.message), sessionIds: warning.session_ids.map(text) }
+}
+
+function decodeTransition(value: unknown): GradingSessionSummary['transitions'][number] {
+  const transition = record(value)
+  if (!Number.isInteger(transition.candidates) || !Number.isInteger(transition.minutes)) throw invalid()
+  return {
+    from: transition.from === null || transition.from === undefined ? null : decodeGrade(transition.from),
+    to: decodeGrade(transition.to), candidates: transition.candidates as number, minutes: transition.minutes as number,
+  }
+}
+
+function decodeCandidate(value: unknown): GradingCandidate {
+  const person = record(value)
+  return { applicationId: text(person.application_id), studentId: text(person.student_id), name: text(person.name),
+    memberNo: optionalText(person.member_no), candidateNumber: optionalInteger(person.candidate_number),
+    currentGrade: person.current_grade === null || person.current_grade === undefined ? null : decodeGrade(person.current_grade) }
+}
+
 export function decodeGradingDay(value: unknown): GradingDay {
   const row = record(value)
   const [session] = decodeExaminerSessions([{ ...row, candidates: 0 }])
-  if (!Array.isArray(row.grades)) throw invalid()
+  if (!Array.isArray(row.students) || !Array.isArray(row.sessions)) throw invalid()
   const { candidates: _ignored, ...rest } = session
   void _ignored
+  const applicationDeadline = optionalText(row.application_deadline)
+  if (applicationDeadline !== null && !/^\d{4}-\d{2}-\d{2}$/.test(applicationDeadline)) throw invalid()
   return {
     ...rest,
-    grades: row.grades.map(item => {
+    applicationDeadline,
+    gradingStarted: flag(row.grading_started),
+    isPrivate: flag(row.is_private),
+    publishedAt: optionalText(row.published_at),
+    capacity: optionalInteger(row.capacity),
+    warnings: Array.isArray(row.warnings) ? row.warnings.map(decodeWarning) : [],
+    students: row.students.map(item => {
+      const person = record(item)
+      return { ...decodeCandidate(person), targetGrade: decodeGrade(person.target_grade), sessionId: optionalText(person.session_id) }
+    }),
+    sessions: row.sessions.map(item => {
       const entry = record(item)
-      if (!Array.isArray(entry.candidates)) throw invalid()
+      if (!Number.isInteger(entry.position) || !Array.isArray(entry.grades)) throw invalid()
       const batch = entry.my_batch === null || entry.my_batch === undefined ? null : record(entry.my_batch)
       const startsAt = optionalText(entry.starts_at)
       const endsAt = optionalText(entry.ends_at)
       if ((startsAt === null) !== (endsAt === null)) throw invalid()
       if (batch && !['draft', 'submitted'].includes(text(batch.status))) throw invalid()
       return {
-        grade: decodeGrade(entry.grade),
-        candidates: entry.candidates.map(candidate => {
-          const person = record(candidate)
-          return { studentId: text(person.student_id), name: text(person.name), memberNo: optionalText(person.member_no),
-            candidateNumber: optionalInteger(person.candidate_number),
-            currentGrade: person.current_grade === null || person.current_grade === undefined ? null : decodeGrade(person.current_grade) }
+        id: text(entry.id), position: entry.position as number, startsAt, endsAt,
+        grades: entry.grades.map(group => {
+          const grouped = record(group)
+          if (!Array.isArray(grouped.candidates)) throw invalid()
+          return { grade: decodeGrade(grouped.grade), candidates: grouped.candidates.map(decodeCandidate) }
         }),
-        startsAt, endsAt,
+        transitions: Array.isArray(entry.transitions) ? entry.transitions.map(decodeTransition) : [],
         myBatch: batch ? { status: text(batch.status) as 'draft' | 'submitted', updatedAt: text(batch.updated_at),
           submittedAt: optionalText(batch.submitted_at) } : null,
       }

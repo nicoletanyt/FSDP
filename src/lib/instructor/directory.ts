@@ -82,7 +82,7 @@ export function filterDirectorySnapshot(snapshot: DirectorySnapshot, params: URL
     scopeTotal: snapshot.items.length, offset, limit, facets: snapshot.facets }
 }
 
-export function changeDirectoryFilter(params: URLSearchParams, name: 'q' | 'rank' | 'belt' | 'dojo', value: string) {
+export function changeDirectoryFilter(params: URLSearchParams, name: 'q' | 'rank' | 'dojo', value: string) {
   const next = new URLSearchParams(params)
   if (value) next.set(name, value)
   else next.delete(name)
@@ -108,12 +108,21 @@ export function directoryTrack(dateOfBirth: string, today: string): GradeTrack |
   return Number(today.slice(0, 4)) - Number(dateOfBirth.slice(0, 4)) < 13 ? 'children' : 'adult'
 }
 
+/** Age in whole years on `today` (birthday-based); null for a future birth date. */
+export function studentAge(dateOfBirth: string, today: string): number | null {
+  dateOnly(dateOfBirth)
+  dateOnly(today)
+  if (dateOfBirth > today) return null
+  return Number(today.slice(0, 4)) - Number(dateOfBirth.slice(0, 4)) - (today.slice(5) < dateOfBirth.slice(5) ? 1 : 0)
+}
+
 export function directoryStudent(entry: StudentEntry, today: string) {
   const track = directoryTrack(entry.student.date_of_birth, today)
   return {
     id: entry.student.id,
     name: [entry.student.first_name.trim(), entry.student.last_name.trim()].filter(Boolean).join(' ') || entry.student.email,
     memberNo: entry.student.member_no,
+    age: studentAge(entry.student.date_of_birth, today),
     grade: entry.grade,
     principalDojo: entry.centre?.name ?? 'Dojo not recorded',
     trackLabel: track === 'children' ? "Children's grading" : track === 'adult' ? "Adults' grading" : 'Grading track unverified',

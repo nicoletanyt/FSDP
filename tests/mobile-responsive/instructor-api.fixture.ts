@@ -10,7 +10,9 @@ import type { CalendarEntry, CentreRow, EventId, Page, PageOptions, RosterEntry,
 import { createDirectoryFixtureReader } from './instructor-directory.fixture'
 import { createDetailFixtureReads } from './instructor-detail.fixture'
 import { createGradingFixtureReads } from './instructor-grading.fixture'
-import { createGradingBatchFixture } from './instructor-grading-batches.fixture'
+import { createGradingBatchFixture, fixtureGradingSessions } from './instructor-grading-batches.fixture'
+import { createEndorsementFixture } from './instructor-endorsements.fixture'
+import { createApplicationFixture } from './instructor-applications.fixture'
 import { createSessionFixtureReads } from './instructor-session.fixture'
 import { createSessionWriteFixture } from './instructor-session-writes.fixture'
 import { attendanceEditable, attendanceSnapshot, editableAttendanceRows } from '../../src/lib/instructor/attendance'
@@ -170,6 +172,8 @@ export function createCalendarFixtureApi(account = 'audit'): InstructorApi {
     ...createSessionFixtureReads(mode, (...args) => api.getEvent(...args), (...args) => api.getRoster(...args), sessionWrites),
     ...sessionWrites.methods,
     ...createGradingBatchFixture(account, mode, () => api),
+    ...createEndorsementFixture(mode, () => api),
+    ...createApplicationFixture(mode),
     async saveAttendance(input) {
       attendanceRequests.push(structuredClone(input))
       await new Promise(resolve => setTimeout(resolve, mode === 'attendance-slow' ? 1600 : 150))
@@ -244,6 +248,12 @@ export function createCalendarFixtureApi(account = 'audit'): InstructorApi {
             id: item.event.id.replace(/^00000000/, '10000000') as EventId, name: 'Replacement account class', instructor_id: uuid(2) as InstructorId },
            rosterCount: mode === 'empty-roster' ? 0 : largeRoster ? 205 : item.rosterCount })
         }
+      }
+      if (mode === 'grading-sessions') {
+        // The caller examines every fixture grading, sorted into two timed sessions.
+        return page(entries.map(item => item.grading && item.event.starts_at && item.event.ends_at ? { ...item, onPanel: true,
+          gradeSessions: fixtureGradingSessions(item.event.starts_at, item.event.ends_at, Array.from({ length: item.rosterCount }, (_, index) => String(index)))
+            .map(session => ({ id: session.id, position: session.position, grades: [], startsAt: session.startsAt, endsAt: session.endsAt, candidates: session.studentIds.length })) } : item), options)
       }
       return page(entries, options)
     },

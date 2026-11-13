@@ -6,7 +6,7 @@ import type { QueryState } from './use-instructor-data'
 import { useInstructorApi } from '@/lib/instructor/data-context'
 import { parseEntityId } from '@/lib/instructor/adapters'
 import { loadCalendarAvailability, loadCalendarEvents } from '@/lib/instructor/calendar-queries'
-import { toCalendarViewEvent } from '@/lib/instructor/calendar-view'
+import { calendarEventId, toCalendarViewEvent, toCalendarViewEvents } from '@/lib/instructor/calendar-view'
 import { toInstructorDataError } from '@/lib/instructor/errors'
 import { instructorQueryKeys as keys, instructorQueryTimes as times } from '@/lib/instructor/query-keys'
 import type { EventId } from '@/lib/instructor/types'
@@ -73,8 +73,11 @@ export function useInstructorSelectedEvent(id: string | null, enabled: boolean) 
   const { session, profile } = useAuth()
   const userId = profile?.role === 'instructor' ? session?.user.id : undefined
   return useClassQuery(keys.event(userId ?? '', id ?? ''), async signal => {
-    const entry = await api.getEvent(parseEntityId(id, 'event'), signal)
-    return entry ? toCalendarViewEvent(entry) : null
+    const entry = await api.getEvent(parseEntityId(calendarEventId(id ?? ''), 'event'), signal)
+    if (!entry) return null
+    // A grading session block resolves to that session; single reads carry no
+    // session times, so an unresolvable session is reported as not found.
+    return id?.includes(':') ? toCalendarViewEvents(entry).find(event => event.id === id) ?? null : toCalendarViewEvent(entry)
   }, { ...times.event, enabled: Boolean(userId && enabled) })
 }
 

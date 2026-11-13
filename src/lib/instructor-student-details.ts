@@ -217,6 +217,9 @@ export function getGradingRequirements({ syllabus, membershipStatus, rankAwarded
     if (syllabus.minAge !== undefined) requirements.push({
         key: "age", label: "Minimum age (by calendar year)", actual: "0", required: `${syllabus.minAge} years`, met: null,
     });
+    if (syllabus.maxAge !== undefined) requirements.push({
+        key: "max-age", label: "Maximum age (by calendar year)", actual: "0", required: `${syllabus.maxAge} years`, met: null,
+    });
     if (syllabus.minMonths > 0) requirements.push({
         key: "time", label: "Time in current grade", actual: `${months} ${months === 1 ? "month" : "months"}`,
         required: syllabus.maxMonths ? `${syllabus.minMonths}–${syllabus.maxMonths} months` : `${syllabus.minMonths} months`,

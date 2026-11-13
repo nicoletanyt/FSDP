@@ -161,10 +161,10 @@ test('a directory-backed detail preview shows known identity while sensitive sec
     const d = w.document
     w.history.pushState(null, '', '/instructor/students?fixtureData=detail-loading')
     w.dispatchEvent(new w.PopStateEvent('popstate')); await wait(500)
-    const row = d.querySelector('[aria-label="Student directory"] a[data-member-no="STU-0001"]')
+    const row = d.querySelector('[aria-label="Student directory"] [data-member-no="STU-0001"]')
     const name = row.querySelector('.directory-name').textContent.trim()
     const grade = row.querySelector('[data-slot="grade-badge"]').textContent.trim()
-    row.click(); await wait(150)
+    row.querySelector('a').click(); await wait(150)
     const placeholder = d.querySelector('[data-instructor-skeleton="student-detail"]')
     const pending = { text: placeholder?.textContent, sensitive: placeholder?.querySelectorAll('[aria-label="Emergency contacts and medical alerts loading"] [data-slot="skeleton"]').length,
       hasRealDetail: !!d.querySelector('[aria-label="Contact and medical actions"]'), fits: d.documentElement.scrollWidth <= d.documentElement.clientWidth }
@@ -433,4 +433,79 @@ test('grading reads remain isolated across accounts and student changes with lat
   assert.doesNotMatch(race, /STU-0001/)
   assert.match(race, /New student assessment notes/)
   assert.doesNotMatch(race, /Original student assessment notes/)
+})
+
+test('the student avatar shows initials above the student name', async t => {
+  for (const width of [390, 1280]) await t.test(`${width}px`, async () => {
+    const result = await inDetail(width, async (w) => {
+      const d = w.document
+      const visible = e => e && e.getClientRects().length > 0
+      const avatar = [...d.querySelectorAll('[data-student-avatar]')].find(visible)
+      const name = w.innerWidth >= 768 ? d.querySelector('aside h1') : [...d.querySelectorAll('[aria-label="Student details"]')].find(visible)?.querySelector('.detail-meta')
+      return { initials: avatar?.textContent.trim() ?? null, above: Boolean(avatar && name && avatar.getBoundingClientRect().bottom <= name.getBoundingClientRect().top + 1),
+        fits: d.documentElement.scrollWidth <= d.documentElement.clientWidth }
+    })
+    assert.match(result.initials ?? '', /^[A-Z]{1,2}$/, JSON.stringify(result))
+    assert.equal(result.above, true, JSON.stringify(result))
+    assert.equal(result.fits, true)
+  })
+})
+
+test('an Endorse button appears only once every requirement is met, and endorsing records who endorsed', async () => {
+  const eligible = await inDetail(1280, async (w, wait) => {
+    const d = w.document
+    await wait(300)
+    const card = [...d.querySelectorAll('[aria-label="Next grading"]')].find(e => e.getClientRects().length)
+    const button = card?.querySelector('[data-endorse]')
+    const before = { button: button?.textContent.trim() ?? null, endorsement: !!card?.querySelector('[data-endorsement]') }
+    const dialogButton = text => [...(d.querySelector('[data-endorse-dialog]')?.querySelectorAll('button') ?? [])].find(e => e.textContent.trim() === text)
+    // Clicking Endorse only opens the confirmation; Cancel sends nothing.
+    button?.click(); await wait(300)
+    const dialog = { title: d.querySelector('[data-endorse-dialog] h2')?.textContent.trim() ?? null, requests: w.endorseRequestsFixture.length }
+    dialogButton('Cancel')?.click(); await wait(300)
+    const cancelled = { open: !!d.querySelector('[data-endorse-dialog]'), requests: w.endorseRequestsFixture.length, button: !!card?.querySelector('[data-endorse]') }
+    card?.querySelector('[data-endorse]')?.click(); await wait(300)
+    dialogButton('Confirm endorsement')?.click(); await wait(500)
+    return { before, dialog, cancelled, after: card?.querySelector('[data-endorsement]')?.textContent.trim() ?? null,
+      closed: !d.querySelector('[data-endorse-dialog]'), buttonGone: !card?.querySelector('[data-endorse]'), requests: w.endorseRequestsFixture.map(r => r.targetGradeId) }
+  }, { query: '?fixtureData=endorse-eligible' })
+  assert.deepEqual(eligible.before, { button: 'Endorse', endorsement: false })
+  assert.match(eligible.dialog.title ?? '', /^Endorse .+ for Stored next grade\?$/)
+  assert.equal(eligible.dialog.requests, 0)
+  assert.deepEqual(eligible.cancelled, { open: false, requests: 0, button: true })
+  assert.equal(eligible.closed, true)
+  assert.match(eligible.after ?? '', /^Endorsed by Fixture Sensei · /)
+  assert.equal(eligible.buttonGone, true)
+  assert.deepEqual(eligible.requests, ['stored-target-grade'])
+  const ineligible = await inDetail(1280, async (w, wait) => {
+    await wait(300)
+    return { buttons: w.document.querySelectorAll('[data-endorse]').length }
+  })
+  assert.equal(ineligible.buttons, 0)
+})
+
+test('grading applications are listed upcoming first, or a no-applications note is shown', async () => {
+  const listed = await inDetail(1280, async (w, wait) => {
+    await wait(300)
+    const section = [...w.document.querySelectorAll('[aria-label="Grading applications"]')].find(e => e.getClientRects().length)
+    return {
+      sections: w.document.querySelectorAll('[aria-label="Grading applications"]').length,
+      order: [...(section?.querySelectorAll('[data-application-id]') ?? [])].map(e => e.dataset.applicationId),
+      statuses: [...(section?.querySelectorAll('[data-application-status]') ?? [])].map(e => e.textContent.replace('Application: ', '').trim()),
+      session: section?.querySelector('[data-application-session]')?.textContent.trim() ?? null,
+      text: section?.textContent ?? '',
+    }
+  }, { query: '?fixtureData=student-applications' })
+  assert.equal(listed.sections, 1, 'only the active tab renders the section')
+  assert.deepEqual(listed.order, ['application-upcoming', 'application-past'])
+  assert.deepEqual(listed.statuses, ['Submitted', 'Withdrawn'])
+  assert.match(listed.session ?? '', /^Session 2 · 10:00 – 10:30$/)
+  assert.match(listed.text, /December grading[\s\S]*Central Dojo[\s\S]*Applied/)
+  const none = await inDetail(1280, async (w, wait) => {
+    await wait(300)
+    const section = [...w.document.querySelectorAll('[aria-label="Grading applications"]')].find(e => e.getClientRects().length)
+    return { applications: section?.querySelectorAll('[data-application-id]').length ?? null,
+      note: section?.querySelector('[data-no-applications]')?.textContent.trim() ?? null }
+  })
+  assert.deepEqual(none, { applications: 0, note: 'No grading applications so far.' })
 })

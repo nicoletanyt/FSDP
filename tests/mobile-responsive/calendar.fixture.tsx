@@ -6,11 +6,13 @@ import { QueryClientProvider } from '@tanstack/react-query'
 // context. This entry point is outside index.html and the production bundle.
 import { AuthContext } from '../../src/lib/auth-context'
 import InstructorLayout from '../../src/layouts/InstructorLayout'
+import NfcTagCapture from '../../src/components/instructor/NfcTagCapture'
 import InstructorDashboard from '../../src/pages/Instructor/InstructorDashboard'
 import InstructorStudents from '../../src/pages/Instructor/InstructorStudents'
 import InstructorStudentDetails from '../../src/pages/Instructor/InstructorStudentDetails'
 import InstructorGradingAssessment from '../../src/pages/Instructor/InstructorGradingAssessment'
 import InstructorGradingSession from '../../src/pages/Instructor/InstructorGradingSession'
+import InstructorGradingDay from '../../src/pages/Instructor/InstructorGradingDay'
 import InstructorProfile from '../../src/pages/Instructor/InstructorProfile'
 import RootLayout from '../../src/layouts/RootLayout'
 import type { Session } from '@supabase/supabase-js'
@@ -86,7 +88,8 @@ function FixtureApp() {
   }}>
     <InstructorApiContext.Provider value={api}>
       <BrowserRouter><Routes>
-        <Route element={<InstructorLayout />}>
+        {/* Same wrapper as the real app, so navigation keys behave identically. */}
+        <Route element={<NfcTagCapture />}><Route element={<InstructorLayout />}>
           <Route path="/instructor/calendar" element={<InstructorDashboard />} />
           <Route path="/instructor/dashboard" element={<InstructorDashboard />} />
           <Route path="/instructor/students" element={<InstructorStudents />} />
@@ -95,8 +98,9 @@ function FixtureApp() {
           <Route path="/instructor/assessments/:assessmentId" element={<InstructorGradingAssessment />} />
           <Route path="/instructor/assessments/:eventId/:studentId" element={<InstructorGradingAssessment />} />
           <Route path="/instructor/grading/:eventId" element={<InstructorGradingSession />} />
+          <Route path="/instructor/gradings/:eventId" element={<InstructorGradingDay />} />
           <Route path="/instructor/profile" element={<InstructorProfile />} />
-        </Route>
+        </Route></Route>
         <Route element={<RootLayout />}><Route path="*" element={<p>Navigation fixture page</p>} /></Route>
       </Routes></BrowserRouter>
     </InstructorApiContext.Provider>

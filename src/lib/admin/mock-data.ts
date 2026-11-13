@@ -8,7 +8,7 @@ import {
   yearAgeFromIso,
 } from './format'
 import { getGradeSyllabusItems } from './syllabus'
-import { gradeTrackForAge, nextGrade } from './types'
+import { gradeTrackForAge, nextGrade, targetGradeTrack } from './types'
 import type {
   AttendanceRecord,
   AttendanceStatus,
@@ -649,7 +649,7 @@ export const techniqueSignOffs: TechniqueSignOff[] = students.flatMap(
     const target = nextGrade(student.currentGrade, track, age)
     if (!target) return []
 
-    const items = getGradeSyllabusItems(target, track)
+    const items = getGradeSyllabusItems(target, targetGradeTrack(track, target))
     const ratio = [1, 1, 1, 0.9, 0.75, 0.5][hashString(student.id) % 6] ?? 1
     const signedCount = Math.floor(items.length * ratio)
     const instructor = instructors[index % instructors.length]

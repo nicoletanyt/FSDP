@@ -151,6 +151,7 @@ link, and theme, notification, and profile controls. The logo returns to
 | `/admin/grading/eligibility` | Automatic eligibility checks and invitations |
 | `/admin/grading/opportunities` | Live adult and children’s grading schedule and reporting times |
 | `/admin/grading/applications` | Read-only view and CSV export of submitted applications |
+| `/admin/grading/rules` | Scheduling rules per track (session size, day hours, lunch, changeover) and session length per grade transition |
 | `/admin/notifications` | Review EmailJS grading invitation requests |
 | `/admin/instructors` | Teaching team and instructor account creation |
 | `/admin/profile` | Administrator account details and sign out |

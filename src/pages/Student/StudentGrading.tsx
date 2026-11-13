@@ -8,6 +8,12 @@ import { useAuth } from '@/hooks/use-auth'
 import { formatRank, type RankId } from '@/lib/student-grades'
 import { calculateGradingFee } from '@/lib/grading-fees'
 import { money } from '@/lib/format'
+import EligibilityChecklist from '@/components/grading/EligibilityChecklist'
+import type { ChecklistRequirement } from '@/components/grading/EligibilityChecklist'
+
+type Readiness = { targetLabel: string; requirements: ChecklistRequirement[] }
+
+type ReadinessRow = { target_grade_label: string; key: string; label: string; actual: string; required: string; met: boolean }
 
 type Grading = {
   id: string
@@ -34,6 +40,7 @@ export default function StudentGrading() {
   const { profile } = useAuth()
   const [gradings, setGradings] = useState<Grading[]>([])
   const [currentRank, setCurrentRank] = useState('')
+  const [readiness, setReadiness] = useState<Readiness | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -41,14 +48,21 @@ export default function StudentGrading() {
     let active = true
     async function load() {
       try {
-        const [opportunities, student] = await Promise.all([
+        const [opportunities, student, { data: checks, error: checksError }] = await Promise.all([
           supabase.rpc('my_grading_opportunities'),
           profile?.id
             ? supabase.from('students').select('current_grade_id').eq('user_id', profile.id).maybeSingle()
             : Promise.resolve({ data: null, error: null }),
+          supabase.rpc('my_grading_readiness'),
         ])
         const { data: events, error: eventsError } = opportunities
         if (eventsError) throw eventsError
+        if (checksError) throw checksError
+        const rows = (checks ?? []) as ReadinessRow[]
+        if (active) setReadiness(rows.length === 0 ? null : {
+          targetLabel: rows[0].target_grade_label,
+          requirements: rows.map(({ key, label, actual, required, met }) => ({ key, label, actual, required, met })),
+        })
         const mapped = (events ?? []).map((event: { id: string; name: string; grading_date: string; application_deadline: string; reporting_release_on: string | null; reporting_time: string | null; centre_name: string; venue_address: string; target_grade: string; applied: boolean }) => ({
           id: event.id, name: event.name, gradingDate: event.grading_date,
           deadline: event.application_deadline, reportingRelease: event.reporting_release_on,
@@ -86,9 +100,11 @@ export default function StudentGrading() {
 
   return <main className="mx-auto w-full max-w-2xl space-y-5">
     <h1 className="text-3xl font-bold">Grading applications</h1>
+    <p className="text-sm text-muted-foreground">Applications must be submitted two weeks before the grading. Late submissions incur an additional administrative charge.</p>
     {params.get('checkout') === 'success' && <Alert><AlertDescription>Payment is being verified. Your application will appear after confirmation. Refresh this page shortly.</AlertDescription></Alert>}
     {params.get('checkout') === 'cancel' && <Alert><AlertDescription>Checkout was canceled. No application was submitted.</AlertDescription></Alert>}
     {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
+    {!loading && !error && <ReadinessCard readiness={readiness} />}
     {loading ? <p>Loading grading opportunities…</p> : gradings.length === 0 ? <Card className="p-6"><p>No grading applications are open right now.</p><Link to="/dashboard" className="text-primary underline">Back to dashboard</Link></Card>
       : gradings.map((grading) => <Card key={grading.id} className="gap-3 p-6">
         <h2 className="text-xl font-semibold">{grading.name}</h2>
@@ -109,4 +125,31 @@ export default function StudentGrading() {
         </>}
       </Card>)}
   </main>
+}
+
+function ReadinessCard({ readiness }: { readiness: Readiness | null }) {
+  if (!readiness) {
+    return <Card className="gap-1 p-6">
+      <h2 className="text-xl font-semibold">Your next grade</h2>
+      <p className="text-sm text-muted-foreground">You have reached the highest grade on your grading ladder.</p>
+    </Card>
+  }
+  const met = readiness.requirements.filter((requirement) => requirement.met).length
+  const total = readiness.requirements.length
+  const eligible = met === total
+  return <Card className="gap-4 p-6">
+    <div className="flex flex-wrap items-baseline justify-between gap-2">
+      <div>
+        <p className="text-sm text-muted-foreground">Your next grade</p>
+        <h2 className="text-xl font-semibold">{readiness.targetLabel}</h2>
+      </div>
+      <p className={eligible ? 'text-sm font-medium text-success' : 'text-sm font-medium text-muted-foreground'}>
+        {eligible ? 'Eligible to grade' : `${met} of ${total} requirements met`}
+      </p>
+    </div>
+    <EligibilityChecklist requirements={readiness.requirements} compact />
+    <p className="text-xs text-muted-foreground">
+      Requirements follow the published ASK grading sheets. Time and training sessions count from your last grading (or from joining if you have not graded yet).
+    </p>
+  </Card>
 }
