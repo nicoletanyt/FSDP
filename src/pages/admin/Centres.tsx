@@ -4,7 +4,7 @@ import { Link, Navigate, useSearchParams } from 'react-router'
 import EmptyState from '@/components/admin/EmptyState'
 import PageHeader from '@/components/admin/PageHeader'
 import { CentreStatusBadge } from '@/components/admin/StatusBadge'
-import { NativeSelect } from '@/components/admin/form-controls'
+import FilterCombobox from '@/components/FilterCombobox'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { useAdminData } from '@/lib/admin/admin-data-context'
@@ -101,18 +101,12 @@ export default function Centres() {
                 />
               </div>
               <div className="w-full sm:w-48">
-                <NativeSelect
-                  className="h-10"
+                <FilterCombobox
                   value={dojoStatus}
-                  onChange={(event) => updateParam('dojoStatus', event.target.value)}
-                  aria-label="Filter by dojo status"
-                >
-                  {dojoStatusOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </NativeSelect>
+                  onChange={(value) => updateParam('dojoStatus', value)}
+                  ariaLabel="Filter by dojo status"
+                  options={dojoStatusOptions}
+                />
               </div>
               {dojoFiltersActive > 0 && (
                 <Button

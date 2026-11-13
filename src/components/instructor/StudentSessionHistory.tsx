@@ -36,6 +36,7 @@ import type {
     StudentId,
 } from "@/lib/instructor/types";
 import { cn } from "cn";
+import FilterCombobox from "@/components/FilterCombobox";
 
 const PAGE_SIZE = 20;
 
@@ -133,46 +134,41 @@ function SessionFilters({
     inline?: boolean;
 }) {
     const id = useId();
-    const selectClassName =
-        "detail-body h-11 min-w-0 rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50 lg:h-9";
+    const selectClassName = "detail-body h-11 min-w-44 lg:h-9";
     return (
         <div className={inline ? "flex flex-wrap items-end gap-3" : "grid gap-3"}>
             <div className="flex min-w-0 flex-col gap-1.5">
                 <Label htmlFor={`${id}-attendance`} className="detail-label">
                     Attendance
                 </Label>
-                <select
+                <FilterCombobox
                     id={`${id}-attendance`}
                     value={attendance}
-                    onChange={(event) =>
-                        onAttendanceChange(event.target.value as AttendanceState | "all")
-                    }
+                    onChange={(value) => onAttendanceChange(value as AttendanceState | "all")}
                     className={selectClassName}
-                >
-                    <option value="all">All attendance</option>
-                    {(["present", "late", "absent", "excused", "unmarked"] as const).map(
-                        (value) => (
-                            <option key={value} value={value}>
-                                {value[0].toUpperCase()}
-                                {value.slice(1)}
-                            </option>
-                        ),
-                    )}
-                </select>
+                    options={[
+                        { value: "all", label: "All attendance" },
+                        ...(["present", "late", "absent", "excused", "unmarked"] as const).map((value) => ({
+                            value,
+                            label: `${value[0].toUpperCase()}${value.slice(1)}`,
+                        })),
+                    ]}
+                />
             </div>
             <div className="flex min-w-0 flex-col gap-1.5">
                 <Label htmlFor={`${id}-sort`} className="detail-label">
                     Date order
                 </Label>
-                <select
+                <FilterCombobox
                     id={`${id}-sort`}
                     value={sort}
-                    onChange={(event) => onSortChange(event.target.value)}
+                    onChange={onSortChange}
                     className={selectClassName}
-                >
-                    <option value="newest">Newest first</option>
-                    <option value="oldest">Oldest first</option>
-                </select>
+                    options={[
+                        { value: "newest", label: "Newest first" },
+                        { value: "oldest", label: "Oldest first" },
+                    ]}
+                />
             </div>
             {(attendance !== "all" || sort !== "newest") && (
                 <Button variant="ghost" size="touch" onClick={onReset}>

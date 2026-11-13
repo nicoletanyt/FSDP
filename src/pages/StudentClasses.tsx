@@ -28,6 +28,7 @@ import {
 import type {
   ClassOffering
 } from '@/lib/student-schedule'
+import FilterCombobox from '@/components/FilterCombobox'
 
 type Action =
   | { kind: 'enroll'; sessions: ClassOffering[] }
@@ -45,8 +46,6 @@ const days = [
   'Saturday'
 ]
 
-const input =
-  'h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-2 focus-visible:outline-ring'
 const seatColours = {
   full: 'bg-rose-50 text-rose-950 dark:bg-rose-950/45 dark:text-rose-100',
   low: 'bg-amber-50 text-amber-950 dark:bg-amber-950/45 dark:text-amber-100',
@@ -205,34 +204,22 @@ function SessionFilters({
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <label className="space-y-1 text-sm">
               <span>Centre</span>
-              <select
-                className={input}
+              <FilterCombobox
                 value={centre}
-                onChange={e => setFilter('centre', e.target.value)}
-              >
-                <option value="all">All centres</option>
-                {centres.map(c => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
+                onChange={value => setFilter('centre', value)}
+                disabled={disabled}
+                options={[{ value: 'all', label: 'All centres' }, ...centres.map(c => ({ value: c, label: c }))]}
+              />
             </label>
 
             <label className="space-y-1 text-sm">
               <span>Day</span>
-              <select
-                className={input}
-                value={day}
-                onChange={e => setFilter('day', e.target.value)}
-              >
-                <option value="all">Any day</option>
-                {days.map((d, i) => (
-                  <option value={i} key={d}>
-                    {d}
-                  </option>
-                ))}
-              </select>
+              <FilterCombobox
+                value={String(day)}
+                onChange={value => setFilter('day', value)}
+                disabled={disabled}
+                options={[{ value: 'all', label: 'Any day' }, ...days.map((d, i) => ({ value: String(i), label: d }))]}
+              />
             </label>
 
           </div>
@@ -256,30 +243,27 @@ function SessionFilters({
             <div className="grid gap-3 border-t pt-3 sm:grid-cols-2 lg:grid-cols-3">
               <label className="space-y-1 text-sm">
                 <span>Time of day</span>
-                <select
-                  className={input}
+                <FilterCombobox
                   value={period}
-                  onChange={e => setFilter('period', e.target.value)}
-                >
-                  <option value="all">Any time</option>
-                  <option value="morning">Morning</option>
-                  <option value="afternoon">Afternoon</option>
-                  <option value="evening">Evening</option>
-                </select>
+                  onChange={value => setFilter('period', value)}
+                  disabled={disabled}
+                  options={[
+                    { value: 'all', label: 'Any time' },
+                    { value: 'morning', label: 'Morning' },
+                    { value: 'afternoon', label: 'Afternoon' },
+                    { value: 'evening', label: 'Evening' },
+                  ]}
+                />
               </label>
 
               <label className="space-y-1 text-sm">
                 <span>Instructor</span>
-                <select
-                  className={input}
+                <FilterCombobox
                   value={instructor}
-                  onChange={e => setFilter('instructor', e.target.value)}
-                >
-                  <option value="all">All instructors</option>
-                  {instructors.map(i => (
-                    <option key={i}>{i}</option>
-                  ))}
-                </select>
+                  onChange={value => setFilter('instructor', value)}
+                  disabled={disabled}
+                  options={[{ value: 'all', label: 'All instructors' }, ...instructors.map(i => ({ value: i, label: i }))]}
+                />
               </label>
 
             </div>

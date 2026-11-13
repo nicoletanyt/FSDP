@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowRight, Bell, CheckCircle2, ChevronRight, XCircle } from 'lucide-react'
 import AdminGradeBadge from '@/components/admin/AdminGradeBadge'
+import FilterCombobox from '@/components/FilterCombobox'
 import EmptyState from '@/components/admin/EmptyState'
 import EligibilityChecklist from '@/components/grading/EligibilityChecklist'
 import { EligibilityBadge } from '@/components/admin/StatusBadge'
-import { NativeSelect } from '@/components/admin/form-controls'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -256,10 +256,8 @@ export default function GradingEligibility() {
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="w-full sm:w-72">
-          <NativeSelect className="h-10" value={eventId} onChange={(event) => { setEventId(event.target.value); setPreview(null); setSelectedStudentId(null) }} aria-label="Select persisted grading event">
-            <option value="">All eligible students</option>
-            {events.map((event) => <option key={event.id} value={event.id}>{event.name}</option>)}
-          </NativeSelect>
+          <FilterCombobox value={eventId} onChange={(value) => { setEventId(value); setPreview(null); setSelectedStudentId(null) }} ariaLabel="Select persisted grading event"
+            options={[{ value: '', label: 'All eligible students' }, ...events.map((event) => ({ value: event.id, label: event.name }))]} />
         </div>
         <Button className="ml-auto" variant="outline" onClick={() => { setPreview(null); setNotice(''); setNotifyOpen(true) }} disabled={pendingAction !== null || savingWording}>
           <Bell />

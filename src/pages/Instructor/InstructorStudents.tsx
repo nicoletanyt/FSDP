@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useSearchParams, Link } from "react-router";
 import {
-    ChevronDown,
     ChevronLeft,
     ChevronRight,
     MapPin,
@@ -11,13 +10,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuRadioGroup,
-    DropdownMenuRadioItem,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import FilterCombobox from "@/components/FilterCombobox";
 import { Input } from "@/components/ui/input";
 import GradeBadge from "@/components/instructor/DatabaseGradeBadge";
 import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
@@ -57,63 +50,23 @@ function DirectoryFilter({
     options: { value: string; label: string }[];
     onValueChange: (value: string) => void;
 }) {
-    const triggerId = useId();
+    const inputId = useId();
 
     return (
         <div className="grid min-w-0 gap-1.5">
-            <Label
-                htmlFor={triggerId}
-                className="shrink-0 text-sm text-muted-foreground"
-            >
+            <Label htmlFor={inputId} className="shrink-0 text-sm text-muted-foreground">
                 {label}
             </Label>
-            <DropdownMenu>
-                <DropdownMenuTrigger
-                    id={triggerId}
-                    render={
-                        <Button
-                            variant="outline"
-                            size="touch"
-                            className="directory-control w-full min-w-0 justify-between gap-2"
-                        />
-                    }
-                    aria-label={`${label}: ${options.find((option) => option.value === value)?.label || value || "All"}`}
-                >
-                    <span className="truncate">
-                        {options.find((option) => option.value === value)?.label ||
-                            value ||
-                            "All"}
-                    </span>
-                    <ChevronDown aria-hidden="true" className="size-4" />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                    align="start"
-                    className="student-directory-filter-menu"
-                >
-                    <DropdownMenuRadioGroup
-                        value={value}
-                        onValueChange={onValueChange}
-                        aria-label={`${label} filter`}
-                    >
-                        <DropdownMenuRadioItem value="" closeOnClick>
-                            <span className="min-w-0 [overflow-wrap:anywhere]">
-                                All dojos
-                            </span>
-                        </DropdownMenuRadioItem>
-                        {options.map((option) => (
-                            <DropdownMenuRadioItem
-                                key={option.value}
-                                value={option.value}
-                                closeOnClick
-                            >
-                                <span className="min-w-0 [overflow-wrap:anywhere]">
-                                    {option.label}
-                                </span>
-                            </DropdownMenuRadioItem>
-                        ))}
-                    </DropdownMenuRadioGroup>
-                </DropdownMenuContent>
-            </DropdownMenu>
+            <FilterCombobox
+                id={inputId}
+                value={value}
+                onChange={onValueChange}
+                ariaLabel={`${label} filter`}
+                emptyText="No dojo found."
+                className="directory-control h-11 lg:h-10"
+                contentClassName="student-directory-filter-menu"
+                options={[{ value: "", label: "All dojos" }, ...options]}
+            />
         </div>
     );
 }
@@ -128,63 +81,28 @@ function GradeFilter({
     grades: GradeRow[];
     onValueChange: (value: string) => void;
 }) {
-    const triggerId = useId();
-    const selected = grades.find((grade) => grade.id === value) ?? null;
+    const inputId = useId();
+    const byId = new Map(grades.map((grade) => [grade.id, grade]));
 
     return (
         <div className="grid min-w-0 gap-1.5">
-            <Label
-                htmlFor={triggerId}
-                className="shrink-0 text-sm text-muted-foreground"
-            >
+            <Label htmlFor={inputId} className="shrink-0 text-sm text-muted-foreground">
                 Grade
             </Label>
-            <DropdownMenu>
-                <DropdownMenuTrigger
-                    id={triggerId}
-                    render={
-                        <Button
-                            variant="outline"
-                            size="touch"
-                            className="directory-control w-full min-w-0 justify-between gap-2"
-                        />
-                    }
-                    aria-label={`Grade: ${selected?.label || value || "All"}`}
-                >
-                    <span className="flex min-w-0 items-center">
-                        {selected ? (
-                            <GradeBadge grade={selected} showBeltLabel />
-                        ) : (
-                            <span className="truncate">{value || "All"}</span>
-                        )}
-                    </span>
-                    <ChevronDown aria-hidden="true" className="size-4" />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                    align="start"
-                    className="student-directory-filter-menu"
-                >
-                    <DropdownMenuRadioGroup
-                        value={value}
-                        onValueChange={onValueChange}
-                        aria-label="Grade filter"
-                    >
-                        <DropdownMenuRadioItem value="" closeOnClick>
-                            <span className="min-w-0 [overflow-wrap:anywhere]">All grades</span>
-                        </DropdownMenuRadioItem>
-                        {grades.map((grade) => (
-                            <DropdownMenuRadioItem
-                                key={grade.id}
-                                value={grade.id}
-                                closeOnClick
-                                aria-label={grade.label}
-                            >
-                                <GradeBadge grade={grade} showBeltLabel />
-                            </DropdownMenuRadioItem>
-                        ))}
-                    </DropdownMenuRadioGroup>
-                </DropdownMenuContent>
-            </DropdownMenu>
+            <FilterCombobox
+                id={inputId}
+                value={value}
+                onChange={onValueChange}
+                ariaLabel="Grade filter"
+                emptyText="No grade found."
+                className="directory-control h-11 lg:h-10"
+                contentClassName="student-directory-filter-menu"
+                options={[{ value: "", label: "All grades" }, ...grades.map((grade) => ({ value: grade.id, label: grade.label }))]}
+                renderOption={(option) => {
+                    const grade = byId.get(option.value);
+                    return grade ? <GradeBadge grade={grade} showBeltLabel /> : option.label;
+                }}
+            />
         </div>
     );
 }

@@ -6,7 +6,7 @@ import { useAdminData } from '@/lib/admin/admin-data-context'
 import { useAdminFilters } from '@/lib/admin/admin-filters'
 import type { AdminDateRange } from '@/lib/admin/admin-filters'
 import CentreCombobox from './CentreCombobox'
-import { NativeSelect } from './form-controls'
+import FilterCombobox from '@/components/FilterCombobox'
 
 export default function AdminFilterBar() {
   const { centres } = useAdminData()
@@ -63,16 +63,16 @@ export default function AdminFilterBar() {
         <div className="flex items-center gap-1.5">
           <CalendarDays className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <div className="w-44 shrink-0">
-            <NativeSelect
-              className="h-10"
-              value={dateRange}
-              onChange={(event) => setDateRange(Number(event.target.value) as AdminDateRange)}
-              aria-label="Date range"
-            >
-              <option value={30}>Last 30 days</option>
-              <option value={90}>Last 90 days</option>
-              <option value={180}>Last 180 days</option>
-            </NativeSelect>
+            <FilterCombobox
+              value={String(dateRange)}
+              onChange={(value) => setDateRange(Number(value) as AdminDateRange)}
+              ariaLabel="Date range"
+              options={[
+                { value: '30', label: 'Last 30 days' },
+                { value: '90', label: 'Last 90 days' },
+                { value: '180', label: 'Last 180 days' },
+              ]}
+            />
           </div>
         </div>
       </div>

@@ -23,6 +23,7 @@ import {
   prettyDate
 } from '@/lib/student-schedule'
 import type { ClassOffering } from '@/lib/student-schedule'
+import FilterCombobox from '@/components/FilterCombobox'
 
 type Pending =
   | { kind: 'cancel'; id: string }
@@ -315,19 +316,16 @@ export default function StudentAttendance() {
                 {filterFields.map(({ key, label, options }) => (
                   <div key={key} className="grid gap-1 text-sm">
                     <label htmlFor={`attendance-filter-${key}`} className="font-medium">{label}</label>
-                    <select
+                    <FilterCombobox
                       id={`attendance-filter-${key}`}
                       value={filters[key]}
-                      onChange={event => {
-                        const value = event.target.value
+                      onChange={value => {
                         setFilters(previous => ({ ...previous, [key]: value }))
                         setSelectedId(null)
                       }}
-                      className="h-9 w-full rounded-md border border-input bg-background px-2 font-normal focus-visible:outline-2 focus-visible:outline-ring"
-                    >
-                      <option value="">All</option>
-                      {[...new Set(options)].sort().map(option => <option key={option}>{option}</option>)}
-                    </select>
+                      className="h-9 font-normal"
+                      options={[{ value: '', label: 'All' }, ...[...new Set(options)].sort().map(option => ({ value: option, label: option }))]}
+                    />
                   </div>
                 ))}
               </PopoverContent>

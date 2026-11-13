@@ -5,7 +5,6 @@ import { useSearchParams } from 'react-router'
 import AdminGradeBadge from '@/components/admin/AdminGradeBadge'
 import EmptyState from '@/components/admin/EmptyState'
 import { EligibilityBadge, MembershipBadge, RiskBadge, StatusBadge } from '@/components/admin/StatusBadge'
-import { NativeSelect } from '@/components/admin/form-controls'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -18,6 +17,7 @@ import { getGradeMeta, grades, UNRANKED } from '@/lib/admin/types'
 import type { Grade, MembershipStatus, RiskLevel } from '@/lib/admin/types'
 import { supabase } from '@/lib/supabase'
 import { cn } from 'cn'
+import FilterCombobox from '@/components/FilterCombobox'
 
 type DirectoryStudent = {
   id: string
@@ -161,18 +161,12 @@ export default function LiveStudentsTab() {
               className="h-10 w-full rounded-lg border border-input bg-background pr-2.5 pl-8 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30" />
           </div>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            <NativeSelect className="h-10" value={risk} onChange={event => updateParam('risk', event.target.value)} aria-label="Filter by attendance risk">
-              <option value="all">All risk levels</option><option value="at_risk">At risk</option><option value="healthy">Healthy</option>
-              <option value="unassessed">Not assessed</option>
-            </NativeSelect>
-            <NativeSelect className="h-10" value={eligibility} onChange={event => updateParam('eligibility', event.target.value)} aria-label="Filter by grading eligibility">
-              <option value="all">All eligibility</option><option value="eligible">Eligible</option>
-              <option value="not_eligible">Not eligible</option><option value="no_open_gradings">No open gradings</option>
-            </NativeSelect>
-            <NativeSelect className="h-10" value={membership} onChange={event => updateParam('membership', event.target.value)} aria-label="Filter by membership">
-              <option value="all">All memberships</option><option value="active">Active</option>
-              <option value="expired">Expired</option><option value="pending">Pending</option>
-            </NativeSelect>
+            <FilterCombobox value={risk} onChange={value => updateParam('risk', value)} ariaLabel="Filter by attendance risk"
+              options={[{ value: 'all', label: 'All risk levels' }, { value: 'at_risk', label: 'At risk' }, { value: 'healthy', label: 'Healthy' }, { value: 'unassessed', label: 'Not assessed' }]} />
+            <FilterCombobox value={eligibility} onChange={value => updateParam('eligibility', value)} ariaLabel="Filter by grading eligibility"
+              options={[{ value: 'all', label: 'All eligibility' }, { value: 'eligible', label: 'Eligible' }, { value: 'not_eligible', label: 'Not eligible' }, { value: 'no_open_gradings', label: 'No open gradings' }]} />
+            <FilterCombobox value={membership} onChange={value => updateParam('membership', value)} ariaLabel="Filter by membership"
+              options={[{ value: 'all', label: 'All memberships' }, { value: 'active', label: 'Active' }, { value: 'expired', label: 'Expired' }, { value: 'pending', label: 'Pending' }]} />
           </div>
           <Button variant="outline" size="sm" onClick={exportStudents} disabled={filtered.length === 0} className="w-full shrink-0 lg:w-auto">
             <Download />Export CSV

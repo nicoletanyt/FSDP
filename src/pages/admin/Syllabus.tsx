@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { BookOpen } from 'lucide-react'
-import { NativeSelect } from '@/components/admin/form-controls'
+import FilterCombobox from '@/components/FilterCombobox'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Table,
@@ -117,17 +117,12 @@ export default function Syllabus() {
           Syllabus
         </label>
         <div className="w-full sm:w-80">
-          <NativeSelect
+          <FilterCombobox
             id="syllabus-part"
             value={part.id}
-            onChange={(event) => selectPart(event.target.value as SyllabusPartId)}
-          >
-            {syllabusParts.map((entry) => (
-              <option key={entry.id} value={entry.id}>
-                {entry.title} · {entry.subtitle}
-              </option>
-            ))}
-          </NativeSelect>
+            onChange={(value) => selectPart(value as SyllabusPartId)}
+            options={syllabusParts.map((entry) => ({ value: entry.id, label: `${entry.title} · ${entry.subtitle}` }))}
+          />
         </div>
       </div>
 
@@ -216,19 +211,12 @@ export default function Syllabus() {
               </CardDescription>
             </div>
             <div className="w-56">
-              <NativeSelect
+              <FilterCombobox
                 value={selectedRow.grade}
-                onChange={(event) =>
-                  setSelectedGrade(event.target.value as Grade)
-                }
-                aria-label="Choose a grade to inspect"
-              >
-                {part.rows.map((row) => (
-                  <option key={row.grade} value={row.grade}>
-                    {row.grade}
-                  </option>
-                ))}
-              </NativeSelect>
+                onChange={(value) => setSelectedGrade(value as Grade)}
+                ariaLabel="Choose a grade to inspect"
+                options={part.rows.map((row) => ({ value: row.grade, label: row.grade }))}
+              />
             </div>
           </div>
         </CardHeader>

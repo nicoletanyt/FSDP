@@ -5,7 +5,6 @@ import AttendanceNoticeDialog, { noticeResultMessage } from '@/components/admin/
 import CentreCombobox from '@/components/admin/CentreCombobox'
 import EmptyState from '@/components/admin/EmptyState'
 import { RiskBadge, StatusBadge } from '@/components/admin/StatusBadge'
-import { NativeSelect } from '@/components/admin/form-controls'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -18,6 +17,7 @@ import { loadCalendarCentres } from '@/lib/admin/live-class-calendar'
 import type { RiskLevel } from '@/lib/admin/types'
 import { supabase } from '@/lib/supabase'
 import { cn } from 'cn'
+import FilterCombobox from '@/components/FilterCombobox'
 
 type MonitoredStudent = {
   id: string
@@ -134,10 +134,8 @@ export default function AttendanceMonitoring() {
           <CentreCombobox centres={centresQuery.data ?? []} value={centreId} onChange={setCentreId}
             ariaLabel="Filter monitored students by centre" className="w-full sm:w-56" />
         </div>
-        <div className="w-40"><NativeSelect className="h-10" value={levelFilter} onChange={event => setLevelFilter(event.target.value)} aria-label="Filter by risk level">
-          <option value="at_risk">At risk</option><option value="all">All levels</option><option value="healthy">Healthy</option>
-          <option value="unassessed">Not assessed</option>
-        </NativeSelect></div>
+        <div className="w-40"><FilterCombobox value={levelFilter} onChange={setLevelFilter} ariaLabel="Filter by risk level"
+          options={[{ value: 'at_risk', label: 'At risk' }, { value: 'all', label: 'All levels' }, { value: 'healthy', label: 'Healthy' }, { value: 'unassessed', label: 'Not assessed' }]} /></div>
         <Button className="ml-auto" variant="outline" onClick={openNotice} disabled={!!error || loading}>
           <Bell aria-hidden="true" />Follow Up
         </Button>
