@@ -54,7 +54,7 @@ if (new URLSearchParams(location.search).get('fixtureChat') === 'true') {
     options.signal.addEventListener('abort', () => { state.aborted++ }, { once: true })
     if (state.mode === 'pending') await new Promise<void>(resolve => { state.release = resolve })
     return state.mode === 'error'
-      ? { data: null, error: { context: Response.json({ error: 'Ollama Cloud is unavailable. Please retry.' }, { status: 502 }) } }
+      ? { data: null, error: { context: Response.json({ error: 'The chat provider is unavailable. Please retry.' }, { status: 502 }) } }
       : { data: { reply: state.reply ?? 'Your next class is at 10:00 AM at Central.\nCheck the calendar for the full schedule.', sources: [{ label: 'Your calendar', href: '/instructor/calendar?date=2026-11-08' }] }, error: null }
   } } })
 }

@@ -44,7 +44,7 @@
 | Request keys / loading | `src/hooks/use-instructor-data.ts` and the calling page; `src/components/instructor/InstructorDataStatus.tsx`, `src/components/instructor/InstructorLoadingBoundary.tsx` |
 | Database shape and instructor contracts | [Database schema](database-schema.md); [instructor data contracts](instructor-data.md); `supabase/migrations/` for actual SQL |
 | Env, deploy, test setup | `.env.example`, `vite.config.ts`, `README.md`, `package.json`, `tests/mobile-responsive/README.md` |
-| Instructor chatbot | `src/components/FloatingChatbot.tsx`, `src/lib/instructor/chat.ts`, `supabase/functions/instructor-chat/` — caller-scoped read tools and Ollama Cloud; see README for secrets/deployment |
+| Instructor chatbot | `src/components/FloatingChatbot.tsx`, `src/lib/instructor/chat.ts`, `supabase/functions/instructor-chat/` — caller-scoped read tools and OpenRouter; see README for secrets/deployment |
 
 ## Key patterns
 

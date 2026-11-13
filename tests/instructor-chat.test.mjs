@@ -51,8 +51,38 @@ test('invalid replies fail and source links allow only known instructor routes',
   await assert.rejects(fixture({ data: { reply: '', sources: [] } }).reply(userId, turns, new AbortController().signal), /invalid reply/)
 })
 
+test('proposed actions are strictly validated and never invented by the client', async () => {
+  const student = '00000000-0000-4000-8000-000000000010'
+  const event = '00000000-0000-4000-8000-000000000030'
+  const { reply } = fixture({ data: { reply: 'Ready to confirm.', sources: [
+    { label: 'Grading day', href: `/instructor/gradings/${event}` },
+  ], actions: [
+    { kind: 'endorse_student', student_id: student, target_grade_id: '4th-kyu', label: 'Endorse Alex Tan for 4th Kyu' },
+    { kind: 'mark_attendance', event_id: event, student_id: student, status: 'present', label: 'Mark Alex Tan present' },
+    { kind: 'mark_attendance', event_id: event, student_id: student, status: 'late', label: 'Bad status' },
+  ] } })
+  const result = await reply(userId, turns, new AbortController().signal)
+  assert.equal(result.sources.length, 1)
+  assert.deepEqual(result.actions, [
+    { kind: 'endorse_student', studentId: student, targetGradeId: '4th-kyu', label: 'Endorse Alex Tan for 4th Kyu' },
+    { kind: 'mark_attendance', eventId: event, studentId: student, status: 'present', label: 'Mark Alex Tan present' },
+  ])
+  const bad = [
+    { kind: 'delete_student', student_id: student, label: 'Delete' },
+    { kind: 'endorse_student', student_id: 'not-a-uuid', target_grade_id: '4th-kyu', label: 'Bad id' },
+    { kind: 'endorse_student', student_id: student, target_grade_id: '4th kyu; drop', label: 'Bad grade' },
+    { kind: 'endorse_student', student_id: student, target_grade_id: '4th-kyu', label: 'x'.repeat(121) },
+    { kind: 'mark_attendance', event_id: 'bad', student_id: student, status: 'present', label: 'Bad event' },
+    null, 'string',
+  ]
+  const rejected = await fixture({ data: { reply: 'x', sources: [], actions: bad } }).reply(userId, turns, new AbortController().signal)
+  assert.deepEqual(rejected.actions, [])
+  const missing = await fixture({ data: { reply: 'x', sources: [] } }).reply(userId, turns, new AbortController().signal)
+  assert.deepEqual(missing.actions, [])
+})
+
 test('backend errors are recoverable and transport errors do not expose internals', async () => {
-  await assert.rejects(fixture({ error: { context: Response.json({ error: 'Ollama is not configured.' }, { status: 503 }) } }).reply(userId, turns, new AbortController().signal), /not configured/)
+  await assert.rejects(fixture({ error: { context: Response.json({ error: 'Instructor chat is not configured yet.' }, { status: 503 }) } }).reply(userId, turns, new AbortController().signal), /not configured/)
   await assert.rejects(fixture({ error: new Error('internal diagnostic') }).reply(userId, turns, new AbortController().signal), /Check your connection/)
 })
 
@@ -69,9 +99,9 @@ test('history is bounded by message count, content and UTF-8 request size', () =
 
 test('suggested topics have unique labels, valid prompts and relevant follow-ups', () => {
   assert.equal(new Set(starterChatTopics).size, 4)
-  assert.equal(new Set(Object.values(instructorChatTopics).map(topic => topic.label)).size, 4)
+  assert.equal(new Set(Object.values(instructorChatTopics).map(topic => topic.label)).size, Object.keys(instructorChatTopics).length)
   assert.ok(!('availability' in instructorChatTopics) && !('students' in instructorChatTopics))
-  for (const id of starterChatTopics) {
+  for (const id of Object.keys(instructorChatTopics)) {
     const topic = instructorChatTopics[id]
     assert.ok(topic.label.endsWith('?'), 'Suggestions should read as full questions')
     assert.ok(topic.prompt.trim().length > 0 && topic.prompt.length <= 4000)
@@ -81,5 +111,5 @@ test('suggested topics have unique labels, valid prompts and relevant follow-ups
     assert.ok(next.every(id => instructorChatTopics[id]))
   }
   assert.deepEqual(followUpChatTopics(), ['today', 'week', 'attendance'])
-  for (const id of ['attendance', 'history']) assert.match(instructorChatTopics[id].prompt, /ask me for a name or membership number first/i)
+  for (const id of ['attendance', 'history', 'readiness']) assert.match(instructorChatTopics[id].prompt, /ask me for a name or membership number first/i)
 })
