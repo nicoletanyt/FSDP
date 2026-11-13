@@ -1,37 +1,18 @@
-import { NavLink, Outlet } from 'react-router'
+import { Outlet } from 'react-router'
 import PageHeader from '@/components/admin/PageHeader'
-import { cn } from 'cn'
+import SectionTabs from '@/components/admin/SectionTabs'
 
 const tabs = [
-  { to: 'opportunities', label: 'Schedule' },
-  { to: 'eligibility', label: 'Eligibility' },
-  { to: 'applications', label: 'Applications' },
-  { to: 'syllabus', label: 'Syllabus' },
-  { to: 'rules', label: 'Scheduling rules' },
+  { to: '/admin/grading/opportunities', label: 'Schedule' },
+  { to: '/admin/grading/applications', label: 'Applications' },
+  { to: '/admin/grading/eligibility', label: 'Eligibility' },
 ]
 
 export default function Grading() {
   return (
     <div className="space-y-6">
       <PageHeader title="Grading" />
-      <nav aria-label="Grading sections" className="flex flex-wrap gap-1 border-b border-border">
-        {tabs.map((tab) => (
-          <NavLink
-            key={tab.to}
-            to={tab.to}
-            className={({ isActive }) =>
-              cn(
-                '-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors',
-                isActive
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-muted-foreground hover:text-foreground',
-              )
-            }
-          >
-            {tab.label}
-          </NavLink>
-        ))}
-      </nav>
+      <SectionTabs label="Grading sections" tabs={tabs} />
       <Outlet />
     </div>
   )

@@ -65,7 +65,6 @@ export default function LiveAttendanceRegister() {
   })
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
-      <h1 className="text-3xl font-semibold tracking-tight">Calendar</h1>
       {centresQuery.isPending && <p role="status" className="text-sm text-muted-foreground">Loading dojos…</p>}
       {centresQuery.isError && <div role="alert" className="flex flex-wrap items-center gap-3 text-sm text-destructive">Unable to load dojos. <Button variant="outline" size="sm" onClick={() => void centresQuery.refetch()}>Retry</Button></div>}
       {centresQuery.isSuccess && !centres.length && <p role="status" className="text-sm text-muted-foreground">No dojos are available.</p>}

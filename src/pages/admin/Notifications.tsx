@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react'
-import PageHeader from '@/components/admin/PageHeader'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow,
@@ -56,7 +55,7 @@ export default function Notifications() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Notifications" description="Review grading invitation requests sent through EmailJS." />
+      <p className="text-sm text-muted-foreground">Grading invitations and attendance notices sent by email.</p>
       <Card className="overflow-hidden py-0">
         <CardHeader className="border-b border-border py-4">
           <CardTitle>Grading invitations</CardTitle>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { LucideIcon } from "lucide-react";
-import { Check, Menu } from "lucide-react";
+import { Check, LogOut, Menu } from "lucide-react";
 import { Link, useLocation } from "react-router";
 import logo from "@/assets/logo.png";
 import ThemeToggle from "@/components/theme-toggle";
@@ -89,9 +89,9 @@ export default function MobileNavigation({
                                 Shinju-Kai
                             </span>
                         </span>
-                        {profile?.role === "instructor" && (
+                        {(profile?.role === "instructor" || profile?.role === "administrator") && (
                             <span className="mt-0.5 block text-3xs leading-none font-normal tracking-normal text-muted-foreground">
-                                Instructor
+                                {role}
                             </span>
                         )}
                     </span>
@@ -158,29 +158,33 @@ export default function MobileNavigation({
                                     ))}
                                 </nav>
                             )}
-                            {onSignOut && (
-                                <Button
-                                    variant="outline"
-                                    onClick={() => void onSignOut()}
-                                    disabled={signingOut}
-                                    className="h-11 w-full"
-                                >
-                                    {signingOut ? "Signing out…" : "Sign out"}
-                                </Button>
-                            )}
-                            {error && (
-                                <p
-                                    role="alert"
-                                    className="text-sm text-destructive [overflow-wrap:anywhere]"
-                                >
-                                    {error}
-                                </p>
-                            )}
                         </div>
                         <div className="flex shrink-0 items-center justify-between border-t pt-4">
                             <span className="text-[14px]">Appearance</span>
                             <ThemeToggle />
                         </div>
+                        {onSignOut && (
+                            <div className="shrink-0 space-y-2">
+                                <Button
+                                    variant="destructive"
+                                    onClick={() => void onSignOut()}
+                                    disabled={signingOut}
+                                    aria-busy={signingOut}
+                                    className="h-11 w-full"
+                                >
+                                    <LogOut aria-hidden="true" />
+                                    {signingOut ? "Signing out…" : "Sign out"}
+                                </Button>
+                                {error && (
+                                    <p
+                                        role="alert"
+                                        className="text-sm text-destructive [overflow-wrap:anywhere]"
+                                    >
+                                        {error}
+                                    </p>
+                                )}
+                            </div>
+                        )}
                     </SheetContent>
                 </Sheet>
             </div>

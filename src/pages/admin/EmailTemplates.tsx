@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronRight, Mail } from 'lucide-react'
-import PageHeader from '@/components/admin/PageHeader'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -93,7 +92,7 @@ export default function EmailTemplates() {
   }
 
   return <div className="space-y-6">
-    <PageHeader title="Email templates" description="Edit the saved wording for grading invitations, attendance notices, and instructor account emails. Saving a template does not send email." />
+    <p className="text-sm text-muted-foreground">Edit the wording for grading invitations, attendance notices and instructor account emails. Saving a template does not send email.</p>
     {directory.isPending && <p role="status" className="text-sm text-muted-foreground">Loading email templates…</p>}
     {directory.isError && <Alert variant="destructive" role="alert"><AlertDescription className="flex items-center gap-3">
       Unable to load email templates. <Button variant="outline" size="sm" onClick={() => void directory.refetch()}>Retry</Button>

@@ -1,5 +1,5 @@
 import { lazy } from 'react'
-import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router'
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from 'react-router'
 import { GuestRoute, InstructorIndexRedirect, ProtectedRoute } from '@/components/auth/AuthGate'
 import NfcTagCapture from '@/components/instructor/NfcTagCapture'
 import AuthLayout from './layouts/AuthLayout'
@@ -33,6 +33,9 @@ const AdminNotifications = lazy(() => import('./pages/admin/Notifications'))
 const AdminInstructors = lazy(() => import('./pages/admin/Instructors'))
 const AdminEmailTemplates = lazy(() => import('./pages/admin/EmailTemplates'))
 const AdminProfile = lazy(() => import('./pages/admin/Profile'))
+const AdminStudents = lazy(() => import('./pages/admin/Students'))
+const AdminStudentDirectory = lazy(() => import('./pages/admin/LiveStudentsTab'))
+const AdminSettings = lazy(() => import('./pages/admin/Settings'))
 
 const ForgetPassword = lazy(() => import('./pages/ForgetPassword')) 
 const ApplyMembership = lazy(() => import('./pages/Student/ApplyMembership'))
@@ -59,6 +62,12 @@ const InstructorGradings = lazy(() => import('./pages/Instructor/InstructorGradi
 const InstructorGradingDay = lazy(() => import('./pages/Instructor/InstructorGradingDay'))
 const InstructorGradingSessionPage = lazy(() => import('./pages/Instructor/InstructorGradingSession').then(module => ({ default: module.InstructorGradingSessionPage })))
 const LegacySessionChecklistsRedirect = lazy(() => import('./pages/Instructor/InstructorGradingSession').then(module => ({ default: module.LegacySessionChecklistsRedirect })))
+
+/** Redirect a moved route, keeping its query string. */
+function MovedRoute({ to }: { to: string }) {
+  const { search } = useLocation()
+  return <Navigate to={`${to}${search}`} replace />
+}
 
 function LegacyCoverInvitationRedirect() {
   const { invitationId } = useParams()
@@ -125,29 +134,38 @@ export default function App() {
           <Route element={<ProtectedRoute role="administrator" />}>
             <Route path="admin" element={<AdminLayout />}>
               <Route index element={<AdminOverview />} />
-              // is rerouting students to centres really needed?
-              <Route path="students" element={<Navigate to="/admin/centres" replace />} />
+              <Route path="students" element={<AdminStudents />}>
+                <Route index element={<AdminStudentDirectory />} />
+                <Route path="attendance" element={<AdminAttendanceMonitoring />} />
+              </Route>
               <Route path="students/:studentId" element={<AdminStudentDetail />} />
               <Route path="centres" element={<AdminCentres />} />
               <Route path="calendar" element={<AdminAttendance />}>
                 <Route index element={<AdminAttendanceRegister />} />
                 <Route path="records" element={<AdminAttendanceRecords />} />
-                <Route path="monitoring" element={<AdminAttendanceMonitoring />} />
               </Route>
+              <Route path="calendar/monitoring" element={<MovedRoute to="/admin/students/attendance" />} />
               <Route path="grading" element={<AdminGrading />}>
                 <Route index element={<Navigate to="opportunities" replace />} />
                 <Route path="eligibility" element={<AdminGradingEligibility />} />
                 <Route path="opportunities" element={<AdminGradingOpportunities />} />
                 <Route path="applications" element={<AdminGradingApplications />} />
-                <Route path="syllabus" element={<AdminGradingSyllabus />} />
-                <Route path="rules" element={<AdminGradingRules />} />
               </Route>
+              <Route path="grading/syllabus" element={<MovedRoute to="/admin/settings/syllabus" />} />
+              <Route path="grading/rules" element={<MovedRoute to="/admin/settings/grading-rules" />} />
               {/* A grading's own pages sit outside the section tabs. */}
               <Route path="grading/days/:eventId" element={<AdminGradingDay />} />
               <Route path="grading/days/:eventId/:sessionId" element={<AdminGradingResults />} />
-              <Route path="notifications" element={<AdminNotifications />} />
               <Route path="instructors" element={<AdminInstructors />} />
-              <Route path="email-templates" element={<AdminEmailTemplates />} />
+              <Route path="settings" element={<AdminSettings />}>
+                <Route index element={<Navigate to="email-templates" replace />} />
+                <Route path="email-templates" element={<AdminEmailTemplates />} />
+                <Route path="email-log" element={<AdminNotifications />} />
+                <Route path="syllabus" element={<AdminGradingSyllabus />} />
+                <Route path="grading-rules" element={<AdminGradingRules />} />
+              </Route>
+              <Route path="notifications" element={<MovedRoute to="/admin/settings/email-log" />} />
+              <Route path="email-templates" element={<MovedRoute to="/admin/settings/email-templates" />} />
               <Route path="profile" element={<AdminProfile />} />
             </Route>
           </Route>

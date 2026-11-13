@@ -80,7 +80,7 @@ export default function Overview() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Dojo operations"
+        title="Overview"
         actions={centresQuery.isSuccess
           ? <CentreCombobox centres={activeCentres} value={centreId} onChange={setCentreId} />
           : undefined}
@@ -103,14 +103,14 @@ export default function Overview() {
       <section aria-label="Key figures" className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
         <StatCard label="Active students" value={snapshot ? String(snapshot.active_students) : '—'}
           detail={snapshot ? `of ${snapshot.total_students} students` : undefined} icon={Users}
-          to={snapshot ? '/admin/centres?tab=students&membership=active' : undefined} />
+          to={snapshot ? '/admin/students?membership=active' : undefined} />
         <StatCard label="Needs attention" value={snapshot ? String(snapshot.attention_count) : '—'}
           icon={AlertTriangle}
           tone={snapshot?.attention_count ? 'danger' : 'default'}
-          to={snapshot ? '/admin/centres?tab=students&risk=at_risk' : undefined} />
+          to={snapshot ? '/admin/students?risk=at_risk' : undefined} />
         <StatCard label="Eligible to grade" value={snapshot ? String(snapshot.eligible_count) : '—'}
           detail={snapshot ? `${snapshot.application_count} applications received` : undefined} icon={GraduationCap}
-          to={snapshot ? '/admin/centres?tab=students&eligibility=eligible' : undefined} />
+          to={snapshot ? '/admin/students?eligibility=eligible' : undefined} />
       </section>
 
       <Card>
@@ -166,7 +166,7 @@ export default function Overview() {
             <PipelineRow label="Invitation recipients (all centres)" value={snapshot?.invitation_recipients} max={maxPipeline} tone="bg-warning" />
             <PipelineRow label="Applications" value={snapshot?.application_count} max={maxPipeline} tone="bg-success" />
             <div className="flex gap-2 pt-1">
-              <Button variant="outline" size="sm" render={<Link to="/admin/notifications" />}>Send history</Button>
+              <Button variant="outline" size="sm" render={<Link to="/admin/settings/email-log" />}>Send history</Button>
               <Button variant="outline" size="sm" render={<Link to="/admin/grading/applications" />}>Applications</Button>
             </div>
           </CardContent>

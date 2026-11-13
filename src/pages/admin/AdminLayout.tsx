@@ -9,15 +9,9 @@ import { cn } from 'cn'
 function AdminShell() {
   const { pathname } = useLocation()
   const isCalendar = pathname === '/admin/calendar'
-  // main's list already hides the filter bar on every grading page (a superset
-  // of the grading schedule pages this branch hid).
+  // The shared filter bar is only used on a student's detail page.
   const showFilters =
-    pathname !== '/admin' && pathname !== '/admin/profile' && pathname !== '/admin/instructors' &&
-    pathname !== '/admin/notifications' &&
-    pathname !== '/admin/email-templates' &&
-    pathname !== '/admin/grading' && !pathname.startsWith('/admin/grading/') &&
-    pathname !== '/admin/calendar/records' && pathname !== '/admin/calendar/monitoring' &&
-    !isCalendar && pathname !== '/admin/centres'
+    pathname.startsWith('/admin/students/') && pathname !== '/admin/students/attendance'
 
   return (
     <div

@@ -112,7 +112,7 @@ export default function StudentTable({
                     variant="ghost"
                     size="icon-xs"
                     aria-label={`Notify ${fullName(student)}`}
-                    render={<Link to={`/admin/notifications?audience=selected&student=${student.id}`} />}
+                    render={<Link to={`/admin/settings/email-log?audience=selected&student=${student.id}`} />}
                   >
                     <Bell />
                   </Button>

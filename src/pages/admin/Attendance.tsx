@@ -1,37 +1,17 @@
-import { NavLink, Outlet } from 'react-router'
-import { cn } from 'cn'
+import { Outlet } from 'react-router'
+import PageHeader from '@/components/admin/PageHeader'
+import SectionTabs from '@/components/admin/SectionTabs'
 
 const tabs = [
-  { to: '/admin/calendar', label: 'Calendar' },
-  { to: 'records', label: 'Records' },
-  { to: 'monitoring', label: 'Students' },
+  { to: '/admin/calendar', label: 'Schedule', end: true },
+  { to: '/admin/calendar/records', label: 'Records' },
 ]
 
 export default function Attendance() {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
-      <nav
-        aria-label="Calendar sections"
-        className="flex shrink-0 flex-wrap gap-1 border-b border-border"
-      >
-        {tabs.map((tab) => (
-          <NavLink
-            key={tab.to}
-            to={tab.to}
-            end={tab.to === '/admin/calendar'}
-            className={({ isActive }) =>
-              cn(
-                '-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors',
-                isActive
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-muted-foreground hover:text-foreground',
-              )
-            }
-          >
-            {tab.label}
-          </NavLink>
-        ))}
-      </nav>
+      <PageHeader title="Calendar" />
+      <SectionTabs label="Calendar sections" tabs={tabs} />
       <Outlet />
     </div>
   )

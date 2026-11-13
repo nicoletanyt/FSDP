@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { MapPin, Search, X } from 'lucide-react'
-import { Link, useSearchParams } from 'react-router'
+import { Link, Navigate, useSearchParams } from 'react-router'
 import EmptyState from '@/components/admin/EmptyState'
 import PageHeader from '@/components/admin/PageHeader'
 import { CentreStatusBadge } from '@/components/admin/StatusBadge'
@@ -9,10 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { useAdminData } from '@/lib/admin/admin-data-context'
 import type { Centre } from '@/lib/admin/types'
-import LiveStudentsTab from './LiveStudentsTab'
 import { cn } from 'cn'
-
-type Tab = 'dojos' | 'students'
 
 const dojoStatusOptions = [
   { value: 'all', label: 'All statuses' },
@@ -25,7 +22,7 @@ export default function Centres() {
   const { centres } = useAdminData()
   const [searchParams, setSearchParams] = useSearchParams()
 
-  const tab: Tab = searchParams.get('tab') === 'students' ? 'students' : 'dojos'
+  const legacyStudentsTab = searchParams.get('tab') === 'students'
   const dojoQuery = searchParams.get('dojoQ') ?? ''
   const dojoStatus = searchParams.get('dojoStatus') ?? 'all'
 
@@ -33,12 +30,6 @@ export default function Centres() {
     const next = new URLSearchParams(searchParams)
     if (!value || value === 'all') next.delete(key)
     else next.set(key, value)
-    setSearchParams(next, { replace: true })
-  }
-
-  function setTab(nextTab: Tab) {
-    const next = new URLSearchParams(searchParams)
-    next.set('tab', nextTab)
     setSearchParams(next, { replace: true })
   }
 
@@ -70,35 +61,17 @@ export default function Centres() {
     (centre) => centre.status === 'under_renovation',
   ).length
 
+  // The student directory moved to its own section.
+  if (legacyStudentsTab) {
+    const next = new URLSearchParams(searchParams)
+    next.delete('tab')
+    const query = next.toString()
+    return <Navigate to={`/admin/students${query ? `?${query}` : ''}`} replace />
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader title="Centres" />
-      <nav
-        aria-label="Centre sections"
-        className="flex flex-wrap gap-1 border-b border-border"
-      >
-        {[
-          { value: 'dojos', label: 'Dojos' },
-          { value: 'students', label: 'Students' },
-        ].map((item) => (
-          <button
-            key={item.value}
-            type="button"
-            onClick={() => setTab(item.value as Tab)}
-            aria-current={tab === item.value ? 'page' : undefined}
-            className={cn(
-              '-mb-px cursor-pointer border-b-2 px-3 py-2 text-sm font-medium transition-colors',
-              tab === item.value
-                ? 'border-primary text-primary'
-                : 'border-transparent text-muted-foreground hover:text-foreground',
-            )}
-          >
-            {item.label}
-          </button>
-        ))}
-      </nav>
-
-      {tab === 'dojos' ? (
         <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <SummaryTile label="Dojos" value={`${centres.length}`} />
@@ -174,9 +147,6 @@ export default function Centres() {
             </div>
           )}
         </div>
-      ) : (
-        <LiveStudentsTab />
-      )}
     </div>
   )
 }

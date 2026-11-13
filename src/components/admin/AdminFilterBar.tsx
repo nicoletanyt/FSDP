@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { CalendarDays, MapPin, Search } from 'lucide-react'
-import { useLocation, useNavigate, useSearchParams } from 'react-router'
+import { useLocation, useNavigate } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { useAdminData } from '@/lib/admin/admin-data-context'
 import { useAdminFilters } from '@/lib/admin/admin-filters'
@@ -14,9 +14,8 @@ import { NativeSelect } from './form-controls'
 export default function AdminFilterBar() {
   const { centres } = useAdminData()
   const { pathname } = useLocation()
-  const [searchParams] = useSearchParams()
   const { session } = useAuth()
-  const isLiveStudents = pathname === '/admin/centres' && searchParams.get('tab') === 'students'
+  const isLiveStudents = pathname === '/admin/students'
   const isLive = pathname === '/admin' || isLiveStudents
   const liveCentres = useQuery({
     queryKey: ['admin', 'overview', 'centres', session?.user.id],
@@ -42,8 +41,8 @@ export default function AdminFilterBar() {
     const trimmed = query.trim()
     navigate(
       trimmed
-        ? `/admin/centres?tab=students&q=${encodeURIComponent(trimmed)}`
-        : '/admin/centres?tab=students',
+        ? `/admin/students?q=${encodeURIComponent(trimmed)}`
+        : '/admin/students',
     )
   }
 

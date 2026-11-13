@@ -72,8 +72,8 @@ export default function StudentDetail() {
                 title="Student not found"
                 description="This profile may have been removed or the link may be incorrect."
                 action={
-                    <Button render={<Link to="/admin/centres" />}>
-                        Back to centres
+                    <Button render={<Link to="/admin/students" />}>
+                        Back to students
                     </Button>
                 }
             />
@@ -133,10 +133,10 @@ export default function StudentDetail() {
             <Button
                 variant="ghost"
                 size="sm"
-                render={<Link to="/admin/centres" />}
+                render={<Link to="/admin/students" />}
             >
                 <ArrowLeft />
-                All centres
+                All students
             </Button>
 
             <PageHeader
@@ -158,7 +158,7 @@ export default function StudentDetail() {
                         <Button
                             render={
                                 <Link
-                                    to={`/admin/notifications?audience=selected&student=${student.id}`}
+                                    to={`/admin/settings/email-log?audience=selected&student=${student.id}`}
                                 />
                             }
                         >

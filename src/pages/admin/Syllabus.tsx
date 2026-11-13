@@ -112,29 +112,24 @@ export default function Syllabus() {
 
   return (
     <div className="space-y-6">
-      <nav
-        aria-label="Syllabus parts"
-        className="flex flex-wrap gap-1 border-b border-border"
-      >
-        {syllabusParts.map((entry) => (
-          <button
-            key={entry.id}
-            type="button"
-            onClick={() => selectPart(entry.id)}
-            className={cn(
-              '-mb-px border-b-2 px-3 py-2 text-left text-sm font-medium transition-colors',
-              entry.id === part.id
-                ? 'border-primary text-primary'
-                : 'border-transparent text-muted-foreground hover:text-foreground',
-            )}
+      <div className="flex flex-wrap items-center gap-3">
+        <label htmlFor="syllabus-part" className="text-sm font-medium">
+          Syllabus
+        </label>
+        <div className="w-full sm:w-80">
+          <NativeSelect
+            id="syllabus-part"
+            value={part.id}
+            onChange={(event) => selectPart(event.target.value as SyllabusPartId)}
           >
-            {entry.title}
-            <span className="block text-xs font-normal text-muted-foreground">
-              {entry.subtitle} · {countItems(entry)} items
-            </span>
-          </button>
-        ))}
-      </nav>
+            {syllabusParts.map((entry) => (
+              <option key={entry.id} value={entry.id}>
+                {entry.title} · {entry.subtitle}
+              </option>
+            ))}
+          </NativeSelect>
+        </div>
+      </div>
 
       <Card>
         <CardHeader>
