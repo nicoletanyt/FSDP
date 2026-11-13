@@ -417,7 +417,7 @@ function StudentDetailPage() {
                     <ChevronLeft aria-hidden="true" />
                     Back to students
                 </Button>
-                <h1 className="text-2xl font-semibold">Student not found</h1>
+                <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Student not found</h1>
                 <p className="text-sm text-muted-foreground">
                     This student record is unavailable.
                 </p>

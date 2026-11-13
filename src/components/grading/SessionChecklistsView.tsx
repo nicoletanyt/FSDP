@@ -88,7 +88,7 @@ export function ExaminerChecklist({ examiner, session, scope }: { examiner: Exam
       {groups.map(group => (
         <div key={group.grade.id} className="space-y-3">
           {mixed && (
-            <h3 className="flex flex-wrap items-center gap-2 text-lg font-semibold">
+            <h3 className="flex flex-wrap items-center gap-2 text-base font-medium">
               <DatabaseGradeBadge grade={group.grade} showBeltLabel className="text-sm" />
               <span className="text-sm font-normal text-muted-foreground">{candidateCount(group.students.length)}</span>
             </h3>
@@ -145,7 +145,7 @@ export default function SessionChecklistsView({ day, session, results, scope }: 
           { key: 'candidates', icon: Users, label: candidateCount(sessionCandidates(session)) },
         ]} />
       <section className="space-y-4" aria-labelledby="examiner-results">
-        <h2 id="examiner-results" className="text-xl font-semibold">Examiner results</h2>
+        <h2 id="examiner-results" className="text-base font-medium">Examiner results</h2>
         {results.isPending ? (
           <p className="text-sm text-muted-foreground">Loading results…</p>
         ) : results.isError ? (

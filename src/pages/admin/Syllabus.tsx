@@ -206,7 +206,7 @@ export default function Syllabus() {
                   className="rounded-lg border border-border/70 bg-background/60 p-3"
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    <p className="text-sm font-medium">
                       {columnLabel(cell.column)}
                     </p>
                     <span className="text-xs tabular-nums text-muted-foreground">

@@ -75,7 +75,7 @@ export function GradingPageHeader({ title, badges, facts, actions, children }: {
     <header className="flex flex-wrap items-start justify-between gap-4">
       <div className="min-w-0 space-y-3">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <h1 className="min-w-0 text-3xl font-semibold tracking-tight [overflow-wrap:anywhere]">{title}</h1>
+          <h1 className="min-w-0 text-2xl font-semibold tracking-tight md:text-3xl [overflow-wrap:anywhere]">{title}</h1>
           {badges}
         </div>
         {facts && <GradingFacts items={facts} />}
@@ -113,7 +113,7 @@ export function ExaminerPanel({ panel, viewerIsChief = false, label, photos = {}
           {panel.map(member => (
             <li key={member.instructorId} data-examiner
               className="inline-flex max-w-full items-center gap-2 rounded-full border bg-background py-1 pr-3 pl-1">
-              <InstructorAvatar interactive={false} avatarClassName="size-7" fallbackClassName="text-[11px]"
+              <InstructorAvatar interactive={false} avatarClassName="size-7" fallbackClassName="text-3xs"
                 profile={{ id: member.instructorId, name: member.name, role: 'Examiner', avatarUrl: photos[member.instructorId] }} />
               {member.isChief && (
                 <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">

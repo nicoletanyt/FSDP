@@ -99,7 +99,7 @@ export default function NfcCheckIn() {
             aria-label="NFC attendance"
         >
             <header className="space-y-2">
-                <h1 className="text-2xl font-semibold tracking-tight">
+                <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
                     NFC attendance
                 </h1>
                 <p className="max-w-prose text-sm text-muted-foreground">

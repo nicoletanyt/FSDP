@@ -20,7 +20,7 @@ function AdminShell() {
       <AdminNavbar />
       <main
         className={cn(
-          'flex-1 px-4 sm:px-6',
+          'flex-1 px-4 text-sm sm:px-6',
           pageWidth,
           isCalendar
             ? 'flex min-h-0 flex-col overflow-hidden py-4 sm:py-6'

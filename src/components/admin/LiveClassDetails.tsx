@@ -12,7 +12,7 @@ import { cn } from 'cn'
 import CoverCandidatePreview from './CoverCandidatePreview'
 
 // Same compact grade line the instructor roster uses under each name.
-const rosterGradeClass = 'h-auto max-w-16 flex-nowrap rounded-none border-0 bg-transparent p-0 text-[11px] text-muted-foreground lg:h-4 lg:max-w-full lg:leading-4 [&>span:first-child]:min-w-0 [&>span:first-child]:truncate [&>span:first-child]:font-normal [&>[aria-hidden]]:h-1.5 [&>[aria-hidden]]:w-2 lg:[&>[aria-hidden]]:w-3'
+const rosterGradeClass = 'h-auto max-w-16 flex-nowrap rounded-none border-0 bg-transparent p-0 text-3xs text-muted-foreground lg:h-4 lg:max-w-full lg:leading-4 [&>span:first-child]:min-w-0 [&>span:first-child]:truncate [&>span:first-child]:font-normal [&>[aria-hidden]]:h-1.5 [&>[aria-hidden]]:w-2 lg:[&>[aria-hidden]]:w-3'
 
 /**
  * A class's details in the admin calendar, laid out like the instructor's
@@ -42,7 +42,7 @@ export default function LiveClassDetails({ event, fillHeight = false }: {
     >
       <div className="shrink-0 space-y-2 px-3 py-2.5">
         <div className="flex items-center justify-between gap-2 text-xs">
-          <h4 className="font-semibold">Attendance</h4>
+          <h4 className="text-sm font-medium">Attendance</h4>
           <span aria-live="polite" className="text-muted-foreground">
             {roster.isSuccess ? `${marked}/${students.length} marked` : '…'}
           </span>

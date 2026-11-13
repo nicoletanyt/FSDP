@@ -185,7 +185,7 @@ export default function AttendanceMonitoring() {
                 </Button></TableCell>
               </TableRow>
               {isExpanded && <TableRow id={`monitoring-details-${student.id}`}><TableCell colSpan={6} className="bg-muted/30">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Attendance assessment</p>
+                <p className="text-sm font-medium">Attendance assessment</p>
                 <p className="mt-2 text-sm md:hidden">Last attended {relativeDay(student.last_attended ?? '')}{student.rate === null ? '' : ` · ${formatPercent(student.rate)} of the last 5`}</p>
                 <p className="mt-2 text-sm">{student.enrolments} completed enrolments considered · {marked} marked · {student.attended} attended · {student.missed} missed.</p>
                 <p className="mt-1 text-sm text-muted-foreground">{marked === 0

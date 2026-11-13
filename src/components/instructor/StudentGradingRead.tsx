@@ -396,7 +396,7 @@ function AssessmentHistory({
                             >
                                 <div className="flex flex-wrap items-start justify-between gap-3">
                                     <div className="min-w-0 space-y-2">
-                                        <h3 className="text-base font-semibold">
+                                        <h3 className="text-base font-medium">
                                             {assessment.event.name}
                                         </h3>
                                         {assessment.targetGrade ? (

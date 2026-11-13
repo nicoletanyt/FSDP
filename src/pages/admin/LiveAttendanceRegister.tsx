@@ -162,7 +162,7 @@ export default function LiveAttendanceRegister() {
             <ul className="space-y-3 text-xs">
               {Object.entries(sessionTypeStyles).map(([type, style]) => (
                 <li key={type} className="grid gap-1 sm:grid-cols-[9.5rem_minmax(0,1fr)] sm:items-center sm:gap-3">
-                  <span className={cn('w-fit rounded-full border px-2 py-1 text-[10px] uppercase', style.badge)}>{style.label}</span>
+                  <span className={cn('w-fit rounded-full border px-2 py-1 text-2xs font-medium', style.badge)}>{style.label}</span>
                   <span className="text-muted-foreground">{style.description}</span>
                 </li>
               ))}
@@ -193,12 +193,12 @@ export default function LiveAttendanceRegister() {
         <DrawerContent>
           <DrawerHeader>
             <div className="min-w-0">
-              <DrawerTitle className="text-[18px] font-semibold">Class details</DrawerTitle>
-              <DrawerDescription className="text-[13px] text-muted-foreground">
+              <DrawerTitle className="text-base font-medium">Class details</DrawerTitle>
+              <DrawerDescription className="text-xs text-muted-foreground">
                 {lastSelected.current?.date.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}
               </DrawerDescription>
             </div>
-            <DrawerClose render={<Button variant="ghost" className="h-11 rounded-full px-3 text-[15px] text-primary" />}>Done</DrawerClose>
+            <DrawerClose render={<Button variant="ghost" className="h-11 rounded-full px-3 text-sm text-primary" />}>Done</DrawerClose>
           </DrawerHeader>
           <DrawerBody className="pb-[max(1rem,env(safe-area-inset-bottom))]">
             {lastSelected.current && <EventCard key={lastSelected.current.id} event={lastSelected.current} layout="panel" expanded onToggle={closeDetails} />}

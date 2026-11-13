@@ -52,7 +52,7 @@ function StudentTrainingContent({ student }: { student: StudentEntry }) {
         <>
             <DialogHeader className="shrink-0 gap-2 border-b p-4 sm:p-6">
                 <div className="flex items-start justify-between gap-4">
-                    <DialogTitle className="min-w-0 break-words text-xl font-semibold">
+                    <DialogTitle className="min-w-0 break-words">
                         {profile.name}
                     </DialogTitle>
                     <DialogClose

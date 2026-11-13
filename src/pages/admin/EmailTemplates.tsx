@@ -175,7 +175,7 @@ export default function EmailTemplates() {
           <button type="button" disabled={!template} onClick={() => template && open(template)}
             className="flex w-full cursor-pointer items-center gap-4 rounded-xl p-5 text-left transition-colors hover:bg-accent/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed">
             <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><Mail className="size-5" aria-hidden="true" /></span>
-            <span className="min-w-0 flex-1"><span className="block font-semibold">{item.title}</span>
+            <span className="min-w-0 flex-1"><span className="block font-medium">{item.title}</span>
               <span className="mt-1 block text-sm text-muted-foreground">{template ? item.description : 'Not set up yet'}</span></span>
             <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           </button>
@@ -194,7 +194,7 @@ export default function EmailTemplates() {
           {error && <Alert variant="destructive" role="alert"><AlertDescription>{error}</AlertDescription></Alert>}
           {previewing && selected ? (
             <div className="space-y-3 rounded-lg border bg-muted/30 p-4 text-sm">
-              <p className="font-semibold">{preview(selected.details, subject)}</p>
+              <p className="font-medium">{preview(selected.details, subject)}</p>
               <p className="whitespace-pre-wrap">{preview(selected.details, body)}</p>
             </div>
           ) : (

@@ -88,7 +88,7 @@ function ScheduleCard({ item, next, now, photos, onPanelSaved }: {
   return (
     <Card className="gap-3 px-5 py-4">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <h3 className="text-lg font-semibold">
+        <h3 className="text-base font-medium">
           <Link to={dayHref} className="hover:underline focus-visible:outline-2 focus-visible:outline-ring">{title}</Link>
         </h3>
         <GradingStatusPill opensOn={item.application_opens_on} closesOn={item.application_deadline} gradingDate={item.grading_date} today={now} />

@@ -233,7 +233,7 @@ export default function InstructorCheckIn() {
                     className={cn("min-h-0 min-w-0 gap-0 py-0", isKiosk && "hidden")}
                 >
                     <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b px-4 py-3">
-                        <h2 className="text-sm font-semibold">Recent check-ins</h2>
+                        <h2 className="text-sm font-medium">Recent check-ins</h2>
                         <p
                             aria-live="polite"
                             aria-atomic="true"

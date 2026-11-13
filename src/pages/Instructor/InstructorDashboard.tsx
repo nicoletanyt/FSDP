@@ -462,7 +462,7 @@ function CalendarMonth({
                                         }
                                         onClick={() => onToggleClass(event)}
                                         className={cn(
-                                            "h-auto min-h-11 w-full min-w-0 flex-col items-start gap-0 rounded border-0 px-1 py-0.5 text-left text-xs leading-tight whitespace-normal lg:min-h-5 lg:text-[11px] xl:flex-row xl:items-center xl:gap-1",
+                                            "h-auto min-h-11 w-full min-w-0 flex-col items-start gap-0 rounded border-0 px-1 py-0.5 text-left text-xs leading-tight whitespace-normal lg:min-h-5 lg:text-3xs xl:flex-row xl:items-center xl:gap-1",
                                             getEventStyle(event).card,
                                             expandedClassId === event.id &&
                                             "relative z-[1] pr-5 ring-2 ring-primary ring-offset-1 ring-offset-background",
@@ -748,7 +748,7 @@ export default function InstructorDashboard() {
                 onChangeView={(mode: MobileCalendarView) => { setMobileList(mode === "list"); if (mode !== "list") changeView(mode === "multi-day" ? "week" : mode); }}
             /> : <>
             <header className="shrink-0">
-                <h1 className="text-2xl font-semibold tracking-tight lg:text-3xl">
+                <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
                     Your calendar
                 </h1>
             </header>
@@ -777,7 +777,7 @@ export default function InstructorDashboard() {
                         <ul className="space-y-3 text-xs">
                             {(calendar.data?.classTypes ?? []).map(type => (
                                 <li key={type.id} className="grid gap-1 sm:grid-cols-[9.5rem_minmax(0,1fr)] sm:items-center sm:gap-3">
-                                    <span className={cn("w-fit rounded-full border px-2 py-1 text-[10px] uppercase", calendarClassStyle(type.id).badge)}>{type.label}</span>
+                                    <span className={cn("w-fit rounded-full border px-2 py-1 text-2xs font-medium", calendarClassStyle(type.id).badge)}>{type.label}</span>
                                     <span className="text-muted-foreground">{type.description}</span>
                                 </li>
                             ))}
@@ -847,8 +847,8 @@ export default function InstructorDashboard() {
             {!isDesktop && <Drawer open={Boolean(expandedClassId)} onOpenChange={(open) => { if (!open) updateSelection(selectedDate); }}>
                 <DrawerContent finalFocus={() => classTriggerRef.current?.isConnected ? classTriggerRef.current : document.querySelector<HTMLElement>('[data-mobile-calendar] button')}>
                     <DrawerHeader>
-                        <div className="min-w-0"><DrawerTitle className="text-[18px] font-semibold">{lastSelectedSession.current?.type === "grading" ? "Grading session details" : "Class details"}</DrawerTitle><DrawerDescription className="text-[13px] text-muted-foreground">{lastSelectedSession.current?.date.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</DrawerDescription></div>
-                        <DrawerClose render={<Button variant="ghost" className="h-11 rounded-full px-3 text-[15px] text-primary" />}>Done</DrawerClose>
+                        <div className="min-w-0"><DrawerTitle className="text-base font-medium">{lastSelectedSession.current?.type === "grading" ? "Grading session details" : "Class details"}</DrawerTitle><DrawerDescription className="text-xs text-muted-foreground">{lastSelectedSession.current?.date.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</DrawerDescription></div>
+                        <DrawerClose render={<Button variant="ghost" className="h-11 rounded-full px-3 text-sm text-primary" />}>Done</DrawerClose>
                     </DrawerHeader>
                     <DrawerBody className="pb-[max(1rem,env(safe-area-inset-bottom))]">
                         {lastSelectedSession.current && <EventCard key={lastSelectedSession.current.id} event={lastSelectedSession.current} layout="panel" expanded onToggle={() => updateSelection(selectedDate)} />}

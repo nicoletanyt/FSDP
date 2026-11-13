@@ -402,7 +402,7 @@ function GradingTable({
                                 groups.map((group) => (
                                     <div key={group.grade.id} className="space-y-3">
                                         {mixed && (
-                                            <h2 className="flex flex-wrap items-center gap-2 text-lg font-semibold">
+                                            <h2 className="flex flex-wrap items-center gap-2 text-base font-medium">
                                                 <DatabaseGradeBadge grade={group.grade} showBeltLabel className="text-sm" />
                                                 <span className="text-sm font-normal text-muted-foreground">
                                                     {candidateCount(group.students.length)}
@@ -685,7 +685,7 @@ function GradingSessionBody({
         !query.data.day ||
         !query.data.reference ||
         !query.data.identity ? (
-        <h1 className="text-2xl font-semibold">Grading session not found</h1>
+        <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Grading session not found</h1>
     ) : (
         <GradingTable
             key={`${eventId}:${sessionId}`}

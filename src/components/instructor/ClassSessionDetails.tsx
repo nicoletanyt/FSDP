@@ -323,7 +323,7 @@ export default function ClassSessionDetails({
                 {!summary && (
                     <div className="shrink-0 space-y-2 px-3 py-2.5">
                         <div className="flex items-center justify-between gap-2 text-xs">
-                            <h4 className="font-semibold">Attendance</h4>
+                            <h4 className="text-sm font-medium">Attendance</h4>
                             <span aria-live="polite" className="text-muted-foreground">
                                 {query.status === "success" && attendance.data
                                     ? `${marked}/${roster.length} marked`
@@ -502,7 +502,7 @@ export default function ClassSessionDetails({
                                             <div className="col-start-2 row-start-1 flex min-w-0 items-center gap-1 lg:col-start-1 lg:row-start-2">
                                                 <GradeBadge
                                                     grade={student.grade}
-                                                    className="h-auto max-w-16 flex-nowrap rounded-none border-0 bg-transparent p-0 text-[11px] text-muted-foreground lg:h-4 lg:max-w-full lg:leading-4 [&>span:first-child]:min-w-0 [&>span:first-child]:truncate [&>span:first-child]:font-normal [&>[aria-hidden]]:h-1.5 [&>[aria-hidden]]:w-2 lg:[&>[aria-hidden]]:w-3"
+                                                    className="h-auto max-w-16 flex-nowrap rounded-none border-0 bg-transparent p-0 text-3xs text-muted-foreground lg:h-4 lg:max-w-full lg:leading-4 [&>span:first-child]:min-w-0 [&>span:first-child]:truncate [&>span:first-child]:font-normal [&>[aria-hidden]]:h-1.5 [&>[aria-hidden]]:w-2 lg:[&>[aria-hidden]]:w-3"
                                                 />
                                                 {student.targetGrade && (
                                                     <>
@@ -513,7 +513,7 @@ export default function ClassSessionDetails({
                                                         <span className="sr-only">grading for</span>
                                                         <GradeBadge
                                                             grade={student.targetGrade}
-                                                            className="h-auto max-w-16 flex-nowrap rounded-none border-0 bg-transparent p-0 text-[11px] text-muted-foreground lg:h-4 lg:max-w-full lg:leading-4 [&>span:first-child]:min-w-0 [&>span:first-child]:truncate [&>span:first-child]:font-normal [&>[aria-hidden]]:h-1.5 [&>[aria-hidden]]:w-2 lg:[&>[aria-hidden]]:w-3"
+                                                            className="h-auto max-w-16 flex-nowrap rounded-none border-0 bg-transparent p-0 text-3xs text-muted-foreground lg:h-4 lg:max-w-full lg:leading-4 [&>span:first-child]:min-w-0 [&>span:first-child]:truncate [&>span:first-child]:font-normal [&>[aria-hidden]]:h-1.5 [&>[aria-hidden]]:w-2 lg:[&>[aria-hidden]]:w-3"
                                                         />
                                                     </>
                                                 )}

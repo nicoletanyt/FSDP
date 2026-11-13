@@ -109,7 +109,7 @@ function SessionCard({ session, action, studentHref, renderMove, renderSessionAc
       <CardHeader className="border-b">
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-            <CardTitle className="text-lg font-semibold">{label}</CardTitle>
+            <CardTitle>{label}</CardTitle>
             <ul className="flex flex-wrap gap-1.5" aria-label={`Grades in ${label}`}>
               {session.grades.map(group => <li key={group.grade.id}><GradeBadge grade={group.grade} /></li>)}
             </ul>

@@ -288,7 +288,7 @@ export default function GradingEligibility() {
               <Button type="button" variant="outline" disabled={!wording || wordingChanged || pendingAction !== null || savingWording}
                 onClick={() => void notifyEligible(false)}>{pendingAction === 'preview' ? 'Preparing preview…' : 'Preview students'}</Button>
             </> : <section aria-label="Email preview" className="space-y-3">
-              <h3 className="font-semibold">Email preview</h3>
+              <h3 className="text-sm font-medium">Email preview</h3>
               <p className="font-medium">Send to {preview.eligible} {preview.eligible === 1 ? 'student' : 'students'}</p>
               <div className="rounded-md border border-border bg-background p-4">
                 <p className="font-medium">{preview.email_subject}</p>
@@ -317,7 +317,7 @@ export default function GradingEligibility() {
           {selectedStudent && (
             <>
               <DialogHeader>
-                <DialogTitle className="text-xl">{studentName(selectedStudent)}</DialogTitle>
+                <DialogTitle>{studentName(selectedStudent)}</DialogTitle>
                 <DialogDescription>
                   {selectedStudent.age_years} years old · {selectedStudent.centre_name}
                 </DialogDescription>
@@ -335,7 +335,7 @@ export default function GradingEligibility() {
                   {selectedStudent.last_graded_at ? formatDate(selectedStudent.last_graded_at) : 'never'}
                 </p>
                 <section className="flex flex-col gap-3">
-                  <h3 className="text-sm font-semibold">Requirements</h3>
+                  <h3 className="text-sm font-medium">Requirements</h3>
                   <EligibilityChecklist key={selectedStudent.id} requirements={selectedRequirements} compact
                     techniqueDetails={selectedStudent.techniques.length ? <ul className="space-y-2">
                       {selectedStudent.techniques.map(item => <li key={item.id} className="flex items-start gap-2 text-sm">
@@ -506,7 +506,7 @@ function requirementText(grade: Grade, track: GradeTrack): string {
 function RuleList({ title, track }: { title: string; track: GradeTrack }) {
   return (
     <div>
-      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <p className="text-sm font-medium">
         {title}
       </p>
       <dl className="mt-2 space-y-1 text-sm">

@@ -16,7 +16,7 @@ export const availabilityStyle = "border-emerald-300 bg-emerald-50 text-emerald-
 
 export function AvailabilityCard({ slot, selected, compact = false, onSelect }: { slot: AvailabilitySlot; selected: boolean; compact?: boolean; onSelect: () => void }) {
     return (
-        <Button variant="outline" onClick={onSelect} aria-pressed={selected} aria-label={`Available, ${fullDate(slot.date)}, ${formatTime(slot.startTime)} to ${formatTime(slot.endTime)}. View availability details`} className={cn("h-auto w-full min-w-0 flex-col items-start gap-2 border-dashed p-4 text-left whitespace-normal hover:bg-emerald-100 dark:hover:bg-emerald-900", availabilityStyle, selected && "ring-2 ring-emerald-500", compact && "gap-0 px-1.5 py-1 text-[11px]")}>
+        <Button variant="outline" onClick={onSelect} aria-pressed={selected} aria-label={`Available, ${fullDate(slot.date)}, ${formatTime(slot.startTime)} to ${formatTime(slot.endTime)}. View availability details`} className={cn("h-auto w-full min-w-0 flex-col items-start gap-2 border-dashed p-4 text-left whitespace-normal hover:bg-emerald-100 dark:hover:bg-emerald-900", availabilityStyle, selected && "ring-2 ring-emerald-500", compact && "gap-0 px-1.5 py-1 text-3xs")}>
             <span className="flex max-w-full items-center gap-1.5 truncate font-medium"><CalendarCheck aria-hidden="true" className="size-3 shrink-0" />Available</span>
             <span className={cn("font-normal", !compact && "text-xs")}>
                 {formatTime(slot.startTime)}{!compact && ` – ${formatTime(slot.endTime)}`}

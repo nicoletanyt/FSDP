@@ -92,7 +92,7 @@ function TrackForm({ rules, durations, grades }: { rules: ScheduleRules; duratio
       <Card>
         <CardContent className="space-y-6">
           <section aria-labelledby={id('day')} className="space-y-3">
-            <h2 id={id('day')} className="font-semibold">Day</h2>
+            <h2 id={id('day')} className="text-base font-medium">Day</h2>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
               {dayFields.map(field => (
                 <Field key={field.key} label={field.label} htmlFor={id(field.key)}>
@@ -104,7 +104,7 @@ function TrackForm({ rules, durations, grades }: { rules: ScheduleRules; duratio
           </section>
 
           <section aria-labelledby={id('sessions')} className="space-y-3 border-t pt-6">
-            <h2 id={id('sessions')} className="font-semibold">Sessions</h2>
+            <h2 id={id('sessions')} className="text-base font-medium">Sessions</h2>
             <div className="grid gap-4 sm:grid-cols-2">
               {sessionFields.map(field => (
                 <Field key={field.key} label={field.label} htmlFor={id(field.key)} hint={field.hint}>
@@ -119,7 +119,7 @@ function TrackForm({ rules, durations, grades }: { rules: ScheduleRules; duratio
           <section className="border-t pt-4">
             <button type="button" aria-expanded={showLengths} aria-controls={id('lengths')}
               onClick={() => setShowLengths(value => !value)}
-              className="flex w-full cursor-pointer items-center justify-between gap-3 rounded-md py-2 text-left font-semibold focus-visible:outline-2 focus-visible:outline-ring">
+              className="flex w-full cursor-pointer items-center justify-between gap-3 rounded-md py-2 text-left text-base font-medium focus-visible:outline-2 focus-visible:outline-ring">
               <span>Different lengths for specific grades
                 {rows.length + added.length > 0 && <span className="ml-2 text-sm font-normal text-muted-foreground">{rows.length + added.length} set</span>}
               </span>

@@ -63,7 +63,7 @@ function SessionHistoryCard({
         >
             <CardHeader className="gap-3">
                 <div className="flex items-start justify-between gap-4">
-                    <CardTitle className="min-w-0 text-base font-semibold">
+                    <CardTitle className="min-w-0">
                         <h3>{session.event.name}</h3>
                     </CardTitle>
                     <span
@@ -190,7 +190,7 @@ export default function StudentSessionHistory({
         <section aria-label="Session history" aria-busy={history.isPlaceholderData} className="detail-section">
             {history.isPlaceholderData && <p role="status" className="sr-only">Loading requested page. Showing page {displayedPage + 1}.</p>}
             <div className="detail-section-header">
-                <h2 className="font-semibold">Session history</h2>
+                <h2 className="text-base font-medium">Session history</h2>
                 <FilterPopover title="Filter sessions" activeCount={activeCount} onReset={filters.onReset}>
                     <FilterField
                         label="Attendance"

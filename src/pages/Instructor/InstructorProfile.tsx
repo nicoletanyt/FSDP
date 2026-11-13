@@ -240,7 +240,7 @@ export default function InstructorProfile() {
     return (
         <section className="w-full space-y-6">
             <header>
-                <h1 className="text-3xl font-semibold tracking-tight">Profile</h1>
+                <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Profile</h1>
             </header>
             <Card>
                 <CardContent className="space-y-5">

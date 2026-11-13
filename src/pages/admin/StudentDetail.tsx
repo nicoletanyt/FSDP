@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeft, CalendarCheck, Mail } from 'lucide-react'
+import { ArrowLeft, CalendarCheck, CalendarDays, CircleCheck, CircleX, Mail, Percent } from 'lucide-react'
 import { Link, useParams } from 'react-router'
 import EmptyState from '@/components/admin/EmptyState'
 import PageHeader from '@/components/admin/PageHeader'
+import StatCard from '@/components/admin/StatCard'
 import { MembershipBadge } from '@/components/admin/StatusBadge'
 import AttendanceStateBadge from '@/components/instructor/AttendanceStateBadge'
 import { Button } from '@/components/ui/button'
@@ -130,25 +131,20 @@ export default function StudentDetail() {
       <Card>
         <CardHeader><CardTitle>Attendance</CardTitle></CardHeader>
         <CardContent className="space-y-5">
-          <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {[
-              ['Attendance rate', student.attendance_rate === null ? '—' : formatPercent(student.attendance_rate)],
-              ['Attended', String(student.attended)],
-              ['Missed', String(student.missed)],
-              ['Last attended', student.last_attended ? relativeDay(student.last_attended) : '—'],
-            ].map(([label, value]) => (
-              <div key={label} className="rounded-lg border p-3">
-                <dt className="text-xs text-muted-foreground">{label}</dt>
-                <dd className="mt-1 text-lg font-semibold tabular-nums">{value}</dd>
-              </div>
-            ))}
-          </dl>
+          <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
+            <StatCard label="Attendance rate" icon={Percent}
+              value={student.attendance_rate === null ? '—' : formatPercent(student.attendance_rate)} />
+            <StatCard label="Attended" icon={CircleCheck} tone="success" value={String(student.attended)} />
+            <StatCard label="Missed" icon={CircleX} tone={student.missed ? 'danger' : 'default'} value={String(student.missed)} />
+            <StatCard label="Last attended" icon={CalendarDays}
+              value={student.last_attended ? relativeDay(student.last_attended) : '—'} />
+          </div>
           <div className="flex items-center justify-between gap-2 text-sm">
             <span className="text-muted-foreground">Risk</span>
             <StudentRisk level={student.risk_level} />
           </div>
           <div className="space-y-2 border-t pt-4">
-            <h3 className="text-sm font-semibold">Recent classes</h3>
+            <h3 className="text-sm font-medium">Recent classes</h3>
             {recent.isPending && <p role="status" className="text-sm text-muted-foreground">Loading classes…</p>}
             {recent.isError && <div role="alert" className="flex flex-wrap items-center gap-3 text-sm text-destructive">
               Unable to load recent classes.

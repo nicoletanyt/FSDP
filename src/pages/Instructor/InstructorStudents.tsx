@@ -129,7 +129,7 @@ export default function InstructorStudents() {
     return (
         <section aria-busy={data.status === "loading" || outOfRange} className="student-directory-view space-y-2 md:space-y-6">
             <header>
-                <h1 className="text-3xl font-semibold tracking-tight">Students</h1>
+                <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Students</h1>
             </header>
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                 <SearchInput
@@ -275,7 +275,7 @@ export default function InstructorStudents() {
                                     aria-hidden="true"
                                     className="mx-auto size-6 text-muted-foreground"
                                 />
-                                <h2 className="text-sm font-semibold">{hasFilters ? "No students found" : "No students yet"}</h2>
+                                <h2 className="text-base font-medium">{hasFilters ? "No students found" : "No students yet"}</h2>
                                 <p className="directory-copy text-sm text-muted-foreground">
                                     {hasFilters ? "Try another name, student ID, grade or dojo." : "No student records are available."}
                                 </p>
