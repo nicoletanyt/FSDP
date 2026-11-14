@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { CalendarSkeleton } from '@/components/shared/skeletons'
 import { useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router'
 import AttendanceCalendar, { EventCard } from '@/components/admin/AttendanceCalendar'
@@ -132,7 +133,7 @@ export default function LiveAttendanceRegister() {
 
   return (
     <section aria-busy={classesQuery.isFetching} className="flex flex-col gap-4 lg:min-h-0 lg:flex-1">
-      {centresQuery.isPending && <p role="status" className="text-sm text-muted-foreground">Loading dojos…</p>}
+      {centresQuery.isPending && <CalendarSkeleton label="Loading dojos…" />}
       {centresQuery.isError && <div role="alert" className="flex flex-wrap items-center gap-3 text-sm text-destructive">Unable to load dojos. <Button variant="outline" size="sm" onClick={() => void centresQuery.refetch()}>Retry</Button></div>}
       {centresQuery.isSuccess && !centres.length && <p role="status" className="text-sm text-muted-foreground">No dojos are available.</p>}
       {centresQuery.isSuccess && <>
@@ -176,7 +177,7 @@ export default function LiveAttendanceRegister() {
           'flex flex-col lg:min-h-0 lg:flex-1',
           showSidePanel && isDesktop && 'lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:grid-rows-1 lg:gap-3 lg:overflow-hidden',
         )}>
-          {classesQuery.isPending && <p role="status" className="py-4 text-sm text-muted-foreground">Loading classes…</p>}
+          {classesQuery.isPending && <CalendarSkeleton label="Loading classes…" />}
           {classesQuery.isError && <div role="alert" className="flex flex-wrap items-center gap-3 text-sm text-destructive">Unable to load classes. <Button variant="outline" size="sm" onClick={() => void classesQuery.refetch()}>Retry</Button></div>}
           {classesQuery.isSuccess && <AttendanceCalendar date={selectedDate} today={today} now={now} focusRequest={focusRequest}
             view={view} display={displayMode} events={events} selectedSessionId={selectedEvent?.id ?? null}

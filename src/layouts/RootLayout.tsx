@@ -1,6 +1,7 @@
 import { Suspense, useState } from 'react'
 import { Link, Outlet, useLocation, useMatch } from 'react-router'
 import { LayoutDashboard, LogIn, UserPlus } from 'lucide-react'
+import { PageSkeleton } from '@/components/shared/skeletons'
 import MobileNavigation from '@/components/shared/layout/MobileNavigation'
 import StudentNavigation from '@/components/student/StudentNavigation'
 import ThemeToggle from '@/components/theme-toggle'
@@ -65,12 +66,9 @@ export default function RootLayout() {
     return (
       <Suspense
         fallback={
-          <p
-            role="status"
-            className="mx-auto w-full p-6 text-muted-foreground lg:w-[80%] lg:px-0 lg:py-6"
-          >
-            Loading…
-          </p>
+          <div className="mx-auto w-full p-4 lg:w-[80%] lg:px-0 lg:py-6">
+            <PageSkeleton />
+          </div>
         }
       >
         <Outlet />
@@ -173,12 +171,7 @@ export default function RootLayout() {
       {isAdmin ? (
         <Suspense
           fallback={
-            <p
-              role="status"
-              className="px-4 py-12 text-muted-foreground sm:px-6"
-            >
-              Loading…
-            </p>
+            <div className="px-4 py-8 sm:px-6"><PageSkeleton /></div>
           }
         >
           <Outlet />
@@ -193,9 +186,7 @@ export default function RootLayout() {
         >
           <Suspense
             fallback={
-              <p role="status" className="py-12 text-muted-foreground">
-                Loading…
-              </p>
+              <PageSkeleton />
             }
           >
             <Outlet />

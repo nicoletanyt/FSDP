@@ -36,7 +36,7 @@ export default function InstructorLayout() {
     : pathname.startsWith('/instructor/grading/') ? 'grading-page'
     : pathname.startsWith('/instructor/gradings') ? 'directory-page'
     : pathname.startsWith('/instructor/assessments/') ? 'assessment'
-      : isCheckIn ? 'check-in' : 'profile'
+      : pathname === '/instructor/nfc_checkin' ? 'nfc' : isCheckIn ? 'check-in' : 'profile'
   const [stationKiosk, setIsKiosk] = useState(false)
   const isKiosk = isCheckIn && stationKiosk
   const [calendarSearch, setCalendarSearch] = useState('')

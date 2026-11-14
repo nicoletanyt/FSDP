@@ -1,4 +1,6 @@
+import { Suspense } from 'react'
 import { Outlet, useLocation } from 'react-router'
+import { DetailSkeleton } from '@/components/shared/skeletons'
 import AdminNavbar from '@/components/admin/AdminNavbar'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AdminDataProvider } from '@/lib/admin/admin-data-context'
@@ -27,7 +29,9 @@ function AdminShell() {
             : 'space-y-6 py-6 sm:py-8',
         )}
       >
-        <Outlet />
+        <Suspense fallback={<DetailSkeleton label="Loading page…" />}>
+          <Outlet />
+        </Suspense>
       </main>
     </div>
   )

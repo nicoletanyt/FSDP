@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { TableSkeleton } from "@/components/shared/skeletons";
 import { Download } from "lucide-react";
 import EmptyState from "@/components/shared/layout/EmptyState";
 import { DatabaseGradeBadge as GradeBadge } from "@/components/shared/grade/GradeBadge";
@@ -163,7 +164,7 @@ export default function GradingApplications() {
                 </p>
             )}
             {loading ? (
-                <p className="text-sm text-muted-foreground">Loading applications…</p>
+                <TableSkeleton rows={6} cols={4} label="Loading applications…" />
             ) : error ? null : rows.length === 0 ? (
                 <EmptyState
                     title="No applications found"

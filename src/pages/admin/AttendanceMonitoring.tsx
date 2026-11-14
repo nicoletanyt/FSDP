@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
+import { TableSkeleton } from '@/components/shared/skeletons'
 import { useQuery } from '@tanstack/react-query'
 import { attendanceMonitoringKey, loadAttendanceMonitoring } from '@/lib/admin/section-counts'
 import { AlertTriangle, Bell, ChevronRight } from 'lucide-react'
@@ -117,7 +118,7 @@ export default function AttendanceMonitoring() {
         Unable to load live attendance monitoring. No demo students are shown.
         <Button variant="outline" size="sm" onClick={() => { void centresQuery.refetch(); void monitoring.refetch() }}>Retry</Button>
       </AlertDescription></Alert>}
-      {loading && !error && <p role="status" className="text-sm text-muted-foreground">Loading live attendance monitoring…</p>}
+      {loading && !error && <TableSkeleton rows={8} cols={5} label="Loading attendance…" />}
 
       <div className="flex flex-wrap items-center gap-2">
         <SearchInput value={search} onChange={event => setSearch(event.target.value)}

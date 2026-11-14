@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Skeleton } from '@/components/ui/skeleton'
 import { useQuery } from '@tanstack/react-query'
 import { AlertTriangle, Bell, GraduationCap, Users } from 'lucide-react'
 import { Link } from 'react-router'
@@ -91,7 +92,6 @@ export default function Overview() {
           : undefined}
       />
 
-      {loading && !error && <p role="status" className="text-sm text-muted-foreground">Loading live Overview…</p>}
       {error && (
         <Alert variant="destructive" role="alert">
           <AlertDescription className="flex flex-wrap items-center gap-3">
@@ -123,7 +123,7 @@ export default function Overview() {
           <CardTitle>Attendance trend</CardTitle>
           <CardDescription>Completed classes over the last 12 weeks {selectedCentre ? 'at the selected centre' : 'across all centres'}.</CardDescription>
         </CardHeader>
-        <CardContent>{snapshot ? <AttendanceTrend data={snapshot.trend} compact /> : <p className="text-sm text-muted-foreground">{error ? 'Unavailable' : 'Loading…'}</p>}</CardContent>
+        <CardContent>{snapshot ? <AttendanceTrend data={snapshot.trend} compact /> : error ? <p className="text-sm text-muted-foreground">Unavailable</p> : <Skeleton aria-hidden="true" className="h-40 w-full" />}</CardContent>
       </Card>
 
       <div className="grid gap-4 xl:grid-cols-[1.35fr_1fr]">
@@ -152,7 +152,7 @@ export default function Overview() {
             ))}
             {snapshot?.attention_count === 0 && <p className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">No students are at risk right now.</p>}
             {snapshot && snapshot.attention_count > snapshot.attention_students.length && <p className="text-xs text-muted-foreground">Showing 5 of {snapshot.attention_count} students.</p>}
-            {!snapshot && <p className="text-sm text-muted-foreground">{error ? 'Unavailable' : 'Loading…'}</p>}
+            {!snapshot && (error ? <p className="text-sm text-muted-foreground">Unavailable</p> : <div aria-hidden="true" className="space-y-3">{[0, 1, 2].map(row => <Skeleton key={row} className="h-12 w-full" />)}</div>)}
             <div className="flex justify-end pt-2">
               <Button variant="outline" size="sm" onClick={() => setNoticeOpen(true)} disabled={!snapshot}>
                 <Bell aria-hidden="true" />Follow Up

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { FormSkeleton } from '@/components/shared/skeletons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ChevronDown, Plus, Trash2 } from 'lucide-react'
 import { GradeLabelBadge } from '@/components/shared/grade/GradeBadge'
@@ -201,7 +202,7 @@ function TrackForm({ rules, durations, grades }: { rules: ScheduleRules; duratio
 export default function GradingRules() {
   const query = useQuery({ queryKey: gradingRulesKeys.all, queryFn: loadGradingRules, retry: false })
   const [track, setTrack] = useState<GradeTrack>('adult')
-  if (query.isPending) return <p role="status" className="text-sm text-muted-foreground">Loading the grading schedule…</p>
+  if (query.isPending) return <FormSkeleton fields={5} label="Loading the grading schedule…" />
   if (query.isError) return <RetryAlert message={query.error.message} onRetry={() => void query.refetch()} />
   const { rules, durations, grades } = query.data
   const current = rules.find(row => row.track === track)

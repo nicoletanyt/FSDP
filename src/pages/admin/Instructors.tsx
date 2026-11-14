@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { TableSkeleton } from '@/components/shared/skeletons'
 import { Mail, Plus } from 'lucide-react'
 import CreateInstructorForm from '@/components/auth/CreateInstructorForm'
 import PageHeader from '@/components/shared/layout/PageHeader'
@@ -123,7 +124,7 @@ export default function Instructors() {
         )}
 
         <div aria-busy={loading}>
-          {loading && <p className="py-4 text-sm text-muted-foreground">Loading instructor accounts…</p>}
+          {loading && <TableSkeleton rows={6} cols={3} label="Loading instructors…" />}
           {!loading && error && (
             <Alert variant="destructive">
               <AlertDescription className="flex flex-wrap items-center gap-2">

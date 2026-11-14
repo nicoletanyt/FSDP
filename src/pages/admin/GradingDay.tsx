@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { DetailSkeleton } from '@/components/shared/skeletons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useParams } from 'react-router'
 import { ArrowRightLeft, Ellipsis } from 'lucide-react'
@@ -106,7 +107,7 @@ function GradingDayPage() {
   const changing = sort.isPending || move.isPending || split.isPending || merge.isPending || add.isPending || publish.isPending
   const error = sort.error ?? move.error ?? split.error ?? merge.error ?? add.error ?? publish.error
 
-  if (day.isPending) return <p className="text-sm text-muted-foreground">Loading grading day…</p>
+  if (day.isPending) return <DetailSkeleton sections={3} label="Loading grading day…" />
   if (day.isError) return <RetryAlert message={day.error.message} onRetry={() => void day.refetch()} />
   const data = day.data
   const sessions = data.sessions

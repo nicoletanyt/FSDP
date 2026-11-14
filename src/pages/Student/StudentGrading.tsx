@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { CardListSkeleton } from '@/components/shared/skeletons'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -107,7 +108,7 @@ export default function StudentGrading() {
     {params.get('checkout') === 'cancel' && <Alert><AlertDescription>Checkout was canceled. No application was submitted.</AlertDescription></Alert>}
     {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
     {!loading && !error && <ReadinessCard readiness={readiness} />}
-    {loading ? <p>Loading grading opportunities…</p> : gradings.length === 0 ? <Card className="p-6"><p>No grading applications are open right now.</p><Link to="/dashboard" className="text-primary underline">Back to dashboard</Link></Card>
+    {loading ? <CardListSkeleton count={2} label="Loading grading opportunities…" /> : gradings.length === 0 ? <Card className="p-6"><p>No grading applications are open right now.</p><Link to="/dashboard" className="text-primary underline">Back to dashboard</Link></Card>
       : gradings.map((grading) => <Card key={grading.id} className="gap-3 p-6">
         <h2 className="text-xl font-semibold">{grading.name}</h2>
         <dl className="grid gap-2 text-sm sm:grid-cols-2">

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { CardListSkeleton } from '@/components/shared/skeletons'
 import { useFeedback } from '@/hooks/use-feedback'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import {
@@ -357,7 +358,7 @@ export default function StudentClasses() {
           }}>Try again</Button>
         </div>
       ) : !catalog ? (
-        <p role="status" className="text-sm text-muted-foreground">Loading the full class list…</p>
+        <CardListSkeleton count={2} label="Loading the full class list…" />
       ) : unscheduled && unscheduled.length > 0 && (
         <section aria-labelledby="other-class-types" className="space-y-3">
           <h3 id="other-class-types" className="text-lg font-semibold">Other class types</h3>

@@ -21,6 +21,7 @@ import {
     DialogTrigger,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/use-auth";
 import { useFeedback } from "@/hooks/use-feedback";
@@ -37,6 +38,10 @@ const employmentStatusLabels = {
     part_time: "Part time",
     full_time: "Full time",
 };
+
+function ValueSkeleton() {
+    return <Skeleton aria-hidden="true" className="inline-block h-4 w-28 align-middle" />;
+}
 
 export default function InstructorProfile() {
     const { profile } = useAuth();
@@ -475,7 +480,7 @@ export default function InstructorProfile() {
                             <dd className="min-w-0 flex-1 sm:text-right">
                                 <span className="whitespace-pre-wrap break-words">
                                     {details.isPending
-                                        ? "Loading…"
+                                        ? <ValueSkeleton />
                                         : details.isError
                                             ? "Unavailable"
                                             : details.data?.address || "Not provided"}
@@ -484,13 +489,13 @@ export default function InstructorProfile() {
                         </div>
                         <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
                             <dt className="text-muted-foreground">Grade</dt>
-                            <dd>{details.isPending ? "Loading…" : details.isError ? "Unavailable" : <GradeBadge grade={details.data?.grade ?? null} />}</dd>
+                            <dd>{details.isPending ? <ValueSkeleton /> : details.isError ? "Unavailable" : <GradeBadge grade={details.data?.grade ?? null} />}</dd>
                         </div>
                         <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
                             <dt className="text-muted-foreground">Instructor title</dt>
                             <dd>
                                 {details.isPending ? (
-                                    "Loading…"
+                                    <ValueSkeleton />
                                 ) : details.isError ? (
                                     "Unavailable"
                                 ) : details.data && details.data.instructorTitle !== "none" ? (
@@ -504,7 +509,7 @@ export default function InstructorProfile() {
                             <dt className="text-muted-foreground">Examiner</dt>
                             <dd className="min-w-0 sm:text-right">
                                 {details.isPending ? (
-                                    "Loading…"
+                                    <ValueSkeleton />
                                 ) : details.isError ? (
                                     "Unavailable"
                                 ) : details.data?.isExaminer ? (
@@ -521,7 +526,7 @@ export default function InstructorProfile() {
                             <dd className="min-w-0 sm:text-right">
                                 <Badge variant="secondary" className="h-auto px-2.5 py-1">
                                     {details.isPending
-                                        ? "Loading…"
+                                        ? <ValueSkeleton />
                                         : details.isError
                                             ? "Unavailable"
                                             : details.data?.employmentType

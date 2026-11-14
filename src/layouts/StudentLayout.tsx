@@ -1,4 +1,5 @@
 import { matchPath, Outlet, useLocation } from 'react-router'
+import { CalendarSkeleton, CardListSkeleton } from '@/components/shared/skeletons'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/hooks/use-auth'
@@ -48,7 +49,10 @@ type CreditsContext = {
 
 function StudentScheduleOutlet(creditContext: CreditsContext) {
   const schedule = useLiveStudentSchedule()
-  if (schedule.loading) return <p role="status" className="text-sm text-muted-foreground">Loading class schedule…</p>
+  const { pathname } = useLocation()
+  if (schedule.loading) return pathname.startsWith('/timetable')
+    ? <CalendarSkeleton label="Loading your timetable…" />
+    : <CardListSkeleton count={4} label="Loading classes…" />
   if (schedule.error) return (
     <div role="alert" className="space-y-3">
       <p>{schedule.error}</p>

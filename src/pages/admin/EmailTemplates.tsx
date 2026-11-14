@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { CardListSkeleton } from '@/components/shared/skeletons'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronRight, Eye, Mail, PencilLine, Plus, Undo2 } from 'lucide-react'
 import RetryAlert from '@/components/shared/layout/RetryAlert'
@@ -166,7 +167,7 @@ export default function EmailTemplates() {
   }
 
   return <div className="space-y-4">
-    {directory.isPending && <p role="status" className="text-sm text-muted-foreground">Loading emails…</p>}
+    {directory.isPending && <CardListSkeleton count={4} label="Loading emails…" />}
     {directory.isError && <RetryAlert message="Emails could not be loaded." onRetry={() => void directory.refetch()} />}
     {directory.isSuccess && <div className="grid gap-3">
       {templates.map(item => {

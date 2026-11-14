@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { DetailSkeleton, TableSkeleton } from '@/components/shared/skeletons'
 import { ArrowLeft, CalendarCheck, CalendarDays, CircleCheck, CircleX, Mail, Percent } from 'lucide-react'
 import { Link, useParams } from 'react-router'
 import EmptyState from '@/components/shared/layout/EmptyState'
@@ -74,7 +75,7 @@ export default function StudentDetail() {
     </Button>
   )
 
-  if (directory.isPending) return <p role="status" className="text-sm text-muted-foreground">Loading student…</p>
+  if (directory.isPending) return <DetailSkeleton sections={3} label="Loading student…" />
   if (directory.isError) {
     return (
       <div role="alert" className="flex flex-wrap items-center gap-3 text-sm text-destructive">
@@ -145,7 +146,7 @@ export default function StudentDetail() {
           </div>
           <div className="space-y-2 border-t pt-4">
             <h3 className="text-sm font-medium">Recent classes</h3>
-            {recent.isPending && <p role="status" className="text-sm text-muted-foreground">Loading classes…</p>}
+            {recent.isPending && <TableSkeleton rows={3} cols={3} label="Loading classes…" />}
             {recent.isError && <div role="alert" className="flex flex-wrap items-center gap-3 text-sm text-destructive">
               Unable to load recent classes.
               <Button variant="outline" size="sm" onClick={() => void recent.refetch()}>Retry</Button>

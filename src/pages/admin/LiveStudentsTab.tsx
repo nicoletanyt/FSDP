@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
+import { TableSkeleton } from '@/components/shared/skeletons'
 import { useQuery } from '@tanstack/react-query'
 import { AlertTriangle, ChevronRight, Download, GraduationCap, Users, X } from 'lucide-react'
 import { useSearchParams } from 'react-router'
@@ -139,7 +140,7 @@ export default function LiveStudentsTab() {
       Unable to load live students. No demo data is shown.
       <Button variant="outline" size="sm" onClick={() => { void centresQuery.refetch(); void directory.refetch() }}>Retry</Button>
     </div>}
-    {loading && !error && <p role="status" className="text-sm text-muted-foreground">Loading live students…</p>}
+    {loading && !error && <TableSkeleton rows={8} cols={4} label="Loading students…" />}
 
     {!loading && !error && <>
       <div className="grid grid-cols-3 gap-2 sm:gap-3">

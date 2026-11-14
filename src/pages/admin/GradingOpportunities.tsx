@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { CardListSkeleton } from '@/components/shared/skeletons'
 import { Link, useSearchParams } from 'react-router'
 import { CalendarDays, ChevronRight, Clock3, History, MapPin, Users } from 'lucide-react'
 import EmptyState from '@/components/shared/layout/EmptyState'
@@ -192,7 +193,7 @@ export default function GradingOpportunities() {
         { value: 'upcoming', text: upcoming.length ? `Upcoming (${upcoming.length})` : 'Upcoming' },
         { value: 'past', text: 'Past' },
       ]} />
-      {loading ? <p className="text-sm text-muted-foreground">Loading schedule…</p>
+      {loading ? <CardListSkeleton label="Loading schedule…" />
         : error ? <RetryAlert message={error} onRetry={() => void reload()} />
         : when === 'upcoming' ? (
           upcoming.length === 0 ? (

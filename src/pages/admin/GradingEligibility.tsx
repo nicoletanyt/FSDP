@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { TableSkeleton } from "@/components/shared/skeletons";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router";
 import {
@@ -521,9 +522,7 @@ export default function GradingEligibility() {
             </Dialog>
 
             {eligibility.isPending && (
-                <p role="status" className="text-sm text-muted-foreground">
-                    Loading eligible students…
-                </p>
+                <TableSkeleton rows={6} cols={4} label="Loading eligible students…" />
             )}
             {eligibility.isError && (
                 <RetryAlert

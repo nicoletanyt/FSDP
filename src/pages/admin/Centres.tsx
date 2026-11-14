@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { CardListSkeleton } from '@/components/shared/skeletons'
 import { useQuery } from '@tanstack/react-query'
 import { Building2, CircleCheck, CircleX, Construction, MapPin } from 'lucide-react'
 import { Navigate, useSearchParams } from 'react-router'
@@ -69,7 +70,7 @@ export default function Centres() {
   return (
     <div className="space-y-6">
       <PageHeader title="Centres" />
-      {centresQuery.isPending && <p role="status" className="text-sm text-muted-foreground">Loading dojos…</p>}
+      {centresQuery.isPending && <CardListSkeleton label="Loading dojos…" />}
       {centresQuery.isError && (
         <RetryAlert message="Unable to load dojos. Check your connection and try again." onRetry={() => { void centresQuery.refetch() }} />
       )}

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { TableSkeleton } from '@/components/shared/skeletons'
 import EmptyState from '@/components/shared/layout/EmptyState'
 import { StatusBadge } from '@/components/shared/status/StatusBadge'
 import type { BadgeTone } from '@/components/shared/status/StatusBadge'
@@ -119,7 +120,7 @@ export default function Notifications() {
       </div>
 
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-      {!error && emails === null && <p role="status" className="text-sm text-muted-foreground">Loading sent emails…</p>}
+      {!error && emails === null && <TableSkeleton rows={6} cols={4} label="Loading sent emails…" />}
       {emails !== null && (shown.length === 0 ? (
         <EmptyState
           title={emails.length ? 'No emails match these filters' : 'No emails sent yet'}

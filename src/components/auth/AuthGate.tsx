@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { LoaderCircle } from 'lucide-react'
+import { PageSkeleton } from '@/components/shared/skeletons'
 import { Navigate, Outlet, useLocation } from 'react-router'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -28,9 +28,8 @@ function AuthStatus() {
 
   if (loading) {
     return (
-      <div role="status" className={`flex min-h-48 items-center justify-center gap-2 text-muted-foreground ${shell}`}>
-        <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
-        Loading your account…
+      <div className={shell}>
+        <PageSkeleton label="Loading your account…" />
       </div>
     )
   }
