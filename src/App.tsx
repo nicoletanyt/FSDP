@@ -26,6 +26,9 @@ const AdminGradingEligibility = lazy(() => import('./pages/admin/GradingEligibil
 const AdminGradingOpportunities = lazy(() => import('./pages/admin/GradingOpportunities'))
 const AdminGradingApplications = lazy(() => import('./pages/admin/GradingApplications'))
 const AdminGradingSyllabus = lazy(() => import('./pages/admin/Syllabus'))
+const AdminGradingRules = lazy(() => import('./pages/admin/GradingRules'))
+const AdminGradingDay = lazy(() => import('./pages/admin/GradingDay'))
+const AdminGradingResults = lazy(() => import('./pages/admin/GradingResults'))
 const AdminNotifications = lazy(() => import('./pages/admin/Notifications'))
 const AdminInstructors = lazy(() => import('./pages/admin/Instructors'))
 const AdminEmailTemplates = lazy(() => import('./pages/admin/EmailTemplates'))
@@ -37,6 +40,7 @@ const ApplicationSuccess = lazy(() => import('./pages/Student/ApplicationSuccess
 
 const StudentDashboard = lazy(() => import('./pages/Student/StudentDashboard'))
 const StudentClasses = lazy(() => import('./pages/StudentClasses'))
+const StudentClassBooking = lazy(() => import('./pages/StudentClasses').then(module => ({ default: module.StudentClassBooking })))
 const StudentAttendance = lazy(() => import('./pages/StudentAttendance'))
 const StudentProfile = lazy(() => import('./pages/Student/StudentProfile'))
 const StudentPayments = lazy(() => import('./pages/Student/StudentPayments'))
@@ -48,11 +52,12 @@ const InstructorDashboard = lazy(() => import('./pages/Instructor/InstructorDash
 const InstructorStudents = lazy(() => import('./pages/Instructor/InstructorStudents'))
 const InstructorProfile = lazy(() => import('./pages/Instructor/InstructorProfile'))
 const InstructorCheckIn = lazy(() => import('./pages/Instructor/InstructorCheckIn'))
-const NfcCheckIn = lazy(() => import('./pages/Instructor/NfcCheckIn'))
 const InstructorStudentDetails = lazy(() => import('./pages/Instructor/InstructorStudentDetails'))
 const InstructorGradingSession = lazy(() => import('./pages/Instructor/InstructorGradingSession'))
 const InstructorGradings = lazy(() => import('./pages/Instructor/InstructorGradings'))
 const InstructorGradingDay = lazy(() => import('./pages/Instructor/InstructorGradingDay'))
+const InstructorGradingSessionPage = lazy(() => import('./pages/Instructor/InstructorGradingSession').then(module => ({ default: module.InstructorGradingSessionPage })))
+const LegacySessionChecklistsRedirect = lazy(() => import('./pages/Instructor/InstructorGradingSession').then(module => ({ default: module.LegacySessionChecklistsRedirect })))
 
 function LegacyCoverInvitationRedirect() {
   const { invitationId } = useParams()
@@ -80,6 +85,8 @@ export default function App() {
               <Route path="dashboard" element={<StudentDashboard />} />
               <Route path="classes" element={<StudentClasses />} />
               <Route path="timetable" element={<StudentAttendance />} />
+              <Route path="attendance" element={<Navigate to="/timetable" replace />} />
+              <Route path="classes/choose" element={<StudentClassBooking />} />
               <Route path="profile" element={<StudentProfile />} />
               <Route path="payments" element={<StudentPayments />} />
               <Route path="student/credits" element={<StudentCredits />} />
@@ -102,11 +109,13 @@ export default function App() {
                 <Route path="students" element={<InstructorStudents />} />
                 <Route path="check-in" element={<InstructorCheckIn />} />
                 <Route path="cover/:invitationId" element={<LegacyCoverInvitationRedirect />} />
-                <Route path="nfc_checkin" element={<NfcCheckIn />} />
+                <Route path="nfc_checkin" element={<InstructorCheckIn />} />
                 <Route path="students/:studentId" element={<InstructorStudentDetails />} />
                 <Route path="reports/:eventId" element={<Navigate to="/instructor/calendar" replace />} />
                 <Route path="gradings" element={<InstructorGradings />} />
                 <Route path="gradings/:eventId" element={<InstructorGradingDay />} />
+                <Route path="gradings/:eventId/sessions/:sessionId" element={<LegacySessionChecklistsRedirect />} />
+                <Route path="grading/session/:sessionId" element={<InstructorGradingSessionPage />} />
                 <Route path="grading/:eventId" element={<InstructorGradingSession />} />
                 <Route path="profile" element={<InstructorProfile />} />
               </Route>
@@ -130,7 +139,11 @@ export default function App() {
                 <Route path="opportunities" element={<AdminGradingOpportunities />} />
                 <Route path="applications" element={<AdminGradingApplications />} />
                 <Route path="syllabus" element={<AdminGradingSyllabus />} />
+                <Route path="rules" element={<AdminGradingRules />} />
               </Route>
+              {/* A grading's own pages sit outside the section tabs. */}
+              <Route path="grading/days/:eventId" element={<AdminGradingDay />} />
+              <Route path="grading/days/:eventId/:sessionId" element={<AdminGradingResults />} />
               <Route path="notifications" element={<AdminNotifications />} />
               <Route path="instructors" element={<AdminInstructors />} />
               <Route path="email-templates" element={<AdminEmailTemplates />} />

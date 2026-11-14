@@ -27,7 +27,7 @@ import { instructorQueryKeys, instructorQueryTimes } from "@/lib/instructor/quer
 import type { QueryState } from "@/hooks/use-instructor-data";
 import { toInstructorDataError } from "@/lib/instructor/errors";
 import { useInstructorApi } from "@/lib/instructor/data-context";
-import type { StudentDirectory } from "@/lib/instructor/types";
+import type { GradeRow, StudentDirectory } from "@/lib/instructor/types";
 import { Label } from "@/components/ui/label";
 import {
     Popover,
@@ -52,7 +52,7 @@ function DirectoryFilter({
     options,
     onValueChange,
 }: {
-    label: "Rank" | "Belt" | "Dojo";
+    label: "Dojo";
     value: string;
     options: { value: string; label: string }[];
     onValueChange: (value: string) => void;
@@ -97,12 +97,7 @@ function DirectoryFilter({
                     >
                         <DropdownMenuRadioItem value="" closeOnClick>
                             <span className="min-w-0 [overflow-wrap:anywhere]">
-                                All{" "}
-                                {label === "Rank"
-                                    ? "ranks"
-                                    : label === "Belt"
-                                        ? "belts"
-                                        : "dojos"}
+                                All dojos
                             </span>
                         </DropdownMenuRadioItem>
                         {options.map((option) => (
@@ -123,6 +118,77 @@ function DirectoryFilter({
     );
 }
 
+// One grade filter drawn with the same GradeBadge the list uses, in ladder order.
+function GradeFilter({
+    value,
+    grades,
+    onValueChange,
+}: {
+    value: string;
+    grades: GradeRow[];
+    onValueChange: (value: string) => void;
+}) {
+    const triggerId = useId();
+    const selected = grades.find((grade) => grade.id === value) ?? null;
+
+    return (
+        <div className="grid min-w-0 gap-1.5">
+            <Label
+                htmlFor={triggerId}
+                className="shrink-0 text-sm text-muted-foreground"
+            >
+                Grade
+            </Label>
+            <DropdownMenu>
+                <DropdownMenuTrigger
+                    id={triggerId}
+                    render={
+                        <Button
+                            variant="outline"
+                            size="touch"
+                            className="directory-control w-full min-w-0 justify-between gap-2"
+                        />
+                    }
+                    aria-label={`Grade: ${selected?.label || value || "All"}`}
+                >
+                    <span className="flex min-w-0 items-center">
+                        {selected ? (
+                            <GradeBadge grade={selected} showBeltLabel />
+                        ) : (
+                            <span className="truncate">{value || "All"}</span>
+                        )}
+                    </span>
+                    <ChevronDown aria-hidden="true" className="size-4" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                    align="start"
+                    className="student-directory-filter-menu"
+                >
+                    <DropdownMenuRadioGroup
+                        value={value}
+                        onValueChange={onValueChange}
+                        aria-label="Grade filter"
+                    >
+                        <DropdownMenuRadioItem value="" closeOnClick>
+                            <span className="min-w-0 [overflow-wrap:anywhere]">All grades</span>
+                        </DropdownMenuRadioItem>
+                        {grades.map((grade) => (
+                            <DropdownMenuRadioItem
+                                key={grade.id}
+                                value={grade.id}
+                                closeOnClick
+                                aria-label={grade.label}
+                            >
+                                <GradeBadge grade={grade} showBeltLabel />
+                            </DropdownMenuRadioItem>
+                        ))}
+                    </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+            </DropdownMenu>
+        </div>
+    );
+}
+
 export default function InstructorStudents() {
     const api = useInstructorApi();
     const { session, profile } = useAuth();
@@ -131,7 +197,6 @@ export default function InstructorStudents() {
     const filterTriggerRef = useRef<HTMLButtonElement>(null);
     const [filtersOpen, setFiltersOpen] = useState(false);
     const query = params.get("q") ?? "";
-    const belt = params.get("belt") ?? "";
     const rank = params.get("rank") ?? "";
     const dojo = params.get("dojo") ?? "";
     const page = directoryPage(params);
@@ -146,12 +211,12 @@ export default function InstructorStudents() {
         if (snapshot.status === "loading") return { status: "loading", data: null, error: null };
         if (snapshot.status === "error") return { status: "error", data: null, error: snapshot.error };
         try {
-            const filters = new URLSearchParams({ q: query, rank, belt, dojo, page: String(page) });
+            const filters = new URLSearchParams({ q: query, rank, dojo, page: String(page) });
             return { status: "success", data: filterDirectorySnapshot(snapshot.data, filters), error: null };
         } catch (error) {
             return { status: "error", data: null, error: toInstructorDataError(error, "Unable to filter student records.").message };
         }
-    }, [snapshot.status, snapshot.data, snapshot.error, query, rank, belt, dojo, page]);
+    }, [snapshot.status, snapshot.data, snapshot.error, query, rank, dojo, page]);
     const data = { ...view, retry: snapshot.retry };
     const account = profile?.role === "instructor" ? session?.user.id : null;
     const [metadata, setMetadata] = useState<{ account: string; facets: StudentDirectory["facets"] } | null>(null);
@@ -161,12 +226,12 @@ export default function InstructorStudents() {
     // Keep only same-account filter metadata during refetches, never old rows or
     // counts. Popover choices and focus remain stable while the request runs.
     const facets = snapshot.data?.facets ?? (metadata?.account === account ? metadata?.facets : null);
-    const ranks = (facets?.grades ?? []).map(grade => ({ value: grade.id, label: grade.label }));
-    const beltOptions = (facets?.colours ?? []).map(colour => ({ value: colour, label: `${colour} belt` }));
+    const grades = useMemo(() => [...(facets?.grades ?? [])]
+        .sort((a, b) => a.sort_order - b.sort_order || a.label.localeCompare(b.label)), [facets]);
     const dojos = (facets?.centres ?? []).map(centre => ({ value: centre.id, label: centre.name }));
     const search = query.trim().toLowerCase();
-    const hasFilters = Boolean(search || rank || belt || dojo);
-    const activeFilterCount = [rank, belt, dojo].filter(Boolean).length;
+    const hasFilters = Boolean(search || rank || dojo);
+    const activeFilterCount = [rank, dojo].filter(Boolean).length;
     const pageCount = data.status === "success" ? Math.max(1, Math.ceil(data.data.total / data.data.limit)) : 1;
     const outOfRange = data.status === "success" && page > pageCount;
     const ready = data.status === "success" && !outOfRange;
@@ -175,16 +240,16 @@ export default function InstructorStudents() {
         if (!outOfRange) return;
         setParams(current => {
             if (directoryPage(current) !== page || (current.get("q") ?? "") !== query
-                || (current.get("rank") ?? "") !== rank || (current.get("belt") ?? "") !== belt
+                || (current.get("rank") ?? "") !== rank
                 || (current.get("dojo") ?? "") !== dojo) return current;
             const next = new URLSearchParams(current);
             if (pageCount === 1) next.delete("page");
             else next.set("page", String(pageCount));
             return next;
         }, { replace: true });
-    }, [outOfRange, pageCount, page, query, rank, belt, dojo, setParams]);
+    }, [outOfRange, pageCount, page, query, rank, dojo, setParams]);
 
-    function updateFilter(name: "q" | "rank" | "belt" | "dojo", value: string) {
+    function updateFilter(name: "q" | "rank" | "dojo", value: string) {
         setParams(
             (current) => {
                 return changeDirectoryFilter(current, name, value);
@@ -280,17 +345,10 @@ export default function InstructorStudents() {
                                 Filter students
                             </PopoverTitle>
                         </div>
-                        <DirectoryFilter
-                            label="Rank"
+                        <GradeFilter
                             value={rank}
-                            options={ranks}
+                            grades={grades}
                             onValueChange={(value) => updateFilter("rank", value)}
-                        />
-                        <DirectoryFilter
-                            label="Belt"
-                            value={belt}
-                            options={beltOptions}
-                            onValueChange={(value) => updateFilter("belt", value)}
                         />
                         <DirectoryFilter
                             label="Dojo"
@@ -350,21 +408,41 @@ export default function InstructorStudents() {
                             <ul className="divide-y" aria-label="Student directory">
                                 {directory.map((student) => (
                                     <li key={student.id}>
-                                        <Link
-                                            to={studentDetailsHref(student.id)}
+                                        {/* The name link stretches over the whole row, so the grade
+                                            badge can be its own button without nesting it in a link. */}
+                                        <div
                                             data-member-no={student.memberNo}
-                                            className="flex min-h-17 items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:-outline-offset-2 focus-visible:outline-2 focus-visible:outline-ring"
+                                            className="relative flex min-h-17 items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/50 has-[a:focus-visible]:bg-muted/50 has-[a:focus-visible]:-outline-offset-2 has-[a:focus-visible]:outline-2 has-[a:focus-visible]:outline-ring"
                                         >
                                             <div className="min-w-0 flex-1">
                                                 <div className="flex flex-wrap items-start gap-x-2 gap-y-1">
-                                                    <p className="directory-name min-w-0 flex-1 basis-24 text-sm font-medium [overflow-wrap:anywhere]">
+                                                    <Link
+                                                        to={studentDetailsHref(student.id)}
+                                                        className="directory-name min-w-0 flex-1 basis-24 text-sm font-medium [overflow-wrap:anywhere] outline-none after:absolute after:inset-0"
+                                                    >
                                                         {student.name}
-                                                    </p>
+                                                    </Link>
                                                 </div>
                                                 <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 sm:mt-1">
-                                                    <GradeBadge
-                                                        grade={student.grade}
-                                                    />
+                                                    {student.grade ? (
+                                                        <button
+                                                            type="button"
+                                                            className="relative z-10 max-w-full rounded-md focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
+                                                            aria-label={rank === student.grade.id
+                                                                ? `Showing ${student.grade.label} only. Show all grades`
+                                                                : `Show only ${student.grade.label}`}
+                                                            aria-pressed={rank === student.grade.id}
+                                                            title={rank === student.grade.id ? "Show all grades" : `Show only ${student.grade.label}`}
+                                                            onClick={() => updateFilter("rank", rank === student.grade?.id ? "" : student.grade!.id)}
+                                                        >
+                                                            <GradeBadge
+                                                                grade={student.grade}
+                                                                className="hover:border-foreground/40"
+                                                            />
+                                                        </button>
+                                                    ) : (
+                                                        <GradeBadge grade={null} />
+                                                    )}
                                                     <p className="directory-meta min-w-0 text-xs text-muted-foreground [overflow-wrap:anywhere]">
                                                         {student.trackLabel}
                                                     </p>
@@ -388,7 +466,7 @@ export default function InstructorStudents() {
                                                 aria-hidden="true"
                                                 className="size-4 shrink-0 text-muted-foreground"
                                             />
-                                        </Link>
+                                        </div>
                                     </li>
                                 ))}
                             </ul>
@@ -400,7 +478,7 @@ export default function InstructorStudents() {
                                 />
                                 <h2 className="text-sm font-semibold">{hasFilters ? "No students found" : "No students yet"}</h2>
                                 <p className="directory-copy text-sm text-muted-foreground">
-                                    {hasFilters ? "Try another name, student ID, rank, belt or dojo." : "No student records are available."}
+                                    {hasFilters ? "Try another name, student ID, grade or dojo." : "No student records are available."}
                                 </p>
                                 <Button
                                     variant="outline"

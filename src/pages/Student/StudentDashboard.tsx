@@ -1,24 +1,16 @@
-import { useState } from "react";
 import { Link } from "react-router";
 import {
   ClipboardCheck,
   CreditCard,
   IdCard,
-  QrCode,
   Presentation,
   UserCheck,
   type LucideIcon,
 } from "lucide-react";
 
+import AttendanceQrCard from "@/components/student/AttendanceQrCard";
 import { buttonVariants } from "@/components/student/button";
 import { Card } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import { formatDateTime } from "@/lib/format";
 import { mockStudent, type Student } from "@/lib/student-dashboard";
 import CreditBalanceCard from "@/pages/Student/CreditBalanceCard";
@@ -30,11 +22,6 @@ function greetingFor(hour: number) {
   if (hour < 12) return "Good morning";
   if (hour < 18) return "Good afternoon";
   return "Good evening";
-}
-
-function isClassDay(iso: string) {
-  const classDate = new Date(iso);
-  return !Number.isNaN(classDate.getTime()) && classDate.toDateString() === new Date().toDateString();
 }
 
 function gradingProgress(r: Student["requirements"]) {
@@ -107,10 +94,8 @@ function Tile({ title, status, to, icon: Icon, badge, badgeLabel, busy }: TilePr
 export default function StudentDashboard() {
   const { profile } = useAuth();
   const grading = useDashboardGrading(profile?.id);
-  const [attendanceQrOpen, setAttendanceQrOpen] = useState(false);
   const student = mockStudent;
   const { belt, nextBelt, requirements: r, counts, nextClass } = student;
-  const attendanceQrAvailable = nextClass ? isClassDay(nextClass.startsAt) : false;
 
   const pct = gradingProgress(r);
   const ctaLabel = student.gradingOpen
@@ -246,59 +231,8 @@ export default function StudentDashboard() {
                   </span>
                 )}
               </dl>
-              <Dialog open={attendanceQrOpen} onOpenChange={setAttendanceQrOpen}>
-                <DialogTrigger
-                  render={
-                    <button
-                      type="button"
-                      disabled={!attendanceQrAvailable}
-                      aria-label={
-                        attendanceQrAvailable
-                          ? "Open attendance QR placeholder"
-                          : "Attendance QR unavailable until the class day"
-                      }
-                      className={`grid min-h-40 w-full place-items-center rounded-xl border border-dashed p-5 text-center transition focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed ${
-                        attendanceQrAvailable
-                          ? "border-primary/50 bg-primary/5 text-primary hover:bg-primary/10"
-                          : "border-border bg-muted/50 text-muted-foreground"
-                      }`}
-                    />
-                  }
-                >
-                  <span className="grid justify-items-center gap-2">
-                    <QrCode className="size-8" aria-hidden="true" />
-                    <span className="font-semibold">
-                      {attendanceQrAvailable ? "Attendance QR" : "QR unavailable"}
-                    </span>
-                    <span className="text-sm">
-                      {attendanceQrAvailable
-                        ? "Tap to view attendance placeholder"
-                        : "Available on class day"}
-                    </span>
-                  </span>
-                </DialogTrigger>
-                <DialogContent className="w-[calc(100%-2rem)] max-w-lg p-4 sm:max-w-lg lg:p-6">
-                  <div className="grid justify-items-center gap-5 py-2 text-center">
-                    <div>
-                      <DialogTitle className="text-xl font-semibold">
-                        Attendance QR
-                      </DialogTitle>
-                      <DialogDescription className="mt-2">
-                        QR placeholder for {nextClass.title}. No attendance will be recorded yet.
-                      </DialogDescription>
-                    </div>
-                    <div
-                      aria-label="QR code placeholder; no code generated"
-                      className="grid aspect-square w-64 max-w-full place-items-center rounded-2xl border-2 border-dashed border-primary/40 bg-muted/50 text-primary sm:w-80"
-                    >
-                      <div className="grid justify-items-center gap-3">
-                        <QrCode className="size-16" aria-hidden="true" />
-                        <span className="text-sm font-medium">QR placeholder</span>
-                      </div>
-                    </div>
-                  </div>
-                </DialogContent>
-              </Dialog>
+              {/* Live, signed code for today's booked class; independent of the mock next class above. */}
+              <AttendanceQrCard />
             </div>
           ) : (
             <div className="grid gap-3">

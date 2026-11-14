@@ -7,6 +7,7 @@ const tabs = [
   { to: 'eligibility', label: 'Eligibility' },
   { to: 'applications', label: 'Applications' },
   { to: 'syllabus', label: 'Syllabus' },
+  { to: 'rules', label: 'Scheduling rules' },
 ]
 
 export default function Grading() {

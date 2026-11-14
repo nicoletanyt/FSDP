@@ -9,7 +9,7 @@ const item = { id: 'database/adult/target/basics/one', grade_id: target.id, trac
 const detail = { student: { id: 'student', date_of_birth: '2000-12-31', joined_at: '2020-01-01', last_graded_at: '2026-01-01',
   current_grade_id: current.id, membership_status: 'active', outstanding_fees: false }, grade: current }
 const reads = { reference: { grades: [target, current], gradeTracks: [{ grade_id: current.id, track: 'adult' }, { grade_id: target.id, track: 'adult' }],
-  gradeRequirements: [{ grade_id: target.id, track: 'adult', min_months: 3, max_months: 6, min_age_years: 15, min_sessions: 20 }], syllabusItems: [item] },
+  gradeRequirements: [{ grade_id: target.id, track: 'adult', min_months: 3, max_months: 6, min_age_years: 15, max_age_years: null, min_sessions: 20 }], syllabusItems: [item] },
   summary: { cycleStart: '2026-01-01', cycleAttended: 20 }, signOffs: [], assessments: [] }
 
 test('readiness uses stored grade ordering, published requirements and complete cycle attendance, excluding all technique sign-offs', () => {
@@ -104,10 +104,12 @@ test('grading loaders follow every recorded assessment page; partial failures/ca
   await assert.rejects(loadStudentGrading(api, 'student', controller.signal), { name: 'AbortError' })
 })
 
-test('gradings the caller examines split into one calendar block per timed grade session', () => {
+test('gradings the caller examines split into one calendar block per sorted session', () => {
   const eventId = '00000000-0000-4000-8000-000000000101'
   const centreId = '00000000-0000-4000-8000-000000000102'
+  const [first, second] = ['00000000-0000-4000-8000-000000000201', '00000000-0000-4000-8000-000000000202']
   const grade = (id, label, sort_order) => ({ id, label, colour: 'Blue', is_ranked: true, sort_order })
+  const [blue, brown, dan] = [grade('blue-6th-kyu', 'Blue (6th Kyu)', 7), grade('brown-4th-kyu', 'Brown (4th Kyu)', 10), grade('1st-dan', '1st Dan', 17)]
   const raw = (overrides = {}) => ({
     id: eventId, centre_id: centreId, instructor_id: null, event_type: 'grading', name: 'Adult grading — 14 Nov 2026',
     starts_at: '2026-11-14T02:00:00Z', ends_at: '2026-11-14T04:00:00Z', status: 'scheduled',
@@ -117,36 +119,88 @@ test('gradings the caller examines split into one calendar block per timed grade
     class: null, seminar: null, workshop: null, participants: [{ count: 3 }], on_panel: true,
     grading: { event_id: eventId, track: 'adult', application_deadline: '2026-11-13', application_status: 'open', grading_date: '2026-11-14',
       application_opens_on: '2026-10-28', reporting_release_on: '2026-11-12', reporting_time: '10:00:00', official_schedule: true,
-      target_grades: [
-        { grade: grade('blue-6th-kyu', 'Blue (6th Kyu)', 7), starts_at: '2026-11-14T02:00:00Z', ends_at: '2026-11-14T02:30:00Z', candidates: 2 },
-        { grade: grade('brown-4th-kyu', 'Brown (4th Kyu)', 10), starts_at: '2026-11-14T02:30:00Z', ends_at: '2026-11-14T03:00:00Z', candidates: 1 },
-        { grade: grade('1st-dan', '1st Dan', 17), starts_at: null, ends_at: null, candidates: 0 },
+      target_grades: [{ grade: blue }, { grade: brown }, { grade: dan }],
+      // Session 1 holds two grades after an administrator moved a student.
+      sessions: [
+        { id: first, position: 1, starts_at: '2026-11-14T02:00:00Z', ends_at: '2026-11-14T02:30:00Z', candidates: 3, grades: [blue, brown] },
+        { id: second, position: 2, starts_at: '2026-11-14T02:30:00Z', ends_at: '2026-11-14T03:00:00Z', candidates: 1, grades: [dan] },
       ] },
     ...overrides,
   })
   const entry = decoders.decodeCalendarEntry(raw())
   assert.equal(entry.onPanel, true)
   assert.deepEqual(entry.targetGrades.map(row => row.id), ['blue-6th-kyu', 'brown-4th-kyu', '1st-dan'])
-  assert.deepEqual(entry.gradeSessions.map(row => [row.grade.id, row.candidates, row.startsAt]),
-    [['blue-6th-kyu', 2, '2026-11-14T02:00:00Z'], ['brown-4th-kyu', 1, '2026-11-14T02:30:00Z'], ['1st-dan', 0, null]])
+  assert.deepEqual(entry.gradeSessions.map(row => [row.position, row.grades.map(item => item.id), row.candidates, row.startsAt]),
+    [[1, ['blue-6th-kyu', 'brown-4th-kyu'], 3, '2026-11-14T02:00:00Z'], [2, ['1st-dan'], 1, '2026-11-14T02:30:00Z']])
   const blocks = calendarView.toCalendarViewEvents(entry)
   assert.deepEqual(blocks.map(block => [block.name, block.startTime, block.endTime, block.rosterCount]), [
-    ['Blue (6th Kyu) · Adult grading', '10:00', '10:30', 2],
-    ['Brown (4th Kyu) · Adult grading', '10:30', '11:00', 1],
+    ['Session 1 · Adult grading', '10:00', '10:30', 3],
+    ['Session 2 · Adult grading', '10:30', '11:00', 1],
   ])
-  assert.deepEqual(blocks.map(block => block.gradeSession), [
-    { eventId, gradeId: 'blue-6th-kyu' }, { eventId, gradeId: 'brown-4th-kyu' }])
+  assert.deepEqual(blocks.map(block => block.gradeSession), [{ eventId, sessionId: first }, { eventId, sessionId: second }])
   assert.equal(new Set(blocks.map(block => block.id)).size, 2)
+  // Session blocks keep a distinct id; every event read uses its event part.
+  assert.deepEqual(blocks.map(block => calendarView.calendarEventId(block.id)), [eventId, eventId])
+  assert.equal(calendarView.calendarEventId(eventId), eventId)
   assert.equal(calendarView.calendarEventsForDate(blocks, new Date(2026, 10, 14)).length, 2)
-  // Not on the panel, or older responses without times: one grading block as before.
-  for (const other of [raw({ on_panel: false }), (() => { const item = raw(); delete item.on_panel
-    item.grading.target_grades = item.grading.target_grades.map(row => ({ grade: row.grade })); return item })()]) {
+  // Not on the panel, not yet sorted, or a table read without sessions: one grading block as before.
+  for (const other of [raw({ on_panel: false }), (() => { const item = raw(); item.grading.sessions = []; return item })(),
+    (() => { const item = raw(); delete item.on_panel; delete item.grading.sessions; return item })()]) {
     const [single, ...rest] = calendarView.toCalendarViewEvents(decoders.decodeCalendarEntry(other))
     assert.equal(rest.length, 0)
     assert.equal(single.id, eventId)
     assert.equal(single.gradeSession, undefined)
   }
-  for (const bad of [raw({ on_panel: 'yes' }), (() => { const item = raw(); item.grading.target_grades[0].ends_at = null; return item })()]) {
+  for (const bad of [raw({ on_panel: 'yes' }), (() => { const item = raw(); item.grading.sessions[0].ends_at = null; return item })(),
+    (() => { const item = raw(); item.grading.sessions[0].id = 'not-a-uuid'; return item })()]) {
     assert.throws(() => decoders.decodeCalendarEntry(bad), { code: 'invalid_data' })
   }
+})
+
+test('a grade with a maximum age (Junior Dan) is skipped once the student is older', () => {
+  const junior = { ...current, id: 'junior-dan', label: 'Junior Dan', sort_order: 20 }
+  const data = { ...reads, reference: { ...reads.reference, grades: [current, junior, target],
+    gradeTracks: [...reads.reference.gradeTracks, { grade_id: junior.id, track: 'adult' }],
+    gradeRequirements: [...reads.reference.gradeRequirements,
+      { grade_id: junior.id, track: 'adult', min_months: 9, max_months: null, min_age_years: null, max_age_years: 14, min_sessions: 62 }] } }
+  assert.equal(studentGrading(detail, data, '2026-11-05').target.id, target.id, 'aged 26 by year: straight to the next Dan grade')
+  const young = studentGrading({ ...detail, student: { ...detail.student, date_of_birth: '2012-03-01' } }, data, '2026-11-05')
+  assert.equal(young.target.id, junior.id)
+  assert.deepEqual(young.requirements.find(row => row.key === 'max-age'), { key: 'max-age', actual: 14, required: 14, met: true })
+  assert.deepEqual(readinessRequirementText(young.requirements.find(row => row.key === 'max-age'), false),
+    { label: 'Maximum age (by calendar year)', actual: '14 years', required: '14 years' })
+})
+
+test('a child at the top of the children ladder is shown the next adult grade, gated on turning 13', () => {
+  const silver = { ...current, id: 'black-silver', label: 'Black-Silver (2nd Kyu)', sort_order: 14 }
+  const blackGold = { ...current, id: 'black-gold', label: 'Black-Gold (1st Kyu)', sort_order: 15 }
+  const adultItem = { ...item, id: 'adult/black-gold/one', grade_id: blackGold.id, track: 'adult' }
+  const data = { ...reads, reference: { grades: [silver, blackGold],
+    gradeTracks: [{ grade_id: silver.id, track: 'children' }, { grade_id: blackGold.id, track: 'adult' }],
+    gradeRequirements: [{ grade_id: blackGold.id, track: 'adult', min_months: 9, max_months: null, min_age_years: null, max_age_years: null, min_sessions: 62 }],
+    syllabusItems: [adultItem] } }
+  const child = { ...detail, student: { ...detail.student, date_of_birth: '2016-05-01', current_grade_id: silver.id } }
+  const result = studentGrading(child, data, '2026-11-05')
+  assert.equal(result.track, 'children')
+  assert.equal(result.targetTrack, 'adult')
+  assert.equal(result.target.id, blackGold.id)
+  assert.deepEqual(result.requirements.find(row => row.key === 'adult-age'), { key: 'adult-age', actual: 10, required: 13, met: false })
+  assert.deepEqual(result.syllabus.map(row => row.id), [adultItem.id])
+  assert.equal(result.ready, false)
+})
+
+test('an intermediate grade from an adult grading submits directly; one from a children grading does not', () => {
+  const silver = { ...current, id: 'black-silver-2nd-kyu', label: 'Black-Silver (2nd Kyu)', sort_order: 14 }
+  const blackGold = { ...current, id: 'black-gold', label: 'Black-Gold (1st Kyu)', sort_order: 15 }
+  const data = { ...reads, reference: { grades: [silver, blackGold],
+    gradeTracks: [{ grade_id: silver.id, track: 'children' }, { grade_id: blackGold.id, track: 'adult' }],
+    gradeRequirements: [{ grade_id: blackGold.id, track: 'adult', min_months: 9, max_months: null, min_age_years: null, max_age_years: null, min_sessions: 62 }],
+    syllabusItems: [] } }
+  const adultAward = studentGrading({ ...detail, student: { ...detail.student, current_grade_id: silver.id, last_graded_at: '2026-10-01' } }, data, '2026-11-05')
+  assert.deepEqual(adultAward.requirements.map(row => row.key), ['membership', 'membership-length', 'direct-entry', 'fees'])
+  assert.equal(adultAward.ready, true)
+  assert.equal(readinessRequirementText(adultAward.requirements[2], false).actual, 'Submit directly')
+  const childAward = studentGrading({ ...detail, student: { ...detail.student, date_of_birth: '2012-01-01', current_grade_id: silver.id,
+    last_graded_at: '2024-06-01' } }, { ...data, summary: { cycleStart: '2024-06-01', cycleAttended: 70 } }, '2026-11-05')
+  assert.deepEqual(childAward.requirements.map(row => row.key), ['membership', 'membership-length', 'time', 'sessions', 'fees'])
 })

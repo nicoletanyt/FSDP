@@ -111,6 +111,39 @@ export interface GradeTrackRow {
   track: GradeTrack
 }
 
+/** A student's grading application, with its grading and (if visible) session. */
+export interface StudentApplication {
+  id: string
+  status: 'submitted' | 'under_review' | 'withdrawn'
+  submittedAt: string
+  targetGrade: GradeRow | null
+  eventId: string
+  eventName: string
+  eventStatus: string
+  gradingDate: string | null
+  track: GradeTrack | null
+  centreName: string | null
+  session: { position: number; startsAt: string | null; endsAt: string | null } | null
+}
+
+/** An instructor's endorsement of a student for their next grade. */
+export interface GradingEndorsement {
+  endorsedAt: string
+  endorsedBy: string | null
+}
+
+/** The student's next grade, whether they meet every requirement, and any endorsement for it. */
+export interface GradingEndorsementStatus {
+  targetGradeId: string | null
+  eligible: boolean
+  endorsement: GradingEndorsement | null
+}
+
+export interface EventEndorsement extends GradingEndorsement {
+  studentId: string
+  targetGradeId: string
+}
+
 export interface GradeRequirementRow {
   grade_id: GradeId
   track: GradeTrack
@@ -118,6 +151,7 @@ export interface GradeRequirementRow {
   max_months: number | null
   min_sessions: number | null
   min_age_years: number | null
+  max_age_years: number | null
 }
 
 export interface SyllabusItemRow {
@@ -193,23 +227,26 @@ export interface EventStudentRow {
 }
 
 export interface GradingSignature { version: 1; strokes: { x: number; y: number }[][] }
-export interface GradingBatchCell { student_id: StudentId; syllabus_item_id: string; checked: boolean }
+// A technique is marked A, B or C; null is blank (allowed in drafts, not on submission).
+export type GradingMark = 'A' | 'B' | 'C'
+export interface GradingBatchCell { student_id: StudentId; syllabus_item_id: string; grade: GradingMark | null }
 export interface GradingBatch {
   id: string
   event_id: EventId
   instructor_id: InstructorId
   track: GradeTrack
-  target_grade_id: string
+  session_id: string
   status: 'draft' | 'submitted'
   version: number
   signature: GradingSignature | null
   submitted_at: Timestamp | null
   updated_at: Timestamp
-  students: { student_id: StudentId; candidate_number: number; name: string; notes: string | null }[]
-  items: { syllabus_item_id: string; category: string; label: string; sort_order: number }[]
+  // Each candidate is graded on their own target grade's techniques only.
+  students: { student_id: StudentId; candidate_number: number; name: string; notes: string | null; target_grade_id: string }[]
+  items: { syllabus_item_id: string; category: string; label: string; sort_order: number; grade_id: string }[]
   results: GradingBatchCell[]
 }
-export interface GradingBatchKey { eventId: EventId; track: GradeTrack; gradeId: string }
+export interface GradingBatchKey { eventId: EventId; sessionId: string }
 export interface GradingBatchSaveInput extends GradingBatchKey {
   requestId: string
   expectedUserId: AuthUserId
@@ -345,7 +382,7 @@ export interface StudentSummary {
 }
 
 // Readiness means ready to START an assessment. Techniques belong to assessment.
-export type ReadinessRequirementKey = 'membership' | 'membership-length' | 'age' | 'time' | 'sessions' | 'fees'
+export type ReadinessRequirementKey = 'membership' | 'membership-length' | 'adult-age' | 'age' | 'max-age' | 'direct-entry' | 'time' | 'sessions' | 'fees'
 
 export interface ReadinessRequirement {
   key: ReadinessRequirementKey
@@ -400,8 +437,11 @@ export interface InstructorReferenceData {
 }
 
 // One target grade's own grading session within a grading event.
+// A sorted grading session (time slot) on the calendar; it may hold several grades.
 export interface GradeSessionTime {
-  grade: GradeRow
+  id: string
+  position: number
+  grades: GradeRow[]
   startsAt: Timestamp | null
   endsAt: Timestamp | null
   candidates: number

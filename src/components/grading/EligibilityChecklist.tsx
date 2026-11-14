@@ -2,14 +2,22 @@ import { useId, useState } from 'react'
 import type { ReactNode } from 'react'
 import { CheckCircle2, ChevronRight, XCircle } from 'lucide-react'
 import { cn } from 'cn'
-import type { EligibilityRequirement } from '@/lib/admin/types'
+
+/** One checked requirement; shared by the admin and student grading views. */
+export interface ChecklistRequirement {
+  key: string
+  label: string
+  actual: string
+  required: string
+  met: boolean
+}
 
 export default function EligibilityChecklist({
   requirements,
   compact = false,
   techniqueDetails,
 }: {
-  requirements: EligibilityRequirement[]
+  requirements: ChecklistRequirement[]
   compact?: boolean
   techniqueDetails?: ReactNode
 }) {

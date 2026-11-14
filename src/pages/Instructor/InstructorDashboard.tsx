@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router";
+import { useSearchParams } from "react-router";
 import {
     ChevronDown,
     ChevronLeft,
@@ -543,7 +543,6 @@ export default function InstructorDashboard() {
         range: AvailabilityRange;
         editingId?: string;
     } | null>(null);
-    const navigate = useNavigate();
     const requestedId = searchParams.get("session") ?? searchParams.get("class");
     const requestedDate = parseCalendarDate(searchParams.get("date"));
     const [resolvedSelectionDate, setResolvedSelectionDate] = useState<{ id: string; date: Date } | null>(null);
@@ -738,12 +737,7 @@ export default function InstructorDashboard() {
         expandedClassId,
         onSelectDate: selectDay,
         onToggleClass: (event) => {
-            // A grade session block opens that grade's grading checklist.
-            const gradeSession = event.gradeSession;
-            if (gradeSession) {
-                void navigate(`/instructor/grading/${gradeSession.eventId}?grade=${encodeURIComponent(gradeSession.gradeId)}`);
-                return;
-            }
+            // Grading session blocks open the same side panel as classes.
             if (document.activeElement instanceof HTMLElement) classTriggerRef.current = document.activeElement;
             updateSelection(
                 event.date,
@@ -971,7 +965,7 @@ export default function InstructorDashboard() {
                         />
                     )}
                     {isDesktop && showSidePanel && requestedSession && (view === "day" ? (
-                        <DayClassDetails onClose={() => updateSelection(selectedDate)}>
+                        <DayClassDetails title={requestedSession.type === "grading" ? "Grading session details" : "Class details"} onClose={() => updateSelection(selectedDate)}>
                             <EventCard
                                 key={requestedSession.id}
                                 event={requestedSession}
@@ -997,7 +991,7 @@ export default function InstructorDashboard() {
             {!isDesktop && <Drawer open={Boolean(expandedClassId)} onOpenChange={(open) => { if (!open) updateSelection(selectedDate); }}>
                 <DrawerContent finalFocus={() => classTriggerRef.current?.isConnected ? classTriggerRef.current : document.querySelector<HTMLElement>('[data-mobile-calendar] button')}>
                     <DrawerHeader>
-                        <div className="min-w-0"><DrawerTitle className="text-[18px] font-semibold">Class details</DrawerTitle><DrawerDescription className="text-[13px] text-muted-foreground">{lastSelectedSession.current?.date.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</DrawerDescription></div>
+                        <div className="min-w-0"><DrawerTitle className="text-[18px] font-semibold">{lastSelectedSession.current?.type === "grading" ? "Grading session details" : "Class details"}</DrawerTitle><DrawerDescription className="text-[13px] text-muted-foreground">{lastSelectedSession.current?.date.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</DrawerDescription></div>
                         <DrawerClose render={<Button variant="ghost" className="h-11 rounded-full px-3 text-[15px] text-primary" />}>Done</DrawerClose>
                     </DrawerHeader>
                     <DrawerBody className="pb-[max(1rem,env(safe-area-inset-bottom))]">

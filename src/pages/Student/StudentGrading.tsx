@@ -7,10 +7,12 @@ import { Label } from '@/components/ui/label'
 import { useAuth } from '@/hooks/use-auth'
 import { supabase } from '@/lib/supabase'
 import { money } from '@/lib/format'
+import EligibilityChecklist from '@/components/grading/EligibilityChecklist'
+import type { ChecklistRequirement } from '@/components/grading/EligibilityChecklist'
 import { gradingProgression } from '@/lib/grading-progression'
 import { getGradingQuote, getGradingCheckoutUrl, getGradingTestCheckoutUrl, gradingCheckoutRequest, type GradingCheckoutOption } from '@/lib/grading-checkout'
 
-type Readiness = { target_grade_id: string; key: string; label: string; actual: string; required: string; met: boolean }
+type Readiness = ChecklistRequirement & { target_grade_id: string; target_grade_label: string }
 type ApplicationDraft = { id: string; target_grade_id: string; status: string; created_at: string; base_fee_cents: number }
 
 export default function GradingApplication() {
@@ -96,7 +98,6 @@ export default function GradingApplication() {
         const result = await gradingCheckoutRequest<{ paid: boolean; draftSaved?: boolean; paymentRecorded?: boolean }>({ action: testReturn ? 'test-status' : 'status', session_id: sessionId })
         if (!active) return
         if (result.paid) {
-          // 👇 核心修改：前端手动触发真实写入（防呆设计，确保数据一定进库）
           if (result.paymentRecorded && targetBelt && profile?.id) {
             const { data: existing } = await supabase
               .from('grading_applications')
@@ -169,7 +170,9 @@ export default function GradingApplication() {
       {error && <div role="alert" className="mb-6 text-sm text-destructive">{error} <button type="button" className="underline" onClick={() => setRevision((previous) => previous + 1)}>Try again</button></div>}
       {loading && <p role="status" className="mb-6 text-sm text-muted-foreground">Loading your grading opportunities…</p>}
       
-      {/* 👇 修复 1：只要已经支付成功（有 paidRequest 或 payment 提示），就不显示这句话了 */}
+      {/* 👇 合并了同学的 ReadinessCard 和你的防重逻辑 */}
+      {!loading && !error && <ReadinessCard readiness={readiness.length ? { targetLabel: readiness[0].target_grade_label, requirements: readiness } : null} />}
+      
       {!loading && !error && available.length === 0 && !paidRequest && !payment && (
         <p className="mb-6 text-sm text-muted-foreground">No eligible grading applications are open for your account. Your dojo must confirm your membership and training requirements before a formal grading application.</p>
       )}
@@ -244,7 +247,6 @@ export default function GradingApplication() {
                 <span className="text-gray-500">Base Fee</span>
                 <span className="font-medium">{selected || paidRequest ? money.format(baseFee) : progression?.feeCents != null ? money.format(progression.feeCents / 100) : '—'}</span>
               </div>
-              {/* 逾期费提示 */}
               {isLateSubmission && (
                 <div className="flex justify-between text-red-600 bg-red-50 p-2 rounded">
                   <span className="flex items-center gap-1"><Info className="w-3 h-3"/> Late Submission</span>
@@ -276,4 +278,31 @@ export default function GradingApplication() {
       </div>
     </main>
   )
+}
+
+function ReadinessCard({ readiness }: { readiness: { targetLabel: string; requirements: ChecklistRequirement[] } | null }) {
+  if (!readiness) {
+    return <Card className="gap-1 p-6">
+      <h2 className="text-xl font-semibold">Your next grade</h2>
+      <p className="text-sm text-muted-foreground">You have reached the highest grade on your grading ladder.</p>
+    </Card>
+  }
+  const met = readiness.requirements.filter((requirement) => requirement.met).length
+  const total = readiness.requirements.length
+  const eligible = met === total
+  return <Card className="gap-4 p-6 mt-6">
+    <div className="flex flex-wrap items-baseline justify-between gap-2">
+      <div>
+        <p className="text-sm text-muted-foreground">Your next grade</p>
+        <h2 className="text-xl font-semibold">{readiness.targetLabel}</h2>
+      </div>
+      <p className={eligible ? 'text-sm font-medium text-green-600' : 'text-sm font-medium text-muted-foreground'}>
+        {eligible ? 'Eligible to grade' : `${met} of ${total} requirements met`}
+      </p>
+    </div>
+    <EligibilityChecklist requirements={readiness.requirements} compact />
+    <p className="text-xs text-muted-foreground">
+      Requirements follow the published ASK grading sheets. Time and training sessions count from your last grading (or from joining if you have not graded yet).
+    </p>
+  </Card>
 }

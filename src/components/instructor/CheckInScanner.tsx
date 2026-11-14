@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
     Camera,
     CameraOff,
@@ -14,6 +14,7 @@ import { Card } from "@/components/ui/card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import GradeBadge from "@/components/GradeBadge";
 import type { StudentRank } from "@/lib/student-grades";
+import type { NfcScanResult } from "@/lib/nfc-check-in";
 import { useQrCamera } from "@/hooks/use-qr-camera";
 import { cn } from "@/lib/utils";
 
@@ -27,10 +28,26 @@ export type ScanFeedback = {
 export default function CheckInScanner({
     feedback,
     onScan,
+    choice,
+    choicePending = false,
+    onChooseClass,
+    onCancelChoice,
+    cameraPaused = false,
+    onCameraRunningChange,
+    onCameraEnabledChange,
+    onCameraErrorChange,
     isKiosk = false,
 }: {
     feedback: ScanFeedback | null;
     onScan: (payload: string) => void;
+    choice?: NfcScanResult | null;
+    choicePending?: boolean;
+    onChooseClass?: (eventId: string) => void;
+    onCancelChoice?: () => void;
+    cameraPaused?: boolean;
+    onCameraRunningChange?: (running: boolean, live: boolean) => void;
+    onCameraEnabledChange?: (enabled: boolean) => void;
+    onCameraErrorChange?: (failed: boolean) => void;
     isKiosk?: boolean;
 }) {
     const [enabled, setEnabled] = useState(false);
@@ -38,15 +55,20 @@ export default function CheckInScanner({
     const [settingsOpen, setSettingsOpen] = useState(false);
     const { videoRef, status, error, cameras, activeCameraId, restart } =
         useQrCamera({
-            enabled,
+            enabled: enabled && !cameraPaused,
             cameraId,
-            paused: !!feedback,
+            paused: !!feedback || !!choice || choicePending,
             onScan,
         });
     const live = status === "live";
     const starting = status === "starting";
 
+    useEffect(() => { onCameraRunningChange?.(live || starting, live); }, [live, starting, onCameraRunningChange]);
+    useEffect(() => { onCameraEnabledChange?.(enabled); }, [enabled, onCameraEnabledChange]);
+    useEffect(() => { onCameraErrorChange?.(status === "error"); }, [status, onCameraErrorChange]);
+
     function startCamera() {
+        if (cameraPaused) return;
         if (enabled) restart();
         else setEnabled(true);
     }
@@ -93,7 +115,7 @@ export default function CheckInScanner({
                             ? "Camera live"
                             : starting
                                 ? "Starting camera…"
-                                : "Camera off"}
+                                : cameraPaused ? "NFC listening window" : "Camera off"}
                     </span>
                 </div>
                 <Popover open={settingsOpen} onOpenChange={setSettingsOpen}>
@@ -158,6 +180,7 @@ export default function CheckInScanner({
                         <p className="text-xl font-semibold tracking-tight sm:text-2xl">
                             {starting
                                 ? "Connecting to your camera"
+                                : cameraPaused ? "Listening for NFC tags"
                                 : error && enabled
                                     ? "Camera needs attention"
                                     : "Ready for check-ins?"}
@@ -165,12 +188,13 @@ export default function CheckInScanner({
                         <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-zinc-300">
                             {starting
                                 ? "Allow camera access when your browser asks."
+                                : cameraPaused ? "Hold the tag near this phone until confirmation. QR scanning resumes automatically."
                                 : error && enabled
                                     ? error
                                     : "Start the camera to let students scan their QR codes."}
                         </p>
                     </div>
-                    {!starting && (
+                    {!starting && !cameraPaused && (
                         <Button
                             onClick={startCamera}
                             className="mt-2 min-h-12 gap-2 rounded-xl bg-white px-6 text-zinc-950 hover:bg-zinc-200"
@@ -183,6 +207,21 @@ export default function CheckInScanner({
                 </div>
             )}
 
+            {choice?.status === "select_class" && (
+                <div role="group" aria-label="Choose NFC class" className="absolute inset-0 z-30 overflow-y-auto overscroll-contain bg-amber-100 px-4 py-6 text-center text-amber-950">
+                    <div className="flex min-h-full flex-col items-center justify-center gap-3">
+                        <CircleAlert aria-hidden="true" className="size-12" />
+                        <h2 className="text-xl font-semibold sm:text-3xl">Choose a class for {choice.student_name || "this student"}</h2>
+                        <p className="text-sm">More than one class is open. No attendance has been changed.</p>
+                        <div className="flex w-full max-w-md flex-col gap-2">
+                            {choice.classes?.map(item => <Button key={item.event_id} type="button" variant="outline"
+                                disabled={choicePending} className="h-auto min-h-11 whitespace-normal py-3 text-amber-950"
+                                onClick={() => onChooseClass?.(item.event_id)}>{item.class_name} · {new Intl.DateTimeFormat("en-SG", { timeZone: "Asia/Singapore", hour: "numeric", minute: "2-digit" }).format(new Date(item.starts_at))}</Button>)}
+                            <Button type="button" variant="ghost" className="min-h-11 text-amber-950" disabled={choicePending} onClick={onCancelChoice}>Cancel</Button>
+                        </div>
+                    </div>
+                </div>
+            )}
             {feedback && (
                 <div
                     role={feedback.tone === "invalid" ? "alert" : "status"}

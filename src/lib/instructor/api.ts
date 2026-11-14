@@ -7,10 +7,12 @@ import {
   decodeSummary, decodeSyllabusItem, decodeTechniqueSignOff, array, decodeAttendanceSave, decodeAttendanceSnapshot,
   decodeSessionSave, decodeAssessmentSnapshot,
   decodeGradingBatch, decodeGradingSignature, decodeAvailabilitySave, decodeAvailabilitySnapshot,
+  decodeEndorsementStatus, decodeEventEndorsements, decodeStudentApplication,
 } from './decoders'
 import { InstructorDataError, toInstructorDataError } from './errors'
 import { createInstructorProfileApi } from './profile'
 import { decodeExaminerSessions, decodeGradingDay } from './grading-panels'
+import { loadSessionResults } from '../grading/checklist-results'
 import { collectCalendarPages } from './page-collector'
 import type {
   AssessmentDetail, AssessmentKey, AttendanceSaveInput, AvailabilityInput, CalendarOptions, DirectoryOptions, EventId, HistoryOptions,
@@ -73,6 +75,23 @@ export async function requestInstructorData<T>(
   } catch (error) {
     throw toInstructorDataError(error, errorMessage)
   }
+}
+
+// Signed links to instructors' profile photos, by instructor ID, for avatars.
+// Photos are a nicety: anything that fails falls back to initials.
+export async function loadInstructorPhotos(client: Pick<SupabaseClient, 'from'> & Partial<Pick<SupabaseClient, 'storage'>>, ids: string[]) {
+  const photos: Record<string, string> = {}
+  if (!ids.length) return photos
+  const { data, error } = await client.from('instructors').select('id,profile_picture_url').in('id', ids)
+  if (error || !data) return photos
+  const rows = (data as { id: string; profile_picture_url: string | null }[]).filter(row => row.profile_picture_url)
+  const stored = rows.filter(row => !row.profile_picture_url!.startsWith('https://'))
+  for (const row of rows) if (row.profile_picture_url!.startsWith('https://')) photos[row.id] = row.profile_picture_url!
+  if (stored.length && client.storage) {
+    const { data: signed } = await client.storage.from('instructor-photos').createSignedUrls(stored.map(row => row.profile_picture_url!), 3600)
+    signed?.forEach((item, index) => { if (item.signedUrl) photos[stored[index].id] = item.signedUrl })
+  }
+  return photos
 }
 
 export function createInstructorApi(client: InstructorClient) {
@@ -250,15 +269,14 @@ export function createInstructorApi(client: InstructorClient) {
     async getGradingBatch(key: GradingBatchKey, signal?: AbortSignal) {
       const identity = await getCurrentInstructor(signal)
       const eventId = parseEntityId(key.eventId, 'event')
-      if (!['children', 'adult'].includes(key.track) || !key.gradeId) invalidRequest('Choose a grading track and target grade.')
+      const sessionId = parseEntityId(key.sessionId, 'record')
       const value = await requestInstructorData(
-        () => cancellable(client.rpc('get_instructor_grading_batch', {
-          target_event: eventId, target_track: key.track, target_grade: key.gradeId,
-        }), signal), 'Unable to load your grading draft. Please retry.', signal,
+        () => cancellable(client.rpc('get_instructor_grading_batch', { target_session: sessionId }), signal),
+        'Unable to load your grading draft. Please retry.', signal,
       )
       if (value === null) return null
       const batch = decodeGradingBatch(value)
-      if (batch.event_id !== eventId || batch.instructor_id !== identity.instructorId || batch.track !== key.track || batch.target_grade_id !== key.gradeId) {
+      if (batch.event_id !== eventId || batch.instructor_id !== identity.instructorId || batch.session_id !== sessionId) {
         throw new InstructorDataError('invalid_data', 'The grading batch does not match your account or selected group.')
       }
       return batch
@@ -267,26 +285,25 @@ export function createInstructorApi(client: InstructorClient) {
     async saveGradingBatch(input: GradingBatchSaveInput) {
       const identity = await getCurrentInstructor()
       if (identity.userId !== input.expectedUserId) throw new InstructorDataError('forbidden', 'Your account changed. Reopen the grading session.')
-      if (!['children', 'adult'].includes(input.track) || !input.gradeId || !Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 0
+      if (!input.sessionId || !Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 0
         || typeof input.submit !== 'boolean' || !Array.isArray(input.cells) || !input.cells.length
-        || input.cells.some(c => typeof c.checked !== 'boolean' || !c.syllabus_item_id)
+        || input.cells.some(c => (c.grade !== null && !['A', 'B', 'C'].includes(c.grade)) || !c.syllabus_item_id)
         || new Set(input.cells.map(c => JSON.stringify([c.student_id, c.syllabus_item_id]))).size !== input.cells.length
         || !Array.isArray(input.comments) || input.comments.some(c => c.notes !== null && (typeof c.notes !== 'string' || c.notes.length > 2000))
         || new Set(input.comments.map(c => c.student_id)).size !== input.comments.length) invalidRequest('Enter a complete grading checklist.')
       const result = decodeGradingBatch(await rpc('save_instructor_grading_batch_with_comments', {
         request_id: parseEntityId(input.requestId, 'grading-request'), expected_user: input.expectedUserId,
-        target_event: parseEntityId(input.eventId, 'event'), target_track: input.track, target_grade: input.gradeId,
-        expected_version: input.expectedVersion,
+        target_session: parseEntityId(input.sessionId, 'record'), expected_version: input.expectedVersion,
         cells: input.cells.map(c => ({ ...c, student_id: parseEntityId(c.student_id, 'student') })),
         comments: input.comments.map(c => ({ ...c, student_id: parseEntityId(c.student_id, 'student') })),
         submit: input.submit, examiner_signature: input.signature === null ? null : decodeGradingSignature(input.signature),
       }, undefined, 'Unable to save your grading batch. Please retry.'))
-      const expected = new Map(input.cells.map(c => [JSON.stringify([c.student_id, c.syllabus_item_id]), c.checked]))
+      const expected = new Map(input.cells.map(c => [JSON.stringify([c.student_id, c.syllabus_item_id]), c.grade]))
       const expectedComments = new Map(input.comments.map(c => [c.student_id, c.notes]))
-      if (result.event_id !== input.eventId || result.instructor_id !== identity.instructorId || result.track !== input.track
-        || result.target_grade_id !== input.gradeId || result.version !== input.expectedVersion + 1
+      if (result.event_id !== input.eventId || result.instructor_id !== identity.instructorId
+        || result.session_id !== input.sessionId || result.version !== input.expectedVersion + 1
         || result.status !== (input.submit ? 'submitted' : 'draft') || result.results.length !== expected.size
-        || result.results.some(c => expected.get(JSON.stringify([c.student_id, c.syllabus_item_id])) !== c.checked)
+        || result.results.some(c => expected.get(JSON.stringify([c.student_id, c.syllabus_item_id])) !== c.grade)
         || result.students.length !== expectedComments.size || result.students.some(s => !expectedComments.has(s.student_id) || expectedComments.get(s.student_id) !== s.notes)) {
         throw new InstructorDataError('invalid_data', 'The save response did not match the grading batch. Retry the same request.')
       }
@@ -484,12 +501,66 @@ export function createInstructorApi(client: InstructorClient) {
         'Unable to load your grading sessions. Please try again.'))
     },
 
+    // Avatars for examiner panels.
+    getInstructorPhotos(ids: string[]) {
+      return loadInstructorPhotos(client, ids)
+    },
+
     // One grading day with a session per target grade. Panel members and admins only.
+    // Every grading application the student has made, newest first.
+    async getStudentApplications(id: StudentId, signal?: AbortSignal) {
+      const studentId = parseEntityId(id, 'student')
+      await getInstructorAccount(signal)
+      return allRows('grading_applications', ['submitted_at', 'id'], decodeStudentApplication, signal,
+        'id,status,submitted_at,target_grade:grades(*),session:grading_sessions(position,starts_at,ends_at),'
+        + 'grading:gradings(grading_date,track,event:events(id,name,starts_at,status,centre:centres(name)))', { student_id: studentId })
+    },
+
+    async getEndorsementStatus(id: StudentId, signal?: AbortSignal) {
+      const studentId = parseEntityId(id, 'student')
+      return decodeEndorsementStatus(await rpc('grading_endorsement_status', { target_student: studentId }, signal,
+        'Unable to load the endorsement. Please try again.'))
+    },
+
+    async endorseStudent(id: StudentId, targetGradeId: string) {
+      const studentId = parseEntityId(id, 'student')
+      return decodeEndorsementStatus(await rpc('endorse_grading_student', { target_student: studentId, expected_grade: targetGradeId },
+        undefined, 'Unable to endorse this student. Please try again.'))
+    },
+
+    async getEventEndorsements(id: string, signal?: AbortSignal) {
+      const eventId = parseEntityId(id, 'event')
+      return decodeEventEndorsements(await rpc('grading_event_endorsements', { target_event: eventId }, signal,
+        'Unable to load endorsements. Please try again.'))
+    },
+
     async getGradingDay(id: string, signal?: AbortSignal) {
       const eventId = parseEntityId(id, 'event')
       await getCurrentInstructor(signal)
       return decodeGradingDay(await rpc('examiner_grading_day', { target_event: eventId }, signal,
         'Unable to load this grading. Please try again.'))
+    },
+
+    // The grading a session belongs to, or null when the caller can't see the
+    // session (row security: panel examiners once published, the chief always).
+    async getGradingSessionEvent(session: string, signal?: AbortSignal): Promise<string | null> {
+      const sessionId = parseEntityId(session, 'grading-session')
+      const data = await requestInstructorData(
+        () => cancellable(client.from('grading_sessions').select('grading_event_id').eq('id', sessionId), signal).maybeSingle<unknown>(),
+        'Unable to load this grading session. Please try again.', signal)
+      if (data === null) return null
+      const eventId = data && typeof data === 'object' ? (data as Record<string, unknown>).grading_event_id : null
+      return parseEntityId(eventId, 'event')
+    },
+
+    // Checklists for one grading session. Row security returns the caller's own
+    // batch, plus every submitted panel batch when they are the chief examiner.
+    async getSessionChecklists(id: string, session: string) {
+      const eventId = parseEntityId(id, 'event')
+      const sessionId = parseEntityId(session, 'grading-session')
+      const identity = await getCurrentInstructor()
+      // The viewer's own instructor ID, so the page can open on their own checklist.
+      return { viewerId: identity.instructorId as string, batches: await loadSessionResults(client, eventId, sessionId) }
     },
 
     async getStudentSummary(id: StudentId, signal?: AbortSignal) {

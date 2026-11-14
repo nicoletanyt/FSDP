@@ -9,6 +9,8 @@ import { cn } from 'cn'
 function AdminShell() {
   const { pathname } = useLocation()
   const isCalendar = pathname === '/admin/calendar'
+  // main's list already hides the filter bar on every grading page (a superset
+  // of the grading schedule pages this branch hid).
   const showFilters =
     pathname !== '/admin' && pathname !== '/admin/profile' && pathname !== '/admin/instructors' &&
     pathname !== '/admin/notifications' &&

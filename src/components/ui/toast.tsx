@@ -16,6 +16,7 @@ function Toaster() {
             <ToastPrimitive.Content className="flex items-center gap-3">
               <CircleCheck aria-hidden="true" className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
               <ToastPrimitive.Title className="min-w-0 flex-1 text-sm font-medium [overflow-wrap:anywhere]">{toast.title}</ToastPrimitive.Title>
+              {toast.actionProps && <ToastPrimitive.Action render={<Button variant="outline" size="sm" className="min-h-11 shrink-0 lg:min-h-0" />} />}
               <ToastPrimitive.Close aria-label="Dismiss notification" render={<Button variant="ghost" size="icon-sm" className="size-11 shrink-0 lg:size-8.75" />}>
                 <X aria-hidden="true" />
               </ToastPrimitive.Close>

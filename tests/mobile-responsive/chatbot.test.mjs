@@ -52,6 +52,7 @@ test('send, retry and keyboard close preserve a real conversation without showin
     d.querySelector('[aria-label="Send message"]').click(); await wait()
     const success = d.querySelector('[aria-label="Chat messages"]').textContent
     const sourcesVisible = !!d.querySelector('[aria-label="Source records"]')
+    const related = [...d.querySelectorAll('[aria-label="Related pages"] a')].map(a => a.getAttribute('href'))
     w.chatFixture.mode = 'error'
     set('What about next week?'); await wait()
     d.querySelector('[aria-label="Send message"]').click(); await wait()
@@ -63,11 +64,12 @@ test('send, retry and keyboard close preserve a real conversation without showin
     const recovered = !d.querySelector('[role="alert"]')
     input.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await wait()
     const closed = !!d.querySelector('[aria-label="Open DojoGPT"]') && d.activeElement === d.querySelector('[aria-label="Open DojoGPT"]')
-    return { focused, success, sourcesVisible, failed, userCount, afterRetry, recovered, closed, path: w.location.pathname, calls: w.chatFixture.calls.length }
+    return { focused, success, sourcesVisible, related, failed, userCount, afterRetry, recovered, closed, path: w.location.pathname, calls: w.chatFixture.calls.length }
   })
   assert.equal(result.focused, true)
   assert.match(result.success, /10:00 AM/)
   assert.equal(result.sourcesVisible, false)
+  assert.deepEqual(result.related, ['/instructor/calendar?date=2026-11-08'])
   assert.match(result.failed, /unavailable/)
   assert.equal(result.afterRetry, result.userCount)
   assert.equal(result.recovered, true)
@@ -110,10 +112,10 @@ test('starter topics and follow-ups send real chat prompts without duplicate req
     const draft = input.value
     d.querySelector('[aria-label="New conversation"]').click(); await wait()
     const resetCount = d.querySelectorAll('[aria-label="Suggested questions"] button').length
-    d.querySelector('[aria-label="Suggested questions"] [data-chat-topic="attendance"]').focus()
+    d.querySelector('[aria-label="Suggested questions"] [data-chat-topic="followUp"]').focus()
     return { starters, initial, pending, followUps, followUpPlacement, question, displayQuestion, sentTurns, second, draft, resetCount }
   })
-  assert.deepEqual(result.starters, ['What classes am I teaching today?', 'What’s on my schedule this week?', 'How is this student’s attendance?', 'What sessions has this student attended?'])
+  assert.deepEqual(result.starters, ['What classes am I teaching today?', 'Who was absent from my last class?', 'Which students need a follow-up?', 'What gradings am I examining?'])
   assert.equal(result.initial.calls, 0)
   assert.equal(result.initial.inGreeting, true)
   assert.match(result.initial.greetingText, /Hi, I’m DojoGPT/)
@@ -122,7 +124,7 @@ test('starter topics and follow-ups send real chat prompts without duplicate req
   assert.equal(result.pending.calls, 1)
   assert.equal(result.pending.suggestions, 0)
   assert.equal(result.pending.draft, 'My unfinished question')
-  assert.deepEqual(result.followUps, ['What’s on my schedule this week?', 'How is this student’s attendance?', 'What sessions has this student attended?'])
+  assert.deepEqual(result.followUps, ['What’s on my schedule this week?', 'Who was absent from my last class?', 'Which students need a follow-up?'])
   assert.equal(result.followUpPlacement, true)
   assert.deepEqual(result.question, { role: 'user', content: 'What classes and events am I assigned to today?' })
   assert.equal(result.displayQuestion, 'What classes am I teaching today?')
@@ -144,7 +146,7 @@ test('starter topics and follow-ups send real chat prompts without duplicate req
     ;[...d.querySelectorAll('button')].find(button => button.textContent === 'Retry reply').click(); await wait()
     return { prompt, hiddenOnError, recovered: d.querySelectorAll('[aria-label="Follow-up questions"] button').length }
   })
-  assert.match(keyboard.prompt, /ask me for a name or membership number first/i)
+  assert.match(keyboard.prompt, /missed 3 or more classes in a row/i)
   assert.equal(keyboard.hiddenOnError, true)
   assert.equal(keyboard.recovered, 3)
 })

@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { ArrowRight, Bell, CheckCircle2, ChevronRight, XCircle } from 'lucide-react'
 import AdminGradeBadge from '@/components/admin/AdminGradeBadge'
 import EmptyState from '@/components/admin/EmptyState'
-import EligibilityChecklist from '@/components/admin/EligibilityChecklist'
+import EligibilityChecklist from '@/components/grading/EligibilityChecklist'
 import { EligibilityBadge } from '@/components/admin/StatusBadge'
 import { NativeSelect } from '@/components/admin/form-controls'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -496,6 +496,7 @@ function requirementText(grade: Grade, track: GradeTrack): string {
   if (!requirement) return '—'
   const parts: string[] = []
   if (requirement.minAge !== undefined) parts.push(`age ${requirement.minAge}+`)
+  if (requirement.maxAge !== undefined) parts.push(`age ≤${requirement.maxAge}`)
   if (requirement.minMonths > 0) {
     parts.push(formatMonths(requirement.minMonths, requirement.maxMonths))
   }
