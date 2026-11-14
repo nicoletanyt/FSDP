@@ -9,6 +9,7 @@ import {
     openGradingEventsKey,
     singaporeGradingDate,
 } from "@/lib/admin/section-counts";
+import { sentEmailsKey } from "@/lib/admin/sent-emails";
 import {
     ArrowRight,
     CheckCircle2,
@@ -261,6 +262,7 @@ export default function GradingEligibility() {
                 setPreview(null);
                 setNotifyOpen(false);
                 void client.invalidateQueries({ queryKey: ['admin', 'grading-eligibility', session?.user.id] });
+                void client.invalidateQueries({ queryKey: sentEmailsKey(session?.user.id) });
             } else {
                 if (!data?.preview_token || !data?.email_subject || !data?.email_body) {
                     throw new Error(

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useAuth } from '@/hooks/use-auth'
 import { supabase } from '@/lib/supabase'
+import { sentEmailsKey } from '@/lib/admin/sent-emails'
 
 type RecipientCheck = {
   delivery_mode: 'bcc'
@@ -30,6 +31,7 @@ export default function AttendanceNoticeDialog({ centreId, studentIds, onClose, 
   onSent: (result: NoticeResult) => void
 }) {
   const { session } = useAuth()
+  const client = useQueryClient()
   const template = useQuery({
     queryKey: ['admin', 'attendance-notice-template', session?.user.id],
     enabled: !!session,
@@ -80,6 +82,7 @@ export default function AttendanceNoticeDialog({ centreId, studentIds, onClose, 
         throw new Error('The email service returned an unexpected result. Check send history before trying again.')
       }
       onSent(data as NoticeResult)
+      void client.invalidateQueries({ queryKey: sentEmailsKey(session?.user.id) })
       onClose()
     } catch (failure) {
       const message = failure instanceof Error ? failure.message : 'Unable to process attendance notices.'

@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { TableSkeleton } from '@/components/shared/skeletons'
 import EmptyState from '@/components/shared/layout/EmptyState'
+import RetryAlert from '@/components/shared/layout/RetryAlert'
 import { StatusBadge } from '@/components/shared/status/StatusBadge'
 import type { BadgeTone } from '@/components/shared/status/StatusBadge'
 import FilterPopover, { FilterField } from '@/components/shared/filters/FilterPopover'
@@ -11,37 +13,10 @@ import {
   Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
 import { formatDate } from '@/lib/admin/format'
-import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/hooks/use-auth'
+import { loadSentEmails, sentEmailsKey, sentEmailsRefreshInterval } from '@/lib/admin/sent-emails'
 
 type SendStatus = 'pending' | 'accepted' | 'failed'
-
-interface GradingSend {
-  id: string
-  grading_event_id: string | null
-  event_name: string | null
-  status: SendStatus
-  recipient_count: number
-  created_at: string
-  error: string | null
-}
-
-interface AttendanceSend {
-  id: string
-  student_id: string
-  status: SendStatus
-  created_at: string
-  error: string | null
-  students: { first_name: string; last_name: string } | { first_name: string; last_name: string }[] | null
-}
-
-type SentEmail = {
-  id: string
-  date: string
-  type: 'grading' | 'attendance'
-  sentTo: string
-  status: SendStatus
-  error: string | null
-}
 
 const typeLabels = { grading: 'Grading invitation', attendance: 'Attendance notice' } as const
 
@@ -55,43 +30,19 @@ const statusLabels: Record<SendStatus, { label: string; tone: BadgeTone }> = {
 const tableClass = '[&_th]:px-4 [&_td]:px-4 [&_td]:py-4 [&_th:first-child]:pl-5 [&_td:first-child]:pl-5 [&_th:last-child]:pr-5 [&_td:last-child]:pr-5'
 
 export default function Notifications() {
-  const [emails, setEmails] = useState<SentEmail[] | null>(null)
-  const [error, setError] = useState('')
+  const { session } = useAuth()
+  const emailsQuery = useQuery({
+    queryKey: sentEmailsKey(session?.user.id),
+    queryFn: loadSentEmails,
+    enabled: Boolean(session),
+    refetchInterval: sentEmailsRefreshInterval,
+    // React Query pauses polling in hidden tabs, just as the old timer did.
+    refetchOnWindowFocus: 'always',
+  })
+  const emails = emailsQuery.data
   const [search, setSearch] = useState('')
   const [type, setType] = useState('all')
   const [status, setStatus] = useState('all')
-
-  const refresh = useCallback(async () => {
-    const [grading, attendance] = await Promise.all([
-      supabase.from('grading_email_sends')
-        .select('id,grading_event_id,event_name,status,recipient_count,created_at,error')
-        .order('created_at', { ascending: false }),
-      supabase.from('admin_attendance_email_sends')
-        .select('id,student_id,status,created_at,error,students(first_name,last_name)')
-        .order('created_at', { ascending: false }).limit(100),
-    ])
-    if (grading.error || attendance.error) {
-      setError('Sent emails could not be loaded. Check your connection and refresh the page.')
-      return
-    }
-    const gradingRows = ((grading.data ?? []) as GradingSend[]).map((send): SentEmail => ({
-      id: `grading-${send.id}`, date: send.created_at, type: 'grading', status: send.status, error: send.error,
-      sentTo: `${send.event_name ?? 'A former grading'} · ${send.recipient_count} ${send.recipient_count === 1 ? 'student' : 'students'}`,
-    }))
-    const attendanceRows = ((attendance.data ?? []) as AttendanceSend[]).map((send): SentEmail => {
-      const student = Array.isArray(send.students) ? send.students[0] : send.students
-      return { id: `attendance-${send.id}`, date: send.created_at, type: 'attendance', status: send.status, error: send.error,
-        sentTo: student ? `${student.first_name} ${student.last_name}` : 'A former student' }
-    })
-    setEmails([...gradingRows, ...attendanceRows].sort((left, right) => right.date.localeCompare(left.date)))
-    setError('')
-  }, [])
-
-  useEffect(() => {
-    void refresh()
-    const timer = window.setInterval(() => { if (!document.hidden) void refresh() }, 10_000)
-    return () => window.clearInterval(timer)
-  }, [refresh])
 
   const shown = useMemo(() => {
     const needle = search.trim().toLowerCase()
@@ -119,9 +70,9 @@ export default function Notifications() {
         </FilterPopover>
       </div>
 
-      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-      {!error && emails === null && <TableSkeleton rows={6} cols={4} label="Loading sent emails…" />}
-      {emails !== null && (shown.length === 0 ? (
+      {emailsQuery.isError && <RetryAlert message={emailsQuery.error.message} onRetry={() => void emailsQuery.refetch()} />}
+      {emailsQuery.isPending && <TableSkeleton rows={6} cols={4} label="Loading sent emails…" />}
+      {emails && (shown.length === 0 ? (
         <EmptyState
           title={emails.length ? 'No emails match these filters' : 'No emails sent yet'}
           description={emails.length
