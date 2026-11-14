@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useOutletContext } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { CalendarX2, ChevronDown, LogOut, Maximize, UserCheck } from "lucide-react";
+import { CalendarX2, ChevronDown, LogOut, Maximize, Nfc, UserCheck } from "lucide-react";
 import CheckInScanner from "@/components/instructor/CheckInScanner";
+import { pendingNfcTagKey } from "@/components/instructor/NfcTagCapture";
 import type { ScanFeedback } from "@/components/instructor/CheckInScanner";
 import DatabaseGradeBadge from "@/components/instructor/DatabaseGradeBadge";
 import { Button } from "@/components/ui/button";
@@ -15,6 +16,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/hooks/use-auth";
+import { useNfcReader } from "@/hooks/use-nfc-reader";
 import { useClassQuery, useInstructorRoster } from "@/hooks/use-instructor-class-queries";
 import { parseEntityId, toSingaporeDateTime } from "@/lib/instructor/adapters";
 import { invalidateSessionChange } from "@/lib/instructor/cache-invalidation";
@@ -23,6 +25,9 @@ import { useInstructorApi } from "@/lib/instructor/data-context";
 import { instructorQueryKeys } from "@/lib/instructor/query-keys";
 import type { CalendarViewEvent } from "@/lib/instructor/calendar-view";
 import { checkInWithQr, qrCheckInFeedback } from "@/lib/instructor/qr-check-in";
+import { nfcCheckInFeedback } from "@/lib/instructor/nfc-feedback";
+import { scanNfcTag } from "@/lib/nfc-check-in";
+import type { NfcScanResult } from "@/lib/nfc-check-in";
 import type { EventId } from "@/lib/instructor/types";
 import { formatTime } from "@/lib/instructor-calendar";
 import type { InstructorOutletContext } from "@/layouts/InstructorLayout";
@@ -81,11 +86,26 @@ export default function InstructorCheckIn() {
         [calendar.data],
     );
     const [chosenId, setChosenId] = useState<string | null>(null);
-    const session = sessions.find((item) => item.id === chosenId) ?? defaultSession(sessions);
+    const [nfcClass, setNfcClass] = useState<Pick<CalendarViewEvent, 'id' | 'name' | 'startsAt' | 'endsAt'> | null>(null);
+    const nfcSession: CalendarViewEvent | null = nfcClass?.startsAt && nfcClass.endsAt ? {
+        ...nfcClass,
+        date: new Date(`${toSingaporeDateTime(nfcClass.startsAt).date}T00:00:00`), type: "training", status: "scheduled",
+        startTime: toSingaporeDateTime(nfcClass.startsAt).time,
+        endTime: toSingaporeDateTime(nfcClass.endsAt).time,
+        dojo: "NFC class", instructorId: null, rosterCount: 0, capacity: null,
+        dateOnly: false, reportingTime: null, reportingReleaseOn: null,
+    } : null;
+    const session = sessions.find((item) => item.id === chosenId) ?? (nfcClass?.id === chosenId ? nfcSession : null) ?? defaultSession(sessions);
     const eventId: EventId = session ? parseEntityId(session.id, "event") : NO_EVENT;
     const roster = useInstructorRoster(eventId, Boolean(session));
     const [feedback, setFeedback] = useState<ScanFeedback | null>(null);
     const scanLocked = useRef(false);
+    const nfcInFlight = useRef(false);
+    const [choice, setChoice] = useState<NfcScanResult | null>(null);
+    const choiceTag = useRef<string | null>(null);
+    const [nfcPending, setNfcPending] = useState(false);
+    const [nfcRetry, setNfcRetry] = useState(false);
+    const attemptedUrl = useRef(false);
     const enterKioskRef = useRef<HTMLButtonElement>(null);
     const exitKioskRef = useRef<HTMLButtonElement>(null);
     const wasKiosk = useRef(false);
@@ -101,6 +121,7 @@ export default function InstructorCheckIn() {
             Date.parse(a.record.checked_in_at ?? a.record.recorded_at ?? ""));
     const attendancePercent = entries.length ? (checkedIn.length / entries.length) * 100 : 0;
     const canScan = roster.status === "success" && roster.data.canEditAttendance;
+    const nfc = useNfcReader((token) => void handleNfc(token), () => scanLocked.current || !!choiceTag.current);
     const sessionDetails = session
         ? `${session.dojo} · ${dateFormat.format(session.date)} · ${formatTime(session.startTime)}–${formatTime(session.endTime)}`
         : `${dateFormat.format(new Date())} · No classes to check in today`;
@@ -108,11 +129,24 @@ export default function InstructorCheckIn() {
     useEffect(() => {
         if (!feedback) return;
         const timeout = window.setTimeout(() => {
-            scanLocked.current = false;
+            if (!choiceTag.current) scanLocked.current = false;
             setFeedback(null);
         }, 2000);
         return () => window.clearTimeout(timeout);
     }, [feedback]);
+
+    useEffect(() => {
+        if (attemptedUrl.current || !authSession || !signedInAsInstructor) return;
+        const token = sessionStorage.getItem(pendingNfcTagKey);
+        if (!token) return;
+        attemptedUrl.current = true;
+        // Consume before the async request; never leave a reusable token in browser storage.
+        sessionStorage.removeItem(pendingNfcTagKey);
+        if (token === "invalid") {
+            scanLocked.current = true;
+            setFeedback(nfcCheckInFeedback({ status: "invalid" }));
+        } else void handleNfc(token);
+    });
 
     useEffect(() => {
         function onKeyDown(event: KeyboardEvent) {
@@ -189,9 +223,63 @@ export default function InstructorCheckIn() {
         }
     }
 
-    function changeSession(value: string) {
+    async function handleNfc(token: string, selectedEventId?: string) {
+        if (nfcInFlight.current || (scanLocked.current && !selectedEventId)) return;
+        if (!signedInAsInstructor || !authSession) {
+            scanLocked.current = true;
+            setFeedback({ tone: "invalid", title: "Not signed in as an instructor", description: "Sign in again as the instructor to check students in." });
+            return;
+        }
+        scanLocked.current = true;
+        nfcInFlight.current = true;
+        setNfcPending(true);
+        setNfcRetry(false);
+        const generation = queryGeneration(queryClient);
+        try {
+            // Without a class ID, the NFC function resolves the student's class itself.
+            // Only pass a class ID after the instructor explicitly chooses among matches.
+            const result = await scanNfcTag(token, selectedEventId);
+            if (result.status === "select_class") {
+                choiceTag.current = token;
+                setChoice(result);
+                setFeedback(null);
+                return;
+            }
+            choiceTag.current = null;
+            setChoice(null);
+            setFeedback(nfcCheckInFeedback(result));
+            if (result.event_id) {
+                invalidateSessionChange(queryClient, generation, authSession.user.id, result.event_id, [], "attendance", false);
+                // Show the roster for the class actually returned, not the last QR selection.
+                setNfcClass({ id: result.event_id, name: result.class_name || "Class", startsAt: result.starts_at ?? null, endsAt: result.ends_at ?? null });
+                setChosenId(result.event_id);
+                if (!sessions.some(item => item.id === result.event_id)) void queryClient.invalidateQueries({ queryKey: [...instructorQueryKeys.all(authSession.user.id), "check-in-classes", range.from] });
+            }
+        } catch {
+            // Do not surface server error details: they may include sensitive tag data.
+            choiceTag.current = token;
+            setChoice(null);
+            setNfcRetry(true);
+            setFeedback({ tone: "invalid", title: "Unable to check NFC tag", description: "Check your connection and try again. No attendance was confirmed." });
+        } finally {
+            nfcInFlight.current = false;
+            setNfcPending(false);
+        }
+    }
+
+    function retryNfc() {
+        if (!choiceTag.current || nfcPending) return;
+        const token = choiceTag.current;
         scanLocked.current = false;
         setFeedback(null);
+        void handleNfc(token);
+    }
+
+    function changeSession(value: string) {
+        if (!nfcPending && !choiceTag.current) {
+            scanLocked.current = false;
+            setFeedback(null);
+        }
         setChosenId(value);
     }
 
@@ -278,6 +366,27 @@ export default function InstructorCheckIn() {
                 </Button>
             </header>
 
+            <div className={cn("flex shrink-0 flex-wrap items-center gap-2", isKiosk && "absolute bottom-20 left-4 z-40 rounded-xl bg-black/70 p-2 text-white", isKiosk && (feedback || choice) && "hidden")}>
+                {nfc.supported ? (
+                    <>
+                        <Button type="button" variant={isKiosk ? "secondary" : "outline"} className="min-h-11 gap-2"
+                            disabled={nfc.state === "starting"} onClick={() => nfc.state === "active" ? nfc.stop() : void nfc.start()}>
+                            <Nfc aria-hidden="true" className="size-4" />
+                            {nfc.state === "active" ? "Stop NFC scanning" : nfc.state === "starting" ? "Starting NFC…" : "Start NFC scanning"}
+                        </Button>
+                        <span role="status" className={cn("text-xs text-muted-foreground", isKiosk && "text-white/80")}>
+                            {nfcPending ? "Checking tag…" : nfc.state === "active" ? "NFC ready · Tap a student’s tag" : "QR camera and NFC can be used together"}
+                        </span>
+                    </>
+                ) : <p className="text-xs text-muted-foreground">NFC scanning is unavailable here. QR check-in and existing NFC tag links still work.</p>}
+                {nfc.error && <p role="alert" className="w-full text-xs text-destructive">{nfc.error}</p>}
+            </div>
+
+            {nfcRetry && choiceTag.current && <div className="flex flex-wrap gap-2">
+                <Button type="button" variant="outline" className="min-h-11" onClick={retryNfc}>Retry NFC check-in</Button>
+                <Button type="button" variant="ghost" className="min-h-11" onClick={() => { choiceTag.current = null; setNfcRetry(false); scanLocked.current = false; setFeedback(null); }}>Cancel retry</Button>
+            </div>}
+
             <div
                 className={cn(
                     "grid min-h-0 flex-1",
@@ -288,6 +397,10 @@ export default function InstructorCheckIn() {
                 <CheckInScanner
                     feedback={feedback}
                     onScan={(payload) => void handleScan(payload)}
+                    choice={choice}
+                    choicePending={nfcPending}
+                    onChooseClass={eventId => { if (choiceTag.current) void handleNfc(choiceTag.current, eventId); }}
+                    onCancelChoice={() => { choiceTag.current = null; setChoice(null); scanLocked.current = false; }}
                     isKiosk={isKiosk}
                 />
                 <Card

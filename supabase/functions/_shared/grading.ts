@@ -15,7 +15,7 @@ export function gradingHeaders(request: Request) {
     allowed: !origin || allowed.includes(origin),
     headers: {
       'Access-Control-Allow-Origin': origin && allowed.includes(origin) ? origin : allowed[0],
-      'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info',
+      'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info, idempotency-key',
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
       'Cache-Control': 'no-store', 'Vary': 'Origin',
     },

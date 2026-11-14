@@ -28,7 +28,7 @@ export default function InstructorLayout() {
   const { session, profile } = useAuth()
   const [params] = useSearchParams()
   const isCalendar = pathname === '/instructor/calendar' || pathname === '/instructor/dashboard'
-  const isCheckIn = pathname === '/instructor/check-in'
+  const isCheckIn = pathname === '/instructor/check-in' || pathname === '/instructor/nfc_checkin'
   const isStudentDirectory = /^\/instructor\/students\/?$/.test(pathname)
   const isStudentDetails = /^\/instructor\/students\/[^/]+\/?$/.test(pathname)
   const isStudentPage = isStudentDirectory || isStudentDetails
