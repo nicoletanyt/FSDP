@@ -98,6 +98,27 @@ export default function GradingApplication() {
         const result = await gradingCheckoutRequest<{ paid: boolean; draftSaved?: boolean; paymentRecorded?: boolean }>({ action: testReturn ? 'test-status' : 'status', session_id: sessionId })
         if (!active) return
         if (result.paid) {
+          if (result.paymentRecorded && targetBelt && profile?.id) {
+            const { data: existing } = await supabase
+              .from('grading_applications')
+              .select('id')
+              .eq('user_id', profile.id)
+              .eq('target_grade_id', targetBelt)
+              .eq('status', 'pending_review')
+              .maybeSingle()
+
+            if (!existing) {
+              await supabase.from('grading_applications').insert({
+                user_id: profile.id,
+                target_grade_id: targetBelt,
+                status: 'pending_review',
+                amount_paid: totalFee,
+                payment_method: 'stripe',
+                payment_date: new Date().toISOString()
+              })
+            }
+          }
+
           setPayment(testReturn ? result.paymentRecorded
             ? 'Payment confirmed and recorded. Your grading request is awaiting dojo eligibility review. No real charge was made.'
             : 'Your checkout completed, but the payment record could not be verified. Contact your dojo; do not pay again.'
@@ -111,7 +132,7 @@ export default function GradingApplication() {
     }
     void check()
     return () => { active = false; clearTimeout(timer) }
-  }, [sessionId, profile?.id, testReturn])
+  }, [sessionId, profile?.id, testReturn, targetBelt, totalFee])
 
   const handleProceedToPayment = async () => {
     if (paidRequest || verifyingRequest || (!selected && !testCheckout) || submitting.current) return
@@ -148,9 +169,16 @@ export default function GradingApplication() {
       {params.get('checkout') === 'test-cancel' && <p role="status" className="mb-6 text-sm text-muted-foreground">Payment preview canceled. No payment was made.</p>}
       {error && <div role="alert" className="mb-6 text-sm text-destructive">{error} <button type="button" className="underline" onClick={() => setRevision((previous) => previous + 1)}>Try again</button></div>}
       {loading && <p role="status" className="mb-6 text-sm text-muted-foreground">Loading your grading opportunities…</p>}
+      
+      {/* 👇 合并了同学的 ReadinessCard 和你的防重逻辑 */}
       {!loading && !error && <ReadinessCard readiness={readiness.length ? { targetLabel: readiness[0].target_grade_label, requirements: readiness } : null} />}
-      {!loading && !error && available.length === 0 && <p className="mb-6 text-sm text-muted-foreground">No eligible grading applications are open for your account. Your dojo must confirm your membership and training requirements before a formal grading application.</p>}
+      
+      {!loading && !error && available.length === 0 && !paidRequest && !payment && (
+        <p className="mb-6 text-sm text-muted-foreground">No eligible grading applications are open for your account. Your dojo must confirm your membership and training requirements before a formal grading application.</p>
+      )}
+      
       {options.filter((option) => option.applied).map((option) => <p key={option.id} className="mb-4 rounded-xl border p-4 text-sm"><CheckCircle2 className="mr-2 inline size-4 text-primary" />Application submitted: {option.grade_label} · {option.name}</p>)}
+      
       {!loading && savedDraft && <p role="status" className="mb-4 rounded-lg border p-4 text-sm">{paidRequest
         ? `Payment confirmed: ${progression?.target?.label}. Your request is awaiting dojo eligibility review. Do not pay again.`
         : verifyingRequest ? 'Payment verification pending. Do not pay again; contact your dojo if this persists.'
@@ -219,7 +247,6 @@ export default function GradingApplication() {
                 <span className="text-gray-500">Base Fee</span>
                 <span className="font-medium">{selected || paidRequest ? money.format(baseFee) : progression?.feeCents != null ? money.format(progression.feeCents / 100) : '—'}</span>
               </div>
-              {/* 逾期费提示 */}
               {isLateSubmission && (
                 <div className="flex justify-between text-red-600 bg-red-50 p-2 rounded">
                   <span className="flex items-center gap-1"><Info className="w-3 h-3"/> Late Submission</span>
@@ -237,7 +264,7 @@ export default function GradingApplication() {
               onClick={() => void handleProceedToPayment()}
               disabled={Boolean(paidRequest || verifyingRequest) || (!isEligible && !testCheckout) || loading || processing || Boolean(error)}
               aria-describedby={testCheckout ? 'payment-preview-note' : undefined}
-              className="w-full h-12 bg-[#2c3f67] hover:bg-[#1f2d4a] text-white text-base font-medium"
+              className={`w-full h-12 text-base font-medium ${paidRequest ? 'bg-gray-400 cursor-not-allowed hover:bg-gray-400 text-white' : 'bg-[#2c3f67] hover:bg-[#1f2d4a] text-white'}`}
             >
               {paidRequest ? 'Payment Confirmed' : verifyingRequest ? 'Verifying Payment' : processing ? <><Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> Redirecting to Stripe…</> : 'Proceed to Payment'}
             </Button>
@@ -263,13 +290,13 @@ function ReadinessCard({ readiness }: { readiness: { targetLabel: string; requir
   const met = readiness.requirements.filter((requirement) => requirement.met).length
   const total = readiness.requirements.length
   const eligible = met === total
-  return <Card className="gap-4 p-6">
+  return <Card className="gap-4 p-6 mt-6">
     <div className="flex flex-wrap items-baseline justify-between gap-2">
       <div>
         <p className="text-sm text-muted-foreground">Your next grade</p>
         <h2 className="text-xl font-semibold">{readiness.targetLabel}</h2>
       </div>
-      <p className={eligible ? 'text-sm font-medium text-success' : 'text-sm font-medium text-muted-foreground'}>
+      <p className={eligible ? 'text-sm font-medium text-green-600' : 'text-sm font-medium text-muted-foreground'}>
         {eligible ? 'Eligible to grade' : `${met} of ${total} requirements met`}
       </p>
     </div>
