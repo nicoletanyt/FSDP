@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useOutletContext } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { CalendarX2, ChevronDown, LogOut, Maximize, Nfc, UserCheck } from "lucide-react";
@@ -99,6 +99,8 @@ export default function InstructorCheckIn() {
     const eventId: EventId = session ? parseEntityId(session.id, "event") : NO_EVENT;
     const roster = useInstructorRoster(eventId, Boolean(session));
     const [feedback, setFeedback] = useState<ScanFeedback | null>(null);
+    const [cameraRunning, setCameraRunning] = useState(false);
+    const [cameraPaused, setCameraPaused] = useState(false);
     const scanLocked = useRef(false);
     const nfcInFlight = useRef(false);
     const [choice, setChoice] = useState<NfcScanResult | null>(null);
@@ -122,6 +124,7 @@ export default function InstructorCheckIn() {
     const attendancePercent = entries.length ? (checkedIn.length / entries.length) * 100 : 0;
     const canScan = roster.status === "success" && roster.data.canEditAttendance;
     const nfc = useNfcReader((token) => void handleNfc(token), () => scanLocked.current || !!choiceTag.current);
+    const onCameraRunningChange = useCallback((running: boolean) => setCameraRunning(running), []);
     const sessionDetails = session
         ? `${session.dojo} · ${dateFormat.format(session.date)} · ${formatTime(session.startTime)}–${formatTime(session.endTime)}`
         : `${dateFormat.format(new Date())} · No classes to check in today`;
@@ -134,6 +137,10 @@ export default function InstructorCheckIn() {
         }, 2000);
         return () => window.clearTimeout(timeout);
     }, [feedback]);
+
+    useEffect(() => {
+        if (cameraPaused && !cameraRunning) void nfc.start();
+    }, [cameraPaused, cameraRunning, nfc.start]);
 
     useEffect(() => {
         if (attemptedUrl.current || !authSession || !signedInAsInstructor) return;
@@ -375,8 +382,14 @@ export default function InstructorCheckIn() {
                             {nfc.state === "active" ? "Stop NFC scanning" : nfc.state === "starting" ? "Starting NFC…" : "Start NFC scanning"}
                         </Button>
                         <span role="status" className={cn("text-xs text-muted-foreground", isKiosk && "text-white/80")}>
-                            {nfcPending ? "Checking tag…" : nfc.state === "active" ? "NFC ready · Tap a student’s tag" : "QR camera and NFC can be used together"}
+                            {nfcPending ? "Checking tag…" : nfc.state === "active" ? "NFC reader started · Tap a student’s tag" : "Tap Start to scan NFC tags"}
                         </span>
+                        {cameraRunning && <Button type="button" variant={isKiosk ? "secondary" : "outline"} className="min-h-11"
+                            onClick={() => { nfc.stop(); setCameraPaused(true); }}>
+                            NFC not responding? Pause camera
+                        </Button>}
+                        {cameraPaused && <Button type="button" variant={isKiosk ? "secondary" : "outline"} className="min-h-11"
+                            onClick={() => setCameraPaused(false)}>Resume QR camera</Button>}
                     </>
                 ) : <p className="text-xs text-muted-foreground">NFC scanning is unavailable here. QR check-in and existing NFC tag links still work.</p>}
                 {nfc.error && <p role="alert" className="w-full text-xs text-destructive">{nfc.error}</p>}
@@ -397,6 +410,8 @@ export default function InstructorCheckIn() {
                 <CheckInScanner
                     feedback={feedback}
                     onScan={(payload) => void handleScan(payload)}
+                    cameraPaused={cameraPaused}
+                    onCameraRunningChange={onCameraRunningChange}
                     choice={choice}
                     choicePending={nfcPending}
                     onChooseClass={eventId => { if (choiceTag.current) void handleNfc(choiceTag.current, eventId); }}

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
     Camera,
     CameraOff,
@@ -32,6 +32,8 @@ export default function CheckInScanner({
     choicePending = false,
     onChooseClass,
     onCancelChoice,
+    cameraPaused = false,
+    onCameraRunningChange,
     isKiosk = false,
 }: {
     feedback: ScanFeedback | null;
@@ -40,6 +42,8 @@ export default function CheckInScanner({
     choicePending?: boolean;
     onChooseClass?: (eventId: string) => void;
     onCancelChoice?: () => void;
+    cameraPaused?: boolean;
+    onCameraRunningChange?: (running: boolean) => void;
     isKiosk?: boolean;
 }) {
     const [enabled, setEnabled] = useState(false);
@@ -47,7 +51,7 @@ export default function CheckInScanner({
     const [settingsOpen, setSettingsOpen] = useState(false);
     const { videoRef, status, error, cameras, activeCameraId, restart } =
         useQrCamera({
-            enabled,
+            enabled: enabled && !cameraPaused,
             cameraId,
             paused: !!feedback || !!choice || choicePending,
             onScan,
@@ -55,7 +59,10 @@ export default function CheckInScanner({
     const live = status === "live";
     const starting = status === "starting";
 
+    useEffect(() => { onCameraRunningChange?.(live || starting); }, [live, starting, onCameraRunningChange]);
+
     function startCamera() {
+        if (cameraPaused) return;
         if (enabled) restart();
         else setEnabled(true);
     }
@@ -102,7 +109,7 @@ export default function CheckInScanner({
                             ? "Camera live"
                             : starting
                                 ? "Starting camera…"
-                                : "Camera off"}
+                                : cameraPaused ? "Camera paused for NFC" : "Camera off"}
                     </span>
                 </div>
                 <Popover open={settingsOpen} onOpenChange={setSettingsOpen}>
@@ -167,6 +174,7 @@ export default function CheckInScanner({
                         <p className="text-xl font-semibold tracking-tight sm:text-2xl">
                             {starting
                                 ? "Connecting to your camera"
+                                : cameraPaused ? "Camera paused for NFC"
                                 : error && enabled
                                     ? "Camera needs attention"
                                     : "Ready for check-ins?"}
@@ -174,12 +182,13 @@ export default function CheckInScanner({
                         <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-zinc-300">
                             {starting
                                 ? "Allow camera access when your browser asks."
+                                : cameraPaused ? "Use Resume QR camera above when you’re ready to scan codes."
                                 : error && enabled
                                     ? error
                                     : "Start the camera to let students scan their QR codes."}
                         </p>
                     </div>
-                    {!starting && (
+                    {!starting && !cameraPaused && (
                         <Button
                             onClick={startCamera}
                             className="mt-2 min-h-12 gap-2 rounded-xl bg-white px-6 text-zinc-950 hover:bg-zinc-200"
