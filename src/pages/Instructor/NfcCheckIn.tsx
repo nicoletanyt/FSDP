@@ -5,17 +5,13 @@ import {
     CircleAlert,
     Clock3,
     ScanLine,
-    Smartphone,
-    QrCode,
 } from "lucide-react";
-import { Link } from "react-router";
 import { pendingNfcTagKey } from "@/components/instructor/NfcTagCapture";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { scanNfcTag } from "@/lib/nfc-check-in";
 import type { NfcScanResult } from "@/lib/nfc-check-in";
-import { currentDeviceSupportsNfcCheckIn } from "@/lib/nfc-device";
 import { tokenFromNdefRecords } from "@/lib/nfc-tag-reader";
 
 type NdefReader = {
@@ -33,7 +29,9 @@ const formatTime = (value: string) =>
     }).format(new Date(value));
 
 export default function NfcCheckIn() {
-    const [supportedDevice] = useState(currentDeviceSupportsNfcCheckIn);
+    // URL-based check-in works independently of Web NFC availability.
+    const [canScanWebNfc] = useState(() => window.isSecureContext &&
+        typeof (window as Window & { NDEFReader?: unknown }).NDEFReader === "function");
     const [tag, setTag] = useState(() =>
         sessionStorage.getItem(pendingNfcTagKey),
     );
@@ -53,7 +51,7 @@ export default function NfcCheckIn() {
 
     const checkTag = useCallback(
         async (token: string, eventId?: string) => {
-            if (!supportedDevice || inFlight.current) return;
+            if (inFlight.current) return;
             inFlight.current = true;
             setPending(true);
             setError("");
@@ -77,7 +75,7 @@ export default function NfcCheckIn() {
                 setPending(false);
             }
         },
-        [supportedDevice],
+        [],
     );
     checkTagRef.current = checkTag;
 
@@ -89,7 +87,7 @@ export default function NfcCheckIn() {
     }, []);
 
     const startScanning = useCallback(async () => {
-        if (scanController.current || !supportedDevice) return;
+        if (scanController.current || !canScanWebNfc) return;
         manuallyStopped.current = false;
         const controller = new AbortController();
         scanController.current = controller;
@@ -133,10 +131,10 @@ export default function NfcCheckIn() {
             }
             if (scanController.current === controller) scanController.current = null;
         }
-    }, [supportedDevice]);
+    }, [canScanWebNfc]);
 
     useEffect(() => {
-        if (!supportedDevice || !navigator.permissions?.query) return;
+        if (!canScanWebNfc || !navigator.permissions?.query) return;
         let cancelled = false;
         // A permission prompt requires a user gesture; only auto-start if already granted.
         const autoStartIfPermitted = () => void navigator.permissions.query({ name: "nfc" as PermissionName }).then(permission => {
@@ -147,7 +145,7 @@ export default function NfcCheckIn() {
         autoStartIfPermitted();
         document.addEventListener("visibilitychange", autoStartIfPermitted);
         return () => { cancelled = true; document.removeEventListener("visibilitychange", autoStartIfPermitted); };
-    }, [supportedDevice, startScanning]);
+    }, [canScanWebNfc, startScanning]);
 
     useEffect(() => () => {
         scanController.current?.abort();
@@ -155,11 +153,6 @@ export default function NfcCheckIn() {
     }, []);
 
     useEffect(() => {
-        if (!supportedDevice) {
-            sessionStorage.removeItem(pendingNfcTagKey);
-            setTag(null);
-            return;
-        }
         if (!tag || attempted.current) return;
         attempted.current = true;
         if (tag === "invalid") {
@@ -169,7 +162,7 @@ export default function NfcCheckIn() {
             return;
         }
         void checkTag(tag);
-    }, [supportedDevice, tag, checkTag]);
+    }, [tag, checkTag]);
 
     useEffect(() => {
         if (!feedbackVisible) return;
@@ -192,13 +185,11 @@ export default function NfcCheckIn() {
                     NFC attendance
                 </h1>
                 <p className="max-w-prose text-sm text-muted-foreground">
-                    {supportedDevice
-                        ? "Tap a student’s tag with this phone or tablet to check their lesson today."
-                        : "NFC check-in is not supported on this device or browser."}
+                    Tap a student’s NFC tag to check their lesson today.
                 </p>
             </header>
 
-            {supportedDevice && (
+            {canScanWebNfc && (
                 <div className="flex flex-wrap items-center gap-3" role="status">
                     <Button type="button" variant={scannerState === "active" ? "outline" : "default"}
                         disabled={scannerState === "starting"}
@@ -213,47 +204,11 @@ export default function NfcCheckIn() {
                 </div>
             )}
 
-            {scannerError && supportedDevice && (
+            {scannerError && canScanWebNfc && (
                 <Alert variant="destructive" role="alert">
                     <CircleAlert className="size-4" aria-hidden="true" />
                     <AlertDescription>{scannerError}</AlertDescription>
                 </Alert>
-            )}
-
-            {!supportedDevice && (
-                <Card>
-                    <CardContent className="flex flex-col items-center gap-4 py-6 text-center" role="status">
-                        <Smartphone
-                            className="size-9 text-muted-foreground"
-                            aria-hidden="true"
-                        />
-                        <div className="space-y-2">
-                            <h2 className="text-lg font-semibold">
-                                Please try a valid device.
-                            </h2>
-                            <p className="text-sm font-medium">
-                                This device can only handle QR check-in.
-                            </p>
-                        </div>
-                        <Button
-                            nativeButton={false}
-                            render={<Link to="/instructor/check-in" />}
-                            className="min-h-11 w-full sm:w-auto"
-                        >
-                            <QrCode className="size-4" aria-hidden="true" />
-                            Use QR check-in
-                        </Button>
-                        <div className="space-y-2 text-sm text-muted-foreground">
-                            <p>Supported devices:</p>
-                            <ul className="list-inside list-disc space-y-2">
-                                <li>
-                                    Android phones/tablets with NFC hardware, running Chrome 89 or
-                                    later.
-                                </li>
-                            </ul>
-                        </div>
-                    </CardContent>
-                </Card>
             )}
 
             {error && (
@@ -436,15 +391,17 @@ export default function NfcCheckIn() {
                     </Alert>
                 )}
 
-            {supportedDevice && !pending && !result && !error && (
+            {!pending && !result && !error && (
                 <Card>
                     <CardContent className="flex min-h-48 flex-col items-center justify-center gap-3 py-8 text-center">
                         <ScanLine className="size-9 text-primary" aria-hidden="true" />
-                        <h2 className="text-lg font-semibold">{scannerState === "active" ? "Ready for a scan" : "Start scanning to check in"}</h2>
+                        <h2 className="text-lg font-semibold">{scannerState === "active" ? "Ready for a scan" : canScanWebNfc ? "Start scanning to check in" : "Ready for a tag link"}</h2>
                         <p className="max-w-sm text-sm text-muted-foreground">
                             {scannerState === "active"
                                 ? "Tap a student’s NFC tag to see their attendance status."
-                                : "Turn on NFC, then tap Start scanning. Existing URL tags also work when opened directly."}
+                                : canScanWebNfc
+                                    ? "Turn on NFC, then tap Start scanning. Existing URL tags also work when opened directly."
+                                    : "Open an existing NFC tag’s URL to check in. Continuous scanning requires Web NFC on a supported device."}
                         </p>
                     </CardContent>
                 </Card>
