@@ -96,6 +96,28 @@ export default function GradingApplication() {
         const result = await gradingCheckoutRequest<{ paid: boolean; draftSaved?: boolean; paymentRecorded?: boolean }>({ action: testReturn ? 'test-status' : 'status', session_id: sessionId })
         if (!active) return
         if (result.paid) {
+          // 👇 核心修改：前端手动触发真实写入（防呆设计，确保数据一定进库）
+          if (result.paymentRecorded && targetBelt && profile?.id) {
+            const { data: existing } = await supabase
+              .from('grading_applications')
+              .select('id')
+              .eq('user_id', profile.id)
+              .eq('target_grade_id', targetBelt)
+              .eq('status', 'pending_review')
+              .maybeSingle()
+
+            if (!existing) {
+              await supabase.from('grading_applications').insert({
+                user_id: profile.id,
+                target_grade_id: targetBelt,
+                status: 'pending_review',
+                amount_paid: totalFee,
+                payment_method: 'stripe',
+                payment_date: new Date().toISOString()
+              })
+            }
+          }
+
           setPayment(testReturn ? result.paymentRecorded
             ? 'Payment confirmed and recorded. Your grading request is awaiting dojo eligibility review. No real charge was made.'
             : 'Your checkout completed, but the payment record could not be verified. Contact your dojo; do not pay again.'
@@ -109,7 +131,7 @@ export default function GradingApplication() {
     }
     void check()
     return () => { active = false; clearTimeout(timer) }
-  }, [sessionId, profile?.id, testReturn])
+  }, [sessionId, profile?.id, testReturn, targetBelt, totalFee])
 
   const handleProceedToPayment = async () => {
     if (paidRequest || verifyingRequest || (!selected && !testCheckout) || submitting.current) return
@@ -146,8 +168,14 @@ export default function GradingApplication() {
       {params.get('checkout') === 'test-cancel' && <p role="status" className="mb-6 text-sm text-muted-foreground">Payment preview canceled. No payment was made.</p>}
       {error && <div role="alert" className="mb-6 text-sm text-destructive">{error} <button type="button" className="underline" onClick={() => setRevision((previous) => previous + 1)}>Try again</button></div>}
       {loading && <p role="status" className="mb-6 text-sm text-muted-foreground">Loading your grading opportunities…</p>}
-      {!loading && !error && available.length === 0 && <p className="mb-6 text-sm text-muted-foreground">No eligible grading applications are open for your account. Your dojo must confirm your membership and training requirements before a formal grading application.</p>}
+      
+      {/* 👇 修复 1：只要已经支付成功（有 paidRequest 或 payment 提示），就不显示这句话了 */}
+      {!loading && !error && available.length === 0 && !paidRequest && !payment && (
+        <p className="mb-6 text-sm text-muted-foreground">No eligible grading applications are open for your account. Your dojo must confirm your membership and training requirements before a formal grading application.</p>
+      )}
+      
       {options.filter((option) => option.applied).map((option) => <p key={option.id} className="mb-4 rounded-xl border p-4 text-sm"><CheckCircle2 className="mr-2 inline size-4 text-primary" />Application submitted: {option.grade_label} · {option.name}</p>)}
+      
       {!loading && savedDraft && <p role="status" className="mb-4 rounded-lg border p-4 text-sm">{paidRequest
         ? `Payment confirmed: ${progression?.target?.label}. Your request is awaiting dojo eligibility review. Do not pay again.`
         : verifyingRequest ? 'Payment verification pending. Do not pay again; contact your dojo if this persists.'
@@ -234,7 +262,7 @@ export default function GradingApplication() {
               onClick={() => void handleProceedToPayment()}
               disabled={Boolean(paidRequest || verifyingRequest) || (!isEligible && !testCheckout) || loading || processing || Boolean(error)}
               aria-describedby={testCheckout ? 'payment-preview-note' : undefined}
-              className="w-full h-12 bg-[#2c3f67] hover:bg-[#1f2d4a] text-white text-base font-medium"
+              className={`w-full h-12 text-base font-medium ${paidRequest ? 'bg-gray-400 cursor-not-allowed hover:bg-gray-400 text-white' : 'bg-[#2c3f67] hover:bg-[#1f2d4a] text-white'}`}
             >
               {paidRequest ? 'Payment Confirmed' : verifyingRequest ? 'Verifying Payment' : processing ? <><Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> Redirecting to Stripe…</> : 'Proceed to Payment'}
             </Button>
