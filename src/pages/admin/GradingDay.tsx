@@ -8,15 +8,12 @@ import RetryAlert from '@/components/shared/layout/RetryAlert'
 import SplitSessionDialog from '@/components/admin/SplitSessionDialog'
 import GradingDayView from '@/components/grading/GradingDayView'
 import type { MoveControl, SessionControl } from '@/components/grading/GradingDayView'
-import ScheduleNotice from '@/components/grading/ScheduleNotice'
+import { ScheduleStatusPills } from '@/components/grading/ScheduleNotice'
 import { GradingBackLink, GradingNote } from '@/components/grading/GradingParts'
 import { DatabaseGradeBadge } from '@/components/shared/grade/GradeBadge'
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
-  AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
-} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { useFeedback } from '@/hooks/use-feedback'
 import { useAuth } from '@/hooks/use-auth'
 import { useGradingDayLayout } from '@/hooks/use-grading-day-layout'
@@ -65,6 +62,7 @@ function GradingDayPage() {
   const view = useGradingDayLayout()
   const client = useQueryClient()
   const { notify, feedbackDialog } = useFeedback()
+  const [confirm, setConfirm] = useState<'publish' | 'regenerate' | null>(null)
   const day = useQuery({ queryKey: adminGradingKeys.day(eventId), queryFn: () => loadAdminGradingDay(eventId), enabled: Boolean(eventId), retry: false })
   const photos = useExaminerPhotos(day.data?.panel.map(member => member.instructorId) ?? [], ids => loadInstructorPhotos(supabase, ids))
   const summaries = useQuery({ queryKey: adminGradingKeys.summaries(eventId), queryFn: () => loadBatchSummaries(eventId), enabled: Boolean(eventId), retry: false })
@@ -123,8 +121,9 @@ function GradingDayPage() {
   const blocker = publishBlocker(data)
   const overflow = data.warnings.find(warning => warning.code === 'overflow')
 
-  // Generate (or regenerate) the draft; private gradings add sessions by hand instead.
-  const generate = data.isPrivate ? (
+  // One main action for where the schedule is; the rarer ones sit in "More".
+  const regenerateText = `Candidates are re-sorted from the scheduling rules and given new candidate numbers. Anything you moved, split or merged by hand is lost${data.publishedAt ? ', and the schedule goes back to draft' : ''}.`
+  const primary = data.isPrivate ? (
     <Button type="button" variant={sessions.length ? 'outline' : 'default'} disabled={changing} onClick={() => add.mutate()}>
       {add.isPending ? 'Adding…' : 'Add session'}
     </Button>
@@ -132,54 +131,22 @@ function GradingDayPage() {
     <Button type="button" disabled={!sortable || changing} onClick={() => sort.mutate()}>
       {sort.isPending ? 'Generating…' : 'Generate draft schedule'}
     </Button>
-  ) : (
-    <AlertDialog>
-      <AlertDialogTrigger render={<Button type="button" variant="outline" disabled={!sortable || changing} />}>
-        {sort.isPending ? 'Generating…' : 'Generate again'}
-      </AlertDialogTrigger>
-      <AlertDialogContent size="compact">
-        <AlertDialogHeader>
-          <AlertDialogTitle>Generate the schedule again?</AlertDialogTitle>
-          <AlertDialogDescription>
-            Candidates are re-sorted from the scheduling rules and given new candidate numbers. Anything you moved, split or merged by hand is lost{data.publishedAt ? ', and the schedule goes back to draft' : ''}.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction onClick={() => sort.mutate()}>Generate again</AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
-  )
-
-  const release = !sessions.length ? null : data.publishedAt ? (
-    <Button type="button" variant="outline" disabled={changing} onClick={() => publish.mutate(false)}>
-      {publish.isPending ? 'Saving…' : 'Return to draft'}
+  ) : null
+  const regenerate = !data.isPrivate && sessions.length > 0 ? (
+    <Button type="button" variant="outline" disabled={!sortable || changing} onClick={() => setConfirm('regenerate')}>
+      {sort.isPending ? 'Generating…' : 'Generate again'}
     </Button>
-  ) : (
-    <AlertDialog>
-      <AlertDialogTrigger render={<Button type="button" disabled={changing || Boolean(blocker)} title={blocker ?? undefined} />}>
-        {publish.isPending ? 'Publishing…' : 'Publish schedule'}
-      </AlertDialogTrigger>
-      <AlertDialogContent size="compact">
-        <AlertDialogHeader>
-          <AlertDialogTitle>Publish this schedule?</AlertDialogTitle>
-          <AlertDialogDescription>
-            Every examiner on the panel will see the sessions, and students get the reporting time once its release date arrives.
-            {overflow ? ` ${overflow.message}` : ''} Changing anything afterwards returns the schedule to draft.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction onClick={() => publish.mutate(true)}>Publish</AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
-  )
+  ) : null
+  // Publishing is the main step once sessions exist; it reads "Published" once done.
+  const publishButton = sessions.length > 0 ? (
+    <Button type="button" disabled={changing || Boolean(blocker) || Boolean(data.publishedAt)} title={blocker ?? undefined} onClick={() => setConfirm('publish')}>
+      {publish.isPending ? 'Publishing…' : data.publishedAt ? 'Published' : 'Publish schedule'}
+    </Button>
+  ) : null
 
   const headerActions = data.status === 'cancelled' ? undefined : data.gradingStarted ? (
     <p className="text-sm text-muted-foreground">Sessions are locked because grading has started.</p>
-  ) : <div className="flex flex-wrap gap-2">{generate}{release}</div>
+  ) : <div className="flex flex-wrap gap-2">{primary}{regenerate}{publishButton}</div>
 
   // Split off some candidates, or fold this session into another.
   const renderSessionActions: SessionControl | undefined = editable ? session => {
@@ -211,8 +178,8 @@ function GradingDayPage() {
     return (
       <DropdownMenu>
         <DropdownMenuTrigger render={<Button type="button" variant="ghost" size="icon-touch" disabled={changing}
-          aria-label={`Move ${candidate.name} to another session`} />}>
-          <ArrowRightLeft aria-hidden="true" />
+          aria-label={`Move ${candidate.name} to another session`} className="md:w-auto lg:w-auto md:gap-1.5 md:px-3" />}>
+          <ArrowRightLeft aria-hidden="true" /><span aria-hidden="true" className="hidden text-sm md:inline">Move</span>
         </DropdownMenuTrigger>
         <DropdownMenuContent className="w-72">
           {moveOptions(sessions, session).map(({ option, removesFrom }) => (
@@ -238,7 +205,7 @@ function GradingDayPage() {
       <GradingDayView day={data} list={view.list} onListChange={view.setList}
         studentHref={studentId => `/admin/students/${studentId}`}
         headerActions={headerActions}
-        notice={<ScheduleNotice day={data} viewer="admin" />}
+        statusPills={<ScheduleStatusPills day={data} />}
         renderSessionActions={renderSessionActions}
         photos={photos}
         panelAction={<GradingPanelDialog eventId={data.eventId} gradingLabel={gradingDate(data.gradingDate)} panel={data.panel}
@@ -256,6 +223,13 @@ function GradingDayPage() {
       {splitting && <SplitSessionDialog key={splitting.id} session={splitting} open busy={split.isPending}
         onOpenChange={open => { if (!open) setSplitting(null) }}
         onSplit={applicationIds => split.mutate({ sessionId: splitting.id, applicationIds })} />}
+      <ConfirmDialog open={confirm === 'regenerate'} onOpenChange={open => { if (!open) setConfirm(null) }}
+        title="Generate the schedule again?" description={regenerateText} confirmLabel="Generate again"
+        onConfirm={() => { setConfirm(null); sort.mutate() }} />
+      <ConfirmDialog open={confirm === 'publish'} onOpenChange={open => { if (!open) setConfirm(null) }}
+        title="Publish this schedule?"
+        description={`Every examiner on the panel will see the sessions, and students get the reporting time once its release date arrives.${overflow ? ` ${overflow.message}` : ''} Changing anything afterwards returns the schedule to draft.`}
+        confirmLabel="Publish" onConfirm={() => { setConfirm(null); publish.mutate(true) }} />
       {feedbackDialog}
     </div>
   )

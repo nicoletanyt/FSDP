@@ -1,10 +1,10 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router'
-import { CalendarDays, ChevronRight, Clock3, MapPin } from 'lucide-react'
+import { CalendarDays, ChevronRight, Clock3, MapPin, Users } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { DatabaseGradeBadge as GradeBadge } from '@/components/shared/grade/GradeBadge'
 import {
-  ExaminerPanel, GradingCardFooter, GradingFacts, GradingNote, GradingPageHeader, GradingStatusPill, Segmented, gradingActionClass,
+  ExaminerPanel, GradingCardFooter, GradingDetail, GradingDetails, GradingFacts, GradingNote, GradingPageHeader, GradingStatusPill, Segmented, gradingActionClass,
 } from '@/components/grading/GradingParts'
 import { gradingTitle, sessionCandidates, sessionLabel } from '@/lib/instructor/grading-panels'
 import type { DayStudent, GradingCandidate, GradingDay, GradingSessionSummary } from '@/lib/instructor/grading-panels'
@@ -131,7 +131,7 @@ function SessionCard({ session, action, studentHref, renderMove, renderSessionAc
               {members && <th scope="col" className={cn(headClass, 'hidden sm:table-cell')}>Member no.</th>}
               {mixed && <th scope="col" className={headClass}>Target grade</th>}
               <th scope="col" className={cn(headClass, !renderMove && 'pr-4')}>Current grade</th>
-              {renderMove && <th scope="col" className="w-14 pr-2 pb-2"><span className="sr-only">Move</span></th>}
+              {renderMove && <th scope="col" className="pr-2 pb-2"><span className="sr-only">Move</span></th>}
             </tr>
           </thead>
           <tbody>
@@ -144,7 +144,7 @@ function SessionCard({ session, action, studentHref, renderMove, renderSessionAc
                 {members && <td className={cn(cellClass, 'hidden tabular-nums text-muted-foreground sm:table-cell')}>{candidate.memberNo ?? ''}</td>}
                 {mixed && <td className={cellClass}><GradeBadge grade={grade} /></td>}
                 <td className={cn(cellClass, !renderMove && 'pr-4')}><GradeBadge grade={candidate.currentGrade} /></td>
-                {renderMove && <td className="w-14 py-1 pr-2 text-right">{renderMove(candidate, session)}</td>}
+                {renderMove && <td className="w-px whitespace-nowrap py-1 pr-2 text-right">{renderMove(candidate, session)}</td>}
               </tr>
             ))}
           </tbody>
@@ -165,7 +165,7 @@ function SessionCard({ session, action, studentHref, renderMove, renderSessionAc
 // (student list) or the sorted sessions (session list).
 export default function GradingDayView({
   day, list, onListChange, viewerIsChief = false, actionFor, studentHref,
-  emptySessions, renderMove, renderSessionActions, headerActions, panelAction, photos, notice,
+  emptySessions, renderMove, renderSessionActions, headerActions, panelAction, photos, notice, statusPills,
 }: {
   day: GradingDay
   list: GradingDayList | null
@@ -180,6 +180,8 @@ export default function GradingDayView({
   renderSessionActions?: SessionControl
   // Shown above the lists (draft status and schedule warnings).
   notice?: ReactNode
+  // Extra pills beside the status pill in the header (admins: draft/published, things to check).
+  statusPills?: ReactNode
   // The page's main action (admins: sort into sessions), beside the title.
   headerActions?: ReactNode
   // In the examiner panel card (admins: edit the panel).
@@ -192,14 +194,18 @@ export default function GradingDayView({
   return (
     <div className="space-y-6">
       <GradingPageHeader title={gradingTitle(day)} actions={headerActions}
-        badges={<GradingStatusPill status={day.status} closesOn={day.applicationDeadline} gradingDate={day.gradingDate} />}
-        facts={[
-          { key: 'date', icon: CalendarDays, label: gradingDate(day.gradingDate, 'long') },
-          { key: 'time', icon: Clock3, label: gradingTimeLabel(day.startsAt, day.endsAt, day.reportingTime) },
-          { key: 'centre', icon: MapPin, label: day.centre.address ? `${day.centre.name}, ${day.centre.address}` : day.centre.name },
-        ]} />
-      <Card className="px-5 py-4" data-examiner-panel>
-        <div className="flex flex-wrap items-start justify-between gap-3">
+        badges={<>
+          <GradingStatusPill status={day.status} closesOn={day.applicationDeadline} gradingDate={day.gradingDate} />
+          {statusPills}
+        </>} />
+      <Card className="gap-5 px-5 py-5" data-examiner-panel>
+        <GradingDetails>
+          <GradingDetail icon={CalendarDays} term="Date">{gradingDate(day.gradingDate, 'long')}</GradingDetail>
+          <GradingDetail icon={Clock3} term="Time">{gradingTimeLabel(day.startsAt, day.endsAt, day.reportingTime)}</GradingDetail>
+          <GradingDetail icon={MapPin} term="Place">{day.centre.address ? `${day.centre.name}, ${day.centre.address}` : day.centre.name}</GradingDetail>
+          <GradingDetail icon={Users} term="Students">{candidateCount(day.students.length)}</GradingDetail>
+        </GradingDetails>
+        <div className="space-y-3">
           <ExaminerPanel panel={day.panel} viewerIsChief={viewerIsChief} label={`Examiners for ${gradingTitle(day)}`} photos={photos} />
           {panelAction}
         </div>

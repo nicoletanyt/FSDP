@@ -1,23 +1,13 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { PointerEvent, ReactNode } from "react";
+import type { ReactNode } from "react";
 import {
     Calendar,
     CalendarDays,
-    Check,
-    ChevronLeft,
     ChevronRight,
     Columns2,
-    Info,
     List,
     Plus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-    Popover,
-    PopoverContent,
-    PopoverTitle,
-    PopoverTrigger,
-} from "@/components/ui/popover";
 import {
     addDays,
     addMonths,
@@ -38,14 +28,18 @@ import type {
 } from "@/lib/instructor-availability";
 import { cn } from "@/lib/utils";
 import MobileCalendarTimeline from "./MobileCalendarTimeline";
+import WeekStrip from "@/components/shared/calendar/WeekStrip";
+import MobileCalendarHeader from "@/components/shared/calendar/MobileCalendarHeader";
+import type { MobileViewOption } from "@/components/shared/calendar/MobileCalendarHeader";
+import { useSwipeDay } from "@/hooks/use-swipe-day";
 
 export type MobileCalendarView = "day" | "multi-day" | "month" | "list";
-const viewIcons = {
-    day: Calendar,
-    "multi-day": Columns2,
-    month: CalendarDays,
-    list: List,
-};
+const mobileViews: MobileViewOption<MobileCalendarView>[] = [
+    { value: "day", label: "day", icon: Calendar },
+    { value: "multi-day", label: "Multi Day", icon: Columns2, ariaLabel: "Multi Day (two-day schedule)" },
+    { value: "month", label: "month", icon: CalendarDays },
+    { value: "list", label: "list", icon: List },
+];
 type Entry = { id: string; startTime: string; endTime: string } & (
     | { event: CalendarEvent; slot?: never }
     | { slot: AvailabilitySlot; event?: never }
@@ -130,96 +124,6 @@ function Agenda({
                 </li>
             )}
         </ul>
-    );
-}
-
-function WeekStrip({
-    date,
-    today,
-    onSelectDate,
-}: {
-    date: Date;
-    today: Date;
-    onSelectDate: (date: Date) => void;
-}) {
-    const viewport = useRef<HTMLDivElement>(null);
-    const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const weekKey = dateKey(weekDates(date)[0]);
-    const selectedKey = dateKey(date);
-    useLayoutEffect(() => {
-        if (timer.current) clearTimeout(timer.current);
-        const element = viewport.current;
-        if (element) element.scrollLeft = element.clientWidth;
-    }, [weekKey, selectedKey]);
-    useEffect(
-        () => () => {
-            if (timer.current) clearTimeout(timer.current);
-        },
-        [],
-    );
-    return (
-        <div
-            ref={viewport}
-            aria-label="Swipe to change week"
-            className="-mx-4 flex snap-x snap-mandatory overflow-x-auto overscroll-x-contain py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-            onScroll={() => {
-                if (timer.current) clearTimeout(timer.current);
-                timer.current = setTimeout(() => {
-                    const element = viewport.current;
-                    if (!element) return;
-                    const page = Math.round(element.scrollLeft / element.clientWidth);
-                    if (page !== 1) onSelectDate(addDays(date, (page - 1) * 7));
-                }, 160);
-            }}
-        >
-            {[-1, 0, 1].map((offset) => (
-                <div
-                    key={offset}
-                    role="group"
-                    aria-label={`${offset ? (offset < 0 ? "Previous" : "Next") : "Current"} week`}
-                    className="grid w-full shrink-0 snap-center grid-cols-7"
-                >
-                    {weekDates(addDays(date, offset * 7)).map((day) => {
-                        const selected = dateKey(day) === dateKey(date);
-                        const isToday = dateKey(day) === dateKey(today);
-                        return (
-                            <button
-                                key={dateKey(day)}
-                                type="button"
-                                tabIndex={offset === 0 ? 0 : -1}
-                                onClick={() => onSelectDate(day)}
-                                aria-label={day.toLocaleDateString("en-GB", {
-                                    weekday: "long",
-                                    day: "numeric",
-                                    month: "long",
-                                    year: "numeric",
-                                })}
-                                aria-pressed={selected}
-                                aria-current={isToday ? "date" : undefined}
-                                className="flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                            >
-                                <span className="text-[11px] font-medium text-muted-foreground">
-                                    {day
-                                        .toLocaleDateString("en-GB", { weekday: "short" })
-                                        .slice(0, 2)
-                                        .toUpperCase()}
-                                </span>
-                                <span
-                                    className={cn(
-                                        "flex size-9 items-center justify-center rounded-full text-[18px] font-medium tabular-nums transition-colors motion-reduce:transition-none",
-                                        selected
-                                            ? "bg-primary text-primary-foreground"
-                                            : isToday && "text-brand-red-ink",
-                                    )}
-                                >
-                                    {day.getDate()}
-                                </span>
-                            </button>
-                        );
-                    })}
-                </div>
-            ))}
-        </div>
     );
 }
 
@@ -341,200 +245,60 @@ export default function MobileInstructorCalendar({
     onToday: () => void;
     onAddAvailability?: () => void;
 }) {
-    const [viewPickerOpen, setViewPickerOpen] = useState(false);
-    const ActiveViewIcon = viewIcons[view];
-    const currentViewLabel = view === "multi-day" ? "Multi Day" : view;
-    const gesture = useRef<{ x: number; y: number; moved: boolean } | null>(null);
-    const suppressClick = useRef(false);
+    const swipe = useSwipeDay((direction) => onSelectDate(addDays(date, direction)));
     const selectedDayLabel = date.toLocaleDateString("en-GB", {
         weekday: "long",
         day: "numeric",
         month: "long",
     });
-    function endSwipe(event: PointerEvent<HTMLDivElement>) {
-        const start = gesture.current;
-        gesture.current = null;
-        if (!start) return;
-        const dx = event.clientX - start.x;
-        const dy = event.clientY - start.y;
-        suppressClick.current = start.moved;
-        if (Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.5)
-            onSelectDate(addDays(date, dx < 0 ? 1 : -1));
-    }
     return (
         <section
             aria-label="Instructor calendar"
             data-mobile-calendar
             className="min-w-0"
         >
-            <header className="-mx-4 -mt-4 space-y-3 border-b bg-muted/40 p-4">
-                <div className="flex items-center justify-between gap-2">
-                    <h1 className="min-w-0 flex-1 text-[24px] leading-tight font-semibold tracking-tight">
-                        {date.toLocaleDateString("en-GB", { month: "long" })}{" "}
-                        <span className="text-[15px] font-normal text-muted-foreground">
-                            {date.getFullYear()}
-                        </span>
-                    </h1>
-                    <Popover open={viewPickerOpen} onOpenChange={setViewPickerOpen}>
-                        <PopoverTrigger
-                            aria-label="Change calendar view"
-                            aria-description={`Current view: ${currentViewLabel}`}
-                            title={`${currentViewLabel} view`}
-                            render={
-                                <Button
-                                    variant="outline"
-                                    size="icon-touch"
-                                    className="rounded-full"
-                                />
-                            }
-                        >
-                            <ActiveViewIcon aria-hidden="true" className="size-5" />
-                        </PopoverTrigger>
-                        <PopoverContent className="w-56 gap-3 p-4">
-                            <PopoverTitle className="text-[13px] text-muted-foreground">
-                                Calendar view
-                            </PopoverTitle>
-                            <div
-                                role="group"
-                                aria-label="Calendar view"
-                                className="grid gap-2"
-                            >
-                                {(["day", "multi-day", "month", "list"] as const).map(
-                                    (mode) => {
-                                        const Icon = viewIcons[mode];
-                                        return (
-                                            <Button
-                                                key={mode}
-                                                variant="ghost"
-                                                data-calendar-view={mode}
-                                                aria-pressed={view === mode}
-                                                aria-label={
-                                                    mode === "multi-day"
-                                                        ? "Multi Day (two-day schedule)"
-                                                        : undefined
-                                                }
-                                                onClick={() => {
-                                                    onChangeView(mode);
-                                                    setViewPickerOpen(false);
-                                                }}
-                                                className={cn(
-                                                    "h-11 justify-start gap-3 px-3 text-[15px] capitalize",
-                                                    view === mode && "bg-accent text-accent-foreground",
-                                                )}
-                                            >
-                                                <Icon aria-hidden="true" className="size-4" />
-                                                <span className="flex-1 text-left">
-                                                    {mode === "multi-day" ? "Multi Day" : mode}
-                                                </span>
-                                                {view === mode && (
-                                                    <Check aria-hidden="true" className="size-4" />
-                                                )}
-                                            </Button>
-                                        );
-                                    },
-                                )}
-                            </div>
-                        </PopoverContent>
-                    </Popover>
-                </div>
-                <div className="flex flex-wrap items-center justify-between gap-y-2">
-                    <div className="flex items-center gap-0.5">
-                        <Button
-                            variant="ghost"
-                            onClick={onToday}
-                            className="h-11 gap-1.5 rounded-full px-3 text-[14px] font-medium text-destructive"
-                        >
-                            Today
-                        </Button>
-                        <Button
-                            variant="ghost"
-                            size="icon-touch"
-                            aria-label={`Previous ${view === "month" ? "month" : "day"}`}
-                            onClick={() =>
-                                onSelectDate(
-                                    view === "month" ? addMonths(date, -1) : addDays(date, -1),
-                                )
-                            }
-                        >
-                            <ChevronLeft aria-hidden="true" />
-                        </Button>
-                        <Button
-                            variant="ghost"
-                            size="icon-touch"
-                            aria-label={`Next ${view === "month" ? "month" : "day"}`}
-                            onClick={() =>
-                                onSelectDate(
-                                    view === "month" ? addMonths(date, 1) : addDays(date, 1),
-                                )
-                            }
-                        >
-                            <ChevronRight aria-hidden="true" />
-                        </Button>
-                    </div>
-                    <div className="ml-auto flex items-center">
-                        {onAddAvailability && <Button
-                            variant="ghost"
-                            onClick={onAddAvailability}
-                            className="h-11 gap-1.5 rounded-full px-3 text-[14px] font-medium text-primary"
-                        >
-                            <Plus aria-hidden="true" className="size-4" />
-                            Add Availability
-                        </Button>}
-                        <Popover>
-                            <PopoverTrigger
-                                aria-label="Calendar colours"
-                                render={<Button variant="ghost" size="icon-touch" />}
-                            >
-                                <Info
-                                    aria-hidden="true"
-                                    className="size-4 text-muted-foreground"
-                                />
-                            </PopoverTrigger>
-                            <PopoverContent className="gap-2 text-[14px]">
-                                 <PopoverTitle>Calendar colours</PopoverTitle>
-                                 {catalogueStatus}
-                                 {!catalogueStatus && !classCatalogue.length && <p className="text-muted-foreground">No class types recorded.</p>}
-                                <ul className="space-y-2">
-                                    {classCatalogue.map(type => (
-                                        <li key={type.id} className="space-y-0.5">
-                                            <span
-                                                className={cn(
-                                                    "inline-block rounded-md border px-2 py-1 text-[13px]",
-                                                    calendarClassStyle(type.id).badge,
-                                                )}
-                                            >
-                                                {type.label}
-                                            </span>
-                                            <p className="text-[12px] text-muted-foreground">
-                                                {type.description}
-                                            </p>
-                                        </li>
-                                    ))}
-                                    <li>
-                                        <span
-                                            className={cn(
-                                                "inline-block rounded-md px-2 py-1 text-[13px]",
-                                                eventStyles.grading.badge,
-                                            )}
-                                        >
-                                            Grading
-                                        </span>
-                                    </li>
-                                </ul>
-                                {onAddAvailability && <p>
-                                    <span className="text-emerald-600 dark:text-emerald-400">
-                                        ●
-                                    </span>{" "}
-                                    Availability
-                                </p>}
-                                <p className="text-muted-foreground">
-                                    Tap an event for details. Times are shown in Singapore time.
-                                </p>
-                            </PopoverContent>
-                        </Popover>
-                    </div>
-                </div>
-            </header>
+            <MobileCalendarHeader
+                date={date}
+                view={view}
+                views={mobileViews}
+                onViewChange={onChangeView}
+                stepUnit={view === "month" ? "month" : "day"}
+                onToday={onToday}
+                onPrevious={() => onSelectDate(view === "month" ? addMonths(date, -1) : addDays(date, -1))}
+                onNext={() => onSelectDate(view === "month" ? addMonths(date, 1) : addDays(date, 1))}
+                extras={onAddAvailability && <Button
+                    variant="ghost"
+                    onClick={onAddAvailability}
+                    className="h-11 gap-1.5 rounded-full px-3 text-[14px] font-medium text-primary"
+                >
+                    <Plus aria-hidden="true" className="size-4" />
+                    Add Availability
+                </Button>}
+                legend={<>
+                    {catalogueStatus}
+                    {!catalogueStatus && !classCatalogue.length && <p className="text-muted-foreground">No class types recorded.</p>}
+                    <ul className="space-y-2">
+                        {classCatalogue.map(type => (
+                            <li key={type.id} className="space-y-0.5">
+                                <span className={cn("inline-block rounded-md border px-2 py-1 text-[13px]", calendarClassStyle(type.id).badge)}>
+                                    {type.label}
+                                </span>
+                                <p className="text-[12px] text-muted-foreground">{type.description}</p>
+                            </li>
+                        ))}
+                        <li>
+                            <span className={cn("inline-block rounded-md px-2 py-1 text-[13px]", eventStyles.grading.badge)}>Grading</span>
+                        </li>
+                    </ul>
+                    {onAddAvailability && <p>
+                        <span className="text-emerald-600 dark:text-emerald-400">●</span>{" "}
+                        Availability
+                    </p>}
+                    <p className="text-muted-foreground">
+                        Tap an event for details. Times are shown in Singapore time.
+                    </p>
+                </>}
+            />
             {view === "month" && !content ? (
                 <MonthGrid
                     getEvents={getEvents}
@@ -555,40 +319,7 @@ export default function MobileInstructorCalendar({
                     {selectedDayLabel}
                 </h2>
             )}
-            <div
-                className="touch-pan-y touch-pinch-zoom"
-                onPointerDownCapture={(event) => {
-                    suppressClick.current = false;
-                    if (event.pointerType === "touch" && event.isPrimary)
-                        gesture.current = {
-                            x: event.clientX,
-                            y: event.clientY,
-                            moved: false,
-                        };
-                }}
-                onPointerMoveCapture={(event) => {
-                    if (
-                        gesture.current &&
-                        Math.hypot(
-                            event.clientX - gesture.current.x,
-                            event.clientY - gesture.current.y,
-                        ) > 12
-                    )
-                        gesture.current.moved = true;
-                }}
-                onPointerUpCapture={endSwipe}
-                onPointerCancel={() => {
-                    gesture.current = null;
-                    suppressClick.current = true;
-                }}
-                onClickCapture={(event) => {
-                    if (suppressClick.current) {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        suppressClick.current = false;
-                    }
-                }}
-            >
+            <div {...swipe}>
                 <div className="animate-in fade-in-0 duration-150 motion-reduce:animate-none">
                     {content ?? (view === "day" || view === "multi-day" ? (
                         <MobileCalendarTimeline
@@ -616,7 +347,7 @@ export default function MobileInstructorCalendar({
                                 addDays(date, index),
                             ).map((day) => (
                                 <section key={dateKey(day)}>
-                                    <h3 className="border-b border-border/50 pb-2 text-[14px] font-semibold">
+                                    <h3 className="sticky top-[var(--mobile-site-nav-height)] z-10 border-b border-border/50 bg-background py-2 text-[14px] font-semibold">
                                         {day.toLocaleDateString("en-GB", {
                                             weekday: "short",
                                             day: "numeric",

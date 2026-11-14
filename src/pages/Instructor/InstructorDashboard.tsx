@@ -19,6 +19,8 @@ import { useMediaQuery } from "@/hooks/use-media-query";
 import { useInstructorCalendarRange, useInstructorSelectedEvent } from "@/hooks/use-instructor-class-queries";
 import { useInstructorPrefetch } from "@/hooks/use-instructor-prefetch";
 import { useAuth } from "@/hooks/use-auth";
+import { useWeekSpan } from "@/hooks/use-week-span";
+import { stepWeekWindow, visibleWeekDays, weeksCovering, windowLabel } from "@/lib/calendar-window";
 import { useFeedback } from "@/hooks/use-feedback";
 import { needsCalendarEventLookup } from "@/lib/instructor/calendar-queries";
 import { calendarClassStyle, calendarEventsForDate, calendarRange, calendarTimeLabel, rosterSizeLabel, singaporeClock } from "@/lib/instructor/calendar-view";
@@ -45,7 +47,6 @@ import {
     monthDates,
     parseCalendarDate,
     weekDates,
-    weekLabel,
 } from "@/lib/instructor-calendar";
 import { cn } from "@/lib/utils";
 
@@ -200,7 +201,8 @@ function CalendarDays({
     view: "day" | "week";
     expandSelectedDay: boolean;
 }) {
-    const days = view === "day" ? [date] : weekDates(date);
+    const span = useWeekSpan();
+    const days = view === "day" ? [date] : visibleWeekDays(date, today, weekDates(date), span, addDays);
 
     return (
         <div
@@ -209,15 +211,15 @@ function CalendarDays({
                     ? "Daily class calendar"
                     : "Weekly class calendar"
             }
-            className="flex flex-col gap-3 lg:min-h-0 lg:flex-1"
+            className="flex flex-col gap-3 min-[785px]:min-h-0 min-[785px]:flex-1"
         >
             {view === "week" && (
                 <CalendarDaySelector date={date} today={today} onSelectDate={onSelectDate} />
             )}
             <div
                 className={cn(
-                    "flex flex-col rounded-xl lg:min-h-0 lg:flex-1 lg:flex-row lg:overflow-hidden",
-                    view === "week" && "border lg:divide-x",
+                    "flex flex-col rounded-xl min-[785px]:min-h-0 min-[785px]:flex-1 min-[785px]:flex-row min-[785px]:overflow-hidden",
+                    view === "week" && "border min-[785px]:divide-x",
                 )}
             >
                 {days.map((day) => {
@@ -239,11 +241,11 @@ function CalendarDays({
                                 month: "long",
                             })}
                             className={cn(
-                                "min-h-0 min-w-0 grow flex-col bg-card transition-[flex-basis,flex-grow,background-color,box-shadow] duration-200 ease-in-out motion-reduce:transition-none lg:shrink-0",
-                                isSelected ? "flex" : "hidden lg:flex",
+                                "min-h-0 min-w-0 grow flex-col bg-card transition-[flex-basis,flex-grow,background-color,box-shadow] duration-200 ease-in-out motion-reduce:transition-none min-[785px]:shrink-0",
+                                isSelected ? "flex" : "hidden min-[785px]:flex",
                                 isExpanded && view === "week"
-                                    ? "bg-accent/60 lg:grow-0 lg:basis-[clamp(300px,24vw,320px)]"
-                                    : "lg:grow lg:basis-0",
+                                    ? "bg-accent/60 min-[785px]:grow-0 min-[785px]:basis-[clamp(300px,24vw,320px)]"
+                                    : "min-[785px]:grow min-[785px]:basis-0",
                             )}
                             data-selected={isExpanded}
                         >
@@ -289,7 +291,7 @@ function CalendarDays({
                             )}
                             <div
                                 className={cn(
-                                    "lg:min-h-0 lg:flex-1 lg:overflow-y-auto",
+                                    "min-[785px]:min-h-0 min-[785px]:flex-1 min-[785px]:overflow-y-auto",
                                     view === "day"
                                         ? "grid auto-rows-max items-start gap-4 bg-muted/30 p-2 xl:grid-cols-2"
                                         : "space-y-3 p-3",
@@ -493,6 +495,9 @@ function CalendarMonth({
 export default function InstructorDashboard() {
     const { session } = useAuth();
     const isDesktop = useMediaQuery("(min-width: 1024px)");
+    const weekSpan = useWeekSpan();
+    // From 785px the toolbar and timeline are used; below it, the phone layout.
+    const wide = useMediaQuery("(min-width: 785px)");
     const [searchParams, setSearchParams] = useSearchParams();
     const [weekOverview, setWeekOverview] = useState(false);
     // Keep the chosen display in the same URL state as class selection. A route
@@ -507,7 +512,7 @@ export default function InstructorDashboard() {
         });
     }, [setSearchParams]);
     const [timelineFocusRequest, setTimelineFocusRequest] = useState(0);
-    const [mobileList, setMobileList] = useState(false);
+    const [mobileList, setMobileList] = useState(() => !window.matchMedia("(min-width: 785px)").matches);
     const classTriggerRef = useRef<HTMLElement | null>(null);
     const lastSelectedSession = useRef<CalendarEvent | null>(null);
     const [now, setNow] = useState(() => singaporeClock());
@@ -532,7 +537,8 @@ export default function InstructorDashboard() {
     const [resolvedSelectionDate, setResolvedSelectionDate] = useState<{ id: string; date: Date } | null>(null);
     const selectedDate = requestedDate ??
         (resolvedSelectionDate?.id === requestedId ? resolvedSelectionDate.date : today);
-    const range = calendarRange(selectedDate, view, isDesktop, mobileList);
+    const range = calendarRange(selectedDate, view, wide, mobileList,
+        weeksCovering(visibleWeekDays(selectedDate, today, weekDates(selectedDate), weekSpan, addDays), weekDates));
     const calendar = useInstructorCalendarRange(range);
     const canUseAvailability = calendar.canUseAvailability;
     const availability = calendar.data?.availability ?? [];
@@ -544,7 +550,7 @@ export default function InstructorDashboard() {
     }, [canUseAvailability]);
     const events = calendar.data?.events ?? [];
     const prefetch = useInstructorPrefetch({ selectedDate, today, range, events, ready: calendar.status === 'success',
-        weekView: view === 'week', isDesktop, mobileList });
+        weekView: view === 'week', isDesktop: wide, mobileList });
     const rangeSession = events.find(event => event.id === requestedId);
     const needsSelection = needsCalendarEventLookup(requestedId, Boolean(requestedDate), calendar.status, Boolean(rangeSession));
     const selection = useInstructorSelectedEvent(requestedId, needsSelection);
@@ -645,8 +651,8 @@ export default function InstructorDashboard() {
             );
             return;
         }
-        const nextDate = addDays(selectedDate, direction * 7);
-        const includesToday = weekDates(nextDate).some(
+        const nextDate = stepWeekWindow(selectedDate, direction === 1 ? 1 : -1, today, weekSpan, addDays);
+        const includesToday = visibleWeekDays(nextDate, today, weekDates(nextDate), weekSpan, addDays).some(
             (day) => dateKey(day) === dateKey(today),
         );
         updateSelection(includesToday ? today : nextDate, null, !includesToday);
@@ -686,7 +692,7 @@ export default function InstructorDashboard() {
 
     const heading =
         view === "week"
-            ? weekLabel(selectedDate)
+            ? windowLabel(visibleWeekDays(selectedDate, today, weekDates(selectedDate), weekSpan, addDays))
             : selectedDate.toLocaleDateString("en-GB", {
                 ...(view === "day"
                     ? { weekday: "long", day: "numeric" }
@@ -744,7 +750,7 @@ export default function InstructorDashboard() {
                 const row = event.target.closest<HTMLElement>('[data-prefetch-class]');
                 if (row && event.currentTarget.contains(row) && row.dataset.prefetchClass) prefetch.touchClass(row.dataset.prefetchClass);
             }}>
-            {!isDesktop ? <MobileInstructorCalendar
+            {!wide ? <MobileInstructorCalendar
                 date={selectedDate} now={now} view={mobileList ? "list" : view === "week" ? "multi-day" : view} slots={availability} focusRequest={timelineFocusRequest}
                 getEvents={getEvents} classCatalogue={calendar.data?.classTypes ?? []} catalogueStatus={catalogueStatus} content={calendarStatus ?? selectionStatus}
                 onSelectDate={selectDay} onSelectClass={calendarProps.onToggleClass} onSelectAvailability={selectAvailability}
@@ -812,7 +818,7 @@ export default function InstructorDashboard() {
                             onSelectAvailability={selectAvailability}
                             onSelectRange={canUseAvailability ? selectRange : undefined}
                             onSelectDate={selectDay}
-                            isDesktop={isDesktop}
+                            isDesktop={wide}
                         />
                     ) : (
                         <CalendarDays

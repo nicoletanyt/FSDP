@@ -2,12 +2,12 @@ import { useEffect, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { CardListSkeleton } from '@/components/shared/skeletons'
 import { Link, useSearchParams } from 'react-router'
-import { CalendarDays, ChevronRight, Clock3, History, MapPin, Users } from 'lucide-react'
+import { CalendarDays, ChevronRight, Clock3, History, MapPin, TriangleAlert, Users } from 'lucide-react'
 import EmptyState from '@/components/shared/layout/EmptyState'
 import GradingPanelDialog from '@/components/admin/GradingPanelDialog'
 import RetryAlert from '@/components/shared/layout/RetryAlert'
 import {
-  ExaminerPanel, GradingFacts, GradingStatusPill, GradingWarnings, Segmented, gradingActionClass,
+  ExaminerPanel, detailTermClass, GradingDetail, GradingDetails, GradingStatusPill, GradingWarnings, Segmented, gradingActionClass,
 } from '@/components/grading/GradingParts'
 import { useExaminerPhotos } from '@/hooks/use-examiner-photos'
 import { loadInstructorPhotos } from '@/lib/instructor/api'
@@ -47,7 +47,7 @@ function warningsFor(item: Schedule, event: ScheduleEvent | undefined, stageKey:
   const until = daysUntil(item.grading_date, now)
   return [
     ...(!panel.length ? ['No examiners assigned'] : !panel.some(member => member.isChief) ? ['No chief examiner'] : []),
-    ...(stageKey === 'unsorted' && until <= 3 ? [`Not sorted, grading ${until === 0 ? 'today' : until === 1 ? 'tomorrow' : `in ${until} days`}`] : []),
+    ...(stageKey === 'unsorted' && until <= 3 ? [`Students not arranged into sessions yet. Grading ${until === 0 ? 'is today' : until === 1 ? 'is tomorrow' : `is in ${until} days`}`] : []),
     ...(underReview ? [`${underReview} application${underReview === 1 ? '' : 's'} under review`] : []),
     ...(stageKey !== 'not-open' && stageKey !== 'open' && !candidates(item) ? ['No candidates'] : []),
     ...(ends.some(end => endsAfter(end, '21:00')) ? ['Runs past 9:00 pm'] : []),
@@ -69,34 +69,44 @@ function ScheduleCard({ item, next, now, photos, onPanelSaved }: {
   const until = daysUntil(item.grading_date, now)
   const action = nextAction[stage.key]
   const actionHref = action.list ? `${dayHref}?list=${action.list}` : dayHref
+  const warnings = warningsFor(item, event, stage.key, now)
   return (
-    <Card className="gap-3 px-5 py-4">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <h3 className="text-base font-medium">
-          <Link to={dayHref} className="hover:underline focus-visible:outline-2 focus-visible:outline-ring">{title}</Link>
-        </h3>
-        <GradingStatusPill opensOn={item.application_opens_on} closesOn={item.application_deadline} gradingDate={item.grading_date} today={now} />
-        {next && <span className="text-sm text-muted-foreground">{until === 0 ? 'Next grading, today' : until === 1 ? 'Next grading, tomorrow' : `Next grading, in ${until} days`}</span>}
+    <Card className="gap-5 px-5 py-5">
+      <div className="space-y-1">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <h3 className="text-lg font-semibold">
+            <Link to={dayHref} className="hover:underline focus-visible:outline-2 focus-visible:outline-ring">{title}</Link>
+          </h3>
+          <GradingStatusPill opensOn={item.application_opens_on} closesOn={item.application_deadline} gradingDate={item.grading_date} today={now} />
+        </div>
+        {next && <p className="text-sm text-muted-foreground">{until === 0 ? 'Next grading, today' : until === 1 ? 'Next grading, tomorrow' : `Next grading, in ${until} days`}</p>}
       </div>
-      <GradingFacts items={[
-        { key: 'date', icon: CalendarDays, label: gradingDate(item.grading_date) },
-        { key: 'time', icon: Clock3, label: gradingTimeLabel(event?.starts_at ?? null, event?.ends_at ?? null, item.reporting_time) },
-        { key: 'centre', icon: MapPin, label: venue?.name ?? 'Aikido Shinju-Kai Headquarters' },
-        { key: 'candidates', icon: Users, label: candidateCount(candidates(item)) },
-      ]} />
-      <div className="flex flex-wrap items-end justify-between gap-3 border-t pt-3">
-        <div className="flex min-w-0 flex-wrap items-end gap-3">
-          <ExaminerPanel panel={panel} photos={photos} label={`Examiners for ${title}, ${gradingDate(item.grading_date)}`} />
-          <GradingPanelDialog eventId={item.event_id} gradingLabel={gradingDate(item.grading_date)} panel={panel} onSaved={onPanelSaved} />
+
+      <GradingDetails>
+        <GradingDetail icon={CalendarDays} term="Date">{gradingDate(item.grading_date)}</GradingDetail>
+        <GradingDetail icon={Clock3} term="Time">{gradingTimeLabel(event?.starts_at ?? null, event?.ends_at ?? null, item.reporting_time)}</GradingDetail>
+        <GradingDetail icon={MapPin} term="Place">{venue?.name ?? 'Aikido Shinju-Kai Headquarters'}</GradingDetail>
+        <GradingDetail icon={Users} term="Students">{candidateCount(candidates(item))}</GradingDetail>
+      </GradingDetails>
+
+      <div className="space-y-3">
+        <ExaminerPanel panel={panel} photos={photos} label={`Examiners for ${title}, ${gradingDate(item.grading_date)}`} />
+        <GradingPanelDialog eventId={item.event_id} gradingLabel={gradingDate(item.grading_date)} panel={panel} onSaved={onPanelSaved} />
+      </div>
+
+      {warnings.length > 0 && (
+        <div className="space-y-2">
+          <p className={detailTermClass}><TriangleAlert className="size-4 shrink-0" aria-hidden="true" />Needs your attention</p>
+          <GradingWarnings warnings={warnings} quiet />
         </div>
-        <div className="flex flex-wrap items-center justify-end gap-3">
-          <GradingWarnings warnings={warningsFor(item, event, stage.key, now)} quiet />
-          <Link to={actionHref} className={gradingActionClass} data-grading-stage={stage.key}>
-            {action.label}
-            <span className="sr-only">: {title}, {gradingDate(item.grading_date)}</span>
-            <ChevronRight className="size-4" aria-hidden="true" />
-          </Link>
-        </div>
+      )}
+
+      <div className="flex justify-end">
+        <Link to={actionHref} className={gradingActionClass} data-grading-stage={stage.key}>
+          {action.label}
+          <span className="sr-only">: {title}, {gradingDate(item.grading_date)}</span>
+          <ChevronRight className="size-4" aria-hidden="true" />
+        </Link>
       </div>
     </Card>
   )

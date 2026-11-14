@@ -86,6 +86,23 @@ export function GradingPageHeader({ title, badges, facts, actions, children }: {
   )
 }
 
+// A labelled fact: small caption above (with icon), value below. One look for
+// every grading detail (date, time, place, students, examiners).
+export const detailTermClass = 'flex items-center gap-1.5 text-sm text-muted-foreground'
+
+export function GradingDetail({ icon: Icon, term, children }: { icon: LucideIcon; term: string; children: ReactNode }) {
+  return (
+    <div className="min-w-0 space-y-1 text-sm">
+      <dt className={detailTermClass}><Icon className="size-4 shrink-0" aria-hidden="true" />{term}</dt>
+      <dd className="font-medium [overflow-wrap:anywhere]">{children}</dd>
+    </div>
+  )
+}
+
+export function GradingDetails({ children }: { children: ReactNode }) {
+  return <dl className="grid gap-x-8 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">{children}</dl>
+}
+
 export interface PanelExaminer {
   instructorId: string
   name: string
@@ -104,9 +121,9 @@ export function ExaminerPanel({ panel, viewerIsChief = false, label, photos = {}
 }) {
   return (
     <div className="space-y-2">
-      {heading && <p className="flex items-center gap-2 text-sm font-medium">
-        <ShieldCheck className="size-4 text-primary" aria-hidden="true" />
-        Examiner panel
+      {heading && <p className={detailTermClass}>
+        <ShieldCheck className="size-4 shrink-0" aria-hidden="true" />
+        Examiners
       </p>}
       {panel.length ? (
         <ul className="flex flex-wrap gap-2" aria-label={label}>

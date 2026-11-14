@@ -60,6 +60,7 @@ before(async () => {
   server = await createServer({ configFile: false, appType: 'custom', logLevel: 'silent', server: { middlewareMode: true },
     resolve: { alias: [
       { find: '@/lib/supabase', replacement: new URL('./helpers/supabase-grading-stub.ts', import.meta.url).pathname },
+      { find: '@/components/shared/FeedbackDialog', replacement: new URL('./helpers/feedback-dialog-stub.tsx', import.meta.url).pathname },
       { find: '@', replacement: new URL('../src', import.meta.url).pathname },
     ] } })
   stub = await server.ssrLoadModule(new URL('./helpers/supabase-grading-stub.ts', import.meta.url).pathname)
@@ -218,7 +219,7 @@ test('the schedule shows each grading\'s lifecycle, its next action and warnings
   assert.equal(root.root.findAll(node => node.type === 'ol' && node.props['aria-label'] === 'Grading progress').length, 0)
   assert.deepEqual(root.root.findAll(node => node.props?.['data-status-pill'] !== undefined && typeof node.type === 'string')
     .map(node => node.props.children), ['Closed', 'Applications open'])
-  assert.equal(text.match(/Examiner panel/g).length, 2)
+  assert.equal(text.match(/"Examiners"/g).length, 2)
   // The footer names the next action and lists warnings instead of repeating the stepper.
   const actions = root.root.findAll(node => node.type === 'a' && node.props['data-grading-stage'] !== undefined)
   assert.deepEqual(actions.map(node => [node.props['data-grading-stage'], node.props.href]),

@@ -1,4 +1,6 @@
 import { CircleCheck, FilePen, TriangleAlert } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
+import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from '@/components/ui/popover'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { gradingStamp } from '@/lib/grading/format'
 import type { GradingDay } from '@/lib/instructor/grading-panels'
@@ -33,5 +35,37 @@ export default function ScheduleNotice({ day, viewer }: { day: GradingDay; viewe
         </Alert>
       )}
     </div>
+  )
+}
+
+// The same two facts as the notice, as header pills: draft/published, and a
+// "things to check" pill that opens the list.
+export function ScheduleStatusPills({ day }: { day: GradingDay }) {
+  if (!day.sessions.length) return null
+  const published = day.publishedAt !== null
+  const count = day.warnings.length
+  return (
+    <>
+      <Badge className={published ? 'gap-1 bg-success text-success-foreground' : 'gap-1'} variant={published ? 'default' : 'outline'} title={published ? `Published ${gradingStamp(day.publishedAt!)}` : 'Only you and the chief examiner can see these sessions'}>
+        {published ? <CircleCheck aria-hidden="true" /> : <FilePen aria-hidden="true" />}
+        {published ? 'Schedule published' : 'Draft schedule'}
+      </Badge>
+      {count > 0 && (
+        <Popover>
+          <PopoverTrigger render={<button type="button" className="rounded-4xl focus-visible:outline-2 focus-visible:outline-ring" />}>
+            <Badge className="gap-1 bg-warning text-warning-foreground">
+              <TriangleAlert aria-hidden="true" />
+              {count === 1 ? '1 thing to check' : `${count} things to check`}
+            </Badge>
+          </PopoverTrigger>
+          <PopoverContent className="w-80">
+            <PopoverTitle>{count === 1 ? '1 thing to check' : `${count} things to check`}</PopoverTitle>
+            <ul className="list-disc space-y-1 pl-4 text-sm">
+              {day.warnings.map(warning => <li key={`${warning.code}-${warning.sessionIds.join()}`}>{warning.message}</li>)}
+            </ul>
+          </PopoverContent>
+        </Popover>
+      )}
+    </>
   )
 }

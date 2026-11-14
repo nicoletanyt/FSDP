@@ -71,7 +71,7 @@ export default function GradingPanelDialog({ eventId, gradingLabel, panel, onSav
   return <Dialog open={open} onOpenChange={handleOpenChange}>
     <DialogTrigger render={<Button type="button" variant="outline" size="sm" />}>
       <Pencil className="size-4" aria-hidden="true" />
-      Edit panel
+      Edit examiners
     </DialogTrigger>
     <DialogContent showCloseButton={!saving}>
       <DialogHeader>
