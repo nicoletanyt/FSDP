@@ -55,7 +55,7 @@ const batches = [
     instructors: person('Hiroshi', 'Sato'), grading_batch_students: [], grading_batch_items: [] },
 ]
 
-let server, stub, AdminGradingDay, AdminGradingResults, AdminSchedule, moveOptions
+let server, stub, AdminGradingDay, AdminGradingResults, AdminSchedule, moveOptions, AuthContext
 before(async () => {
   server = await createServer({ configFile: false, appType: 'custom', logLevel: 'silent', server: { middlewareMode: true },
     resolve: { alias: [
@@ -63,6 +63,7 @@ before(async () => {
       { find: '@', replacement: new URL('../src', import.meta.url).pathname },
     ] } })
   stub = await server.ssrLoadModule(new URL('./helpers/supabase-grading-stub.ts', import.meta.url).pathname)
+  ;({ AuthContext } = await server.ssrLoadModule('/src/lib/auth-context.ts'))
   ;({ default: AdminGradingDay, moveOptions } = await server.ssrLoadModule('/src/pages/admin/GradingDay.tsx'))
   ;({ default: AdminGradingResults } = await server.ssrLoadModule('/src/pages/admin/GradingResults.tsx'))
   ;({ default: AdminSchedule } = await server.ssrLoadModule('/src/pages/admin/GradingOpportunities.tsx'))
@@ -84,11 +85,11 @@ async function render(path, { dayData = day, responses = {}, errors = {} } = {})
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   let root
   await act(async () => {
-    root = create(React.createElement(QueryClientProvider, { client },
+    root = create(React.createElement(AuthContext.Provider, { value: auth('admin-a') }, React.createElement(QueryClientProvider, { client },
       React.createElement(MemoryRouter, { initialEntries: [path] },
         React.createElement(Routes, null,
           React.createElement(Route, { path: '/admin/grading/days/:eventId', element: React.createElement(AdminGradingDay) }),
-          React.createElement(Route, { path: '/admin/grading/days/:eventId/:sessionId', element: React.createElement(AdminGradingResults) })))))
+          React.createElement(Route, { path: '/admin/grading/days/:eventId/:sessionId', element: React.createElement(AdminGradingResults) }))))))
   })
   mounted.push({ root, client })
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 30)) })
@@ -96,6 +97,7 @@ async function render(path, { dayData = day, responses = {}, errors = {} } = {})
 }
 const textOf = root => JSON.stringify(root.toJSON())
 const hrefs = root => root.root.findAll(node => node.type === 'a').map(node => node.props.href)
+const auth = id => ({ session: { user: { id } }, profile: null, loading: false, error: null, reloadProfile() {}, signOut: async () => {} })
 
 test('the admin grading day shows each session with its candidates, the panel\'s progress and a move control', async () => {
   const root = await render(`/admin/grading/days/${eventId}`)
@@ -202,9 +204,9 @@ test('the schedule shows each grading\'s lifecycle, its next action and warnings
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   let root
   await act(async () => {
-    root = create(React.createElement(QueryClientProvider, { client },
+    root = create(React.createElement(AuthContext.Provider, { value: auth('admin-a') }, React.createElement(QueryClientProvider, { client },
       React.createElement(MemoryRouter, null, React.createElement(Routes, null,
-        React.createElement(Route, { path: '*', element: React.createElement(AdminSchedule) })))))
+        React.createElement(Route, { path: '*', element: React.createElement(AdminSchedule) }))))))
   })
   mounted.push({ root, client })
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 30)) })
@@ -235,4 +237,37 @@ test('the schedule shows each grading\'s lifecycle, its next action and warnings
   assert.ok(hrefs(root).includes('/admin/grading/days/past'))
   assert.ok(text.includes('2 sessions'))
   assert.ok(!text.includes('Sort into sessions'))
+})
+
+test('the schedule page reuses a fresh cache on remount and refetches after invalidation', async () => {
+  stub.data.errors = {}
+  stub.data.gradings = []
+  stub.calls.length = 0
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 30_000 } } })
+  let root
+  async function mount(id) {
+    await act(async () => {
+      root = create(React.createElement(QueryClientProvider, { client },
+        React.createElement(AuthContext.Provider, { value: auth(id) },
+          React.createElement(MemoryRouter, null, React.createElement(AdminSchedule)))))
+    })
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 30)) })
+  }
+  const reads = () => stub.calls.filter(call => call[0] === 'select' && call[1] === 'gradings').length
+  try {
+    await mount('admin-a')
+    assert.match(textOf(root), /No upcoming gradings/)
+    assert.equal(reads(), 2)
+    await act(async () => root.unmount())
+    await mount('admin-a')
+    assert.equal(reads(), 2)
+    await act(async () => { await client.invalidateQueries({ queryKey: ['admin', 'grading-schedule', 'admin-a'] }) })
+    assert.equal(reads(), 4)
+    await act(async () => root.unmount())
+    await mount('admin-b')
+    assert.equal(reads(), 6)
+  } finally {
+    if (root) await act(async () => root.unmount())
+    client.clear()
+  }
 })

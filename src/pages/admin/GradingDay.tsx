@@ -18,6 +18,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { useFeedback } from '@/hooks/use-feedback'
+import { useAuth } from '@/hooks/use-auth'
 import { useGradingDayLayout } from '@/hooks/use-grading-day-layout'
 import { useExaminerPhotos } from '@/hooks/use-examiner-photos'
 import { loadInstructorPhotos } from '@/lib/instructor/api'
@@ -27,6 +28,7 @@ import {
   publishGradingSchedule, sortGradingSessions, splitGradingSession, unpublishGradingSchedule,
 } from '@/lib/admin/grading-results'
 import type { BatchSummary } from '@/lib/admin/grading-results'
+import { gradingScheduleAccountKey } from '@/lib/admin/grading-schedule'
 import { gradingDate, gradingTimeLabel, singaporeToday } from '@/lib/grading/format'
 import { sessionCandidates, sessionLabel } from '@/lib/instructor/grading-panels'
 import type { GradingDay, GradingSessionSummary } from '@/lib/instructor/grading-panels'
@@ -59,6 +61,7 @@ const publishBlocker = (day: GradingDay) =>
 
 function GradingDayPage() {
   const { eventId = '' } = useParams()
+  const { session } = useAuth()
   const view = useGradingDayLayout()
   const client = useQueryClient()
   const { notify, feedbackDialog } = useFeedback()
@@ -67,7 +70,10 @@ function GradingDayPage() {
   const summaries = useQuery({ queryKey: adminGradingKeys.summaries(eventId), queryFn: () => loadBatchSummaries(eventId), enabled: Boolean(eventId), retry: false })
   const [splitting, setSplitting] = useState<GradingSessionSummary | null>(null)
   // Every schedule change returns the whole updated day.
-  const update = (updated: GradingDay) => client.setQueryData(adminGradingKeys.day(eventId), updated)
+  const update = (updated: GradingDay) => {
+    client.setQueryData(adminGradingKeys.day(eventId), updated)
+    void client.invalidateQueries({ queryKey: gradingScheduleAccountKey(session?.user.id) })
+  }
   const sort = useMutation({
     mutationFn: () => sortGradingSessions(eventId),
     onSuccess: updated => {
@@ -236,7 +242,7 @@ function GradingDayPage() {
         renderSessionActions={renderSessionActions}
         photos={photos}
         panelAction={<GradingPanelDialog eventId={data.eventId} gradingLabel={gradingDate(data.gradingDate)} panel={data.panel}
-          onSaved={() => { void day.refetch(); notify({ title: 'Grading panel saved', description: 'The examiners for this grading have been updated.' }) }} />}
+          onSaved={() => { void day.refetch(); void client.invalidateQueries({ queryKey: gradingScheduleAccountKey(session?.user.id) }); notify({ title: 'Grading panel saved', description: 'The examiners for this grading have been updated.' }) }} />}
         emptySessions={<GradingNote>{data.isPrivate
           ? 'No sessions yet. This is a private grading, so add sessions by hand.'
           : 'No sessions yet. Generate a draft schedule once applications close.'}</GradingNote>}

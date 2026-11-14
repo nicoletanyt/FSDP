@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { CardListSkeleton } from '@/components/shared/skeletons'
 import { Link, useSearchParams } from 'react-router'
 import { CalendarDays, ChevronRight, Clock3, History, MapPin, Users } from 'lucide-react'
@@ -15,35 +16,16 @@ import { candidateCount, daysUntil, endsAfter, gradingDate, gradingStage, gradin
 import { gradingTitle } from '@/lib/instructor/grading-panels'
 import { supabase } from '@/lib/supabase'
 import { useFeedback } from '@/hooks/use-feedback'
-import { panelSelect, toPanel } from '@/lib/admin/grading-panels'
-
-interface Schedule {
-  event_id: string
-  track: 'adult' | 'children'
-  grading_date: string
-  application_opens_on: string
-  application_deadline: string
-  reporting_release_on: string
-  reporting_time: string | null
-  events: ScheduleEvent | ScheduleEvent[]
-  grading_panel_members: Parameters<typeof toPanel>[0]
-  grading_applications: { status: string }[]
-  grading_sessions: { id: string; ends_at: string | null }[]
-}
-
-interface ScheduleEvent {
-  name: string
-  starts_at: string | null
-  ends_at: string | null
-  centres: { name: string; address: string } | { name: string; address: string }[]
-}
+import { useAuth } from '@/hooks/use-auth'
+import { toPanel } from '@/lib/admin/grading-panels'
+import { gradingScheduleAccountKey, gradingScheduleKey, loadGradingSchedule } from '@/lib/admin/grading-schedule'
+import { adminGradingKeys } from '@/lib/admin/grading-results'
+import type { Schedule, ScheduleEvent } from '@/lib/admin/grading-schedule'
 
 function related<T>(value: T | T[] | null | undefined): T | undefined {
   return Array.isArray(value) ? value[0] : value ?? undefined
 }
 
-const scheduleSelect = `event_id,track,grading_date,application_opens_on,application_deadline,reporting_release_on,reporting_time,
-  events!inner(name,starts_at,ends_at,centres(name,address)),${panelSelect},grading_applications(status),grading_sessions(id,ends_at)`
 // Candidates are active (non-withdrawn) applications, counted the same way on the instructor side.
 const candidates = (item: Schedule) => item.grading_applications.filter(row => row.status !== 'withdrawn').length
 
@@ -152,33 +134,25 @@ function PastGradings({ items }: { items: Schedule[] }) {
 }
 
 export default function GradingOpportunities() {
-  const [upcoming, setUpcoming] = useState<Schedule[]>([])
-  const [past, setPast] = useState<Schedule[]>([])
-  const [loading, setLoading] = useState(true)
+  const { session } = useAuth()
+  const client = useQueryClient()
   const { notify, feedbackDialog } = useFeedback()
-  const [error, setError] = useState('')
   const [search, setSearch] = useSearchParams()
   const when = search.get('when') === 'past' ? 'past' : 'upcoming'
-  const now = singaporeToday()
+  const [now, setNow] = useState(singaporeToday)
+  useEffect(() => {
+    const timer = setInterval(() => setNow(singaporeToday()), 60_000)
+    return () => clearInterval(timer)
+  }, [])
+  const schedule = useQuery({
+    queryKey: gradingScheduleKey(session?.user.id, now),
+    queryFn: () => loadGradingSchedule(now),
+    enabled: Boolean(session),
+  })
+  const upcoming = schedule.data?.upcoming ?? []
+  const past = schedule.data?.past ?? []
   const photos = useExaminerPhotos([...upcoming, ...past].flatMap(item => (item.grading_panel_members ?? []).map(member => member.instructor_id)),
     ids => loadInstructorPhotos(supabase, ids))
-
-  const reload = useCallback(async () => {
-    const official = () => supabase.from('gradings').select(scheduleSelect).eq('official_schedule', true)
-    const [next, previous] = await Promise.all([
-      official().gte('grading_date', singaporeToday()).order('grading_date'),
-      official().lt('grading_date', singaporeToday()).order('grading_date', { ascending: false }).limit(20),
-    ])
-    if (next.error || previous.error) setError('Unable to load the official grading schedule.')
-    else {
-      setUpcoming((next.data ?? []) as Schedule[])
-      setPast((previous.data ?? []) as Schedule[])
-      setError('')
-    }
-    setLoading(false)
-  }, [])
-
-  useEffect(() => { void reload() }, [reload])
 
   const showWhen = (value: 'upcoming' | 'past') => setSearch(current => {
     const params = new URLSearchParams(current)
@@ -193,15 +167,15 @@ export default function GradingOpportunities() {
         { value: 'upcoming', text: upcoming.length ? `Upcoming (${upcoming.length})` : 'Upcoming' },
         { value: 'past', text: 'Past' },
       ]} />
-      {loading ? <CardListSkeleton label="Loading schedule…" />
-        : error ? <RetryAlert message={error} onRetry={() => void reload()} />
+      {schedule.isPending ? <CardListSkeleton label="Loading schedule…" />
+        : schedule.isError ? <RetryAlert message={schedule.error.message} onRetry={() => void schedule.refetch()} />
         : when === 'upcoming' ? (
           upcoming.length === 0 ? (
             <EmptyState icon={CalendarDays} title="No upcoming gradings" description="Future grading dates will appear here when scheduled." />
           ) : (
             <section className="grid gap-4" aria-label="Upcoming gradings">
               {upcoming.map((item, index) => (
-                <ScheduleCard key={item.event_id} item={item} next={index === 0} now={now} photos={photos} onPanelSaved={() => { void reload(); notify({ title: 'Grading panel saved', description: 'The examiners for this grading have been updated.' }) }} />
+                <ScheduleCard key={item.event_id} item={item} next={index === 0} now={now} photos={photos} onPanelSaved={() => { void client.invalidateQueries({ queryKey: gradingScheduleAccountKey(session?.user.id) }); void client.invalidateQueries({ queryKey: adminGradingKeys.day(item.event_id) }); notify({ title: 'Grading panel saved', description: 'The examiners for this grading have been updated.' }) }} />
               ))}
             </section>
           )
