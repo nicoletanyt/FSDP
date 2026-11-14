@@ -41,9 +41,11 @@ test('reader only auto-starts with granted permission, serializes taps, and stop
   blocked = true
   await act(async () => { reader.onreading({ message: { records: [{ token: 'second' }] } }) })
   assert.deepEqual(received, ['first'], 'no concurrent NFC submission')
+  assert.equal(hook.readCount, 2, 'token-free diagnostics still record the hardware read event')
   blocked = false
   await act(async () => { reader.onreading({ message: { records: [{ token: 'second' }] } }) })
   assert.deepEqual(received, ['first', 'second'])
+  assert.equal(hook.readCount, 3)
   await act(async () => { hook.stop() })
   assert.equal(reader, null)
   permission = 'granted'
