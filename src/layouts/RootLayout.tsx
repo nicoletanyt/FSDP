@@ -205,14 +205,6 @@ export default function RootLayout() {
       {!isAdmin && (
         <div aria-hidden="true" className="h-24 shrink-0 lg:hidden" />
       )}
-      {!isAdmin && !isStudent && (
-        <footer className="border-t border-border">
-          <div className="mx-auto flex w-full max-w-5xl flex-col gap-1 px-6 py-6 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-            <p>&copy; {new Date().getFullYear()} Aikido Shinju-Kai</p>
-            <p>FSDP project portal</p>
-          </div>
-        </footer>
-      )}
     </div>
   )
 }

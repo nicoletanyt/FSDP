@@ -5,6 +5,7 @@ import ThemeToggle from '@/components/theme-toggle'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import MobileNavigation from '@/components/shared/layout/MobileNavigation'
 import { useAuth } from '@/hooks/use-auth'
+import { useSignOut } from '@/hooks/use-sign-out'
 import { pageWidth } from '@/lib/page-width'
 import { cn } from '@/lib/utils'
 
@@ -19,6 +20,7 @@ const routes = [
 export default function StudentNavigation() {
   const { profile } = useAuth()
   const { pathname } = useLocation()
+  const { handleSignOut, signingOut, error } = useSignOut()
   const name = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || 'Student'
   const initials = [profile?.first_name, profile?.last_name]
     .map(name => name?.trim()[0] ?? '')
@@ -34,7 +36,7 @@ export default function StudentNavigation() {
         active: pathname === to || (to === '/grading' && pathname.startsWith('/grading/')),
       })),
       { label: 'Profile', to: '/profile', icon: UserCircle, active: pathname === '/profile' },
-    ]} />
+    ]} onSignOut={handleSignOut} signingOut={signingOut} error={error} />
     <header className="hidden shrink-0 border-b bg-background lg:block">
     <div className={cn(pageWidth, "flex flex-wrap items-center gap-y-2 py-3 lg:justify-between lg:gap-x-6 lg:gap-y-3 lg:py-5")}>
       <Link

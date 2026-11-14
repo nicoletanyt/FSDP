@@ -7,6 +7,7 @@ import MobileNavigation from "@/components/shared/layout/MobileNavigation";
 import OverflowNav from "@/components/shared/layout/OverflowNav";
 import { pageWidth } from "@/lib/page-width";
 import { cn } from "@/lib/utils";
+import { useSignOut } from "@/hooks/use-sign-out";
 import { useMyGradingPanels } from "@/hooks/use-my-grading-panels";
 
 const baseNavigation = [
@@ -27,6 +28,7 @@ export function instructorNavigation(onGradingPanel: boolean) {
 export default function InstructorNavigation({ calendarTo }: { calendarTo: string }) {
     const { pathname } = useLocation();
     const panels = useMyGradingPanels();
+    const { handleSignOut, signingOut, error } = useSignOut();
     const navigation = instructorNavigation(Boolean(panels.data?.length));
     const isCalendarRelated =
         pathname === "/instructor/dashboard" ||
@@ -38,7 +40,7 @@ export default function InstructorNavigation({ calendarTo }: { calendarTo: strin
             ...navigation.map(({ label, to, icon }) => ({ label, to: label === "Calendar" ? calendarTo : to, icon,
                 active: pathname === to || pathname.startsWith(`${to}/`) || (label === "Calendar" && isCalendarRelated) })),
             { label: "Profile", to: "/instructor/profile", icon: UserCircle, active: pathname === "/instructor/profile" },
-        ]} />
+        ]} onSignOut={handleSignOut} signingOut={signingOut} error={error} />
         <header className="hidden shrink-0 border-b bg-background lg:block">
             <div
                 className={cn(pageWidth, "flex items-center gap-6 py-5")}
