@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import jsQR from 'jsqr'
 
 type CameraStatus = 'stopped' | 'starting' | 'live' | 'error'
 
-// Leave room on mobile's main thread for NFC reading events and UI updates.
+// Bound camera sampling and worker CPU use on a phone.
 const scanIntervalMs = 1000 / 5
 
 function cameraError(error: unknown) {
@@ -57,6 +56,9 @@ export function useQrCamera({
 
     let disposed = false
     let stream: MediaStream | undefined
+    let worker: Worker | undefined
+    let decoding = false
+    let failed = false
     let frame = 0
     let lastScan = 0
     const video = videoRef.current
@@ -65,17 +67,27 @@ export function useQrCamera({
 
     function releaseCamera() {
       cancelAnimationFrame(frame)
+      worker?.terminate()
+      worker = undefined
       stream?.getTracks().forEach(track => track.stop())
       if (video && video.srcObject === stream) video.srcObject = null
     }
 
+    function decoderError() {
+      if (disposed || failed) return
+      failed = true
+      releaseCamera()
+      setError('QR decoding stopped. Try restarting the camera.')
+      setStatus('error')
+    }
+
     function scan(time: number) {
-      if (disposed) return
+      if (disposed || failed) return
       frame = requestAnimationFrame(scan)
-      if (pausedRef.current || time - lastScan < scanIntervalMs || !video || !context || video.readyState < 2 || !video.videoWidth || !video.videoHeight) return
+      if (decoding || pausedRef.current || time - lastScan < scanIntervalMs || !video || !context || !worker || video.readyState < 2 || !video.videoWidth || !video.videoHeight) return
       lastScan = time
 
-      // Decode a bounded frame; full-size jsQR on every frame can starve NFC events on phones.
+      // Downsample before transferring the frame; QR decoding runs off the UI thread.
       const scale = Math.min(1, 480 / Math.max(video.videoWidth, video.videoHeight))
       const width = Math.max(1, Math.round(video.videoWidth * scale))
       const height = Math.max(1, Math.round(video.videoHeight * scale))
@@ -86,8 +98,13 @@ export function useQrCamera({
       // Decode every edge of the native frame, independently of the preview's layout.
       context.drawImage(video, 0, 0, video.videoWidth, video.videoHeight, 0, 0, width, height)
       const image = context.getImageData(0, 0, canvas.width, canvas.height)
-      const code = jsQR(image.data, image.width, image.height, { inversionAttempts: 'attemptBoth' })
-      if (code?.data) onScanRef.current(code.data)
+      decoding = true
+      try {
+        // Transfer pixels instead of copying them; only one frame is in flight.
+        worker.postMessage({ pixels: image.data.buffer, width, height }, [image.data.buffer])
+      } catch {
+        decoderError()
+      }
     }
 
     async function start() {
@@ -98,6 +115,14 @@ export function useQrCamera({
           throw new Error('Camera access requires HTTPS or localhost and a supported browser.')
         }
         if (!video || !context) throw new Error('The camera preview is unavailable.')
+        worker = new Worker(new URL('../workers/qr-decode.worker.ts', import.meta.url), { type: 'module' })
+        worker.onmessage = (event: MessageEvent<{ payload: string | null; failed?: boolean }>) => {
+          if (disposed || failed) return
+          decoding = false
+          if (event.data.failed) { decoderError(); return }
+          if (event.data.payload && !pausedRef.current) onScanRef.current(event.data.payload)
+        }
+        worker.onerror = decoderError
         stream = await navigator.mediaDevices.getUserMedia({
           audio: false,
           video: {
