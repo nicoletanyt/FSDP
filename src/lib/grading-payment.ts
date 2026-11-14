@@ -12,6 +12,7 @@ export type GradingPaymentLocationState = {
   gradingTrack?: 'adult' | 'children'
   applicationDeadline?: string
   gradingDate?: string
+  expectedTotalCents?: number
 }
 
 export type GradingPaymentRecord = {

@@ -459,7 +459,7 @@ export function StudentClassBooking() {
 
 function ClassBooking({ type, initialParams }: { type: string; initialParams: URLSearchParams }) {
   const { classes, schedule } = useOutletContext<StudentContext>()
-  const { credits, deductCredit } = useOutletContext<StudentContext>()
+  const { credits, creditAccount, deductCredit } = useOutletContext<StudentContext>()
   const [params, setParams] = useState(initialParams)
   const [day, setDay] = useState('')
   const [pendingChange, setPendingChange] = useState<{ date: Date } | { params: URLSearchParams } | null>(null)
@@ -559,7 +559,7 @@ function ClassBooking({ type, initialParams }: { type: string; initialParams: UR
     setActionError('')
     try {
       if (action.kind === 'enroll') {
-        if (credits < action.sessions.length) {
+        if (!creditAccount.unlimited && credits < action.sessions.length) {
           setActionError('Top up your credits before enrolling in these classes.')
           return
         }

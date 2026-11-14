@@ -1,39 +1,30 @@
-import { matchPath, Outlet, useLocation } from 'react-router'
+import { matchPath, Outlet, useLocation, useSearchParams } from 'react-router'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/hooks/use-auth'
 import { useLiveStudentSchedule } from '@/lib/use-live-student-schedule'
-
-const CREDITS_STORAGE_KEY = 'student_credits'
+import { useStudentCredits } from '@/hooks/use-student-credits'
 
 export default function StudentLayout() {
   const { profile } = useAuth()
   const { pathname } = useLocation()
 
-  const [credits, setCredits] = useState(() => {
-    const saved = Number.parseInt(localStorage.getItem(CREDITS_STORAGE_KEY) ?? '0', 10)
-    return Number.isNaN(saved) ? 0 : saved
-  })
-
-  const addCredits = (amount: number) => {
-    setCredits((previous) => {
-      const next = previous + amount
-      localStorage.setItem(CREDITS_STORAGE_KEY, String(next))
-      return next
-    })
-  }
-
+  const [params] = useSearchParams()
+  const sessionId = params.get('checkout') === 'success' ? params.get('session_id') : null
+  const creditAccount = useStudentCredits(profile?.id, sessionId)
+  // Preserve the booking flow's in-session deductions without writing a
+  // browser-controlled balance back to the database-backed credit account.
+  const creditKey = JSON.stringify([profile?.id, creditAccount.credits])
+  const [spent, setSpent] = useState({ key: creditKey, amount: 0 })
+  const credits = Math.max(0, creditAccount.credits - (spent.key === creditKey ? spent.amount : 0))
   const deductCredit = () => {
+    if (creditAccount.unlimited) return true
     if (credits <= 0) return false
-    setCredits((previous) => {
-      const next = Math.max(previous - 1, 0)
-      localStorage.setItem(CREDITS_STORAGE_KEY, String(next))
-      return next
-    })
+    setSpent(previous => ({ key: creditKey, amount: (previous.key === creditKey ? previous.amount : 0) + 1 }))
     return true
   }
 
-  const creditContext = { credits, addCredits, deductCredit }
+  const creditContext = { credits, creditAccount: { ...creditAccount, credits }, deductCredit }
   if (!['/timetable', '/classes', '/classes/choose'].some(path => matchPath(path, pathname))) {
     return <Outlet context={creditContext} />
   }
@@ -42,7 +33,7 @@ export default function StudentLayout() {
 
 type CreditsContext = {
   credits: number
-  addCredits: (amount: number) => void
+  creditAccount: ReturnType<typeof useStudentCredits>
   deductCredit: () => boolean
 }
 

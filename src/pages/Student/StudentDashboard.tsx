@@ -14,6 +14,8 @@ import { Card } from "@/components/ui/card";
 import { formatDateTime } from "@/lib/format";
 import { mockStudent, type Student } from "@/lib/student-dashboard";
 import CreditBalanceCard from "@/pages/Student/CreditBalanceCard";
+import { useAuth } from "@/hooks/use-auth";
+import { useDashboardGrading } from "@/hooks/use-dashboard-grading";
 
 /* ---------- Helpers ---------- */
 function greetingFor(hour: number) {
@@ -60,18 +62,21 @@ type TileProps = {
   to: string;
   icon: LucideIcon;
   badge?: number;
+  badgeLabel?: string;
+  busy?: boolean;
 };
 
-function Tile({ title, status, to, icon: Icon, badge }: TileProps) {
+function Tile({ title, status, to, icon: Icon, badge, badgeLabel, busy }: TileProps) {
   return (
     <Link
       to={to}
+      aria-busy={busy || undefined}
       className="relative flex min-w-0 flex-col items-center justify-center gap-3 rounded-xl bg-card p-5 text-center text-sm text-card-foreground ring-1 ring-foreground/10 transition-colors hover:bg-accent hover:ring-primary/50 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
     >
       {!!badge && (
         <span
           className="absolute right-3 top-3 grid min-h-7 min-w-7 place-items-center rounded-full bg-destructive px-2 py-0.5 text-xs font-bold text-destructive-foreground"
-          aria-label={`${badge} pending`}
+          aria-label={badgeLabel ?? `${badge} pending`}
         >
           {badge}
         </span>
@@ -87,6 +92,8 @@ function Tile({ title, status, to, icon: Icon, badge }: TileProps) {
 
 /* ---------- Page ---------- */
 export default function StudentDashboard() {
+  const { profile } = useAuth();
+  const grading = useDashboardGrading(profile?.id);
   const student = mockStudent;
   const { belt, nextBelt, requirements: r, counts, nextClass } = student;
 
@@ -105,8 +112,10 @@ export default function StudentDashboard() {
       title: "Grading Applications",
       to: "/grading",
       icon: ClipboardCheck,
-      status: counts.pendingGrading ? "Action needed" : "No pending actions",
-      badge: counts.pendingGrading,
+      status: grading.status,
+      badge: grading.badge,
+      badgeLabel: `${grading.badge} saved or pending grading applications`,
+      busy: grading.loading,
     },
     { title: "Membership Profile", to: "/profile", icon: IdCard, status: `Status: ${student.membershipStatus}` },
   ];
@@ -123,7 +132,7 @@ export default function StudentDashboard() {
           </p>
         </div>
         
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <p className="inline-flex rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
             Membership {student.membershipStatus.toLowerCase()}
           </p>
