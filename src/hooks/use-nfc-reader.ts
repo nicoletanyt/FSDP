@@ -14,7 +14,6 @@ export function useNfcReader(onTag: (token: string) => void, blocked: () => bool
   const [state, setState] = useState<'idle' | 'starting' | 'active'>('idle')
   const [error, setError] = useState('')
   const [wanted, setWanted] = useState(false)
-  const [readCount, setReadCount] = useState(0)
   const controller = useRef<AbortController | null>(null)
   const stopped = useRef(false)
   const wantedRef = useRef(false)
@@ -51,8 +50,6 @@ export function useNfcReader(onTag: (token: string) => void, blocked: () => bool
       const reader = new Reader()
       reader.onreading = event => {
         if (current.signal.aborted) return
-        // Counts only: never store or expose the tag URL, token, or serial number.
-        setReadCount(count => count + 1)
         if (blockedRef.current()) return
         const token = tokenFromNdefRecords(event.message.records, window.location.origin)
         if (!token) {
@@ -103,5 +100,5 @@ export function useNfcReader(onTag: (token: string) => void, blocked: () => bool
   }, [supported, start])
 
   useEffect(() => () => { controller.current?.abort(); controller.current = null }, [])
-  return { supported, state, error, wanted, readCount, start, stop, pause, resume }
+  return { supported, state, error, wanted, start, stop, pause, resume }
 }

@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
 
-const QR_WINDOW_MS = 4000
-const NFC_WINDOW_MS = 3000
+const QR_WINDOW_MS = 2000
+const NFC_WINDOW_MS = 2000
 
 /** Web NFC can stop delivering events while the camera is open on some phones.
  * Release each reader before activating the other; wait for a live reader before
  * starting its window. Nothing is submitted by this timer. */
 export function useCheckInAlternation({
-  cameraEnabled, cameraRunning, cameraLive, cameraFailed, nfcWanted, nfcState, nfcError, simultaneous,
+  cameraEnabled, cameraRunning, cameraLive, cameraFailed, nfcWanted, nfcState, nfcError,
   pauseNfc, resumeNfc, stopNfc, busy, locked,
 }: {
   cameraEnabled: boolean
@@ -17,7 +17,6 @@ export function useCheckInAlternation({
   nfcWanted: boolean
   nfcState: 'idle' | 'starting' | 'active'
   nfcError: string
-  simultaneous: boolean
   pauseNfc: () => void
   resumeNfc: () => void
   stopNfc: () => void
@@ -27,7 +26,7 @@ export function useCheckInAlternation({
   const [phase, setPhase] = useState<'qr' | 'nfc'>('qr')
   const [cameraPaused, setCameraPaused] = useState(false)
   const [visible, setVisible] = useState(() => !document.hidden)
-  const alternating = nfcWanted && cameraEnabled && !cameraFailed && !simultaneous
+  const alternating = nfcWanted && cameraEnabled && !cameraFailed
 
   useEffect(() => {
     const onVisibilityChange = () => setVisible(!document.hidden)
@@ -49,8 +48,8 @@ export function useCheckInAlternation({
 
   useEffect(() => {
     if (alternating && phase === 'nfc' && cameraPaused && !cameraRunning) resumeNfc()
-    if (!alternating && nfcWanted && (simultaneous || !cameraRunning)) resumeNfc()
-  }, [alternating, phase, cameraPaused, cameraRunning, nfcWanted, simultaneous, resumeNfc])
+    if (!alternating && nfcWanted && !cameraRunning) resumeNfc()
+  }, [alternating, phase, cameraPaused, cameraRunning, nfcWanted, resumeNfc])
 
   useEffect(() => {
     // A failed restart must not strand the station with its camera off.
