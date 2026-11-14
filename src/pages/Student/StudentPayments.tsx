@@ -2,17 +2,18 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router";
 import { ArrowLeft } from "lucide-react";
 
-import { buttonVariants } from "@/components/student/button";
+import { Button, buttonVariants } from "@/components/student/button";
 import { Card } from "@/components/ui/card";
 import PaymentStatusBadge from "@/components/student/PaymentStatusBadge";
 import { formatDate, money } from "@/lib/format";
-import { mockProfile } from "@/lib/student-profile";
+import { useAuth } from "@/hooks/use-auth";
+import { useStudentPayments } from "@/hooks/use-student-payments";
 
 const ALL = "All";
 
 export default function StudentPayments() {
-  // TODO: swap for a Supabase-backed hook, e.g. usePayments()
-  const payments = mockProfile.payments;
+  const { session } = useAuth();
+  const { payments, loading, error, retry } = useStudentPayments(session?.user.id);
   const [selected, setSelected] = useState<string>(ALL);
 
   const items = useMemo(() => [ALL, ...new Set(payments.map((p) => p.item))], [payments]);
@@ -41,12 +42,12 @@ export default function StudentPayments() {
             </p>
             <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">All payments</h1>
             <p className="mt-1 text-muted-foreground">
-              {rows.length} {rows.length === 1 ? "payment" : "payments"}
+              {loading ? "Loading payments…" : error ? "Payments unavailable" : `${rows.length} ${rows.length === 1 ? "payment" : "payments"}`}
             </p>
           </div>
           <div className="text-right">
             <p className="text-xs text-muted-foreground">Total paid</p>
-            <p className="text-xl font-bold tabular-nums">{money.format(totalPaid)}</p>
+            <p className="text-xl font-bold tabular-nums">{loading || error ? "—" : money.format(totalPaid)}</p>
           </div>
         </header>
 
@@ -70,8 +71,15 @@ export default function StudentPayments() {
         </div>
 
         <Card className="mt-4 rounded-2xl p-0">
-          {rows.length === 0 ? (
-            <p className="p-5 text-muted-foreground">No payments yet. Fees for enrolled classes will show up here.</p>
+          {loading ? (
+            <p role="status" className="p-5 text-muted-foreground">Loading payments…</p>
+          ) : error ? (
+            <div className="space-y-3 p-5">
+              <p role="alert" className="text-destructive">{error}</p>
+              <Button variant="outline" onClick={retry}>Try again</Button>
+            </div>
+          ) : rows.length === 0 ? (
+            <p className="p-5 text-muted-foreground">No payments yet. Credit top-ups and other payments will show up here once confirmed.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[40rem] text-left text-sm">

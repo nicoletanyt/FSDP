@@ -6,6 +6,7 @@ import { Button, buttonVariants } from "@/components/student/button";
 import { Card } from "@/components/ui/card";
 import PaymentStatusBadge from "@/components/student/PaymentStatusBadge";
 import { useAuth } from "@/hooks/use-auth";
+import { useStudentPayments } from "@/hooks/use-student-payments";
 import { formatDate, money } from "@/lib/format";
 import { mockProfile, type Payment, type Profile } from "@/lib/student-profile";
 
@@ -126,7 +127,8 @@ function MembershipCard({ profile }: { profile: Profile }) {
 
 /* ---------- Page ---------- */
 export default function StudentProfile() {
-  const { signOut } = useAuth();
+  const { session, signOut } = useAuth();
+  const { payments, loading: paymentsLoading, error: paymentsError, retry: retryPayments } = useStudentPayments(session?.user.id);
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState("");
   // TODO: swap for a Supabase-backed hook, e.g. useStudentProfile()
@@ -135,7 +137,7 @@ export default function StudentProfile() {
 
   const daysLeft = daysUntil(membership.expiresOn);
   const expiringSoon = membership.standing === "Active" && daysLeft >= 0 && daysLeft <= 30;
-  const groups = groupByItem(profile.payments);
+  const groups = groupByItem(payments);
 
   async function handleSignOut() {
     if (signingOut) return;
@@ -218,9 +220,16 @@ export default function StudentProfile() {
           </Link>
         </div>
 
-        {groups.length === 0 ? (
+        {paymentsLoading ? (
+          <Card className="rounded-2xl p-5"><p role="status" className="text-muted-foreground">Loading payments…</p></Card>
+        ) : paymentsError ? (
           <Card className="rounded-2xl p-5">
-            <p className="text-muted-foreground">No payments yet. Fees for enrolled classes will show up here.</p>
+            <p role="alert" className="text-destructive">{paymentsError}</p>
+            <Button variant="outline" onClick={retryPayments}>Try again</Button>
+          </Card>
+        ) : groups.length === 0 ? (
+          <Card className="rounded-2xl p-5">
+            <p className="text-muted-foreground">No payments yet. Credit top-ups and other payments will show up here once confirmed.</p>
           </Card>
         ) : (
           <div className="grid gap-4 md:grid-cols-2">
