@@ -28,6 +28,7 @@ export const supabase = {
       order() { return query },
       limit() { return query },
       then(resolve: (value: { data: unknown; error: null }) => unknown) {
+        if (table === 'gradings' && data.errors.gradings) return Promise.resolve({ data: null, error: data.errors.gradings }).then(resolve)
         const source = table === 'gradings' ? data.gradings : data.batches
         const rows = source.filter(row => ranges.every(test => test(row))
           && filters.every(([name, value]) => name === 'event_id' || name === 'official_schedule' || row[name] === value))

@@ -1,11 +1,15 @@
 import { useEffect, useState } from "react";
 import { TableSkeleton } from "@/components/shared/skeletons";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router";
 import {
     gradingEligibilityKey,
     loadGradingEligibility,
+    loadOpenGradingEvents,
+    openGradingEventsKey,
+    singaporeGradingDate,
 } from "@/lib/admin/section-counts";
+import { sentEmailsKey } from "@/lib/admin/sent-emails";
 import {
     ArrowRight,
     CheckCircle2,
@@ -50,10 +54,6 @@ import type { EligibilityRequirement, GradeTrack } from "@/lib/admin/types";
 import { UNRANKED } from "@/lib/admin/types";
 import { supabase } from "@/lib/supabase";
 import { cn } from "cn";
-
-function related<T>(value: T | T[] | null | undefined): T | undefined {
-    return Array.isArray(value) ? value[0] : (value ?? undefined);
-}
 
 interface InvitationPreview {
     eligible: number;
@@ -170,6 +170,7 @@ function liveRequirements(
 
 export default function GradingEligibility() {
     const { session } = useAuth();
+    const client = useQueryClient();
     const [selectedStudentId, setSelectedStudentId] = useState<string | null>(
         null,
     );
@@ -177,9 +178,6 @@ export default function GradingEligibility() {
     const [noticeError, setNoticeError] = useState(false);
     const [confirmSend, setConfirmSend] = useState(false);
     const { notify, feedbackDialog } = useFeedback();
-    const [events, setEvents] = useState<
-        { id: string; name: string; track: GradeTrack }[]
-    >([]);
     const [eventId, setEventId] = useState("");
     const [preview, setPreview] = useState<InvitationPreview | null>(null);
     const [notifyOpen, setNotifyOpen] = useState(false);
@@ -189,47 +187,19 @@ export default function GradingEligibility() {
         null,
     );
 
+    const [today, setToday] = useState(singaporeGradingDate);
+    // A grading can open or close at Singapore midnight while this page is open.
     useEffect(() => {
-        const today = new Intl.DateTimeFormat("sv-SE", {
-            timeZone: "Asia/Singapore",
-            dateStyle: "short",
-        }).format(new Date());
-        void supabase
-            .from("events")
-            .select(
-                "id,name,gradings!inner(track,official_schedule,application_status,grading_date,application_opens_on,application_deadline)",
-            )
-            .eq("event_type", "grading")
-            .eq("status", "scheduled")
-            .eq("gradings.official_schedule", true)
-            .eq("gradings.application_status", "open")
-            .then(({ data, error }) => {
-                if (error) {
-                    setNoticeError(true);
-                    setNotice(
-                        "Open gradings could not be loaded. Refresh the page to try again.",
-                    );
-                } else
-                    setEvents(
-                        (data ?? [])
-                            .filter((event) => {
-                                const grading = related(event.gradings);
-                                return (
-                                    grading &&
-                                    (grading.track === "adult" || grading.track === "children") &&
-                                    grading.grading_date > today &&
-                                    grading.application_opens_on <= today &&
-                                    grading.application_deadline >= today
-                                );
-                            })
-                            .map(({ id, name, gradings }) => ({
-                                id,
-                                name,
-                                track: related(gradings)!.track as GradeTrack,
-                            })),
-                    );
-            });
+        const timer = window.setInterval(() => setToday(singaporeGradingDate()), 60_000);
+        return () => window.clearInterval(timer);
     }, []);
+    const openGradings = useQuery({
+        queryKey: openGradingEventsKey(session?.user.id, today),
+        queryFn: () => loadOpenGradingEvents(today),
+        enabled: Boolean(session),
+        refetchOnWindowFocus: true,
+    });
+    const events = openGradings.data ?? [];
 
     // Opening "Email students" prepares a preview of the saved invitation straight away.
     useEffect(() => {
@@ -291,7 +261,8 @@ export default function GradingEligibility() {
                 });
                 setPreview(null);
                 setNotifyOpen(false);
-                void eligibility.refetch();
+                void client.invalidateQueries({ queryKey: ['admin', 'grading-eligibility', session?.user.id] });
+                void client.invalidateQueries({ queryKey: sentEmailsKey(session?.user.id) });
             } else {
                 if (!data?.preview_token || !data?.email_subject || !data?.email_body) {
                     throw new Error(
@@ -329,6 +300,12 @@ export default function GradingEligibility() {
                     <AlertDescription>{notice}</AlertDescription>
                 </Alert>
             )}
+            {openGradings.isError && (
+                <RetryAlert
+                    message="Open gradings could not be loaded."
+                    onRetry={() => void openGradings.refetch()}
+                />
+            )}
 
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                 <SearchInput
@@ -362,6 +339,7 @@ export default function GradingEligibility() {
                         value={eventId}
                         onChange={selectEvent}
                         ariaLabel="Grading filter"
+                        disabled={openGradings.isPending || (openGradings.isError && !events.length)}
                         options={[
                             { value: "", label: "All gradings" },
                             ...events.map((event) => ({
@@ -370,6 +348,7 @@ export default function GradingEligibility() {
                             })),
                         ]}
                     />
+                    {openGradings.isPending && <p role="status" className="text-xs text-muted-foreground">Loading gradings…</p>}
                 </FilterPopover>
             </div>
 

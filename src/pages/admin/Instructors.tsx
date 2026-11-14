@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { TableSkeleton } from '@/components/shared/skeletons'
 import { Mail, Plus } from 'lucide-react'
 import CreateInstructorForm from '@/components/auth/CreateInstructorForm'
@@ -7,21 +8,19 @@ import EmptyState from '@/components/shared/layout/EmptyState'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
-import type { UserProfile } from '@/lib/auth'
+import { useAuth } from '@/hooks/use-auth'
 import { fullName, initials } from '@/lib/admin/format'
 import type { InstructorAccount } from '@/lib/instructors'
 import { supabase } from '@/lib/supabase'
 import { DatabaseGradeBadge as GradeBadge } from '@/components/shared/grade/GradeBadge'
-import type { GradeRow } from '@/lib/instructor/types'
+import { instructorDirectoryKey, loadInstructorDirectory } from '@/lib/admin/instructor-directory'
 import { setExaminer } from '@/lib/admin/grading-panels'
 import SearchInput from '@/components/shared/filters/SearchInput'
 import { useFeedback } from '@/hooks/use-feedback'
 
-type InstructorProfile = Pick<UserProfile, 'id' | 'first_name' | 'last_name' | 'email'> & {
-  instructors: { id: string; is_examiner: boolean; grade: GradeRow | null } | null
-}
-
-function ExaminerToggle({ instructorId, name, initial }: { instructorId: string; name: string; initial: boolean }) {
+function ExaminerToggle({ instructorId, name, initial, onUpdated }: {
+  instructorId: string; name: string; initial: boolean; onUpdated: () => void
+}) {
   const [checked, setChecked] = useState(initial)
   const [pending, setPending] = useState(false)
   const { notify, feedbackDialog } = useFeedback()
@@ -32,6 +31,7 @@ function ExaminerToggle({ instructorId, name, initial }: { instructorId: string;
     try {
       const updated = await setExaminer(supabase, instructorId, next)
       setChecked(updated)
+      onUpdated()
       notify({ title: 'Examiner status updated', description: `${name} ${updated ? 'can now' : 'can no longer'} examine gradings.` })
     }
     catch (failure) { notify({ variant: 'error', title: 'Couldn’t update examiner status', description: failure instanceof Error ? failure.message : 'Try again.' }) }
@@ -49,30 +49,19 @@ function ExaminerToggle({ instructorId, name, initial }: { instructorId: string;
 }
 
 export default function Instructors() {
-  const [instructors, setInstructors] = useState<InstructorProfile[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const { session } = useAuth()
+  const client = useQueryClient()
+  const directory = useQuery({
+    queryKey: instructorDirectoryKey(session?.user.id),
+    queryFn: loadInstructorDirectory,
+    enabled: Boolean(session),
+  })
+  const instructors = directory.data ?? []
   const [query, setQuery] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
   const { notify, feedbackDialog } = useFeedback()
 
-  const reload = useCallback(async () => {
-    setLoading(true)
-    const { data, error: queryError } = await supabase.from('users')
-      .select('id, first_name, last_name, email, instructors(id, is_examiner, grade:grades(id, label, colour, is_ranked, sort_order))')
-      .eq('role', 'instructor')
-      .order('first_name')
-      .order('last_name')
-
-    if (queryError) setError('Unable to load instructor accounts. Try again.')
-    else {
-      setInstructors((data ?? []) as unknown as InstructorProfile[])
-      setError('')
-    }
-    setLoading(false)
-  }, [])
-
-  useEffect(() => { void reload() }, [reload])
+  const refresh = () => void client.invalidateQueries({ queryKey: instructorDirectoryKey(session?.user.id) })
 
   const search = query.trim().toLowerCase()
   const filtered = instructors.filter((instructor) =>
@@ -83,7 +72,7 @@ export default function Instructors() {
 
   function handleCreated(account: InstructorAccount) {
     setCreateOpen(false)
-    void reload()
+    refresh()
     notify({ title: 'Instructor created', description: `An account for ${account.email} has been created.` })
   }
 
@@ -117,31 +106,31 @@ export default function Instructors() {
       </div>
 
       <section aria-label="Instructor accounts" className="space-y-3">
-        {!loading && !error && (
+        {directory.isSuccess && (
           <p className="text-sm text-muted-foreground">
             {search ? `${filtered.length} of ${instructors.length} instructors` : `${instructors.length} instructors`}
           </p>
         )}
 
-        <div aria-busy={loading}>
-          {loading && <TableSkeleton rows={6} cols={3} label="Loading instructors…" />}
-          {!loading && error && (
+        <div aria-busy={directory.isPending}>
+          {directory.isPending && <TableSkeleton rows={6} cols={3} label="Loading instructors…" />}
+          {directory.isError && (
             <Alert variant="destructive">
               <AlertDescription className="flex flex-wrap items-center gap-2">
-                {error}
-                <Button type="button" variant="outline" size="xs" onClick={() => void reload()}>
+                {directory.error.message}
+                <Button type="button" variant="outline" size="xs" onClick={() => void directory.refetch()}>
                   Retry
                 </Button>
               </AlertDescription>
             </Alert>
           )}
-          {!loading && !error && filtered.length === 0 && (
+          {directory.isSuccess && filtered.length === 0 && (
             <EmptyState
               title={search ? 'No instructors found' : 'No instructor accounts yet'}
               description={search ? 'Try another name or email address.' : 'Create an instructor account to see it here.'}
             />
           )}
-          {!loading && !error && filtered.length > 0 && (
+          {directory.isSuccess && filtered.length > 0 && (
             <ul className="divide-y divide-border border-y border-border">
               {filtered.map((instructor) => (
                 <li key={instructor.id} className="flex items-center gap-3 py-4">
@@ -161,7 +150,7 @@ export default function Instructors() {
                   </div>
                   {instructor.instructors && <ExaminerToggle instructorId={instructor.instructors.id}
                     name={fullName({ firstName: instructor.first_name, lastName: instructor.last_name }) || instructor.email}
-                    initial={instructor.instructors.is_examiner} />}
+                    initial={instructor.instructors.is_examiner} onUpdated={refresh} />}
                 </li>
               ))}
             </ul>

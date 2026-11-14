@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { TableSkeleton } from "@/components/shared/skeletons";
 import { Download } from "lucide-react";
 import EmptyState from "@/components/shared/layout/EmptyState";
+import RetryAlert from "@/components/shared/layout/RetryAlert";
 import { DatabaseGradeBadge as GradeBadge } from "@/components/shared/grade/GradeBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -16,84 +18,35 @@ import {
 } from "@/components/ui/table";
 import { downloadCsv } from "@/lib/admin/export";
 import { formatDate } from "@/lib/admin/format";
-import type { GradeRow } from "@/lib/instructor/types";
-import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/hooks/use-auth";
+import {
+    gradingApplicationGradesKey, gradingApplicationsKey,
+    loadGradingApplicationGrades, loadGradingApplications, missingApplicationGrade,
+} from "@/lib/admin/grading-applications";
 import SearchInput from "@/components/shared/filters/SearchInput";
-
-interface Application {
-    id: string;
-    submitted_at: string;
-    target_grade_id: string;
-    students: Student | Student[];
-    gradings:
-    | { grading_date: string | null; events: Event | Event[] }
-    | { grading_date: string | null; events: Event | Event[] }[];
-}
-
-interface Student {
-    first_name: string;
-    last_name: string;
-    member_no: string;
-    current_grade_id: string;
-}
-interface Event {
-    name: string;
-}
 
 function related<T>(value: T | T[] | null | undefined): T | undefined {
     return Array.isArray(value) ? value[0] : (value ?? undefined);
 }
 
 export default function GradingApplications() {
-    const [applications, setApplications] = useState<Application[]>([]);
-    const [grades, setGrades] = useState<Map<string, GradeRow>>(new Map());
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState("");
+    const { session } = useAuth();
+    const applicationsQuery = useQuery({
+        queryKey: gradingApplicationsKey(session?.user.id),
+        queryFn: loadGradingApplications,
+        enabled: Boolean(session),
+        // New payments are confirmed by a webhook, not a mutation on this page.
+        refetchOnWindowFocus: "always",
+    });
+    const gradesQuery = useQuery({
+        queryKey: gradingApplicationGradesKey(session?.user.id),
+        queryFn: loadGradingApplicationGrades,
+        enabled: Boolean(session),
+    });
+    const applications = applicationsQuery.data ?? [];
+    const grades = useMemo(() => new Map((gradesQuery.data ?? []).map(grade => [grade.id, grade])), [gradesQuery.data]);
+    const missingGrade = applicationsQuery.isSuccess && gradesQuery.isSuccess && missingApplicationGrade(applications, grades);
     const [query, setQuery] = useState("");
-
-    useEffect(() => {
-        let active = true;
-        void (async () => {
-            const [applicationsResult, gradesResult] = await Promise.all([
-                supabase
-                    .from("grading_applications")
-                    .select(
-                        "id,submitted_at,target_grade_id,students(first_name,last_name,member_no,current_grade_id),gradings(grading_date,events(name))",
-                    )
-                    .order("submitted_at", { ascending: false }),
-                supabase.from("grades").select("id,label,colour,is_ranked,sort_order"),
-            ]);
-            if (!active) return;
-            if (applicationsResult.error || gradesResult.error) {
-                setError("Unable to load grading applications and grades.");
-            } else {
-                const items = (applicationsResult.data ?? []) as Application[];
-                const gradeMap = new Map(
-                    (gradesResult.data ?? []).map((grade) => [grade.id, grade]),
-                );
-                if (
-                    items.some((item) => {
-                        const student = related(item.students);
-                        return (
-                            !gradeMap.has(item.target_grade_id) ||
-                            (student && !gradeMap.has(student.current_grade_id))
-                        );
-                    })
-                ) {
-                    setError(
-                        "Unable to resolve the current or target grade for an application.",
-                    );
-                } else {
-                    setApplications(items);
-                    setGrades(gradeMap);
-                }
-            }
-            setLoading(false);
-        })();
-        return () => {
-            active = false;
-        };
-    }, []);
 
     const rows = useMemo(() => {
         const needle = query.trim().toLowerCase();
@@ -152,20 +105,22 @@ export default function GradingApplications() {
                 />
                 <Button
                     variant="outline"
-                    disabled={rows.length === 0}
+                    disabled={rows.length === 0 || applicationsQuery.isError || gradesQuery.isError || missingGrade}
                     onClick={exportApplications}
                 >
                     <Download /> Export CSV
                 </Button>
             </div>
-            {error && (
-                <p role="alert" className="text-sm text-destructive">
-                    {error}
-                </p>
-            )}
-            {loading ? (
+            {applicationsQuery.isPending || gradesQuery.isPending ? (
                 <TableSkeleton rows={6} cols={4} label="Loading applications…" />
-            ) : error ? null : rows.length === 0 ? (
+            ) : applicationsQuery.isError || gradesQuery.isError || missingGrade ? (
+                <RetryAlert
+                    message={missingGrade
+                        ? "Unable to resolve the current or target grade for an application."
+                        : "Unable to load grading applications and grades."}
+                    onRetry={() => { void applicationsQuery.refetch(); void gradesQuery.refetch(); }}
+                />
+            ) : rows.length === 0 ? (
                 <EmptyState
                     title="No applications found"
                     description="Paid applications appear here after the Stripe webhook confirms payment."
