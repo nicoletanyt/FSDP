@@ -3,7 +3,8 @@ import jsQR from 'jsqr'
 
 type CameraStatus = 'stopped' | 'starting' | 'live' | 'error'
 
-const scanIntervalMs = 1000 / 12
+// Leave room on mobile's main thread for NFC reading events and UI updates.
+const scanIntervalMs = 1000 / 5
 
 function cameraError(error: unknown) {
   const name = error instanceof Error ? error.name : ''
@@ -74,8 +75,8 @@ export function useQrCamera({
       if (pausedRef.current || time - lastScan < scanIntervalMs || !video || !context || video.readyState < 2 || !video.videoWidth || !video.videoHeight) return
       lastScan = time
 
-      // Decode a bounded frame to keep continuous scanning comfortable on tablet CPUs.
-      const scale = Math.min(1, 720 / Math.max(video.videoWidth, video.videoHeight))
+      // Decode a bounded frame; full-size jsQR on every frame can starve NFC events on phones.
+      const scale = Math.min(1, 480 / Math.max(video.videoWidth, video.videoHeight))
       const width = Math.max(1, Math.round(video.videoWidth * scale))
       const height = Math.max(1, Math.round(video.videoHeight * scale))
       if (canvas.width !== width || canvas.height !== height) {
