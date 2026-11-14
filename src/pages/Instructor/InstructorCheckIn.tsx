@@ -16,6 +16,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/hooks/use-auth";
+import { useCheckInAlternation } from "@/hooks/use-check-in-alternation";
 import { useNfcReader } from "@/hooks/use-nfc-reader";
 import { useClassQuery, useInstructorRoster } from "@/hooks/use-instructor-class-queries";
 import { parseEntityId, toSingaporeDateTime } from "@/lib/instructor/adapters";
@@ -100,13 +101,17 @@ export default function InstructorCheckIn() {
     const roster = useInstructorRoster(eventId, Boolean(session));
     const [feedback, setFeedback] = useState<ScanFeedback | null>(null);
     const [cameraRunning, setCameraRunning] = useState(false);
-    const [cameraPaused, setCameraPaused] = useState(false);
+    const [cameraLive, setCameraLive] = useState(false);
+    const [cameraEnabled, setCameraEnabled] = useState(false);
+    const [cameraFailed, setCameraFailed] = useState(false);
     const scanLocked = useRef(false);
+    const isScanLocked = useCallback(() => scanLocked.current, []);
     const nfcInFlight = useRef(false);
     const [choice, setChoice] = useState<NfcScanResult | null>(null);
     const choiceTag = useRef<string | null>(null);
     const [nfcPending, setNfcPending] = useState(false);
     const [nfcRetry, setNfcRetry] = useState(false);
+    const [nfcStationWarning, setNfcStationWarning] = useState("");
     const attemptedUrl = useRef(false);
     const enterKioskRef = useRef<HTMLButtonElement>(null);
     const exitKioskRef = useRef<HTMLButtonElement>(null);
@@ -124,7 +129,19 @@ export default function InstructorCheckIn() {
     const attendancePercent = entries.length ? (checkedIn.length / entries.length) * 100 : 0;
     const canScan = roster.status === "success" && roster.data.canEditAttendance;
     const nfc = useNfcReader((token) => void handleNfc(token), () => scanLocked.current || !!choiceTag.current);
-    const onCameraRunningChange = useCallback((running: boolean) => setCameraRunning(running), []);
+    const onNfcStartupFailed = useCallback(() => {
+        nfc.stop();
+        setNfcStationWarning("NFC could not restart after the camera was released. QR scanning has resumed. Check NFC is enabled, then start NFC again.");
+    }, [nfc.stop]);
+    const onCameraRunningChange = useCallback((running: boolean, live: boolean) => { setCameraRunning(running); setCameraLive(live); }, []);
+    const onCameraEnabledChange = useCallback((enabled: boolean) => setCameraEnabled(enabled), []);
+    const onCameraErrorChange = useCallback((failed: boolean) => setCameraFailed(failed), []);
+    const scanBusy = Boolean(feedback || choice || nfcPending || nfcRetry);
+    const { alternating, phase: scanPhase, cameraPaused } = useCheckInAlternation({
+        cameraEnabled, cameraRunning, cameraLive, cameraFailed, nfcWanted: nfc.wanted,
+        nfcState: nfc.state, nfcError: nfc.error, pauseNfc: nfc.pause, resumeNfc: nfc.resume, stopNfc: onNfcStartupFailed,
+        busy: scanBusy, locked: isScanLocked,
+    });
     const sessionDetails = session
         ? `${session.dojo} · ${dateFormat.format(session.date)} · ${formatTime(session.startTime)}–${formatTime(session.endTime)}`
         : `${dateFormat.format(new Date())} · No classes to check in today`;
@@ -137,10 +154,6 @@ export default function InstructorCheckIn() {
         }, 2000);
         return () => window.clearTimeout(timeout);
     }, [feedback]);
-
-    useEffect(() => {
-        if (cameraPaused && !cameraRunning) void nfc.start();
-    }, [cameraPaused, cameraRunning, nfc.start]);
 
     useEffect(() => {
         if (attemptedUrl.current || !authSession || !signedInAsInstructor) return;
@@ -377,22 +390,27 @@ export default function InstructorCheckIn() {
                 {nfc.supported ? (
                     <>
                         <Button type="button" variant={isKiosk ? "secondary" : "outline"} className="min-h-11 gap-2"
-                            disabled={nfc.state === "starting"} onClick={() => nfc.state === "active" ? nfc.stop() : void nfc.start()}>
+                            disabled={nfc.state === "starting"} onClick={() => {
+                                setNfcStationWarning("");
+                                if (nfc.wanted) nfc.stop();
+                                else void nfc.start();
+                            }}>
                             <Nfc aria-hidden="true" className="size-4" />
-                            {nfc.state === "active" ? "Stop NFC scanning" : nfc.state === "starting" ? "Starting NFC…" : "Start NFC scanning"}
+                            {nfc.state === "starting" ? "Starting NFC…" : nfc.wanted ? "Stop NFC scanning" : "Start NFC scanning"}
                         </Button>
                         <span role="status" className={cn("text-xs text-muted-foreground", isKiosk && "text-white/80")}>
-                            {nfcPending ? "Checking tag…" : nfc.state === "active" ? "NFC reader started · Tap a student’s tag" : "Tap Start to scan NFC tags"}
+                            {nfcPending ? "Checking tag…" : alternating
+                                ? scanPhase === "nfc" ? "NFC window · Hold tag until confirmation" : "QR window · Show code to camera"
+                                : nfc.state === "active" ? "NFC reader started · Tap a student’s tag" : "Tap Start to scan NFC tags"}
                         </span>
-                        {cameraRunning && <Button type="button" variant={isKiosk ? "secondary" : "outline"} className="min-h-11"
-                            onClick={() => { nfc.stop(); setCameraPaused(true); }}>
-                            NFC not responding? Pause camera
-                        </Button>}
-                        {cameraPaused && <Button type="button" variant={isKiosk ? "secondary" : "outline"} className="min-h-11"
-                            onClick={() => setCameraPaused(false)}>Resume QR camera</Button>}
+                        {alternating && <span className={cn("text-xs text-muted-foreground", isKiosk && "text-white/80")}>Automatic QR/NFC switching · No button needed between students</span>}
                     </>
                 ) : <p className="text-xs text-muted-foreground">NFC scanning is unavailable here. QR check-in and existing NFC tag links still work.</p>}
                 {nfc.error && <p role="alert" className="w-full text-xs text-destructive">{nfc.error}</p>}
+                {nfcStationWarning && <p role="alert" className="w-full text-xs text-destructive">{nfcStationWarning}</p>}
+                {nfc.supported && <details className="w-full text-xs"><summary>Scanner status</summary>
+                    <p>Page {document.hidden ? "hidden" : "visible"} · Camera {cameraRunning ? "running" : "off"} · NFC {nfc.state} · NFC read events this visit: {nfc.readCount}</p>
+                </details>}
             </div>
 
             {nfcRetry && choiceTag.current && <div className="flex flex-wrap gap-2">
@@ -412,6 +430,8 @@ export default function InstructorCheckIn() {
                     onScan={(payload) => void handleScan(payload)}
                     cameraPaused={cameraPaused}
                     onCameraRunningChange={onCameraRunningChange}
+                    onCameraEnabledChange={onCameraEnabledChange}
+                    onCameraErrorChange={onCameraErrorChange}
                     choice={choice}
                     choicePending={nfcPending}
                     onChooseClass={eventId => { if (choiceTag.current) void handleNfc(choiceTag.current, eventId); }}
