@@ -1,3 +1,5 @@
+import { useWeekSpan } from "@/hooks/use-week-span";
+import { visibleWeekDays } from "@/lib/calendar-window";
 import { useLayoutEffect, useRef, useState } from "react";
 import type { PointerEvent } from "react";
 import { CalendarCheck, MapPin } from "lucide-react";
@@ -19,6 +21,7 @@ import type {
     AvailabilitySlot,
 } from "@/lib/instructor-availability";
 import {
+    addDays,
     dateKey,
     getEventStyle,
     formatTime,
@@ -75,7 +78,8 @@ export default function CalendarTimeline({
         { length: (timelineEnd - timelineStart) / 30 },
         (_, index) => timelineStart + index * 30,
     );
-    const days = view === "day" || !isDesktop ? [date] : weekDates(date);
+    const span = useWeekSpan();
+    const days = view === "day" || !isDesktop ? [date] : visibleWeekDays(date, now, weekDates(date), span, addDays);
     const [drag, setDrag] = useState<DragRange | null>(null);
     const dragRef = useRef<DragRange | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -195,7 +199,7 @@ export default function CalendarTimeline({
                 <div
                     className="grid"
                     style={{
-                        minWidth: view === "week" && isDesktop ? 910 : undefined,
+                        minWidth: view === "week" && isDesktop && span === 7 ? 910 : undefined,
                         gridTemplateColumns: `${isDay ? 56 : 64}px repeat(${days.length}, minmax(0, 1fr))`,
                     }}
                 >

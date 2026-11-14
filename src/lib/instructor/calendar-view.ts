@@ -119,10 +119,11 @@ export function toCalendarAvailability(slot: InstructorAvailabilityRow): Availab
     snapshot: { date: slot.date, startTime: slot.start_time, endTime: slot.end_time } }
 }
 
-export function calendarRange(date: Date, view: 'day' | 'week' | 'month', desktop: boolean, mobileList: boolean) {
+// `weekDays`: the whole weeks covering a shorter (2–4 day) week view, when one is shown.
+export function calendarRange(date: Date, view: 'day' | 'week' | 'month', desktop: boolean, mobileList: boolean, weekDays?: Date[]) {
   const days = !desktop && mobileList ? Array.from({ length: 14 }, (_, index) => addDays(date, index))
     : view === 'month' ? monthDates(date)
-    : view === 'week' ? desktop ? weekDates(date) : [date, addDays(date, 1)] : [date]
+    : view === 'week' ? desktop ? weekDays ?? weekDates(date) : [date, addDays(date, 1)] : [date]
   return { from: calendarDateValue(days[0]), to: calendarDateValue(addDays(days.at(-1)!, 1)) }
 }
 

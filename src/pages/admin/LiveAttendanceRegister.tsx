@@ -3,6 +3,8 @@ import { CalendarSkeleton } from '@/components/shared/skeletons'
 import { useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router'
 import AttendanceCalendar, { EventCard } from '@/components/admin/AttendanceCalendar'
+import MobileAdminCalendar from '@/components/admin/MobileAdminCalendar'
+import type { MobileAdminMode } from '@/components/admin/MobileAdminCalendar'
 import FilterPopover, { FilterField } from '@/components/shared/filters/FilterPopover'
 import CalendarToolbar from '@/components/shared/calendar/CalendarToolbar'
 import type { CalendarDisplayMode, CalendarRange } from '@/components/shared/calendar/CalendarToolbar'
@@ -12,7 +14,9 @@ import { Drawer, DrawerBody, DrawerClose, DrawerContent, DrawerDescription, Draw
 import { useAuth } from '@/hooks/use-auth'
 import { useCalendarShortcuts } from '@/hooks/use-calendar-shortcuts'
 import { useMediaQuery } from '@/hooks/use-media-query'
-import { addDays, addMonths, dateKey, monthDates, parseIsoDate, weekDates, weekLabel } from '@/lib/admin/attendance-calendar'
+import { useWeekSpan } from '@/hooks/use-week-span'
+import { stepWeekWindow, visibleWeekDays, weeksCovering, windowLabel } from '@/lib/calendar-window'
+import { addDays, addMonths, dateKey, monthDates, parseIsoDate, weekDates } from '@/lib/admin/attendance-calendar'
 import type { AdminCalendarEvent } from '@/lib/admin/attendance-calendar'
 import { loadCalendarCentres, loadCalendarClasses, singaporeDate } from '@/lib/admin/live-class-calendar'
 import { sessionTypeStyles } from '@/lib/admin/session-styles'
@@ -25,6 +29,9 @@ function unique(values: string[]) {
 export default function LiveAttendanceRegister() {
   const { session } = useAuth()
   const isDesktop = useMediaQuery('(min-width: 1024px)')
+  const weekSpan = useWeekSpan()
+  // From 785px the full toolbar and timeline are used; below it, the phone layout.
+  const wide = useMediaQuery('(min-width: 785px)')
   const [searchParams, setSearchParams] = useSearchParams()
   const [now, setNow] = useState(() => new Date())
   const [focusRequest, setFocusRequest] = useState(0)
@@ -53,7 +60,11 @@ export default function LiveAttendanceRegister() {
   const centre = centres.find(item => item.id === searchParams.get('centre')) ?? null
   const titleFilter = searchParams.get('title') ?? ''
   const instructorFilter = searchParams.get('instructor') ?? ''
-  const days = view === 'day' ? [selectedDate] : view === 'week' ? weekDates(selectedDate) : monthDates(selectedDate)
+  // Phones show a day, a week list or a month from one fetch: a day loads its whole week.
+  const loadView = !wide && view === 'day' ? 'week' : view
+  const days = loadView === 'day' ? [selectedDate]
+    : loadView === 'week' ? weeksCovering(visibleWeekDays(selectedDate, today, weekDates(selectedDate), weekSpan, addDays), weekDates)
+    : monthDates(selectedDate)
   const first = dateKey(days[0])
   const afterLast = dateKey(addDays(days[days.length - 1], 1))
   const classesQuery = useQuery({
@@ -102,8 +113,8 @@ export default function LiveAttendanceRegister() {
       return
     }
     // Moving onto the current week lands on today, like the instructor calendar.
-    const next = addDays(selectedDate, direction * 7)
-    const includesToday = weekDates(next).some(day => dateKey(day) === dateKey(today))
+    const next = stepWeekWindow(selectedDate, direction === 1 ? 1 : -1, today, weekSpan, addDays)
+    const includesToday = visibleWeekDays(next, today, weekDates(next), weekSpan, addDays).some(day => dateKey(day) === dateKey(today))
     navigate({ date: dateKey(includesToday ? today : next), session: null }, !includesToday)
   }
   function goToday() {
@@ -123,7 +134,7 @@ export default function LiveAttendanceRegister() {
     onDisplayMode: changeDisplayMode,
   })
 
-  const heading = view === 'week' ? weekLabel(selectedDate) : selectedDate.toLocaleDateString('en-GB', {
+  const heading = view === 'week' ? windowLabel(visibleWeekDays(selectedDate, today, weekDates(selectedDate), weekSpan, addDays)) : selectedDate.toLocaleDateString('en-GB', {
     ...(view === 'day' ? { weekday: 'long', day: 'numeric' } : {}), month: 'long', year: 'numeric',
   })
   const showSidePanel = Boolean(selectedEvent)
@@ -131,12 +142,52 @@ export default function LiveAttendanceRegister() {
     <EventCard key={selectedEvent.id} event={selectedEvent} layout="panel" expanded onToggle={closeDetails} />
   )
 
+  const filterNode = <FilterPopover
+    title="Filter classes"
+    activeCount={filterCount}
+    onReset={() => navigate({ centre: null, title: null, instructor: null, session: null })}
+    className="lg:h-10"
+  >
+    {filterFields.map(({ key, label, options, all, value }) => (
+      <FilterField key={key} label={label} value={value} ariaLabel={`${label} filter`}
+        onChange={next => navigate({ [key]: next || null, session: null })}
+        options={[{ value: '', label: all }, ...options]} />
+    ))}
+  </FilterPopover>
+  const legendNode = <>
+    <p className="-mt-2 text-xs text-muted-foreground">{centre?.name ?? 'All dojos'} · Singapore time</p>
+    <ul className="space-y-3 text-xs">
+      {Object.entries(sessionTypeStyles).map(([type, style]) => (
+        <li key={type} className="grid gap-1 sm:grid-cols-[9.5rem_minmax(0,1fr)] sm:items-center sm:gap-3">
+          <span className={cn('w-fit rounded-full border px-2 py-1 text-2xs font-medium', style.badge)}>{style.label}</span>
+          <span className="text-muted-foreground">{style.description}</span>
+        </li>
+      ))}
+    </ul>
+    <ul className="flex flex-wrap gap-4 border-t pt-3 text-xs text-muted-foreground">
+      <li className="flex items-center gap-2"><span aria-hidden="true" className="size-2 rounded-full bg-red-500" />Cover needed</li>
+    </ul>
+  </>
+
+  const mobileMode: MobileAdminMode = view === 'month' ? 'month' : displayMode === 'timeline' ? 'day' : 'list'
+  function changeMobileMode(mode: MobileAdminMode) {
+    navigate(mode === 'month' ? { view: 'month', session: null } : { view: 'week', display: mode === 'day' ? 'timeline' : 'list', session: null })
+  }
+
   return (
     <section aria-busy={classesQuery.isFetching} className="flex flex-col gap-4 lg:min-h-0 lg:flex-1">
       {centresQuery.isPending && <CalendarSkeleton label="Loading dojos…" />}
       {centresQuery.isError && <div role="alert" className="flex flex-wrap items-center gap-3 text-sm text-destructive">Unable to load dojos. <Button variant="outline" size="sm" onClick={() => void centresQuery.refetch()}>Retry</Button></div>}
       {centresQuery.isSuccess && !centres.length && <p role="status" className="text-sm text-muted-foreground">No dojos are available.</p>}
-      {centresQuery.isSuccess && <>
+      {centresQuery.isSuccess && !wide && <>
+        <MobileAdminCalendar loading={classesQuery.isPending} mode={mobileMode} date={selectedDate} today={today} now={now} events={events}
+          selectedSessionId={selectedEvent?.id ?? null} focusRequest={focusRequest} filter={filterNode} legend={legendNode}
+          onChangeMode={changeMobileMode} onSelectDate={date => navigate({ date: dateKey(date), session: null })}
+          onToday={goToday}
+          onToggleSession={event => navigate({ date: event.session.date, session: selectedEvent?.id === event.id ? null : event.id })} />
+        {classesQuery.isError && <div role="alert" className="flex flex-wrap items-center gap-3 text-sm text-destructive">Unable to load classes. <Button variant="outline" size="sm" onClick={() => void classesQuery.refetch()}>Retry</Button></div>}
+      </>}
+      {centresQuery.isSuccess && wide && <>
         <CalendarToolbar
           view={view}
           onViewChange={changeView}
@@ -146,32 +197,8 @@ export default function LiveAttendanceRegister() {
           onToday={goToday}
           onPrevious={() => move(-1)}
           onNext={() => move(1)}
-          filter={<FilterPopover
-            title="Filter classes"
-            activeCount={filterCount}
-            onReset={() => navigate({ centre: null, title: null, instructor: null, session: null })}
-            className="lg:h-10"
-          >
-            {filterFields.map(({ key, label, options, all, value }) => (
-              <FilterField key={key} label={label} value={value} ariaLabel={`${label} filter`}
-                onChange={next => navigate({ [key]: next || null, session: null })}
-                options={[{ value: '', label: all }, ...options]} />
-            ))}
-          </FilterPopover>}
-          legend={<>
-            <p className="-mt-2 text-xs text-muted-foreground">{centre?.name ?? 'All dojos'} · Singapore time</p>
-            <ul className="space-y-3 text-xs">
-              {Object.entries(sessionTypeStyles).map(([type, style]) => (
-                <li key={type} className="grid gap-1 sm:grid-cols-[9.5rem_minmax(0,1fr)] sm:items-center sm:gap-3">
-                  <span className={cn('w-fit rounded-full border px-2 py-1 text-2xs font-medium', style.badge)}>{style.label}</span>
-                  <span className="text-muted-foreground">{style.description}</span>
-                </li>
-              ))}
-            </ul>
-            <ul className="flex flex-wrap gap-4 border-t pt-3 text-xs text-muted-foreground">
-              <li className="flex items-center gap-2"><span aria-hidden="true" className="size-2 rounded-full bg-red-500" />Cover needed</li>
-            </ul>
-          </>}
+          filter={filterNode}
+          legend={legendNode}
         />
         <div className={cn(
           'flex flex-col lg:min-h-0 lg:flex-1',
