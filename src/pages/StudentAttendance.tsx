@@ -6,6 +6,8 @@ import type { AttendanceEntry, AttendanceView } from '@/components/student/Atten
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Drawer, DrawerBody, DrawerClose, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from '@/components/ui/drawer'
 import { useMediaQuery } from '@/hooks/use-media-query'
+import { useFeedback } from '@/hooks/use-feedback'
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { addDays, addMonths, dateKey } from '@/lib/instructor-calendar'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/student/button'
@@ -59,7 +61,10 @@ export default function StudentAttendance() {
     null
   )
   const [replacementId, setReplacementId] = useState('')
-  const [message, setMessage] = useState('')
+  const { notify, feedbackDialog } = useFeedback()
+  function report(error: string | null | undefined, title: string, description: string) {
+    notify(error ? { variant: 'error', title: 'Something went wrong', description: error } : { title, description })
+  }
 
   const entries = useMemo(
     () =>
@@ -152,20 +157,17 @@ export default function StudentAttendance() {
     if (pending.kind === 'cancel') {
       const error = await schedule.cancel(pending.id)
       if (!error) setSelectedId(null)
-      setMessage(error ?? 'Class booking cancelled.')
+      report(error, 'Class cancelled', 'Your booking for this class has been cancelled.')
     } else if (pending.kind === 'leave') {
       const error = await schedule.leaveWaitlist(pending.id)
-      setMessage(error ?? 'Removed from waitlist.')
+      report(error, 'Left waitlist', 'You have been removed from the waitlist.')
     } else if (pending.kind === 'reschedule') {
       const error = await schedule.reschedule(
         pending.id,
         pending.replacement
       )
 
-      setMessage(
-        error ??
-        `Class moved to ${prettyDate(pending.replacement.date)}.`
-      )
+      report(error, 'Class rescheduled', `Your class has been moved to ${prettyDate(pending.replacement.date)}.`)
 
       if (!error) {
         selectDate(pending.replacement.date)
@@ -279,15 +281,6 @@ export default function StudentAttendance() {
   return (
     <div className="relative left-1/2 w-[min(94vw,1440px)] -translate-x-1/2 space-y-3 lg:w-[min(88vw,1440px)]">
       <h2 className="text-2xl font-semibold tracking-tight lg:text-3xl">Your calendar</h2>
-
-      {message && (
-        <p
-          role="status"
-          className="rounded-lg border bg-muted px-4 py-3 text-sm"
-        >
-          {message}
-        </p>
-      )}
 
       <AttendanceToolbar
         date={selectedDate}
@@ -572,50 +565,32 @@ export default function StudentAttendance() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={Boolean(pending)} onOpenChange={open => {
-        if (!open) setPending(null)
-      }}>
-        {pending && (
-          <DialogContent showCloseButton={false}>
-            <DialogTitle>
-              {pending.kind === 'cancel'
-                ? 'Cancel this class?'
-                : pending.kind === 'leave'
-                  ? 'Leave this waitlist?'
-                  : 'Confirm rescheduling?'}
-            </DialogTitle>
-
-            <DialogDescription>
-              {pending.kind === 'cancel'
-                ? 'Are you sure you want to cancel this enrolment?'
-                : pending.kind === 'leave'
-                  ? 'Are you sure you want to remove your name from the waitlist?'
-                  : pending.kind === 'reschedule'
-                    ? `Your original class will be replaced with ${pending.replacement.title} on ${prettyDate(pending.replacement.date)}.`
-                    : ''}
-            </DialogDescription>
-
-            <div className="flex justify-end gap-2">
-              <Button
-                variant="outline"
-                onClick={() => setPending(null)}
-              >
-                No, go back
-              </Button>
-
-              <Button onClick={confirm} disabled={schedule.saving}>
-                {pending.kind === 'cancel'
-                  ? 'Yes, cancel class'
-                  : pending.kind === 'leave'
-                    ? 'Yes, leave waitlist'
-                    : 'Yes, reschedule'}
-              </Button>
-            </div>
-          </DialogContent>
-        )}
-      </Dialog>
-
-
+      <ConfirmDialog
+        open={Boolean(pending)}
+        onOpenChange={open => { if (!open) setPending(null) }}
+        pending={schedule.saving}
+        destructive={pending?.kind !== 'reschedule'}
+        title={pending?.kind === 'cancel'
+          ? 'Cancel this class?'
+          : pending?.kind === 'leave'
+            ? 'Leave this waitlist?'
+            : 'Confirm rescheduling?'}
+        description={pending?.kind === 'cancel'
+          ? 'Are you sure you want to cancel this enrolment?'
+          : pending?.kind === 'leave'
+            ? 'Are you sure you want to remove your name from the waitlist?'
+            : pending?.kind === 'reschedule'
+              ? `Your original class will be replaced with ${pending.replacement.title} on ${prettyDate(pending.replacement.date)}.`
+              : ''}
+        cancelLabel="No, go back"
+        confirmLabel={pending?.kind === 'cancel'
+          ? 'Yes, cancel class'
+          : pending?.kind === 'leave'
+            ? 'Yes, leave waitlist'
+            : 'Yes, reschedule'}
+        onConfirm={confirm}
+      />
+      {feedbackDialog}
     </div>
   )
 }

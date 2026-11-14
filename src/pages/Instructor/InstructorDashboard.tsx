@@ -19,6 +19,7 @@ import { useMediaQuery } from "@/hooks/use-media-query";
 import { useInstructorCalendarRange, useInstructorSelectedEvent } from "@/hooks/use-instructor-class-queries";
 import { useInstructorPrefetch } from "@/hooks/use-instructor-prefetch";
 import { useAuth } from "@/hooks/use-auth";
+import { useFeedback } from "@/hooks/use-feedback";
 import { needsCalendarEventLookup } from "@/lib/instructor/calendar-queries";
 import { calendarClassStyle, calendarEventsForDate, calendarRange, calendarTimeLabel, rosterSizeLabel, singaporeClock } from "@/lib/instructor/calendar-view";
 import type { CalendarEventsForDate, CalendarViewEvent as CalendarEvent } from "@/lib/instructor/calendar-view";
@@ -520,6 +521,7 @@ export default function InstructorDashboard() {
             ? requestedView
             : "week";
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const { notify, feedbackDialog } = useFeedback();
     const [selectedAvailabilityId, setSelectedAvailabilityId] = useState<string | null>(null);
     const [availabilityDialog, setAvailabilityDialog] = useState<{
         range: AvailabilityRange;
@@ -625,7 +627,10 @@ export default function InstructorDashboard() {
         selectRange({ date: addDays(date, 1), startTime: "08:00", endTime: "08:30" });
     }
 
-    function availabilitySaved(range: AvailabilityRange, id: string | null) {
+    function availabilitySaved(range: AvailabilityRange, id: string | null, kind: 'saved' | 'deleted') {
+        notify(kind === 'deleted'
+            ? { title: 'Availability deleted', description: `Your availability on ${fullDate(range.date)} has been removed.` }
+            : { title: availabilityDialog?.editingId ? 'Availability updated' : 'Availability added', description: `You are marked available on ${fullDate(range.date)}, ${formatTime(range.startTime)} – ${formatTime(range.endTime)}.` });
         updateSelection(range.date);
         setSelectedAvailabilityId(id);
         setAvailabilityDialog(null);
@@ -855,6 +860,7 @@ export default function InstructorDashboard() {
                     </DrawerBody>
                 </DrawerContent>
             </Drawer>}
+            {feedbackDialog}
             {canUseAvailability && availabilityDialog && <InstructorAvailabilityEditor
                 key={`${session?.user.id}-${availabilityDialog.editingId ?? "new"}-${dateKey(availabilityDialog.range.date)}-${availabilityDialog.range.startTime}`}
                 initial={availabilityDialog.range}

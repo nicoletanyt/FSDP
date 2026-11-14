@@ -1,4 +1,10 @@
 import type { ReactNode } from 'react'
+import { useFeedback } from '@/hooks/use-feedback'
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useOutletContext, useSearchParams } from 'react-router'
 import {
@@ -6,7 +12,6 @@ import {
   CalendarDays,
 } from 'lucide-react'
 import { Button, buttonVariants } from '@/components/student/button'
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Calendar } from '@/components/ui/calendar'
 import {
   Card,
@@ -401,7 +406,7 @@ function ClassBooking({ type, initialParams }: { type: string; initialParams: UR
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [action, setAction] = useState<Action | null>(null)
   const [submitting, setSubmitting] = useState(false)
-  const [message, setMessage] = useState('')
+  const { notify, feedbackDialog } = useFeedback()
   const [selectionError, setSelectionError] = useState('')
   const [actionError, setActionError] = useState('')
 
@@ -430,7 +435,6 @@ function ClassBooking({ type, initialParams }: { type: string; initialParams: UR
     setPendingChange(null)
     setSelectedIds([])
     setSelectionError('')
-    setMessage('')
   }
 
   function changeDay(date: Date) {
@@ -463,7 +467,6 @@ function ClassBooking({ type, initialParams }: { type: string; initialParams: UR
 
   function toggleSession(session: ClassOffering) {
     setSelectionError('')
-    setMessage('')
     if (selectedIds.includes(session.id)) {
       setSelectedIds(ids => ids.filter(id => id !== session.id))
       return
@@ -514,7 +517,7 @@ function ClassBooking({ type, initialParams }: { type: string; initialParams: UR
         setSelectedIds(ids => ids.filter(id => !completed.includes(id)))
         if (completed.length) {
           const count = completed.length
-          setMessage(`Enrolled in ${count} ${count === 1 ? 'class' : 'classes'} on ${prettyDate(action.sessions[0].date)}.`)
+          notify({ title: 'Enrolment confirmed', description: `Enrolled in ${count} ${count === 1 ? 'class' : 'classes'} on ${prettyDate(action.sessions[0].date)}.` })
         }
         if (failed.length) {
           setAction({ kind: 'enroll', sessions: failed })
@@ -532,7 +535,7 @@ function ClassBooking({ type, initialParams }: { type: string; initialParams: UR
           setActionError(error)
           return
         }
-        setMessage(action.kind === 'waitlist' ? 'You joined the waitlist.' : 'You have left the waitlist.')
+        notify(action.kind === 'waitlist' ? { title: 'Joined waitlist', description: 'You joined the waitlist. This does not reserve a spot.' } : { title: 'Left waitlist', description: 'You have left the waitlist.' })
       }
       closeAction()
     } finally {
@@ -546,9 +549,6 @@ function ClassBooking({ type, initialParams }: { type: string; initialParams: UR
         <h2 id="booking-class-title" className="text-2xl font-semibold">{type || 'Choose a class'}</h2>
         {classSessions[0]?.level && <p className="text-sm text-muted-foreground">{classSessions[0].level}</p>}
       </header>
-      {message && (
-        <p role="status" className="rounded-lg border bg-muted px-4 py-3 text-sm">{message}</p>
-      )}
       <SessionFilters
         title="Filter sessions"
         sessions={classSessions}
@@ -576,8 +576,7 @@ function ClassBooking({ type, initialParams }: { type: string; initialParams: UR
             onDateChange={changeDay}
             onToggle={toggleSession}
             onWaitlist={(session, kind) => {
-              setMessage('')
-              setAction({ kind, session })
+                        setAction({ kind, session })
             }}
           />
           {selectionError && <p role="alert" className="text-sm text-destructive">{selectionError}</p>}
@@ -605,60 +604,58 @@ function ClassBooking({ type, initialParams }: { type: string; initialParams: UR
         </p>
       )}
 
-      <Dialog open={pendingChange !== null} onOpenChange={open => {
-        if (!open) setPendingChange(null)
-      }}>
-        <DialogContent showCloseButton={false} >
-          <DialogTitle>{pendingChange && 'params' in pendingChange ? 'Change filters?' : 'Change date?'}</DialogTitle>
-          <DialogDescription>
-            Your selected slots will be cleared. Confirm to continue.
-          </DialogDescription>
-          <div className="flex flex-wrap justify-end gap-2">
-            <Button variant="outline" onClick={() => setPendingChange(null)}>Keep selection</Button>
-            <Button onClick={confirmChange}>{pendingChange && 'params' in pendingChange ? 'Apply filters' : 'Change date'}</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDialog
+        open={pendingChange !== null}
+        onOpenChange={open => { if (!open) setPendingChange(null) }}
+        title={pendingChange && 'params' in pendingChange ? 'Change filters?' : 'Change date?'}
+        description="Your selected slots will be cleared. Confirm to continue."
+        cancelLabel="Keep selection"
+        confirmLabel={pendingChange && 'params' in pendingChange ? 'Apply filters' : 'Change date'}
+        onConfirm={confirmChange}
+      />
 
-      <Dialog open={action !== null} onOpenChange={open => {
+      <AlertDialog open={action !== null} onOpenChange={open => {
         if (!open && !busy) closeAction()
       }}>
         {action && (
-          <DialogContent showCloseButton={false} >
-            <DialogTitle>
-              {action.kind === 'enroll' ? 'Confirm enrolment?' : action.kind === 'waitlist' ? 'Join the waitlist?' : 'Leave the waitlist?'}
-            </DialogTitle>
-            {action.kind === 'enroll' ? (
-              <>
-                <DialogDescription>{prettyDate(action.sessions[0].date)}</DialogDescription>
-                <ul className="max-h-48 space-y-1 overflow-y-auto text-sm">
-                  {action.sessions.map(session => (
-                    <li key={session.id}>{sessionTime(session)} · {session.centre}</li>
-                  ))}
-                </ul>
-              </>
-            ) : (
-              <DialogDescription>
-                {action.session.title} · {prettyDate(action.session.date)} · {sessionTime(action.session)} · {action.session.centre}
-              </DialogDescription>
-            )}
+          <AlertDialogContent size="compact">
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                {action.kind === 'enroll' ? 'Confirm enrolment?' : action.kind === 'waitlist' ? 'Join the waitlist?' : 'Leave the waitlist?'}
+              </AlertDialogTitle>
+              {action.kind === 'enroll' ? (
+                <>
+                  <AlertDialogDescription>{prettyDate(action.sessions[0].date)}</AlertDialogDescription>
+                  <ul className="max-h-48 space-y-1 overflow-y-auto text-left text-sm">
+                    {action.sessions.map(session => (
+                      <li key={session.id}>{sessionTime(session)} · {session.centre}</li>
+                    ))}
+                  </ul>
+                </>
+              ) : (
+                <AlertDialogDescription>
+                  {action.session.title} · {prettyDate(action.session.date)} · {sessionTime(action.session)} · {action.session.centre}
+                </AlertDialogDescription>
+              )}
+            </AlertDialogHeader>
             {action.kind === 'waitlist' && (
               <p className="text-sm text-muted-foreground">Joining the waitlist does not reserve a spot.</p>
             )}
             {actionError && <p role="alert" className="whitespace-pre-line rounded-md bg-destructive/10 p-3 text-sm text-destructive">{actionError}</p>}
-            <div className="flex flex-wrap justify-end gap-2">
-              <Button variant="outline" disabled={busy} onClick={closeAction}>Back</Button>
-              <Button onClick={confirm} disabled={busy}>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={busy} onClick={closeAction}>Back</AlertDialogCancel>
+              <AlertDialogAction onClick={confirm} disabled={busy}>
                 {busy ? 'Saving…' : action.kind === 'enroll'
                   ? 'Yes, enrol'
                   : action.kind === 'waitlist'
                     ? 'Yes, join waitlist'
                     : 'Yes, leave waitlist'}
-              </Button>
-            </div>
-          </DialogContent>
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
         )}
-      </Dialog>
+      </AlertDialog>
+      {feedbackDialog}
     </section>
   )
 }

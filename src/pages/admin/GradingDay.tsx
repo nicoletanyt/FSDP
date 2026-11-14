@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { ToastProvider, useToast } from '@/components/ui/toast'
+import { useFeedback } from '@/hooks/use-feedback'
 import { useGradingDayLayout } from '@/hooks/use-grading-day-layout'
 import { useExaminerPhotos } from '@/hooks/use-examiner-photos'
 import { loadInstructorPhotos } from '@/lib/instructor/api'
@@ -60,7 +60,7 @@ function GradingDayPage() {
   const { eventId = '' } = useParams()
   const view = useGradingDayLayout()
   const client = useQueryClient()
-  const toast = useToast()
+  const { notify, feedbackDialog } = useFeedback()
   const day = useQuery({ queryKey: adminGradingKeys.day(eventId), queryFn: () => loadAdminGradingDay(eventId), enabled: Boolean(eventId), retry: false })
   const photos = useExaminerPhotos(day.data?.panel.map(member => member.instructorId) ?? [], ids => loadInstructorPhotos(supabase, ids))
   const summaries = useQuery({ queryKey: adminGradingKeys.summaries(eventId), queryFn: () => loadBatchSummaries(eventId), enabled: Boolean(eventId), retry: false })
@@ -72,40 +72,35 @@ function GradingDayPage() {
     onSuccess: updated => {
       update(updated)
       view.setList('sessions')
-      toast.add({ title: `Draft schedule: ${updated.sessions.length === 1 ? '1 session' : `${updated.sessions.length} sessions`}` })
+      notify({ title: 'Draft schedule generated', description: `${updated.sessions.length === 1 ? '1 session was' : `${updated.sessions.length} sessions were`} created.` })
     },
   })
   const move = useMutation({
     mutationFn: ({ applicationId, sessionId }: { applicationId: string; sessionId: string; name: string; from: string | null }) =>
       moveGradingCandidate(applicationId, sessionId),
-    onSuccess: (updated, { applicationId, sessionId, name, from }) => {
+    onSuccess: (updated, { sessionId, name }) => {
       update(updated)
       const to = updated.sessions.find(session => session.id === sessionId)
-      // Undo only while the session they came from still exists.
-      const back = from && updated.sessions.some(session => session.id === from) ? from : null
-      toast.add({
-        title: `Moved ${name} to ${to ? sessionLabel(to.position) : 'another session'}`,
-        actionProps: back ? { children: 'Undo', onClick: () => move.mutate({ applicationId, sessionId: back, name, from: sessionId }) } : undefined,
-      })
+      notify({ title: 'Student moved', description: `${name} is now in ${to ? sessionLabel(to.position) : 'another session'}.` })
     },
   })
   const split = useMutation({
     mutationFn: ({ sessionId, applicationIds }: { sessionId: string; applicationIds: string[] }) => splitGradingSession(sessionId, applicationIds),
-    onSuccess: updated => { update(updated); setSplitting(null); toast.add({ title: 'Session split' }) },
+    onSuccess: updated => { update(updated); setSplitting(null); notify({ title: 'Session split', description: 'The students were moved to a new session.' }) },
   })
   const merge = useMutation({
     mutationFn: ({ sourceId, intoId }: { sourceId: string; intoId: string; label: string }) => mergeGradingSessions(sourceId, intoId),
-    onSuccess: (updated, { label }) => { update(updated); toast.add({ title: `Merged into ${label}` }) },
+    onSuccess: (updated, { label }) => { update(updated); notify({ title: 'Sessions merged', description: `Students were merged into ${label}.` }) },
   })
   const add = useMutation({
     mutationFn: () => addGradingSession(eventId),
-    onSuccess: updated => { update(updated); view.setList('sessions'); toast.add({ title: 'Session added' }) },
+    onSuccess: updated => { update(updated); view.setList('sessions'); notify({ title: 'Session added', description: 'An empty session was added to the schedule.' }) },
   })
   const publish = useMutation({
     mutationFn: (next: boolean) => next ? publishGradingSchedule(eventId) : unpublishGradingSchedule(eventId),
     onSuccess: updated => {
       update(updated)
-      toast.add({ title: updated.publishedAt ? 'Schedule published' : 'Schedule returned to draft' })
+      notify(updated.publishedAt ? { title: 'Schedule published', description: 'The schedule is now published.' } : { title: 'Schedule returned to draft', description: 'The schedule is now a draft again.' })
     },
   })
   const changing = sort.isPending || move.isPending || split.isPending || merge.isPending || add.isPending || publish.isPending
@@ -135,7 +130,7 @@ function GradingDayPage() {
       <AlertDialogTrigger render={<Button type="button" variant="outline" disabled={!sortable || changing} />}>
         {sort.isPending ? 'Generating…' : 'Generate again'}
       </AlertDialogTrigger>
-      <AlertDialogContent>
+      <AlertDialogContent size="compact">
         <AlertDialogHeader>
           <AlertDialogTitle>Generate the schedule again?</AlertDialogTitle>
           <AlertDialogDescription>
@@ -159,7 +154,7 @@ function GradingDayPage() {
       <AlertDialogTrigger render={<Button type="button" disabled={changing || Boolean(blocker)} title={blocker ?? undefined} />}>
         {publish.isPending ? 'Publishing…' : 'Publish schedule'}
       </AlertDialogTrigger>
-      <AlertDialogContent>
+      <AlertDialogContent size="compact">
         <AlertDialogHeader>
           <AlertDialogTitle>Publish this schedule?</AlertDialogTitle>
           <AlertDialogDescription>
@@ -240,7 +235,7 @@ function GradingDayPage() {
         renderSessionActions={renderSessionActions}
         photos={photos}
         panelAction={<GradingPanelDialog eventId={data.eventId} gradingLabel={gradingDate(data.gradingDate)} panel={data.panel}
-          onSaved={() => void day.refetch()} />}
+          onSaved={() => { void day.refetch(); notify({ title: 'Grading panel saved', description: 'The examiners for this grading have been updated.' }) }} />}
         emptySessions={<GradingNote>{data.isPrivate
           ? 'No sessions yet. This is a private grading, so add sessions by hand.'
           : 'No sessions yet. Generate a draft schedule once applications close.'}</GradingNote>}
@@ -254,17 +249,16 @@ function GradingDayPage() {
       {splitting && <SplitSessionDialog key={splitting.id} session={splitting} open busy={split.isPending}
         onOpenChange={open => { if (!open) setSplitting(null) }}
         onSplit={applicationIds => split.mutate({ sessionId: splitting.id, applicationIds })} />}
+      {feedbackDialog}
     </div>
   )
 }
 
 export default function AdminGradingDay() {
   return (
-    <ToastProvider>
-      <div className="space-y-4">
-        <GradingBackLink to="/admin/grading/opportunities">Back to schedule</GradingBackLink>
-        <GradingDayPage />
-      </div>
-    </ToastProvider>
+    <div className="space-y-4">
+      <GradingBackLink to="/admin/grading/opportunities">Back to schedule</GradingBackLink>
+      <GradingDayPage />
+    </div>
   )
 }

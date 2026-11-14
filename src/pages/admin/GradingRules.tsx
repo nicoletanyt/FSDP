@@ -13,6 +13,7 @@ import {
 } from '@/lib/admin/grading-rules'
 import type { GradeTrack, RuleGrade, ScheduleRules, SessionDuration } from '@/lib/admin/grading-rules'
 import { cn } from '@/lib/utils'
+import { useFeedback } from '@/hooks/use-feedback'
 
 const tracks: { value: GradeTrack; label: string }[] = [
   { value: 'adult', label: 'Adults' },
@@ -68,6 +69,7 @@ function TrackForm({ rules, durations, grades }: { rules: ScheduleRules; duratio
     || ([...editedRows.map(minutesFor), ...added.map(row => row.minutes)].some(value => !Number.isInteger(value) || value < 5 || value > 600)
       ? 'Session lengths must be 5–600 minutes.' : null)
 
+  const { notify, feedbackDialog } = useFeedback()
   const save = useMutation({
     mutationFn: async () => {
       if (rulesChanged) await saveGradingRules(draft)
@@ -75,7 +77,10 @@ function TrackForm({ rules, durations, grades }: { rules: ScheduleRules; duratio
       for (const id of removed) await deleteSessionDuration(id)
       for (const row of added) await saveSessionDuration({ track: rules.track, fromGradeId: null, toGradeId: row.gradeId, minutes: row.minutes })
     },
-    onSuccess: () => void client.invalidateQueries({ queryKey: gradingRulesKeys.all }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: gradingRulesKeys.all })
+      notify({ title: 'Grading rules saved', description: 'Your changes have been saved.' })
+    },
   })
 
   function discard() {
@@ -186,8 +191,9 @@ function TrackForm({ rules, durations, grades }: { rules: ScheduleRules; duratio
       <div className="flex flex-wrap items-center gap-3">
         <Button type="submit" disabled={!changed || Boolean(problem) || save.isPending}>{save.isPending ? 'Saving…' : 'Save changes'}</Button>
         {changed && <Button type="button" variant="ghost" disabled={save.isPending} onClick={discard}>Discard changes</Button>}
-        {save.isSuccess && !changed && <span role="status" className="text-sm text-muted-foreground">Saved</span>}
+       
       </div>
+      {feedbackDialog}
     </form>
   )
 }

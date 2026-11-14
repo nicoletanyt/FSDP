@@ -27,14 +27,17 @@ function AlertDialogOverlay({ className, ...props }: AlertDialogPrimitive.Backdr
   />
 }
 
-function AlertDialogContent({ className, size = "default", ...props }: AlertDialogPrimitive.Popup.Props & { size?: "default" | "sm" }) {
+function AlertDialogContent({ className, size = "default", ...props }: AlertDialogPrimitive.Popup.Props & { size?: "default" | "sm" | "compact" }) {
   return <AlertDialogPortal>
     <AlertDialogOverlay />
     <AlertDialogPrimitive.Popup
       data-slot="alert-dialog-content"
       data-size={size}
       className={cn(
-        "group/alert-dialog-content fixed top-1/2 left-1/2 z-50 grid h-[80dvh] max-h-[80dvh] w-[80vw] max-w-[80vw] content-start -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto overscroll-contain rounded-xl bg-popover p-4 lg:gap-5 lg:p-6 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 motion-reduce:animate-none",
+        "group/alert-dialog-content fixed top-1/2 left-1/2 z-50 grid content-start -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto overscroll-contain rounded-xl bg-popover p-4 lg:gap-5 lg:p-6 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 motion-reduce:animate-none",
+        size === "compact"
+          ? "max-h-[85dvh] w-[calc(100vw-2rem)] max-w-sm"
+          : "h-[80dvh] max-h-[80dvh] w-[80vw] max-w-[80vw]",
         className
       )}
       {...props}
@@ -57,7 +60,7 @@ function AlertDialogFooter({ className, ...props }: React.ComponentProps<"div">)
   return <div
     data-slot="alert-dialog-footer"
     className={cn(
-      "-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t px-4 py-3 lg:-mx-6 lg:-mb-6 lg:px-6 lg:py-4 group-data-[size=sm]/alert-dialog-content:grid group-data-[size=sm]/alert-dialog-content:grid-cols-2 sm:flex-row sm:justify-end",
+      "-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl px-4 py-3 lg:-mx-6 lg:-mb-6 lg:px-6 lg:py-4 group-data-[size=sm]/alert-dialog-content:grid group-data-[size=sm]/alert-dialog-content:grid-cols-2 sm:flex-row sm:justify-end",
       className
     )}
     {...props}

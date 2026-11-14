@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { AlertTriangle, Bell, CheckCircle2, GraduationCap, Users } from 'lucide-react'
+import { AlertTriangle, Bell, GraduationCap, Users } from 'lucide-react'
 import { Link } from 'react-router'
 import AttendanceNoticeDialog, { noticeResultMessage } from '@/components/admin/AttendanceNoticeDialog'
+import { useFeedback } from '@/hooks/use-feedback'
 import { GradeLabelBadge } from '@/components/shared/grade/GradeBadge'
 import AttendanceTrend from '@/components/admin/AttendanceTrend'
 import FilterPopover, { FilterField } from '@/components/shared/filters/FilterPopover'
@@ -44,7 +45,7 @@ interface OverviewSnapshot {
 
 export default function Overview() {
   const [noticeOpen, setNoticeOpen] = useState(false)
-  const [notice, setNotice] = useState('')
+  const { notify, feedbackDialog } = useFeedback()
   const { session } = useAuth()
   const { centreId, setCentreId } = useAdminFilters()
   const centresQuery = useQuery({
@@ -102,7 +103,6 @@ export default function Overview() {
           </AlertDescription>
         </Alert>
       )}
-      {notice && <Alert role="status"><CheckCircle2 className="size-4 text-success" aria-hidden="true" /><AlertDescription>{notice}</AlertDescription></Alert>}
 
       <section aria-label="Key figures" className="grid grid-cols-3 gap-2 sm:gap-3">
         <StatCard label="Active students" value={snapshot ? String(snapshot.active_students) : '—'}
@@ -179,9 +179,10 @@ export default function Overview() {
       </div>
       {noticeOpen && <AttendanceNoticeDialog centreId={selectedCentre} studentIds={null}
         onClose={() => setNoticeOpen(false)} onSent={result => {
-          setNotice(noticeResultMessage(result))
+          notify({ title: 'Attendance email sent', description: noticeResultMessage(result) })
           void overviewQuery.refetch()
         }} />}
+      {feedbackDialog}
     </div>
   )
 }

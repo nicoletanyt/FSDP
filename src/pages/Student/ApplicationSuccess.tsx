@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useFeedback } from '@/hooks/use-feedback'
 import { Link, useLocation } from 'react-router'
 import { buttonVariants } from '@/components/ui/button'
 import { CheckCircle2, Copy, Check, Calendar, Award } from 'lucide-react'
@@ -6,6 +7,7 @@ import { GradeLabelBadge } from '@/components/shared/grade/GradeBadge'
 
 export default function ApplicationSuccess() {
   const [copied, setCopied] = useState(false)
+  const { notify, feedbackDialog } = useFeedback()
   
   const location = useLocation()
   const membershipId = location.state?.membershipId || 'ASJ2025O0123'
@@ -33,15 +35,15 @@ export default function ApplicationSuccess() {
             setCopied(true)
             setTimeout(() => setCopied(false), 2000)
           } else {
-            alert('Failed to copy.')
+            notify({ variant: 'error', title: 'Couldn’t copy', description: 'Copy it manually instead.' })
           }
         } catch (err) {
-          alert('Failed to copy.')
+          notify({ variant: 'error', title: 'Couldn’t copy', description: 'Copy it manually instead.' })
         }
         textArea.remove()
       }
     } catch (err) {
-      alert('Failed to copy.')
+      notify({ variant: 'error', title: 'Couldn’t copy', description: 'Copy it manually instead.' })
     }
   }
 
@@ -160,6 +162,7 @@ export default function ApplicationSuccess() {
         </Link>
 
       </div>
+      {feedbackDialog}
     </div>
   )
 }

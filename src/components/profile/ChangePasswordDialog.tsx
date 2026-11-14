@@ -1,3 +1,4 @@
+import { FeedbackDialog } from "@/components/shared/FeedbackDialog";
 import { useState } from "react";
 import type { SubmitEvent } from "react";
 import { Check, ChevronRight, LockKeyhole, X } from "lucide-react";
@@ -109,16 +110,14 @@ export default function ChangePasswordDialog({ accountType }: { accountType: str
 
     return (
         <>
-            {passwordChanged && (
-                <Alert
-                    role="status"
-                    className="border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200"
-                >
-                    <AlertDescription className="text-emerald-800 dark:text-emerald-200">
-                        Your password has been changed successfully.
-                    </AlertDescription>
-                </Alert>
-            )}
+            <FeedbackDialog
+                open={passwordChanged}
+                onOpenChange={(next) => {
+                    if (!next) clearPasswordChanged();
+                }}
+                title="Password changed"
+                description="Your password has been updated. Use it next time you sign in."
+            />
             <Dialog open={open} onOpenChange={handleOpenChange}>
                 <DialogTrigger
                     render={<Button variant="ghost" />}

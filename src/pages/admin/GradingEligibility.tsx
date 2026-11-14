@@ -41,6 +41,8 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { useAuth } from "@/hooks/use-auth";
+import { useFeedback } from "@/hooks/use-feedback";
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { formatDate, initials } from "@/lib/admin/format";
 import { formatMonths } from "@/lib/admin/grading-eligibility";
 import type { EligibilityRequirement, GradeTrack } from "@/lib/admin/types";
@@ -172,6 +174,8 @@ export default function GradingEligibility() {
     );
     const [notice, setNotice] = useState("");
     const [noticeError, setNoticeError] = useState(false);
+    const [confirmSend, setConfirmSend] = useState(false);
+    const { notify, feedbackDialog } = useFeedback();
     const [events, setEvents] = useState<
         { id: string; name: string; track: GradeTrack }[]
     >([]);
@@ -261,13 +265,6 @@ export default function GradingEligibility() {
 
     async function notifyEligible(confirm: boolean) {
         if (confirm && !preview) return;
-        if (
-            confirm &&
-            !window.confirm(
-                `Send this invitation to ${preview!.eligible} ${preview!.eligible === 1 ? "student" : "students"}? Each student gets it privately and can't see the others.`,
-            )
-        )
-            return;
         setPendingAction(confirm ? "send" : "preview");
         setNotice("");
         setNoticeError(false);
@@ -287,10 +284,10 @@ export default function GradingEligibility() {
                 throw new Error(details?.error ?? error.message);
             }
             if (confirm) {
-                setNoticeError(false);
-                setNotice(
-                    `Invitation sent to ${data.bcc_count} ${data.bcc_count === 1 ? "student" : "students"}. You can check it in Settings › Sent emails.`,
-                );
+                notify({
+                    title: "Invitation sent",
+                    description: `Sent to ${data.bcc_count} ${data.bcc_count === 1 ? "student" : "students"}. You can check it in Settings › Sent emails.`,
+                });
                 setPreview(null);
                 setNotifyOpen(false);
                 void eligibility.refetch();
@@ -326,11 +323,8 @@ export default function GradingEligibility() {
 
     return (
         <div className="space-y-4">
-            {notice && !notifyOpen && (
+            {notice && noticeError && !notifyOpen && (
                 <Alert variant={noticeError ? "destructive" : "default"}>
-                    {!noticeError && (
-                        <CheckCircle2 className="size-4 text-success" aria-hidden="true" />
-                    )}
                     <AlertDescription>{notice}</AlertDescription>
                 </Alert>
             )}
@@ -443,7 +437,7 @@ export default function GradingEligibility() {
                                 preview.over_limit ||
                                 !preview.send_ready
                             }
-                            onClick={() => void notifyEligible(true)}
+                            onClick={() => setConfirmSend(true)}
                         >
                             {pendingAction === "send" ? "Sending…" : "Send email"}
                         </Button>
@@ -677,6 +671,18 @@ export default function GradingEligibility() {
                     </div>
                 )}
             </section>
+            {feedbackDialog}
+            <ConfirmDialog
+                open={confirmSend}
+                onOpenChange={setConfirmSend}
+                title="Send this invitation?"
+                description={`It will go to ${preview?.eligible ?? 0} ${preview?.eligible === 1 ? "student" : "students"}. Each student gets it privately and can't see the others.`}
+                confirmLabel="Send invitation"
+                onConfirm={() => {
+                    setConfirmSend(false);
+                    void notifyEligible(true);
+                }}
+            />
         </div>
     );
 }

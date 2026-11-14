@@ -14,6 +14,7 @@ import { useInstructorEditProtection } from "@/hooks/use-instructor-edit-protect
 import { instructorQueryKeys as queryKeys, instructorQueryTimes as queryTimes } from "@/lib/instructor/query-keys";
 import { assessmentKey, sessionCalendarHref, sessionDateLabel, sessionStudentHref } from "@/lib/instructor/session-reads";
 import type { AssessmentDetail } from "@/lib/instructor/types";
+import { useFeedback } from "@/hooks/use-feedback";
 import { useInstructorSessionSave } from "@/hooks/use-instructor-session-save";
 import { assessmentEditable, assessmentSnapshot } from "@/lib/instructor/session-writes";
 
@@ -23,13 +24,14 @@ function AssessmentForm({ detail }: { detail: AssessmentDetail }) {
     const [draft, setDraft] = useState(() => assessmentSnapshot(detail.record));
     const [expected, setExpected] = useState(() => assessmentSnapshot(detail.record));
     const [notice, setNotice] = useState("");
+    const { notify, feedbackDialog } = useFeedback();
     const canEdit = assessmentEditable(session.event);
     const locked = !canEdit || mutation.pending || Boolean(mutation.error);
     const dirty = draft.status !== expected.status || (draft.notes?.trim() || null) !== (expected.notes?.trim() || null);
     async function finish(data: Awaited<ReturnType<typeof mutation.retry>>) {
         if (!data || !mutation.isCurrent()) return;
         const value = assessmentSnapshot(data.record);
-        setExpected(value); setDraft(value); setNotice("Assessment saved.");
+        setExpected(value); setDraft(value); notify({ title: "Assessment saved", description: `${name}'s assessment has been recorded.` });
     }
     const name = [student.student.first_name, student.student.last_name].filter(Boolean).join(" ") || student.student.email;
     const track = session.grading?.track;
@@ -153,6 +155,7 @@ function AssessmentForm({ detail }: { detail: AssessmentDetail }) {
                     </form>}
                 </CardContent>
             </Card>
+            {feedbackDialog}
         </section>
     );
 }

@@ -1,8 +1,9 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { attendanceMonitoringKey, loadAttendanceMonitoring } from '@/lib/admin/section-counts'
-import { AlertTriangle, Bell, CheckCircle2, ChevronRight } from 'lucide-react'
+import { AlertTriangle, Bell, ChevronRight } from 'lucide-react'
 import AttendanceNoticeDialog, { noticeResultMessage } from '@/components/admin/AttendanceNoticeDialog'
+import { useFeedback } from '@/hooks/use-feedback'
 import EmptyState from '@/components/shared/layout/EmptyState'
 import { RiskBadge, StatusBadge } from '@/components/shared/status/StatusBadge'
 import { GradeLabelBadge } from '@/components/shared/grade/GradeBadge'
@@ -45,7 +46,7 @@ export default function AttendanceMonitoring() {
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [expanded, setExpanded] = useState<string | null>(null)
-  const [notice, setNotice] = useState('')
+  const { notify, feedbackDialog } = useFeedback()
   const [noticeOpen, setNoticeOpen] = useState(false)
   const [noticeStudentIds, setNoticeStudentIds] = useState<string[] | null>(null)
 
@@ -112,7 +113,6 @@ export default function AttendanceMonitoring() {
         <p className="text-muted-foreground">Based on each student’s last five completed class enrolments, not how often they book. Two or more missed classes means at risk. With no marked results, risk is not assessed. Unmarked and excused classes do not count as attendance results.</p>
       </div>
 
-      {notice && <Alert role="status"><CheckCircle2 className="size-4 text-success" aria-hidden="true" /><AlertDescription>{notice}</AlertDescription></Alert>}
       {error && <Alert variant="destructive" role="alert"><AlertDescription className="flex flex-wrap items-center gap-3">
         Unable to load live attendance monitoring. No demo students are shown.
         <Button variant="outline" size="sm" onClick={() => { void centresQuery.refetch(); void monitoring.refetch() }}>Retry</Button>
@@ -142,7 +142,7 @@ export default function AttendanceMonitoring() {
       {noticeOpen && <AttendanceNoticeDialog centreId={targetCentre} studentIds={noticeStudentIds}
         onClose={() => setNoticeOpen(false)} onSent={result => {
           setSelected(new Set())
-          setNotice(noticeResultMessage(result))
+          notify({ title: 'Attendance email sent', description: noticeResultMessage(result) })
           void monitoring.refetch()
         }} />}
 
@@ -196,6 +196,7 @@ export default function AttendanceMonitoring() {
             </Fragment>
           })}</TableBody>
         </Table></CardContent></Card>)}
+      {feedbackDialog}
     </div>
   )
 }

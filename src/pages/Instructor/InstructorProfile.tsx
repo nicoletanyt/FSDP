@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent, SubmitEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Check, Pencil, Trash2, Upload } from "lucide-react";
+import { Pencil, Trash2, Upload } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +23,8 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/use-auth";
+import { useFeedback } from "@/hooks/use-feedback";
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { useInstructorProfile } from "@/hooks/use-instructor-profile";
 import { prepareInstructorPhoto } from "@/lib/instructor-calendar";
 import { useInstructorApi } from "@/lib/instructor/data-context";
@@ -47,12 +49,12 @@ export default function InstructorProfile() {
     const photoBusyRef = useRef(false);
     const [photoPending, setPhotoPending] = useState(false);
     const [photoError, setPhotoError] = useState("");
-    const [photoFeedback, setPhotoFeedback] = useState("");
+    const [confirmRemovePhoto, setConfirmRemovePhoto] = useState(false);
+    const { notify, feedbackDialog } = useFeedback();
     const [addressEditing, setAddressEditing] = useState(false);
     const [addressDraft, setAddressDraft] = useState("");
     const [addressPending, setAddressPending] = useState(false);
     const [addressError, setAddressError] = useState("");
-    const [addressFeedback, setAddressFeedback] = useState("");
     const addressBusyRef = useRef(false);
     const addressRequestRef = useRef(0);
     const addressEditRef = useRef<HTMLButtonElement>(null);
@@ -83,14 +85,12 @@ export default function InstructorProfile() {
 
     useEffect(() => {
         setPhotoError("");
-        setPhotoFeedback("");
         setPhotoPending(false);
         photoBusyRef.current = false;
         setAddressEditing(false);
         setAddressDraft("");
         setAddressPending(false);
         setAddressError("");
-        setAddressFeedback("");
         addressBusyRef.current = false;
         return () => {
             photoRequestRef.current += 1;
@@ -116,7 +116,6 @@ export default function InstructorProfile() {
         photoBusyRef.current = true;
         setPhotoPending(true);
         setPhotoError("");
-        setPhotoFeedback("");
         try {
             await queryClient.cancelQueries({
                 queryKey: instructorQueryKeys.profile(userId),
@@ -130,7 +129,7 @@ export default function InstructorProfile() {
             );
             await updateSavedProfile(userId, generation, saved);
             if (request !== photoRequestRef.current) return;
-            setPhotoFeedback("Profile picture updated.");
+            notify({ title: "Profile picture updated", description: "Your new photo is now saved." });
         } catch (failure) {
             if (request === photoRequestRef.current) {
                 setPhotoError(
@@ -162,7 +161,6 @@ export default function InstructorProfile() {
         photoBusyRef.current = true;
         setPhotoPending(true);
         setPhotoError("");
-        setPhotoFeedback("");
         try {
             await queryClient.cancelQueries({
                 queryKey: instructorQueryKeys.profile(userId),
@@ -170,7 +168,7 @@ export default function InstructorProfile() {
             const saved = await api.removeProfilePhoto(userId, previousPath);
             await updateSavedProfile(userId, generation, saved);
             if (request !== photoRequestRef.current) return;
-            setPhotoFeedback("Profile picture removed.");
+            notify({ title: "Profile picture removed", description: "Your account now shows your initials instead." });
         } catch (failure) {
             if (request === photoRequestRef.current)
                 setPhotoError(
@@ -200,7 +198,6 @@ export default function InstructorProfile() {
         }
         setAddressDraft(details.data?.address ?? "");
         setAddressError("");
-        setAddressFeedback("");
         setAddressEditing(true);
     }
 
@@ -213,7 +210,6 @@ export default function InstructorProfile() {
         addressBusyRef.current = true;
         setAddressPending(true);
         setAddressError("");
-        setAddressFeedback("");
         try {
             await queryClient.cancelQueries({
                 queryKey: instructorQueryKeys.profile(userId),
@@ -222,7 +218,7 @@ export default function InstructorProfile() {
             await updateSavedProfile(userId, generation, { address });
             if (request !== addressRequestRef.current) return;
             finishAddressEditing();
-            setAddressFeedback(address ? "Address updated." : "Address removed.");
+            notify(address ? { title: "Address updated", description: "Administrators can now reach you at your new address." } : { title: "Address removed", description: "No address is stored on your account." });
         } catch (failure) {
             if (request === addressRequestRef.current)
                 setAddressError(
@@ -333,9 +329,7 @@ export default function InstructorProfile() {
                                     <Button
                                         type="button"
                                         variant="destructive"
-                                        onClick={() => {
-                                            void removePhoto();
-                                        }}
+                                        onClick={() => setConfirmRemovePhoto(true)}
                                         disabled={photoControlsDisabled}
                                     >
                                         <Trash2 aria-hidden="true" className="size-4" />
@@ -364,17 +358,6 @@ export default function InstructorProfile() {
                                 >
                                     Reload saved profile
                                 </Button>
-                            )}
-                            {photoFeedback && (
-                                <Alert
-                                    role="status"
-                                    className="col-span-full border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200"
-                                >
-                                    <Check aria-hidden="true" />
-                                    <AlertDescription className="text-emerald-800 dark:text-emerald-200">
-                                        {photoFeedback}
-                                    </AlertDescription>
-                                </Alert>
                             )}
                         </div>
                     </div>
@@ -497,14 +480,6 @@ export default function InstructorProfile() {
                                             ? "Unavailable"
                                             : details.data?.address || "Not provided"}
                                 </span>
-                                {addressFeedback && (
-                                    <p
-                                        role="status"
-                                        className="mt-2 text-xs text-emerald-700 dark:text-emerald-400"
-                                    >
-                                        {addressFeedback}
-                                    </p>
-                                )}
                             </dd>
                         </div>
                         <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
@@ -566,6 +541,19 @@ export default function InstructorProfile() {
                     <ChangePasswordDialog accountType="instructor" />
                 </CardContent>
             </Card>
+            {feedbackDialog}
+            <ConfirmDialog
+                open={confirmRemovePhoto}
+                onOpenChange={setConfirmRemovePhoto}
+                title="Remove profile picture?"
+                description="Your photo will be deleted and your initials will be shown instead."
+                confirmLabel="Remove photo"
+                destructive
+                onConfirm={() => {
+                    setConfirmRemovePhoto(false);
+                    void removePhoto();
+                }}
+            />
         </section>
     );
 }

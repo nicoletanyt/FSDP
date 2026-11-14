@@ -9,16 +9,16 @@ export default function InstructorAvailabilityEditor({ initial, editingId, slots
   slots: AvailabilitySlot[]
   getEvents: CalendarEventsForDate
   onClose: () => void
-  onSaved: (range: AvailabilityRange, id: string | null) => void
+  onSaved: (range: AvailabilityRange, id: string | null, kind: 'saved' | 'deleted') => void
 }) {
   const mutation = useInstructorAvailabilitySave(initial, editingId)
   return <AvailabilityDialog initial={initial} editingId={editingId} slots={slots} getEvents={getEvents}
     onClose={onClose} onReload={editingId ? mutation.reload : undefined}
     onSave={async range => {
       const slot = await mutation.save(range)
-      if (mutation.isCurrent()) onSaved(range, slot?.id ?? null)
+      if (mutation.isCurrent()) onSaved(range, slot?.id ?? null, 'saved')
     }} onDelete={editingId ? async () => {
       await mutation.remove()
-      if (mutation.isCurrent()) onSaved(initial, null)
+      if (mutation.isCurrent()) onSaved(initial, null, 'deleted')
     } : undefined} />
 }

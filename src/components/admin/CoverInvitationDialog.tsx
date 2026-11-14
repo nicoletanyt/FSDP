@@ -82,7 +82,7 @@ export default function CoverInvitationDialog({ eventId, className, startsAt, en
       <AlertDialogTrigger render={<Button variant="outline" className="min-h-11 w-full" disabled={!remaining.length || recordedInvitations.isPending || recordedInvitations.isError} />}>
         Request an instructor
       </AlertDialogTrigger>
-      <AlertDialogContent >
+      <AlertDialogContent size="compact">
         <AlertDialogHeader>
           <AlertDialogTitle>Request cover</AlertDialogTitle>
           <AlertDialogDescription>

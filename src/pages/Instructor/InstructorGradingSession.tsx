@@ -48,6 +48,7 @@ import {
 } from "@/lib/grading/format";
 import { useInstructorApi } from "@/lib/instructor/data-context";
 import { useInstructorQuery } from "@/hooks/use-instructor-data";
+import { useFeedback } from "@/hooks/use-feedback";
 import { useInstructorGradingBatch } from "@/hooks/use-instructor-grading-batch";
 import { parseEntityId } from "@/lib/instructor/adapters";
 import {
@@ -130,6 +131,7 @@ function GradingTable({
             item,
         ]),
     );
+    const { notify, feedbackDialog } = useFeedback();
     const batch = useInstructorGradingBatch({
         session,
         entries,
@@ -274,7 +276,10 @@ function GradingTable({
                                 <Button
                                     variant="outline"
                                     disabled={!canSave || batch.retryMode === "submit"}
-                                    onClick={() => void batch.save(false)}
+                                    onClick={async () => {
+                                        if (await batch.save(false))
+                                            notify({ title: "Draft saved", description: "Your grading draft has been saved. You can keep editing it." });
+                                    }}
                                 >
                                     {batch.pending && batch.retryMode !== "submit"
                                         ? "Saving…"
@@ -306,8 +311,14 @@ function GradingTable({
                 pending={batch.pending}
                 error={batch.error}
                 retrying={batch.retryMode === "submit"}
-                onSubmit={(signature) => batch.save(true, signature)}
+                onSubmit={async (signature) => {
+                    const ok = await batch.save(true, signature);
+                    if (ok)
+                        notify({ title: "Grading submitted", description: "Your grading batch has been submitted. No final grades have been assigned." });
+                    return ok;
+                }}
             />
+            {feedbackDialog}
             {day.isChief && gradingSession && examiners.length > 1 && (
                 <ExaminerPicker
                     examiners={examiners}

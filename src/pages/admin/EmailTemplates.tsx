@@ -11,6 +11,8 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useAuth } from '@/hooks/use-auth'
 import { supabase } from '@/lib/supabase'
+import { useFeedback } from '@/hooks/use-feedback'
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 
 type TemplateId = 'grading_invitation' | 'attendance_notice' | 'instructor_account'
 type EmailTemplate = { id: TemplateId; subject: string; body: string; updated_at: string }
@@ -83,7 +85,8 @@ export default function EmailTemplates() {
   const [previewing, setPreviewing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const [saved, setSaved] = useState(false)
+  const [confirmClose, setConfirmClose] = useState(false)
+  const { notify, feedbackDialog } = useFeedback()
   const bodyRef = useRef<HTMLTextAreaElement>(null)
   const changed = !!editing && (subject !== editing.subject || body !== editing.body)
   const selected = templates.find(item => item.id === editing?.id)
@@ -101,7 +104,6 @@ export default function EmailTemplates() {
     setSubject(nextSubject)
     setBody(nextBody)
     setError('')
-    setSaved(false)
   }
 
   function undo() {
@@ -112,7 +114,6 @@ export default function EmailTemplates() {
     setSubject(previous.subject)
     setBody(previous.body)
     setError('')
-    setSaved(false)
   }
 
   function open(template: EmailTemplate) {
@@ -121,13 +122,12 @@ export default function EmailTemplates() {
     setBody(template.body)
     setHistory([])
     setError('')
-    setSaved(false)
     setPreviewing(false)
   }
 
   function changeOpen(next: boolean) {
     if (next || saving) return
-    if (changed && !window.confirm('Close without saving your changes?')) return
+    if (changed) { setConfirmClose(true); return }
     setEditing(null)
   }
 
@@ -159,7 +159,7 @@ export default function EmailTemplates() {
     } else {
       setEditing(data as EmailTemplate)
       setSubject(data.subject)
-      setSaved(true)
+      notify({ title: 'Email template saved', description: 'Your changes have been saved.' })
       void directory.refetch()
     }
     setSaving(false)
@@ -239,7 +239,6 @@ export default function EmailTemplates() {
           <Button type="button" variant="ghost" aria-label="Undo" disabled={!history.length || saving} onClick={undo}>
             <Undo2 aria-hidden="true" /><span className="hidden sm:inline">Undo</span>
           </Button>
-          {saved && !changed && <span role="status" className="text-sm text-muted-foreground">Saved</span>}
           {changed && <Button variant="ghost" disabled={saving} onClick={() => editing && edit(editing.subject, editing.body, true)}>
             <span className="sm:hidden">Discard</span><span className="hidden sm:inline">Discard changes</span>
           </Button>}
@@ -247,5 +246,9 @@ export default function EmailTemplates() {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    <ConfirmDialog open={confirmClose} onOpenChange={setConfirmClose} title="Discard your changes?"
+      description="This email has unsaved changes that will be lost if you close it." confirmLabel="Discard changes" destructive
+      onConfirm={() => { setConfirmClose(false); setEditing(null) }} />
+    {feedbackDialog}
   </div>
 }

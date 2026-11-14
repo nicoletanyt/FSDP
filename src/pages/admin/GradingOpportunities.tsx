@@ -13,6 +13,7 @@ import { Card } from '@/components/ui/card'
 import { candidateCount, daysUntil, endsAfter, gradingDate, gradingStage, gradingTimeLabel, singaporeToday } from '@/lib/grading/format'
 import { gradingTitle } from '@/lib/instructor/grading-panels'
 import { supabase } from '@/lib/supabase'
+import { useFeedback } from '@/hooks/use-feedback'
 import { panelSelect, toPanel } from '@/lib/admin/grading-panels'
 
 interface Schedule {
@@ -153,6 +154,7 @@ export default function GradingOpportunities() {
   const [upcoming, setUpcoming] = useState<Schedule[]>([])
   const [past, setPast] = useState<Schedule[]>([])
   const [loading, setLoading] = useState(true)
+  const { notify, feedbackDialog } = useFeedback()
   const [error, setError] = useState('')
   const [search, setSearch] = useSearchParams()
   const when = search.get('when') === 'past' ? 'past' : 'upcoming'
@@ -198,13 +200,14 @@ export default function GradingOpportunities() {
           ) : (
             <section className="grid gap-4" aria-label="Upcoming gradings">
               {upcoming.map((item, index) => (
-                <ScheduleCard key={item.event_id} item={item} next={index === 0} now={now} photos={photos} onPanelSaved={() => void reload()} />
+                <ScheduleCard key={item.event_id} item={item} next={index === 0} now={now} photos={photos} onPanelSaved={() => { void reload(); notify({ title: 'Grading panel saved', description: 'The examiners for this grading have been updated.' }) }} />
               ))}
             </section>
           )
         ) : past.length ? <PastGradings items={past} /> : (
           <EmptyState icon={History} title="No past gradings yet" description="Finished gradings appear here so their results can be reviewed." />
         )}
+      {feedbackDialog}
     </div>
   )
 }

@@ -32,6 +32,7 @@ import type {
     StudentHistoryEntry,
 } from "@/lib/instructor/types";
 import type { QueryState } from "@/hooks/use-instructor-data";
+import { useFeedback } from "@/hooks/use-feedback";
 import { useGradingEndorsement } from "@/hooks/use-grading-endorsement";
 
 type GradingView = ReturnType<typeof studentGrading>;
@@ -111,27 +112,32 @@ function ReadinessStatus({ view }: { view: GradingView }) {
 function Endorsement({ detail, view }: { detail: StudentDetail; view: GradingView }) {
     const { status, endorse, pending, error, clearError } = useGradingEndorsement(detail.student.id);
     const [open, setOpen] = useState(false);
+    const { notify, feedbackDialog } = useFeedback();
     if (status.status !== "success") return null;
     const { endorsement, eligible, targetGradeId } = status.data;
     if (!targetGradeId) return null;
     if (endorsement) {
         return (
-            <p role="status" data-endorsement className={cn("detail-meta flex items-center gap-2 text-sm font-medium", success)}>
-                <BadgeCheck aria-hidden="true" className="size-4 shrink-0" />
-                Endorsed{endorsement.endorsedBy ? ` by ${endorsement.endorsedBy}` : ""} · {historyDate(endorsement.endorsedAt)}
-            </p>
+            <>
+                <p role="status" data-endorsement className={cn("detail-meta flex items-center gap-2 text-sm font-medium", success)}>
+                    <BadgeCheck aria-hidden="true" className="size-4 shrink-0" />
+                    Endorsed{endorsement.endorsedBy ? ` by ${endorsement.endorsedBy}` : ""} · {historyDate(endorsement.endorsedAt)}
+                </p>
+                {feedbackDialog}
+            </>
         );
     }
     if (!eligible) return null;
     const name = [detail.student.first_name, detail.student.last_name].filter(Boolean).join(" ") || "this student";
     const grade = view.target?.id === targetGradeId ? view.target.label : "their next grade";
     return (
+        <>
         <AlertDialog open={open} onOpenChange={(value) => { if (!pending) { setOpen(value); clearError(); } }}>
             <AlertDialogTrigger render={<Button size="touch" className="w-full gap-2" data-endorse />}>
                 <BadgeCheck aria-hidden="true" />
                 Endorse
             </AlertDialogTrigger>
-            <AlertDialogContent data-endorse-dialog>
+            <AlertDialogContent size="compact" data-endorse-dialog>
                 <AlertDialogHeader>
                     <AlertDialogMedia className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
                         <BadgeCheck aria-hidden="true" />
@@ -145,12 +151,14 @@ function Endorsement({ detail, view }: { detail: StudentDetail; view: GradingVie
                 <AlertDialogFooter>
                     <AlertDialogCancel className="min-h-11" disabled={pending}>Cancel</AlertDialogCancel>
                     <AlertDialogAction disabled={pending} className="min-h-11"
-                        onClick={() => void endorse().then((saved) => { if (saved) setOpen(false); })}>
+                        onClick={() => void endorse().then((saved) => { if (saved) { setOpen(false); notify({ title: "Student endorsed", description: `${name} has been endorsed for ${grade}.` }); } })}>
                         {pending ? "Endorsing…" : "Confirm endorsement"}
                     </AlertDialogAction>
                 </AlertDialogFooter>
             </AlertDialogContent>
         </AlertDialog>
+        {feedbackDialog}
+        </>
     );
 }
 

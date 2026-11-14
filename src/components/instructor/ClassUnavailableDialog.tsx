@@ -8,6 +8,7 @@ import {
     AlertDialogMedia, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useAuth } from "@/hooks/use-auth";
+import { useFeedback } from "@/hooks/use-feedback";
 import { supabase } from "@/lib/supabase";
 
 type RequestStatus = { id: string };
@@ -15,6 +16,7 @@ type RequestStatus = { id: string };
 export default function ClassUnavailableDialog({ eventId }: { eventId: string }) {
     const { session } = useAuth();
     const [open, setOpen] = useState(false);
+    const { notify, feedbackDialog } = useFeedback();
     const [pending, setPending] = useState(false);
     const [error, setError] = useState('');
     const [saved, setSaved] = useState<RequestStatus | null>(null);
@@ -46,6 +48,7 @@ export default function ClassUnavailableDialog({ eventId }: { eventId: string })
             if (!data?.request_id) throw new Error('Unable to confirm the request. Refresh to check its status.');
             setSaved({ id: data.request_id });
             setOpen(false);
+            notify({ title: 'Unavailability reported', description: 'The administrators have been told you cannot take this class.' });
             void status.refetch();
         } catch (failure) {
             setError(failure instanceof Error ? failure.message : 'Unable to save the request. Try again.');
@@ -60,7 +63,7 @@ export default function ClassUnavailableDialog({ eventId }: { eventId: string })
             <AlertDialogTrigger render={<Button variant="destructive" className="min-h-11 w-full" disabled={status.isPending || status.isError} />}>
                 I’m unavailable
             </AlertDialogTrigger>
-            <AlertDialogContent >
+            <AlertDialogContent size="compact">
                 <AlertDialogHeader className="flex flex-row items-center justify-start gap-3 text-left">
                     <AlertDialogMedia className="mb-0 shrink-0 bg-destructive/10 text-destructive"><CircleAlert aria-hidden="true" /></AlertDialogMedia>
                     <AlertDialogTitle className="translate-y-1">Report unavailable for this class?</AlertDialogTitle>
@@ -77,5 +80,6 @@ export default function ClassUnavailableDialog({ eventId }: { eventId: string })
         {status.isError && <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-destructive">
             Unable to check this class’s request status. <Button size="sm" variant="outline" onClick={() => void status.refetch()}>Retry</Button>
         </div>}
+        {feedbackDialog}
     </div>;
 }

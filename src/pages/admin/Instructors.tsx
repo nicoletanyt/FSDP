@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { CheckCircle2, Mail, Plus, X } from 'lucide-react'
+import { Mail, Plus } from 'lucide-react'
 import CreateInstructorForm from '@/components/auth/CreateInstructorForm'
 import PageHeader from '@/components/shared/layout/PageHeader'
 import EmptyState from '@/components/shared/layout/EmptyState'
@@ -14,6 +14,7 @@ import { DatabaseGradeBadge as GradeBadge } from '@/components/shared/grade/Grad
 import type { GradeRow } from '@/lib/instructor/types'
 import { setExaminer } from '@/lib/admin/grading-panels'
 import SearchInput from '@/components/shared/filters/SearchInput'
+import { useFeedback } from '@/hooks/use-feedback'
 
 type InstructorProfile = Pick<UserProfile, 'id' | 'first_name' | 'last_name' | 'email'> & {
   instructors: { id: string; is_examiner: boolean; grade: GradeRow | null } | null
@@ -22,14 +23,17 @@ type InstructorProfile = Pick<UserProfile, 'id' | 'first_name' | 'last_name' | '
 function ExaminerToggle({ instructorId, name, initial }: { instructorId: string; name: string; initial: boolean }) {
   const [checked, setChecked] = useState(initial)
   const [pending, setPending] = useState(false)
-  const [error, setError] = useState('')
+  const { notify, feedbackDialog } = useFeedback()
   useEffect(() => { setChecked(initial) }, [initial])
 
   async function change(next: boolean) {
     setPending(true)
-    setError('')
-    try { setChecked(await setExaminer(supabase, instructorId, next)) }
-    catch (failure) { setError(failure instanceof Error ? failure.message : 'Unable to update the examiner status. Try again.') }
+    try {
+      const updated = await setExaminer(supabase, instructorId, next)
+      setChecked(updated)
+      notify({ title: 'Examiner status updated', description: `${name} ${updated ? 'can now' : 'can no longer'} examine gradings.` })
+    }
+    catch (failure) { notify({ variant: 'error', title: 'Couldn’t update examiner status', description: failure instanceof Error ? failure.message : 'Try again.' }) }
     finally { setPending(false) }
   }
 
@@ -39,7 +43,7 @@ function ExaminerToggle({ instructorId, name, initial }: { instructorId: string;
         aria-label={`${name} can examine gradings`} onChange={event => void change(event.target.checked)} />
       Examiner
     </label>
-    {error && <p role="alert" className="max-w-56 text-right text-xs text-destructive">{error}</p>}
+    {feedbackDialog}
   </div>
 }
 
@@ -49,7 +53,7 @@ export default function Instructors() {
   const [error, setError] = useState('')
   const [query, setQuery] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
-  const [createdEmail, setCreatedEmail] = useState<string | null>(null)
+  const { notify, feedbackDialog } = useFeedback()
 
   const reload = useCallback(async () => {
     setLoading(true)
@@ -77,9 +81,9 @@ export default function Instructors() {
   )
 
   function handleCreated(account: InstructorAccount) {
-    setCreatedEmail(account.email)
     setCreateOpen(false)
     void reload()
+    notify({ title: 'Instructor created', description: `An account for ${account.email} has been created.` })
   }
 
   return (
@@ -110,27 +114,6 @@ export default function Instructors() {
           </DialogContent>
         </Dialog>
       </div>
-
-      {createdEmail && (
-        <Alert role="status" className="flex min-h-12 items-center gap-2 border-success/30 bg-success/10 px-3 py-2 text-left">
-          <span className="flex shrink-0 items-center" aria-hidden="true">
-            <CheckCircle2 className="size-5 text-success" />
-          </span>
-          <AlertDescription className="min-w-0 flex-1 text-left text-foreground">
-            <p className="font-medium">Instructor account created for {createdEmail}.</p>
-          </AlertDescription>
-          <Button
-            type="button"
-            size="icon-sm"
-            variant="ghost"
-            className="shrink-0"
-            aria-label="Dismiss account creation notice"
-            onClick={() => setCreatedEmail(null)}
-          >
-            <X className="size-4" aria-hidden="true" />
-          </Button>
-        </Alert>
-      )}
 
       <section aria-label="Instructor accounts" className="space-y-3">
         {!loading && !error && (
@@ -184,7 +167,7 @@ export default function Instructors() {
           )}
         </div>
       </section>
-
+      {feedbackDialog}
     </div>
   )
 }
