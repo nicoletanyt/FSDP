@@ -53,11 +53,12 @@ export default function CheckInScanner({
     const [enabled, setEnabled] = useState(false);
     const [cameraId, setCameraId] = useState("");
     const [settingsOpen, setSettingsOpen] = useState(false);
-    const { videoRef, status, error, cameras, activeCameraId, restart } =
+    const { videoRef, frozenCanvasRef, hasFrozenFrame, status, error, cameras, activeCameraId, restart } =
         useQrCamera({
             enabled: enabled && !cameraPaused,
             cameraId,
             paused: !!feedback || !!choice || choicePending,
+            freezeOnStop: cameraPaused,
             onScan,
         });
     const live = status === "live";
@@ -90,6 +91,12 @@ export default function CheckInScanner({
                 aria-label="QR scanner camera preview"
                 className="absolute inset-0 size-full object-contain"
             />
+            <canvas
+                ref={frozenCanvasRef}
+                role="img"
+                aria-label="Last camera frame (camera off)"
+                className={cn("absolute inset-0 size-full object-contain", (!hasFrozenFrame || live) && "hidden")}
+            />
             <div
                 className={cn(
                     "absolute inset-x-0 top-0 z-20 items-center justify-between gap-2 bg-gradient-to-b from-black/70 to-transparent p-4",
@@ -115,7 +122,7 @@ export default function CheckInScanner({
                             ? "Camera live"
                             : starting
                                 ? "Starting camera…"
-                                : cameraPaused ? "NFC listening window" : "Camera off"}
+                                : "Camera off"}
                     </span>
                 </div>
                 <Popover open={settingsOpen} onOpenChange={setSettingsOpen}>
@@ -165,7 +172,7 @@ export default function CheckInScanner({
                 </Popover>
             </div>
 
-            {!live && (
+            {!live && !cameraPaused && (
                 <div className={cn("absolute inset-0 overflow-y-auto overscroll-contain px-4 text-center text-white", isKiosk ? "pt-14 pb-3" : "pt-16 pb-4")}>
                   <div className="flex min-h-full flex-col items-center justify-center gap-3">
                     {starting ? (
@@ -180,7 +187,6 @@ export default function CheckInScanner({
                         <p className="text-xl font-semibold tracking-tight sm:text-2xl">
                             {starting
                                 ? "Connecting to your camera"
-                                : cameraPaused ? "Listening for NFC tags"
                                 : error && enabled
                                     ? "Camera needs attention"
                                     : "Ready for check-ins?"}
@@ -188,13 +194,12 @@ export default function CheckInScanner({
                         <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-zinc-300">
                             {starting
                                 ? "Allow camera access when your browser asks."
-                                : cameraPaused ? "Hold the tag near this phone until confirmation. QR scanning resumes automatically."
                                 : error && enabled
                                     ? error
                                     : "Start the camera to let students scan their QR codes."}
                         </p>
                     </div>
-                    {!starting && !cameraPaused && (
+                    {!starting && (
                         <Button
                             onClick={startCamera}
                             className="mt-2 min-h-12 gap-2 rounded-xl bg-white px-6 text-zinc-950 hover:bg-zinc-200"
