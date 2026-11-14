@@ -23,7 +23,7 @@ test('automatic QR/NFC windows release the camera before NFC, freeze during chec
   const locked = () => false
   let options = {
     cameraEnabled: true, cameraRunning: true, cameraLive: true, cameraFailed: false,
-    nfcWanted: true, nfcState: 'active', nfcError: '', pauseNfc, resumeNfc, stopNfc() {}, busy: false, locked,
+    nfcWanted: true, nfcState: 'active', nfcError: '', simultaneous: false, pauseNfc, resumeNfc, stopNfc() {}, busy: false, locked,
   }
   function Harness({ settings }) { current = useCheckInAlternation(settings); return null }
   let root
@@ -65,7 +65,7 @@ test('camera failure falls back to NFC instead of leaving both readers off', asy
   let result, resumed = 0
   function Harness() {
     result = useCheckInAlternation({ cameraEnabled: true, cameraRunning: false, cameraLive: false,
-      cameraFailed: true, nfcWanted: true, nfcState: 'idle', nfcError: '', pauseNfc() {}, stopNfc() {},
+      cameraFailed: true, nfcWanted: true, nfcState: 'idle', nfcError: '', simultaneous: false, pauseNfc() {}, stopNfc() {},
       resumeNfc() { resumed++ }, busy: false, locked: () => false })
     return null
   }
@@ -89,7 +89,7 @@ test('failed NFC restart does not leave the camera paused indefinitely', async (
   const resumeNfc = () => {}
   const locked = () => false
   let settings = { cameraEnabled: true, cameraRunning: true, cameraLive: true, cameraFailed: false,
-    nfcWanted: true, nfcState: 'active', nfcError: '', pauseNfc, resumeNfc, stopNfc, busy: false, locked }
+    nfcWanted: true, nfcState: 'active', nfcError: '', simultaneous: false, pauseNfc, resumeNfc, stopNfc, busy: false, locked }
   function Harness({ options }) { result = useCheckInAlternation(options); return null }
   let root
   await act(async () => { root = TestRenderer.create(React.createElement(Harness, { options: settings })) })
@@ -100,5 +100,53 @@ test('failed NFC restart does not leave the camera paused indefinitely', async (
   settings = { ...settings, nfcWanted: false }
   await act(async () => { root.update(React.createElement(Harness, { options: settings })) })
   assert.equal(result.cameraPaused, false)
+  await act(async () => { root.unmount() })
+})
+
+test('continuous experiment keeps the QR camera up while NFC resumes', async () => {
+  let resumes = 0, pauses = 0, result
+  globalThis.window = { setTimeout, clearTimeout }
+  globalThis.document = { hidden: false, addEventListener() {}, removeEventListener() {} }
+  const pauseNfc = () => { pauses++ }
+  const resumeNfc = () => { resumes++ }
+  function Harness() {
+    result = useCheckInAlternation({ cameraEnabled: true, cameraRunning: true, cameraLive: true,
+      cameraFailed: false, nfcWanted: true, nfcState: 'idle', nfcError: '', simultaneous: true,
+      pauseNfc, resumeNfc, stopNfc() {}, busy: false, locked: () => false })
+    return null
+  }
+  let root
+  await act(async () => { root = TestRenderer.create(React.createElement(Harness)) })
+  assert.equal(result.alternating, false)
+  assert.equal(result.cameraPaused, false)
+  assert.equal(pauses, 0)
+  assert.ok(resumes >= 1)
+  await act(async () => { root.unmount() })
+})
+
+test('turning on continuous mode during an NFC window resumes the camera without stopping NFC', async () => {
+  const timers = new Map()
+  let id = 0, pauses = 0, result
+  globalThis.window = { setTimeout: (fn, ms) => { timers.set(++id, { fn, ms }); return id },
+    clearTimeout: key => timers.delete(key) }
+  globalThis.document = { hidden: false, addEventListener() {}, removeEventListener() {} }
+  const pauseNfc = () => { pauses++ }
+  const resumeNfc = () => {}
+  const stopNfc = () => {}
+  const locked = () => false
+  let options = { cameraEnabled: true, cameraRunning: true, cameraLive: true, cameraFailed: false,
+    nfcWanted: true, nfcState: 'active', nfcError: '', simultaneous: false,
+    pauseNfc, resumeNfc, stopNfc, busy: false, locked }
+  function Harness({ settings }) { result = useCheckInAlternation(settings); return null }
+  let root
+  await act(async () => { root = TestRenderer.create(React.createElement(Harness, { settings: options })) })
+  await act(async () => { [...timers.values()].find(timer => timer.ms === 4000).fn() })
+  assert.equal(result.cameraPaused, true)
+  const initialPauses = pauses
+  options = { ...options, cameraRunning: false, cameraLive: false, simultaneous: true }
+  await act(async () => { root.update(React.createElement(Harness, { settings: options })) })
+  assert.equal(result.cameraPaused, false)
+  assert.equal(result.alternating, false)
+  assert.equal(pauses, initialPauses)
   await act(async () => { root.unmount() })
 })
