@@ -1,15 +1,63 @@
-import { useState } from 'react'
-import { Link, useLocation } from 'react-router'
+import { useState, useEffect } from 'react'
+import { Link } from 'react-router'
 import { buttonVariants } from '@/components/ui/button'
-import { CheckCircle2, Copy, Check, Calendar, Award } from 'lucide-react'
+import { CheckCircle2, Copy, Check, Calendar, Award, Loader2 } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/hooks/use-auth'
 
 export default function ApplicationSuccess() {
   const [copied, setCopied] = useState(false)
+  const { session, loading: authLoading } = useAuth()
+  const userId = session?.user.id
   
-  const location = useLocation()
-  const membershipId = location.state?.membershipId || 'ASJ2025O0123'
-  const startDate = location.state?.startDate || new Date().toISOString().split('T')[0]
-  const beltRank = location.state?.beltRank || 'Mukyu (White)'
+  const [membershipId, setMembershipId] = useState('')
+  const [startDate, setStartDate] = useState('')
+  const [beltRank, setBeltRank] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [loadedUser, setLoadedUser] = useState<string | undefined>()
+  const [error, setError] = useState('')
+  const [revision, setRevision] = useState(0)
+
+  // Always reload the authoritative record, not a stale navigation-state ID.
+  useEffect(() => {
+    const controller = new AbortController()
+    setLoading(true)
+    setMembershipId('')
+    setStartDate('')
+    setBeltRank('')
+    setError('')
+    setCopied(false)
+    async function fetchProfileData() {
+      if (authLoading) return
+      try {
+        if (!userId) throw new Error('Please sign in to view your membership.')
+        const { data, error: readError } = await supabase
+          .rpc('get_my_membership_application')
+          .abortSignal(controller.signal)
+        if (readError) throw readError
+        if (!data) throw new Error('No membership application was found for this account.')
+        if (!controller.signal.aborted) {
+          setMembershipId(data.membershipId)
+          setStartDate(data.startDate)
+          setBeltRank(data.beltRank || 'Not provided')
+        }
+      } catch (failure) {
+        const readFailure = failure as { code?: string; message?: string }
+        if (!controller.signal.aborted) setError(
+          readFailure?.code === 'PGRST202'
+            ? 'Please apply the membership_application_confirmation database migration to load your saved application.'
+            : readFailure?.message || 'Unable to load your membership. Please try again.',
+        )
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoadedUser(userId)
+          setLoading(false)
+        }
+      }
+    }
+    void fetchProfileData()
+    return () => controller.abort()
+  }, [userId, authLoading, revision])
 
   const handleCopy = async () => {
     try {
@@ -31,17 +79,33 @@ export default function ApplicationSuccess() {
           if (successful) {
             setCopied(true)
             setTimeout(() => setCopied(false), 2000)
-          } else {
-            alert('Failed to copy.')
           }
         } catch (err) {
-          alert('Failed to copy.')
+          console.error(err)
         }
         textArea.remove()
       }
     } catch (err) {
-      alert('Failed to copy.')
+      console.error(err)
     }
+  }
+
+  if (authLoading || loading || loadedUser !== userId) {
+    return (
+      <div className="min-h-[calc(100vh-80px)] flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-[#2c3f67]" />
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="mx-auto max-w-xl space-y-4 px-4 py-12">
+        <p role="alert" className="text-destructive">{error}</p>
+        <button type="button" className={buttonVariants({ variant: 'outline' })} onClick={() => setRevision(value => value + 1)}>Try again</button>
+        <Link to="/dashboard" className={buttonVariants({ variant: 'ghost' })}>Return to Dashboard</Link>
+      </div>
+    )
   }
 
   return (
@@ -104,7 +168,6 @@ export default function ApplicationSuccess() {
           
           <div className="flex flex-col w-full bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-2xl shadow-sm overflow-hidden transition-colors">
             
-            {/* 👈 核心修复区：去掉了截断，改用 break-all，缩小手机端字间距 */}
             <div className="flex items-center justify-between gap-3 p-4 sm:p-6 bg-gray-50 dark:bg-slate-800/50">
               
               <div className="flex flex-col min-w-0">
@@ -144,6 +207,7 @@ export default function ApplicationSuccess() {
                   <span className="text-[10px] sm:text-xs font-medium">Initial Rank</span>
                 </div>
                 <span className="text-sm sm:text-base font-bold text-gray-800 dark:text-gray-200">{beltRank}</span>
+                <span className="text-xs text-muted-foreground">As declared in your application</span>
               </div>
             </div>
           </div>
