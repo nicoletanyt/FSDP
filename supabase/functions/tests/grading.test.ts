@@ -55,8 +55,9 @@ Deno.test('verified paid grading session finalizes once per webhook delivery; un
   names.forEach((name, index) => Deno.env.set(name, values[index]))
   const originalFetch = globalThis.fetch
   let finalized = 0
-  let amount = 6000
-  let expectedAmount = 6000
+  const fee = 9500 // per-grade SOP fee fixed on the attempt (e.g. 1st Kyu, adults)
+  let amount = fee
+  let expectedAmount = fee
   const attempt = '00000000-0000-4000-8000-000000000001'
   globalThis.fetch = async (input, init) => {
     const request = new Request(input, init)
@@ -65,6 +66,7 @@ Deno.test('verified paid grading session finalizes once per webhook delivery; un
         payment_status: 'paid', amount_total: amount, currency: 'sgd', metadata: { grading_attempt_id: attempt } })
     }
     if (request.url.includes('/rest/v1/grading_checkout_attempts')) {
+      assert.ok(request.url.includes(`id=eq.${attempt}`))
       return Response.json({ amount_cents: expectedAmount })
     }
     if (request.url.includes('/rest/v1/rpc/finalize_grading_checkout')) {
@@ -72,6 +74,7 @@ Deno.test('verified paid grading session finalizes once per webhook delivery; un
       const payload = await request.json()
       assert.equal(payload.attempt, attempt)
       assert.equal(payload.stripe_session, 'cs_test_grading')
+      assert.equal(payload.paid_amount, expectedAmount)
       return Response.json(null)
     }
     if (request.url.includes('/rest/v1/grading_checkout_attempts')) return Response.json({ amount_cents: expectedAmount })
@@ -88,10 +91,10 @@ Deno.test('verified paid grading session finalizes once per webhook delivery; un
   try {
     assert.equal((await webhook(await signed(false))).status, 200)
     assert.equal(finalized, 0)
-    amount = 5000
+    amount = 6000 // the old flat fee no longer passes for a $95 grade
     assert.equal((await webhook(await signed(true))).status, 400)
     assert.equal(finalized, 0)
-    amount = 6000
+    amount = fee
     assert.equal((await webhook(await signed(true))).status, 200)
     assert.equal((await webhook(await signed(true))).status, 200)
     assert.equal(finalized, 2) // DB RPC locks and deduplicates on the attempt row.

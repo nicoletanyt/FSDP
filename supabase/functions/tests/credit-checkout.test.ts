@@ -193,6 +193,7 @@ Deno.test('verified credit webhook grants the pass once and rejects amount misma
         membership_type: 'student',
         paid_amount: 13500,
         paid_currency: 'sgd',
+        purchased_at: '2026-11-15T00:00:00.000Z',
       })
       return Response.json(null)
     }
@@ -203,6 +204,7 @@ Deno.test('verified credit webhook grants the pass once and rejects amount misma
   async function signedEvent() {
     const body = JSON.stringify({
       id: 'evt_credit',
+      created: Date.parse('2026-11-15T00:00:00Z') / 1000,
       object: 'event',
       type: 'checkout.session.completed',
       livemode: false,
