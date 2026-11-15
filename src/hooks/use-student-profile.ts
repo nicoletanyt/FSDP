@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/hooks/use-auth'
+import { studentPhotoUrl } from '@/lib/student-photo'
 import { supabase } from '@/lib/supabase'
 import type { Payment, Profile, Standing } from '@/lib/student-profile'
 
@@ -18,6 +19,7 @@ type StudentRow = {
   last_name: string
   membership_status: string
   joined_at: string
+  photo_path: string | null
   grade: One<{ label: string; colour: string | null }>
   centre: One<{ name: string }>
 }
@@ -41,7 +43,7 @@ type GradingAttemptRow = {
 async function loadProfile(userId: string, accountName: string): Promise<Profile> {
   const { data: student, error } = await supabase
     .from('students')
-    .select(`id, member_no, first_name, last_name, membership_status, joined_at,
+    .select(`id, member_no, first_name, last_name, membership_status, joined_at, photo_path,
       grade:grades!students_current_grade_id_fkey(label, colour),
       centre:centres!students_home_centre_id_fkey(name)`)
     .eq('user_id', userId)
@@ -57,7 +59,7 @@ async function loadProfile(userId: string, accountName: string): Promise<Profile
     }
   }
 
-  const [payments, grading] = await Promise.all([
+  const [payments, grading, photoUrl] = await Promise.all([
     supabase
       .from('payments')
       .select('id, item, description, amount_cents, method, status, created_at, paid_at')
@@ -70,6 +72,8 @@ async function loadProfile(userId: string, accountName: string): Promise<Profile
       .eq('student_id', student.id)
       .eq('status', 'paid')
       .returns<GradingAttemptRow[]>(),
+    // The membership-application photo replaces the initials on the membership card.
+    studentPhotoUrl(student.photo_path),
   ])
   if (payments.error) throw payments.error
   if (grading.error) throw grading.error
@@ -78,7 +82,7 @@ async function loadProfile(userId: string, accountName: string): Promise<Profile
   return {
     memberId: student.member_no,
     fullName: `${student.first_name} ${student.last_name}`.trim() || accountName,
-    photoUrl: null,
+    photoUrl,
     belt: { name: grade?.label ?? 'Unranked', colour: grade?.colour ?? null },
     homeDojo: one(student.centre)?.name ?? null,
     memberSince: student.joined_at,

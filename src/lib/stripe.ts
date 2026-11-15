@@ -21,6 +21,17 @@ export async function startMembershipCheckout(
   application: MembershipApplication,
   idempotencyKey: string = crypto.randomUUID(),
 ) {
+  window.location.assign(await createMembershipCheckout(application, idempotencyKey))
+}
+
+/**
+ * Same as startMembershipCheckout but returns the Checkout URL instead of
+ * redirecting, for callers that finish saving something first.
+ */
+export async function createMembershipCheckout(
+  application: MembershipApplication,
+  idempotencyKey: string = crypto.randomUUID(),
+): Promise<string> {
   const { data, error } = await supabase.functions.invoke<{ url: string }>(
     'create-checkout-session',
     {
@@ -42,5 +53,5 @@ export async function startMembershipCheckout(
     throw new Error('Stripe did not return a Checkout URL.')
   }
 
-  window.location.assign(data.url)
+  return data.url
 }

@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { startMembershipCheckout } from '@/lib/stripe'
+import { createMembershipCheckout } from '@/lib/stripe'
+import { saveStudentPhoto, studentPhotoError, uploadStudentPhoto } from '@/lib/student-photo'
 import { supabase } from '@/lib/supabase'
 import {
   DATE_OF_BIRTH_STORAGE_KEY,
@@ -55,6 +56,9 @@ export default function ApplyMembership() {
   const [waiverSigned, setWaiverSigned] = useState(false)
   // Same key for retries of an unchanged submission; Stripe then returns the same session.
   const retryKey = useRef(crypto.randomUUID())
+  const [photoFile, setPhotoFile] = useState<File | null>(null)
+  // Reuse an upload when the student retries with the same photo.
+  const uploadedPhoto = useRef<{ file: File; path: string } | null>(null)
 
   const [formData, setFormData] = useState({
     fullName: '', nric: '', nationality: '', dob: '', gender: '',
@@ -194,7 +198,15 @@ export default function ApplyMembership() {
         // The Credits page falls back to the date of birth or adult passes.
       }
       try {
-        await startMembershipCheckout({
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) throw new Error('Please sign in again to submit your application.')
+        // Upload the photo first: if that fails, nothing has been submitted or charged.
+        let photoPath = uploadedPhoto.current?.file === photoFile ? uploadedPhoto.current.path : null
+        if (photoFile && !photoPath) {
+          photoPath = await uploadStudentPhoto(photoFile, user.id)
+          uploadedPhoto.current = { file: photoFile, path: photoPath }
+        }
+        const checkoutUrl = await createMembershipCheckout({
           first_name: firstName,
           last_name: rest.join(' '),
           phone: `+65 ${formData.mobile.trim()}`,
@@ -207,7 +219,17 @@ export default function ApplyMembership() {
           },
           medical_details: formData.medicalDetails.trim(),
         }, retryKey.current)
+        // The application now has a student record, so the photo can become their profile photo.
+        // This is best-effort: a failure here must never block the payment.
+        if (photoPath) {
+          try {
+            await saveStudentPhoto(user.id, photoPath)
+          } catch (photoError) {
+            console.warn('Could not attach the profile photo:', photoError)
+          }
+        }
         // The browser is now leaving for Stripe Checkout, so stay in the submitting state.
+        window.location.assign(checkoutUrl)
       } catch (error) {
         setErrorMsg(error instanceof Error ? error.message : 'Unable to start checkout. Please try again.')
         setIsSubmitting(false)
@@ -222,7 +244,18 @@ export default function ApplyMembership() {
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (file) setFormData({ ...formData, photoName: file.name })
+    if (!file) return
+    const problem = studentPhotoError(file)
+    if (problem) {
+      setErrorMsg(problem)
+      setPhotoFile(null)
+      setFormData({ ...formData, photoName: '' })
+      e.target.value = ''
+      return
+    }
+    setErrorMsg('')
+    setPhotoFile(file)
+    setFormData({ ...formData, photoName: file.name })
   }
 
   const formatPhone = (value: string) => {
@@ -363,7 +396,7 @@ export default function ApplyMembership() {
                     {formData.photoName && <p className="text-xs text-green-600 dark:text-green-400 font-bold mt-1">Selected: {formData.photoName}</p>}
                     {!formData.photoName && <p className="text-[10px] sm:text-xs text-[#e62128] dark:text-red-400 font-medium mt-1">Profile photo is required to continue.</p>}
                   </div>
-                  <input type="file" className="hidden" accept="image/*" onChange={handlePhotoUpload} required aria-required="true" />
+                  <input type="file" className="hidden" accept="image/jpeg,image/png,image/webp" onChange={handlePhotoUpload} required aria-required="true" />
                 </label>
                 <p className="text-xs text-gray-500 flex items-center gap-1 mt-1">
                   <Info className="w-3 h-3" /> Please bring 2 physical photos to your Principal Dojo for your membership booklet.
