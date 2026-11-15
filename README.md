@@ -428,6 +428,21 @@ use Stripe's **Resend** event action after fixing the webhook; do not ask the
 student to purchase again. Run `node --test tests/credit-checkout-db.test.mjs`
 and the function tests before deployment.
 
+Membership payment confirmations and credit purchase receipts are sent
+automatically by the verified Stripe webhook through EmailJS. Apply
+`20261115120000_student_email_sends.sql` before deploying `stripe-webhook` and
+`send-membership-email`. They use the existing `EMAILJS_SERVICE_ID`,
+`EMAILJS_PUBLIC_KEY`, `EMAILJS_EDITABLE_TEMPLATE_ID` (and optional
+`EMAILJS_PRIVATE_KEY`) with To `suroul29@gmail.com`, the student's address in
+BCC, and dynamic `email_subject`/`email_body`. No browser or administrator send
+action is required. `student_email_sends` reserves each message before sending;
+accepted, failed, and uncertain (pending) sends are never automatically retried
+because EmailJS may have accepted a request whose response was lost. Check the
+send record and provider history before any manual replay. The migration also
+marks already-paid membership and credit checkouts as `legacy` so old Stripe
+events cannot trigger new EmailJS messages. The existing
+administrator attendance notice and class booking email flows are unchanged.
+
 Create a **new** EmailJS template (keep the old one unchanged) with To
 `{{to_email}}`, BCC `{{bcc_emails}}`, Subject `{{email_subject}}`, and the body:
 

@@ -3,6 +3,7 @@ import { adminClient } from '../_shared/grading.ts'
 import { resolveCreditPass } from '../_shared/credit-passes.ts'
 import { sendMembershipPaidEmail } from '../send-membership-email/handler.ts'
 import { confirmGradingPreview } from '../_shared/grading-drafts.ts'
+import { sendCreditReceipt } from '../_shared/credit-receipt.ts'
 
 export async function handleRequest(request: Request): Promise<Response> {
   if (request.method !== 'POST') {
@@ -165,6 +166,12 @@ export async function handleRequest(request: Request): Promise<Response> {
           })
           if (error) throw error
           console.log(`Credit purchase finalized (${session.id})`)
+          // An email outage must not undo a completed purchase or trigger a payment retry.
+          try {
+            await sendCreditReceipt(session.id)
+          } catch {
+            console.error('Credit purchase receipt could not be sent.')
+          }
           return Response.json({ received: true })
         }
 

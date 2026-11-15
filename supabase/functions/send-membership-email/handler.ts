@@ -1,5 +1,5 @@
 import { adminClient, authenticate, gradingHeaders } from '../_shared/grading.ts'
-import { requireEnv } from '../_shared/stripe.ts'
+import { sendStudentEmail } from '../_shared/student-emailjs.ts'
 
 type Member = {
   id: string
@@ -27,17 +27,7 @@ const defaults: Dependencies = {
     if (error) throw new Error('Membership lookup failed.')
     return data
   },
-  async send(message, key) {
-    // Loaded on first send so importing this module (e.g. from the webhook) needs no provider package.
-    const { Resend } = await import('npm:resend@6.38.0')
-    const resend = new Resend(requireEnv('RESEND_API_KEY'))
-    const { data, error } = await resend.emails.send({
-      from: requireEnv('MEMBERSHIP_EMAIL_FROM'),
-      ...message,
-    }, { idempotencyKey: key })
-    if (error || !data?.id) throw new Error('Email provider rejected the request.')
-    return data.id
-  },
+  send: sendStudentEmail,
 }
 
 function escapeHtml(value: string) {
@@ -94,7 +84,7 @@ export function membershipPaidMessage(member: Member): Message {
   }
 }
 
-/** Called by the verified Stripe webhook after finalize_membership_checkout. Retries reuse the idempotency key. */
+/** Called by the verified Stripe webhook after finalize_membership_checkout. Retries reuse the send key. */
 export async function sendMembershipPaidEmail(studentId: string, dependencies: Pick<Dependencies, 'send'> = defaults) {
   const { data: member, error } = await adminClient().from('students')
     .select('id, email, first_name, last_name, member_no').eq('id', studentId).maybeSingle<Member>()
