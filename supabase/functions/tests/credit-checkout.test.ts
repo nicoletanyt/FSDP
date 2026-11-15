@@ -148,6 +148,7 @@ Deno.test('verified credit webhook grants the pass once and rejects amount misma
     STRIPE_WEBHOOK_SECRET: 'whsec_unit_test_only',
     SUPABASE_URL: 'https://example.supabase.co',
     SUPABASE_SERVICE_ROLE_KEY: 'unit_test_service_role',
+    EMAILJS_SERVICE_ID: 'service_test', EMAILJS_EDITABLE_TEMPLATE_ID: 'template_test', EMAILJS_PUBLIC_KEY: 'public_test',
   }
   const original = new Map(Object.keys(environment).map((name) => [name, Deno.env.get(name)]))
   const originalFetch = globalThis.fetch
@@ -155,6 +156,8 @@ Deno.test('verified credit webhook grants the pass once and rejects amount misma
 
   let finalized = 0
   let amount = 13500
+  let receiptEmails = 0
+  const reserved = new Set<string>()
   globalThis.fetch = async (input, init) => {
     const request = new Request(input, init)
     const url = new URL(request.url)
@@ -197,6 +200,27 @@ Deno.test('verified credit webhook grants the pass once and rejects amount misma
       })
       return Response.json(null)
     }
+    if (url.pathname === '/rest/v1/credit_purchases') return Response.json([{
+      stripe_session_id: 'cs_test_credit', user_id: userId, pass_title: '10 Session Pass', credits: 10,
+      unlimited: false, amount_cents: 13500, currency: 'sgd', created_at: '2026-11-15T00:00:00Z',
+    }])
+    if (url.pathname === '/rest/v1/users') return Response.json([{ email: 'buyer@example.test', first_name: 'Ari', last_name: 'Lee' }])
+    if (url.pathname === '/rest/v1/credit_accounts') return Response.json([{ credits: 20, unlimited: false }])
+    if (url.pathname === '/rest/v1/student_email_sends' && request.method === 'POST') {
+      const { send_key } = await request.json()
+      if (reserved.has(send_key)) return Response.json([])
+      reserved.add(send_key)
+      return Response.json([{ send_key }])
+    }
+    if (url.pathname === '/rest/v1/student_email_sends' && request.method === 'PATCH') return new Response(null, { status: 204 })
+    if (url.hostname === 'api.emailjs.com') {
+      const payload = await request.json()
+      assert.equal(payload.template_params.to_email, 'suroul29@gmail.com')
+      assert.equal(payload.template_params.bcc_emails, 'buyer@example.test')
+      assert.match(payload.template_params.email_body, /S\$135\.00/)
+      receiptEmails++
+      return new Response('OK')
+    }
 
     throw new Error(`Unexpected external request: ${request.url}`)
   }
@@ -238,6 +262,7 @@ Deno.test('verified credit webhook grants the pass once and rejects amount misma
     assert.equal((await webhook(await signedEvent())).status, 200)
     assert.equal((await webhook(await signedEvent())).status, 200)
     assert.equal(finalized, 2) // The purchase row deduplicates grants in the database.
+    assert.equal(receiptEmails, 1)
   } finally {
     globalThis.fetch = originalFetch
     for (const [name, value] of original) {
