@@ -110,7 +110,7 @@ export default function MobileCalendarTimeline({
             className="pt-4"
         >
             {error && (
-                <p role="alert" className="mb-3 text-[14px] text-destructive">
+                <p role="alert" className="mb-3 text-[14px] text-destructive max-md:text-[1rem]">
                     {error}
                 </p>
             )}
@@ -120,7 +120,7 @@ export default function MobileCalendarTimeline({
                     {days.map(({ day }) => (
                         <h3
                             key={dateKey(day)}
-                            className="text-center text-[13px] font-semibold"
+                            className="text-center text-[13px] font-semibold max-md:text-cal-lg"
                             aria-label={day.toLocaleDateString("en-GB", {
                                 weekday: "long",
                                 day: "numeric",
@@ -147,7 +147,7 @@ export default function MobileCalendarTimeline({
             >
                 <div
                     aria-hidden="true"
-                    className="relative text-[11px] tabular-nums text-muted-foreground"
+                    className="relative text-[11px] tabular-nums text-muted-foreground max-md:text-cal"
                 >
                     {Array.from(
                         { length: (end - start) / 60 + 1 },
@@ -253,14 +253,14 @@ export default function MobileCalendarTimeline({
                                     width: `calc(${100 / lanes}% - 8px)`,
                                 }}
                             >
-                                <span className="w-full text-[14px] leading-tight font-semibold [overflow-wrap:anywhere]">
+                                <span className="w-full text-[14px] leading-tight font-semibold max-md:text-cal-lg [overflow-wrap:anywhere]">
                                     {item.event?.name ?? "Available"}
                                 </span>
-                                <span className="mt-1 text-[11px] leading-tight">
+                                <span className="mt-1 text-[11px] leading-tight max-md:text-cal">
                                     {formatTime(item.startTime)} – {formatTime(item.endTime)}
                                 </span>
                                 {item.event && (
-                                    <span className="mt-1 truncate text-[12px] opacity-75">
+                                    <span className="mt-1 truncate text-[12px] opacity-75 max-md:text-cal">
                                         {item.event.dojo}
                                     </span>
                                 )}

@@ -7,7 +7,7 @@ export default function CountBadge({ count, className }: { count: number; classN
     <span
       aria-hidden="true"
       className={cn(
-        'directory-filter-count flex size-5 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground',
+        'directory-filter-count flex size-5 shrink-0 max-md:h-6 max-md:min-w-6 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground',
         label.length > 1 && 'w-auto min-w-5 px-1',
         className,
       )}

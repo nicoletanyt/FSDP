@@ -152,7 +152,7 @@ export default function StudentCredits() {
               50% student discount applied
             </StatusBadge>
           )}
-          <Link to="/apply-membership" className="text-muted-foreground underline-offset-4 hover:underline">
+          <Link to="/apply-membership" className="inline-flex min-h-11 items-center rounded-sm text-muted-foreground underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring lg:min-h-0">
             Change membership type
           </Link>
       </div>

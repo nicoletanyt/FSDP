@@ -112,7 +112,7 @@ export default function MobileNavigation({
                         className="size-8 shrink-0 object-contain"
                     />
                     <span className="min-w-0 leading-tight">
-                        <span className="block text-[14px] font-semibold">
+                        <span className="block text-[14px] font-semibold max-md:text-[1rem]">
                             <span className="text-primary">Aikido</span>{" "}
                             <span className="whitespace-nowrap text-brand-red-ink">
                                 Shinju-Kai
@@ -131,7 +131,7 @@ export default function MobileNavigation({
                         render={
                             <Button
                                 variant="outline"
-                                className="h-11 gap-2 px-3 text-[14px]"
+                                className="h-11 gap-2 px-3 text-[14px] max-md:text-[1rem]"
                             />
                         }
                     >
@@ -153,11 +153,11 @@ export default function MobileNavigation({
                                 <div className="min-w-0 space-y-1 [overflow-wrap:anywhere]">
                                     <p className="text-[16px] font-semibold">{name}</p>
                                     {profile?.email && (
-                                        <p className="text-[13px] text-muted-foreground">
+                                        <p className="text-[13px] text-muted-foreground max-md:text-[1rem]">
                                             {profile.email}
                                         </p>
                                     )}
-                                    <p className="text-[13px] text-muted-foreground">{role}</p>
+                                    <p className="text-[13px] text-muted-foreground max-md:text-[1rem]">{role}</p>
                                 </div>
                             </div>
                             {loading ? (
@@ -174,7 +174,7 @@ export default function MobileNavigation({
                                     </nav>
                                     {accountLinks && accountLinks.length > 0 && (
                                         <nav aria-labelledby="mobile-account-heading" className="grid gap-2 border-t pt-4">
-                                            <h2 id="mobile-account-heading" className="px-3 text-[13px] font-medium text-muted-foreground">
+                                            <h2 id="mobile-account-heading" className="px-3 text-[13px] font-medium text-muted-foreground max-md:text-[1rem]">
                                                 Account
                                             </h2>
                                             {accountLinks.map((link) => (
@@ -191,7 +191,7 @@ export default function MobileNavigation({
                         </div>
                         {!accountLinks?.length && (
                             <div className="flex shrink-0 items-center justify-between border-t pt-4">
-                                <span className="text-[14px]">Appearance</span>
+                                <span className="text-[14px] max-md:text-[1rem]">Appearance</span>
                                 <ThemeToggle />
                             </div>
                         )}

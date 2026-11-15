@@ -44,7 +44,7 @@ function Agenda({ events, day, selectedSessionId, onToggleSession }: {
           <button type="button" aria-pressed={selectedSessionId === event.id} onClick={() => onToggleSession(event)}
             aria-label={`${event.name}, ${fullDate(day)}, ${formatTime(event.startTime)} to ${formatTime(event.endTime)}. View details`}
             className="flex min-h-18 w-full items-stretch gap-3 rounded-md py-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring">
-            <span className="w-18 shrink-0 text-[13px] leading-5 tabular-nums text-muted-foreground">
+            <span className="w-18 shrink-0 whitespace-nowrap text-[13px] leading-5 tabular-nums max-md:w-20 max-md:text-[1rem] max-md:leading-6 text-muted-foreground">
               <span className="block">{formatTime(event.startTime)}</span>
               <span className="block opacity-70">{formatTime(event.endTime)}</span>
             </span>
@@ -54,7 +54,7 @@ function Agenda({ events, day, selectedSessionId, onToggleSession }: {
                 {needsCover(event) && <TriangleAlert aria-hidden="true" className="size-4 shrink-0 text-red-600 dark:text-red-400" />}
                 {event.name}
               </span>
-              <span className="block text-[13px] leading-5 text-muted-foreground [overflow-wrap:anywhere]">
+              <span className="block text-[13px] leading-5 text-muted-foreground max-md:text-[1rem] max-md:leading-6 [overflow-wrap:anywhere]">
                 {[event.centreName, event.instructorName !== 'Unassigned' ? event.instructorName : null,
                   studentCount(event) > 0 ? `${studentCount(event)} ${studentCount(event) === 1 ? 'student' : 'students'}` : null]
                   .filter(Boolean).join(' · ')}
@@ -79,7 +79,7 @@ function MonthDots({ date, today, events, onSelectDate }: {
   return (
     <div role="grid" aria-label="Month" className="grid grid-cols-7 gap-y-1 py-2">
       {weekDates(date).map(day => (
-        <span key={day.getDay()} role="columnheader" className="py-1 text-center text-[11px] font-medium text-muted-foreground">
+        <span key={day.getDay()} role="columnheader" className="py-1 text-center text-[11px] font-medium max-md:text-cal text-muted-foreground">
           {day.toLocaleDateString('en-GB', { weekday: 'short' }).slice(0, 2)}
         </span>
       ))}
@@ -146,7 +146,7 @@ export default function MobileAdminCalendar({
         ? <MonthDots date={date} today={today} events={events} onSelectDate={onSelectDate} />
         : <WeekStrip date={date} today={today} onSelectDate={onSelectDate} />}
       {mode === 'month' && (
-        <h2 aria-live="polite" className="py-3 text-[15px] font-semibold">
+        <h2 aria-live="polite" className="py-3 text-[15px] font-semibold max-md:text-[1rem]">
           {date.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}
         </h2>
       )}
@@ -163,7 +163,7 @@ export default function MobileAdminCalendar({
               const count = eventsOn(events, day).length
               return (
                 <section key={dateKey(day)}>
-                  <h3 className={cn('sticky top-[var(--mobile-site-nav-height)] z-10 flex items-baseline justify-between border-b border-border/50 bg-background py-2 text-[14px] font-semibold',
+                  <h3 className={cn('sticky top-[var(--mobile-site-nav-height)] z-10 flex items-baseline justify-between border-b border-border/50 bg-background py-2 text-[14px] font-semibold max-md:text-[1rem]',
                     dateKey(day) === dateKey(today) && 'text-brand-red-ink')}>
                     <span>{day.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'long' })}</span>
                     <span className="text-xs font-normal text-muted-foreground">{count === 1 ? '1 class' : `${count} classes`}</span>

@@ -131,7 +131,7 @@ function MembershipDetails({ profile }: { profile: Profile }) {
       <p className={`text-sm ${standing === "Active" ? "text-muted-foreground" : "text-brand-red-ink"}`}>
         {copy.note}
       </p>
-      <dl className="grid gap-3">
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
         <div>
           <dt className="text-xs text-muted-foreground">Status</dt>
           <dd className="font-semibold">{copy.chip}</dd>
@@ -189,7 +189,7 @@ export default function StudentProfile() {
             {/* Fixed card column: an `auto` column shrank the card to its content and crushed it. */}
             <section
               aria-label="Membership"
-              className="mt-6 grid items-start gap-4 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)]"
+              className="mt-6 grid items-start gap-4 md:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)]"
             >
               <MembershipCard profile={profile} />
               <MembershipDetails profile={profile} />

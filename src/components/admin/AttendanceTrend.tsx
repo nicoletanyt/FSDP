@@ -11,6 +11,7 @@ import {
 } from 'recharts'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from '@/components/ui/popover'
+import { useMediaQuery } from '@/hooks/use-media-query'
 import type { WeeklyTrendPoint } from '@/lib/admin/types'
 
 type Metric = 'rate' | 'sessions'
@@ -20,6 +21,9 @@ export default function AttendanceTrend({ data, compact = false }: { data: Weekl
   const [weeks, setWeeks] = useState<4 | 8 | 12>(8)
   const [showTable, setShowTable] = useState(false)
   const gradientId = `attendance-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`
+  // Phones keep chart text at the 16px minimum; Recharts thins ticks that would overlap.
+  const phone = useMediaQuery('(max-width: 47.999rem)')
+  const chartFont = phone ? 16 : 11
   const metricLabel = metric === 'rate' ? 'Attendance rate' : 'Sessions held'
   const visibleData = data.slice(-weeks)
 
@@ -112,14 +116,14 @@ export default function AttendanceTrend({ data, compact = false }: { data: Weekl
                 dataKey="label"
                 tickLine={false}
                 axisLine={false}
-                tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }}
+                tick={{ fill: 'var(--muted-foreground)', fontSize: chartFont }}
                 tickMargin={8}
               />
               <YAxis
                 domain={metric === 'rate' ? [0, 100] : [0, 'auto']}
                 tickLine={false}
                 axisLine={false}
-                tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }}
+                tick={{ fill: 'var(--muted-foreground)', fontSize: chartFont }}
                 tickFormatter={(value: number) =>
                   metric === 'rate' ? `${value}%` : `${value}`
                 }
@@ -131,7 +135,7 @@ export default function AttendanceTrend({ data, compact = false }: { data: Weekl
                   border: '1px solid var(--border)',
                   borderRadius: 10,
                   color: 'var(--popover-foreground)',
-                  fontSize: 12,
+                  fontSize: phone ? 16 : 12,
                 }}
                 labelStyle={{ color: 'var(--muted-foreground)' }}
               />

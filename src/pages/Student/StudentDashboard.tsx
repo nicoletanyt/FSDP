@@ -175,7 +175,7 @@ function MemberDashboardView({ firstName, summary }: { firstName: string; summar
       {/* Overview */}
       <section aria-label="Overview" className="order-1 grid gap-4 sm:order-none xl:grid-cols-2">
         {/* Next class */}
-        <Card id="check-in" className="min-w-0 scroll-mt-24 gap-4 p-5">
+        <Card id="check-in" className="min-w-0 scroll-mt-24 gap-4 p-4">
           <h2 className="text-lg font-semibold">Your next class</h2>
           {nextClass ? (
             <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_11rem] sm:items-end xl:grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_11rem]">
@@ -212,7 +212,7 @@ function MemberDashboardView({ firstName, summary }: { firstName: string; summar
         </Card>
 
         {/* Belt rank */}
-        <Card className="min-w-0 gap-5 p-5">
+        <Card className="min-w-0 gap-4 p-4">
           <div className="flex items-center gap-4">
             <div className="grid size-16 shrink-0 place-items-center rounded-2xl bg-primary/10">
               <BeltIcon hex={beltHexFor(belt?.colour ?? null)} />

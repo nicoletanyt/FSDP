@@ -622,7 +622,7 @@ export default function StudentClasses() {
             ) : (
                 <section
                     aria-label="Classes"
-                    className="grid gap-4 lg:auto-rows-fr lg:grid-cols-2"
+                    className="grid gap-4 md:auto-rows-fr md:grid-cols-2"
                 >
                     {groups.map(([type, sessions]) => {
                         const bookingParams = withoutFilters(params, ["class"]);
@@ -661,7 +661,7 @@ export default function StudentClasses() {
                         <h2 id="other-class-types" className="text-lg font-semibold">
                             Other class types
                         </h2>
-                        <div className="grid gap-4 lg:grid-cols-2">
+                        <div className="grid gap-4 md:grid-cols-2">
                             {unscheduled.map((type) => (
                                 <Card key={type.id} className="gap-2">
                                     <CardHeader>
@@ -928,38 +928,38 @@ function ClassBooking({
                 <PageHeader
                     title={type || "Choose a class"}
                     description={classSessions[0]?.level || undefined}
+                    actions={(
+                        <FilterPopover
+                                    title="Filter sessions"
+                                    activeCount={
+                                        ["q", "centre", "day", "period", "instructor"].filter((key) =>
+                                            params.has(key),
+                                        ).length
+                                    }
+                                    onReset={() =>
+                                        changeFilters(
+                                            withoutFilters(params, [
+                                                "q",
+                                                "centre",
+                                                "day",
+                                                "period",
+                                                "instructor",
+                                            ]),
+                                        )
+                                    }
+                                >
+                                    <SessionFilterFields
+                                        sessions={classSessions}
+                                        params={params}
+                                        showType={false}
+                                        disabled={busy}
+                                        onChange={(name, value) =>
+                                            changeFilters(withFilter(params, name, value))
+                                        }
+                                    />
+                                </FilterPopover>
+                    )}
                 />
-            </div>
-            <div className="flex flex-wrap items-center justify-end gap-3">
-                <FilterPopover
-                    title="Filter sessions"
-                    activeCount={
-                        ["q", "centre", "day", "period", "instructor"].filter((key) =>
-                            params.has(key),
-                        ).length
-                    }
-                    onReset={() =>
-                        changeFilters(
-                            withoutFilters(params, [
-                                "q",
-                                "centre",
-                                "day",
-                                "period",
-                                "instructor",
-                            ]),
-                        )
-                    }
-                >
-                    <SessionFilterFields
-                        sessions={classSessions}
-                        params={params}
-                        showType={false}
-                        disabled={busy}
-                        onChange={(name, value) =>
-                            changeFilters(withFilter(params, name, value))
-                        }
-                    />
-                </FilterPopover>
             </div>
             {!schedule.active && <BookingEligibility linked={schedule.linked} />}
             {current ? (

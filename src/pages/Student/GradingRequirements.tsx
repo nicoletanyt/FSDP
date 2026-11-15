@@ -105,10 +105,11 @@ export default function GradingRequirements() {
       />
 
       {/* Key facts */}
-      <section aria-label="Key requirements" className="mt-6 grid gap-3 sm:grid-cols-3">
+      <section aria-label="Key requirements" className="mt-6 grid gap-2 sm:grid-cols-3 sm:gap-3">
         {keyFacts.map((fact) => (
-          <Card key={fact.value} className="gap-0.5 p-4">
-            <p className="text-2xl font-semibold tracking-tight text-primary">{fact.value}</p>
+          // Phones: one slim row per fact; wider screens: three cards.
+          <Card key={fact.value} className="flex-row items-baseline gap-2 px-4 py-3 sm:flex-col sm:items-start sm:gap-0.5 sm:p-4">
+            <p className="shrink-0 text-lg font-semibold tracking-tight text-primary sm:text-2xl">{fact.value}</p>
             <p className="text-sm text-muted-foreground">{fact.label}</p>
           </Card>
         ))}
@@ -182,14 +183,14 @@ export default function GradingRequirements() {
               )}
             </div>
           </div>
-          <Table className="min-w-[22rem]">
+          <Table>
             <TableCaption className="sr-only">
               {level === 'kyu' ? `Kyu grades for ${track === 'adult' ? 'adults' : 'children'}` : 'Dan grades'}
             </TableCaption>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 <TableHead className="pl-2">Grade</TableHead>
-                <TableHead>Since last grading</TableHead>
+                <TableHead className="whitespace-normal">Since last grading</TableHead>
                 <TableHead className="pr-2 text-right">Fee</TableHead>
               </TableRow>
             </TableHeader>
@@ -199,11 +200,15 @@ export default function GradingRequirements() {
                 return (
                 <TableRow key={`${row.grade}-${row.belt}`} className={cn(next && 'bg-primary/5')}>
                   <TableHead scope="row" className="h-auto py-2 pl-2 font-semibold whitespace-normal">
-                    {row.grade}
-                    {row.belt && <span className="ml-1.5 font-normal text-muted-foreground">{row.belt}</span>}
-                    {next && <StatusBadge tone="info" dot={false} className="ml-2 align-middle">Your next grade</StatusBadge>}
+                    <span className="whitespace-nowrap">{row.grade}</span>
+                    {row.belt && <span className="block font-normal text-muted-foreground sm:ml-1.5 sm:inline">{row.belt}</span>}
+                    {next && <>
+                      {/* Phones rely on the row highlight; the badge would squeeze the other columns. */}
+                      <span className="sr-only sm:hidden">, your next grade</span>
+                      <span className="hidden sm:inline"><StatusBadge tone="info" dot={false} className="ml-2 align-middle">Your next grade</StatusBadge></span>
+                    </>}
                   </TableHead>
-                  <TableCell>{row.needs}</TableCell>
+                  <TableCell className="whitespace-normal">{row.needs}</TableCell>
                   <TableCell className="pr-2 text-right tabular-nums">{money.format(row.fee)}</TableCell>
                 </TableRow>
                 )

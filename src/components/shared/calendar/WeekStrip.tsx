@@ -69,7 +69,7 @@ export default function WeekStrip({
                                 aria-current={isToday ? "date" : undefined}
                                 className="flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             >
-                                <span className="text-[11px] font-medium text-muted-foreground">
+                                <span className="text-[11px] font-medium text-muted-foreground max-md:text-cal">
                                     {day
                                         .toLocaleDateString("en-GB", { weekday: "short" })
                                         .slice(0, 2)

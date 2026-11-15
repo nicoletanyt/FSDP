@@ -58,7 +58,7 @@ function DateButton({
       )}
     >
       <span className={cn(
-        'grid size-6 shrink-0 place-items-center rounded-full tabular-nums lg:size-7',
+        'grid size-6 shrink-0 place-items-center rounded-full tabular-nums max-md:size-8 lg:size-7',
         current && 'bg-primary font-semibold text-primary-foreground'
       )}>
         {day.getDate()}
@@ -85,7 +85,7 @@ export default function AttendanceCalendar({
       <section aria-label="Monthly attendance calendar" className="min-w-0 overflow-hidden rounded-xl border bg-border">
         <div className="grid grid-cols-7 border-b bg-card">
           {days.slice(0, 7).map(day => (
-            <span key={dateKey(day)} className="py-2 text-center text-xs font-medium text-muted-foreground">
+            <span key={dateKey(day)} className="py-2 text-center text-xs font-medium text-muted-foreground max-md:text-cal">
               {day.toLocaleDateString('en-SG', { weekday: 'short' })}
             </span>
           ))}
@@ -174,9 +174,9 @@ function AttendanceTimeline({
               </DateButton>
             </div>
           ))}
-          <div aria-hidden="true" className="relative text-right text-xs tabular-nums text-muted-foreground">
+          <div aria-hidden="true" className="relative text-right text-xs tabular-nums text-muted-foreground max-md:text-cal">
             {hours.map(hour => (
-              <span key={hour} className="absolute right-1 pt-1 text-[10px] whitespace-nowrap" style={{ top: (hour - start) * scale }}>
+              <span key={hour} className="absolute right-1 pt-1 text-[10px] whitespace-nowrap max-md:text-cal" style={{ top: (hour - start) * scale }}>
                 {formatTime(minutesTime(hour)).replace(':00', '')}
               </span>
             ))}
@@ -199,7 +199,7 @@ function AttendanceTimeline({
                   aria-pressed={selectedId === item.id}
                   onClick={() => onSelectEntry(item.entry)}
                   className={cn(
-                    'absolute z-10 flex min-w-0 flex-col overflow-hidden rounded-md border px-1.5 py-1 text-left text-xs outline-none hover:brightness-95 focus-visible:z-20 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+                    'absolute z-10 flex min-w-0 flex-col overflow-hidden rounded-md border px-1.5 py-1 text-left text-xs outline-none max-md:text-cal-lg hover:brightness-95 focus-visible:z-20 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
                     attendanceClassStyle(item.classType ?? item.title),
                     selectedId === item.id && 'ring-2 ring-inset ring-current'
                   )}
@@ -211,8 +211,8 @@ function AttendanceTimeline({
                   }}
                 >
                   <span className="w-full truncate font-semibold">{item.title}</span>
-                  <span className="w-full truncate text-[10px]">{formatTime(item.startTime)} – {formatTime(item.endTime)}</span>
-                  <span className="w-full truncate text-[10px] opacity-85">{item.centre}</span>
+                  <span className="w-full truncate text-[10px] max-md:text-cal">{formatTime(item.startTime)} – {formatTime(item.endTime)}</span>
+                  <span className="w-full truncate text-[10px] opacity-85 max-md:text-cal">{item.centre}</span>
                 </button>
               ))}
             </div>

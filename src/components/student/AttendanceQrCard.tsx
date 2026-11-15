@@ -129,10 +129,10 @@ export default function AttendanceQrCard() {
             type="button"
             disabled={!usable}
             className={cn(
-              'grid min-h-40 w-full place-items-center rounded-xl border border-dashed p-5 text-center transition focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed',
+              'grid w-full place-items-center rounded-xl border border-dashed p-5 text-center transition focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed',
               usable
-                ? 'border-primary/50 bg-primary/5 text-primary hover:bg-primary/10'
-                : 'border-border bg-muted/50 text-muted-foreground',
+                ? 'min-h-40 border-primary/50 bg-primary/5 text-primary hover:bg-primary/10'
+                : 'min-h-24 border-border bg-muted/50 text-muted-foreground',
             )}
           />
         }

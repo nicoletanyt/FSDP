@@ -129,7 +129,7 @@ export function ExaminerPanel({ panel, viewerIsChief = false, label, photos = {}
           {panel.map(member => (
             <li key={member.instructorId} data-examiner
               className="inline-flex max-w-full items-center gap-2 rounded-full border bg-background py-1 pr-3 pl-1">
-              <InstructorAvatar interactive={false} avatarClassName="size-7" fallbackClassName="text-3xs"
+              <InstructorAvatar interactive={false} avatarClassName="size-7 max-md:size-9" fallbackClassName="text-3xs"
                 profile={{ id: member.instructorId, name: member.name, role: 'Examiner', avatarUrl: photos[member.instructorId] }} />
               {member.isChief && (
                 <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">

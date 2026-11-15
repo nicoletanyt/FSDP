@@ -213,7 +213,7 @@ function GradingApplication() {
       )}
       {loading && <p role="status" className="sr-only">Loading your grading opportunities…</p>}
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-[minmax(0,1fr)_17rem] lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           <Card>
             <CardHeader>

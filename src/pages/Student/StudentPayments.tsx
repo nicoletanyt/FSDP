@@ -81,8 +81,25 @@ export default function StudentPayments() {
             </FilterPopover>
           </div>
 
-          <Card className="p-0">
-            <Table className="min-w-[40rem]">
+          {/* Phones: one row per payment, so amount and status are never scrolled off. */}
+          <Card className="py-0 md:hidden">
+            <ul aria-label="Payment history" className="divide-y">
+              {rows.map((p) => (
+                <li key={p.id} className="flex items-start justify-between gap-3 px-4 py-3">
+                  <div className="min-w-0">
+                    <p className="font-medium [overflow-wrap:anywhere]">{p.description}</p>
+                    <p className="text-xs text-muted-foreground">{p.item} · {formatDate(p.date)} · {p.method}</p>
+                  </div>
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    <span className="font-semibold tabular-nums">{money.format(p.amount)}</span>
+                    <PaymentStatusBadge status={p.status} />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </Card>
+          <Card className="hidden p-0 md:flex">
+            <Table>
               <TableCaption className="sr-only">Payment history</TableCaption>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
