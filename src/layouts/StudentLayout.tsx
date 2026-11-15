@@ -13,7 +13,12 @@ export default function StudentLayout() {
   const creditAccount = useStudentCredits(profile?.id, sessionId)
   // Booking RPCs debit/refund batches in the same transaction as the class seat.
   // Never simulate a separate browser deduction on top of that committed debit.
-  const creditContext = { credits: creditAccount.credits, creditAccount }
+  const creditContext = {
+    credits: creditAccount.credits,
+    creditAccount,
+    creditError: Boolean(creditAccount.error),
+    refreshCredits: async () => creditAccount.retry(),
+  }
   if (!['/timetable', '/classes', '/classes/choose'].some(path => matchPath(path, pathname))) {
     return <Outlet context={creditContext} />
   }
@@ -23,6 +28,8 @@ export default function StudentLayout() {
 type CreditsContext = {
   credits: number
   creditAccount: ReturnType<typeof useStudentCredits>
+  creditError: boolean
+  refreshCredits: () => Promise<unknown>
 }
 
 function StudentScheduleOutlet(creditContext: CreditsContext) {
