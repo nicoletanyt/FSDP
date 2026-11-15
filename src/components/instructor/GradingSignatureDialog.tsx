@@ -101,7 +101,7 @@ export default function GradingSignatureDialog({ open, onOpenChange, name, pendi
     const [signature, setSignature] = useState<GradingSignature | null>(null);
     useEffect(() => { if (!open) setSignature(null); }, [open]);
     return <Dialog open={open} onOpenChange={(next) => { if (!pending) onOpenChange(next); }}>
-        <DialogContent className="sm:max-w-lg" showCloseButton={!pending}>
+        <DialogContent showCloseButton={!pending}>
             <DialogHeader><DialogTitle>Sign and submit grading</DialogTitle><DialogDescription>Sign this version of your checklist. You can edit it later; updated submissions require a new signature. No final grades are assigned.</DialogDescription></DialogHeader>
             <div><p className="text-xs text-muted-foreground">Instructor</p><p className="mt-1 font-medium">{name}</p></div>
             <SignaturePad onChange={setSignature} disabled={pending || retrying} />

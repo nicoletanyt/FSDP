@@ -1,3 +1,5 @@
+import { useWeekSpan } from "@/hooks/use-week-span";
+import { visibleWeekDays } from "@/lib/calendar-window";
 import { useLayoutEffect, useRef, useState } from "react";
 import type { PointerEvent } from "react";
 import { CalendarCheck, MapPin } from "lucide-react";
@@ -19,6 +21,7 @@ import type {
     AvailabilitySlot,
 } from "@/lib/instructor-availability";
 import {
+    addDays,
     dateKey,
     getEventStyle,
     formatTime,
@@ -75,7 +78,8 @@ export default function CalendarTimeline({
         { length: (timelineEnd - timelineStart) / 30 },
         (_, index) => timelineStart + index * 30,
     );
-    const days = view === "day" || !isDesktop ? [date] : weekDates(date);
+    const span = useWeekSpan();
+    const days = view === "day" || !isDesktop ? [date] : visibleWeekDays(date, now, weekDates(date), span, addDays);
     const [drag, setDrag] = useState<DragRange | null>(null);
     const dragRef = useRef<DragRange | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -195,14 +199,14 @@ export default function CalendarTimeline({
                 <div
                     className="grid"
                     style={{
-                        minWidth: view === "week" && isDesktop ? 910 : undefined,
+                        minWidth: view === "week" && isDesktop && span === 7 ? 910 : undefined,
                         gridTemplateColumns: `${isDay ? 56 : 64}px repeat(${days.length}, minmax(0, 1fr))`,
                     }}
                 >
                     {!isDay && (
                         <div
                             ref={headerRef}
-                            className="sticky top-0 left-0 z-30 border-r border-b bg-card p-2 text-[10px] text-muted-foreground"
+                            className="sticky top-0 left-0 z-30 border-r border-b bg-card p-2 text-3xs text-muted-foreground"
                         />
                     )}
                     {!isDay &&
@@ -250,7 +254,7 @@ export default function CalendarTimeline({
                         ).map((minute) => (
                             <span
                                 key={minute}
-                                className="absolute right-2 text-[10px] text-muted-foreground tabular-nums"
+                                className="absolute right-2 text-3xs text-muted-foreground tabular-nums"
                                 style={{
                                     top: (minute - timelineStart) * pixelsPerMinute,
                                     transform:
@@ -437,7 +441,7 @@ export default function CalendarTimeline({
                                                     selectedId === item.id &&
                                                     "z-[15] ring-2 ring-primary ring-offset-2 ring-offset-card",
                                                     isDay &&
-                                                    "rounded-lg px-2.5 py-[3px] text-[12px] leading-tight",
+                                                    "rounded-lg px-2.5 py-[3px] text-2xs leading-tight",
                                                     isDay &&
                                                     !isClass &&
                                                     "bg-emerald-50/80 dark:bg-emerald-950/80",
@@ -469,12 +473,12 @@ export default function CalendarTimeline({
                                                         {isClass ? item.event.name : "Available"}
                                                     </span>
                                                 </span>
-                                                <span className="block text-[10px] leading-tight">
+                                                <span className="block text-3xs leading-tight">
                                                     {formatTime(item.startTime)} –{" "}
                                                     {formatTime(item.endTime)}
                                                 </span>
                                                 {isClass && isDay && (
-                                                    <span className="flex max-w-full items-center gap-1 text-[10px] leading-tight opacity-80">
+                                                    <span className="flex max-w-full items-center gap-1 text-3xs leading-tight opacity-80">
                                                         <MapPin
                                                             aria-hidden="true"
                                                             className="size-3 shrink-0"
@@ -483,7 +487,7 @@ export default function CalendarTimeline({
                                                     </span>
                                                 )}
                                                 {isClass && end - start >= 60 && !isDay && (
-                                                    <span className="mt-1 flex w-full items-center justify-between gap-2 text-[10px] opacity-80">
+                                                    <span className="mt-1 flex w-full items-center justify-between gap-2 text-3xs opacity-80">
                                                         <span className="min-w-0 truncate">
                                                             {item.event.dojo}
                                                         </span>

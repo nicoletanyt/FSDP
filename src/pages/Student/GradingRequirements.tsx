@@ -1,9 +1,17 @@
 import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
-import { ArrowLeft, Check, ChevronDown, ExternalLink } from 'lucide-react'
-import { buttonVariants } from '@/components/student/button'
+import { Check, ChevronDown, ExternalLink } from 'lucide-react'
+import BackLink from '@/components/shared/layout/BackLink'
+import { Segmented } from '@/components/shared/Segmented'
+import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import PageHeader from '@/components/shared/layout/PageHeader'
+import { buttonVariants } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { StatusBadge } from '@/components/shared/status/StatusBadge'
+import { useStudentDashboard } from '@/hooks/use-student-dashboard'
 import { money } from '@/lib/format'
+import { classPassAudience, resolveMembershipType } from '@/lib/membership'
+import { cn } from '@/lib/utils'
 
 // Static for now: the same content for every student account.
 // Source: Aikido Shinju-Kai Grading Standard Operating Procedures (September 2025).
@@ -61,30 +69,8 @@ const keyFacts = [
 
 const toSubmit = ['Proof of training sessions', 'Paid-up membership book', 'Grading fee']
 
-function Toggle<T extends string>({ label, value, options, onChange }: {
-  label: string
-  value: T
-  options: { value: T; label: string }[]
-  onChange: (value: T) => void
-}) {
-  return (
-    <div role="group" aria-label={label} className="flex w-fit gap-1 rounded-full bg-muted p-1">
-      {options.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          aria-pressed={value === option.value}
-          onClick={() => onChange(option.value)}
-          className={`rounded-full px-3.5 py-1 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 ${
-            value === option.value ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          {option.label}
-        </button>
-      ))}
-    </div>
-  )
-}
+// "Blue-Gold (5th Kyu)" from the database and "Blue Gold" + "5th Kyu" here compare equal.
+const normalise = (label: string | null | undefined) => (label ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
 
 function More({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
   return (
@@ -102,30 +88,27 @@ function More({ title, hint, children }: { title: string; hint?: string; childre
 }
 
 export default function GradingRequirements() {
-  const [track, setTrack] = useState<Track>('adult')
+  // Junior members start on the children's ladder; everyone can still switch.
+  const [track, setTrack] = useState<Track>(() => classPassAudience(resolveMembershipType()) === 'junior' ? 'children' : 'adult')
   const [level, setLevel] = useState<Level>('kyu')
+  // Best effort: non-members and unranked students simply see no highlight.
+  const nextGrade = normalise(useStudentDashboard().summary?.nextBelt?.label)
   const rows = level === 'kyu' ? kyu[track] : dan
 
   return (
-    <main className="w-full">
-      <Link to="/dashboard" className={buttonVariants({ variant: 'ghost', size: 'sm', className: '-ml-2 gap-1.5' })}>
-        <ArrowLeft className="size-4" aria-hidden="true" />
-        Dashboard
-      </Link>
+    <section className="w-full">
+      <BackLink to="/grading">Back to grading</BackLink>
 
-      <header className="mt-2 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-red-ink">Aikido Shinju-Kai</p>
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Grading requirements</h1>
-        </div>
-        <Link to="/grading" className={buttonVariants({ variant: 'outline' })}>View grading applications</Link>
-      </header>
+      <PageHeader
+        title="Grading requirements"
+        actions={<Link to="/grading" className={buttonVariants({ variant: 'outline' })}>View grading applications</Link>}
+      />
 
       {/* Key facts */}
       <section aria-label="Key requirements" className="mt-6 grid gap-3 sm:grid-cols-3">
         {keyFacts.map((fact) => (
-          <Card key={fact.value} className="gap-0.5 rounded-2xl p-4">
-            <p className="text-2xl font-bold tracking-tight text-primary">{fact.value}</p>
+          <Card key={fact.value} className="gap-0.5 p-4">
+            <p className="text-2xl font-semibold tracking-tight text-primary">{fact.value}</p>
             <p className="text-sm text-muted-foreground">{fact.label}</p>
           </Card>
         ))}
@@ -134,8 +117,8 @@ export default function GradingRequirements() {
       <div className="mt-4 grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
         <div className="grid gap-4">
           {/* What to submit */}
-          <Card className="gap-3 rounded-2xl p-5">
-            <h2 className="font-bold">Submit with your application</h2>
+          <Card className="gap-3 p-4">
+            <h2 className="font-semibold">Submit with your application</h2>
             <ul className="grid gap-2 text-sm">
               {toSubmit.map((item) => (
                 <li key={item} className="flex items-center gap-2.5">
@@ -150,7 +133,7 @@ export default function GradingRequirements() {
           </Card>
 
           {/* Everything else, folded */}
-          <Card className="gap-0 rounded-2xl px-5 py-1">
+          <Card className="gap-0 px-4 py-1">
             <More title="Weapons course" hint="2nd Kyu and above">
               <p>Complete a weapons course and test before grading. Dates are announced on WhatsApp.</p>
             </More>
@@ -187,44 +170,46 @@ export default function GradingRequirements() {
         </div>
 
         {/* Prerequisites and fees */}
-        <Card className="gap-3 rounded-2xl p-5">
+        <Card className="gap-3 p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="font-bold">Prerequisites and fees</h2>
+            <h2 className="font-semibold">Prerequisites and fees</h2>
             <div className="flex flex-wrap gap-2">
-              <Toggle label="Grade level" value={level} onChange={setLevel}
-                options={[{ value: 'kyu', label: 'Kyu' }, { value: 'dan', label: 'Dan' }]} />
+              <Segmented label="Grade level" value={level} onChange={setLevel}
+                options={[{ value: 'kyu', text: 'Kyu' }, { value: 'dan', text: 'Dan' }]} />
               {level === 'kyu' && (
-                <Toggle label="Grading track" value={track} onChange={setTrack}
-                  options={[{ value: 'adult', label: 'Adults' }, { value: 'children', label: 'Children' }]} />
+                <Segmented label="Grading track" value={track} onChange={setTrack}
+                  options={[{ value: 'adult', text: 'Adults' }, { value: 'children', text: 'Children' }]} />
               )}
             </div>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[22rem] text-left text-sm">
-              <caption className="sr-only">
-                {level === 'kyu' ? `Kyu grades for ${track === 'adult' ? 'adults' : 'children'}` : 'Dan grades'}
-              </caption>
-              <thead className="border-b text-muted-foreground">
-                <tr>
-                  <th scope="col" className="py-2 pr-3 font-medium">Grade</th>
-                  <th scope="col" className="py-2 pr-3 font-medium">Since last grading</th>
-                  <th scope="col" className="py-2 text-right font-medium">Fee</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr key={`${row.grade}-${row.belt}`} className="border-b last:border-0">
-                    <th scope="row" className="py-2 pr-3 text-left font-semibold">
-                      {row.grade}
-                      {row.belt && <span className="ml-1.5 font-normal text-muted-foreground">{row.belt}</span>}
-                    </th>
-                    <td className="py-2 pr-3">{row.needs}</td>
-                    <td className="py-2 text-right tabular-nums">{money.format(row.fee)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Table className="min-w-[22rem]">
+            <TableCaption className="sr-only">
+              {level === 'kyu' ? `Kyu grades for ${track === 'adult' ? 'adults' : 'children'}` : 'Dan grades'}
+            </TableCaption>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="pl-2">Grade</TableHead>
+                <TableHead>Since last grading</TableHead>
+                <TableHead className="pr-2 text-right">Fee</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((row) => {
+                const next = level === 'kyu' && Boolean(nextGrade) && normalise(`${row.belt} ${row.grade}`) === nextGrade
+                return (
+                <TableRow key={`${row.grade}-${row.belt}`} className={cn(next && 'bg-primary/5')}>
+                  <TableHead scope="row" className="h-auto py-2 pl-2 font-semibold whitespace-normal">
+                    {row.grade}
+                    {row.belt && <span className="ml-1.5 font-normal text-muted-foreground">{row.belt}</span>}
+                    {next && <StatusBadge tone="info" dot={false} className="ml-2 align-middle">Your next grade</StatusBadge>}
+                  </TableHead>
+                  <TableCell>{row.needs}</TableCell>
+                  <TableCell className="pr-2 text-right tabular-nums">{money.format(row.fee)}</TableCell>
+                </TableRow>
+                )
+              })}
+            </TableBody>
+          </Table>
           <p className="text-xs text-muted-foreground">mo = months of training. Fees in SGD.</p>
         </Card>
       </div>
@@ -238,6 +223,6 @@ export default function GradingRequirements() {
           <span className="sr-only">(opens in a new tab)</span>
         </a>. Rules may change.
       </p>
-    </main>
+    </section>
   )
 }

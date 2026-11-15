@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import GradeBadge from "@/components/instructor/DatabaseGradeBadge";
+import { DatabaseGradeBadge as GradeBadge } from "@/components/shared/grade/GradeBadge";
 import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
 import InstructorLoadingBoundary from "@/components/instructor/InstructorLoadingBoundary";
 import { useInstructorApi } from "@/lib/instructor/data-context";
@@ -14,6 +14,7 @@ import { useInstructorEditProtection } from "@/hooks/use-instructor-edit-protect
 import { instructorQueryKeys as queryKeys, instructorQueryTimes as queryTimes } from "@/lib/instructor/query-keys";
 import { assessmentKey, sessionCalendarHref, sessionDateLabel, sessionStudentHref } from "@/lib/instructor/session-reads";
 import type { AssessmentDetail } from "@/lib/instructor/types";
+import { useFeedback } from "@/hooks/use-feedback";
 import { useInstructorSessionSave } from "@/hooks/use-instructor-session-save";
 import { assessmentEditable, assessmentSnapshot } from "@/lib/instructor/session-writes";
 
@@ -23,13 +24,14 @@ function AssessmentForm({ detail }: { detail: AssessmentDetail }) {
     const [draft, setDraft] = useState(() => assessmentSnapshot(detail.record));
     const [expected, setExpected] = useState(() => assessmentSnapshot(detail.record));
     const [notice, setNotice] = useState("");
+    const { notify, feedbackDialog } = useFeedback();
     const canEdit = assessmentEditable(session.event);
     const locked = !canEdit || mutation.pending || Boolean(mutation.error);
     const dirty = draft.status !== expected.status || (draft.notes?.trim() || null) !== (expected.notes?.trim() || null);
     async function finish(data: Awaited<ReturnType<typeof mutation.retry>>) {
         if (!data || !mutation.isCurrent()) return;
         const value = assessmentSnapshot(data.record);
-        setExpected(value); setDraft(value); setNotice("Assessment saved.");
+        setExpected(value); setDraft(value); notify({ title: "Assessment saved", description: `${name}'s assessment has been recorded.` });
     }
     const name = [student.student.first_name, student.student.last_name].filter(Boolean).join(" ") || student.student.email;
     const track = session.grading?.track;
@@ -47,7 +49,7 @@ function AssessmentForm({ detail }: { detail: AssessmentDetail }) {
                 <p className="mb-2 text-xs text-muted-foreground">
                     Recorded assessment{!canEdit && " · Read-only"}
                 </p>
-                <h1 className="text-3xl font-semibold tracking-tight [overflow-wrap:anywhere]">
+                <h1 className="text-2xl font-semibold tracking-tight md:text-3xl [overflow-wrap:anywhere]">
                     Assess {name}
                 </h1>
                 <p className="mt-2 text-sm text-muted-foreground">
@@ -153,6 +155,7 @@ function AssessmentForm({ detail }: { detail: AssessmentDetail }) {
                     </form>}
                 </CardContent>
             </Card>
+            {feedbackDialog}
         </section>
     );
 }
@@ -177,7 +180,7 @@ function GradingAssessmentPage() {
                 <Link to="/instructor/calendar" className="text-sm underline">
                     Back to calendar
                 </Link>
-                <h1 className="text-2xl font-semibold">Assessment not found</h1>
+                <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Assessment not found</h1>
                 <p className="text-sm text-muted-foreground">
                     Open a candidate’s assessment from a grading session in the calendar.
                 </p>

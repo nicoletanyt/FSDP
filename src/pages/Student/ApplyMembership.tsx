@@ -1,9 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import { useSearchParams } from 'react-router'
+import { Check, ChevronDown, ChevronUp, Info, UploadCloud } from 'lucide-react'
+import { NativeSelect } from '@/components/admin/form-controls'
+import PageHeader from '@/components/shared/layout/PageHeader'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Textarea } from '@/components/ui/textarea'
+import { formatDate, money } from '@/lib/format'
 import { createMembershipCheckout } from '@/lib/stripe'
 import { saveStudentPhoto, studentPhotoError, uploadStudentPhoto } from '@/lib/student-photo'
 import { supabase } from '@/lib/supabase'
@@ -14,14 +21,50 @@ import {
   calculateAge,
   membershipLabel,
 } from '@/lib/membership'
-import { Check, ChevronDown, ChevronUp, UploadCloud, Info } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 const STEPS = [
-  { id: 1, title: 'Personal\nInfo' },
-  { id: 2, title: 'Training\nInfo' },
-  { id: 3, title: 'Emergency\n& Medical' },
-  { id: 4, title: 'Review &\nSubmit' },
+  { id: 1, title: 'Personal information' },
+  { id: 2, title: 'Training information' },
+  { id: 3, title: 'Emergency and medical' },
+  { id: 4, title: 'Review and submit' },
 ]
+
+// Shown for information only; the amount charged is set on the server.
+const MEMBERSHIP_FEE = 60
+
+const NATIONALITIES = [
+  { value: 'singaporean', label: 'Singaporean' },
+  { value: 'pr', label: 'Singapore PR' },
+  { value: 'foreigner', label: 'Foreigner' },
+]
+const GENDERS = [
+  { value: 'male', label: 'Male' },
+  { value: 'female', label: 'Female' },
+]
+const BELTS = [
+  { value: 'white', label: 'White belt (Mukyu)' },
+  { value: 'yellow', label: 'Yellow belt' },
+  { value: 'orange', label: 'Orange belt' },
+  { value: 'green', label: 'Green belt' },
+  { value: 'blue', label: 'Blue belt' },
+  { value: 'brown', label: 'Brown belt' },
+  { value: 'black', label: 'Black belt' },
+]
+const EMERGENCY_RELATIONSHIPS = [
+  { value: 'parent', label: 'Parent' },
+  { value: 'spouse', label: 'Spouse' },
+  { value: 'sibling', label: 'Sibling' },
+  { value: 'friend', label: 'Friend' },
+]
+const GUARDIAN_RELATIONSHIPS = [
+  { value: 'parent', label: 'Parent' },
+  { value: 'guardian', label: 'Legal guardian' },
+  { value: 'sibling', label: 'Sibling' },
+  { value: 'other', label: 'Other' },
+]
+const labelOf = (options: { value: string; label: string }[], value: string) =>
+  options.find((option) => option.value === value)?.label ?? ''
 
 // Same range the database accepts: not in the future, at most 120 years ago.
 function localDate(date: Date) {
@@ -38,8 +81,55 @@ const PARQ_QUESTIONS = [
   { key: 'joint', label: 'Do you have a bone or joint problem that could be made worse by a change in your physical activity?' },
 ]
 
-const isValidNric = (nric: string) => {
-  return /^[STFGM]\d{7}[A-Z]$/i.test(nric);
+const isValidNric = (nric: string) => /^[STFGM]\d{7}[A-Z]$/i.test(nric)
+const formatPhone = (value: string) => value.replace(/\D/g, '').slice(0, 8)
+
+type Errors = Record<string, string>
+const fieldId = (key: string) => `apply-${key}`
+
+/** A labelled control with its hint and inline error. */
+function FormField({ name, label, optional, error, hint, className, children }: {
+  name: string
+  label: string
+  optional?: boolean
+  error?: string
+  hint?: ReactNode
+  className?: string
+  children: ReactNode
+}) {
+  return (
+    <div className={cn('space-y-1.5', className)}>
+      <Label htmlFor={fieldId(name)}>
+        {label}
+        {optional && <span className="font-normal text-muted-foreground">(optional)</span>}
+      </Label>
+      {children}
+      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+      {error && <p id={`${fieldId(name)}-error`} className="text-sm text-destructive">{error}</p>}
+    </div>
+  )
+}
+
+const selectClass = 'h-11 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 lg:h-10'
+const inputClass = 'lg:h-10'
+const groupClass = 'space-y-4 rounded-lg border p-4'
+
+function PhoneInput(props: React.ComponentProps<typeof Input>) {
+  return (
+    <div className="flex gap-2">
+      <span aria-hidden="true" className="flex h-11 w-14 shrink-0 items-center justify-center rounded-lg border bg-muted text-sm text-muted-foreground lg:h-10">+65</span>
+      <Input type="tel" inputMode="numeric" maxLength={8} placeholder="8-digit number" {...props} className={cn('flex-1', inputClass)} />
+    </div>
+  )
+}
+
+function ReviewItem({ term, children }: { term: string; children: ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-xs text-muted-foreground">{term}</dt>
+      <dd className="[overflow-wrap:anywhere]">{children || '—'}</dd>
+    </div>
+  )
 }
 
 export default function ApplyMembership() {
@@ -49,6 +139,7 @@ export default function ApplyMembership() {
   const [showGuardian, setShowGuardian] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
+  const [errors, setErrors] = useState<Errors>({})
   const [isDeclared, setIsDeclared] = useState(false)
   const [waiverSigned, setWaiverSigned] = useState(false)
   const [dojos, setDojos] = useState<{ id: string; name: string }[]>([])
@@ -58,15 +149,20 @@ export default function ApplyMembership() {
   // Same key for retries of an unchanged submission; Stripe then returns the same session.
   const retryKey = useRef(crypto.randomUUID())
   const [photoFile, setPhotoFile] = useState<File | null>(null)
+  const [photoPreview, setPhotoPreview] = useState('')
   // Reuse an upload when the student retries with the same photo.
   const uploadedPhoto = useRef<{ file: File; path: string } | null>(null)
+  const headingRef = useRef<HTMLHeadingElement>(null)
+  // After a failed check, focus moves to the first invalid field; after a step change, to the step heading.
+  const focusField = useRef<string | null>(null)
+  const shownStep = useRef(1)
 
   const [formData, setFormData] = useState({
     fullName: '', nric: '', nationality: '', dob: '', gender: '',
     email: '', mobile: '', address: '', photoName: '',
     principalDojo: '', membershipType: '', currentBelt: '', hasExperience: 'no', experienceDetails: '',
     emergencyName: '', emergencyRelationship: '', emergencyPhone: '',
-    medicalDetails: '', 
+    medicalDetails: '',
     guardianName: '', guardianNric: '', guardianRelationship: '', guardianPhone: '',
   })
 
@@ -105,6 +201,26 @@ export default function ApplyMembership() {
     return () => controller.abort()
   }, [dojoRevision])
 
+  useEffect(() => {
+    if (!photoFile) {
+      setPhotoPreview('')
+      return
+    }
+    const url = URL.createObjectURL(photoFile)
+    setPhotoPreview(url)
+    return () => URL.revokeObjectURL(url)
+  }, [photoFile])
+
+  useEffect(() => {
+    if (focusField.current) {
+      document.getElementById(fieldId(focusField.current))?.focus()
+      focusField.current = null
+    } else if (shownStep.current !== currentStep) {
+      headingRef.current?.focus()
+    }
+    shownStep.current = currentStep
+  }, [currentStep, errors])
+
   const centreName = dojos.find((d) => d.id === formData.principalDojo)?.name
 
   const age = calculateAge(formData.dob)
@@ -114,93 +230,92 @@ export default function ApplyMembership() {
     if (isMinor) setShowGuardian(true)
   }, [isMinor])
 
-  const validateStep = (step: number) => {
-    setErrorMsg('')
-    
+  function clearError(key: string) {
+    setErrors(previous => {
+      if (!previous[key]) return previous
+      const next = { ...previous }
+      delete next[key]
+      return next
+    })
+  }
+
+  function setField(key: keyof typeof formData, value: string) {
+    setFormData(previous => ({ ...previous, [key]: value }))
+    clearError(key)
+  }
+
+  /** Accessibility attributes that tie a control to its label and inline error. */
+  function control(key: string) {
+    return {
+      id: fieldId(key),
+      'aria-invalid': errors[key] ? true : undefined,
+      'aria-describedby': errors[key] ? `${fieldId(key)}-error` : undefined,
+    }
+  }
+
+  /** Problems in one step, keyed by field, in the order the fields appear. */
+  function stepErrors(step: number): Errors {
+    const found: Errors = {}
     if (step === 1) {
-      if (!formData.fullName || !formData.nric || !formData.nationality || !formData.dob || !formData.gender || !formData.mobile || !formData.address) {
-        setErrorMsg('Please fill in all required Personal Information fields.')
-        return false
-      }
-      if (formData.fullName.trim().split(/\s+/).length < 2) {
-        setErrorMsg('Please enter your full name (first and last).')
-        return false
-      }
-      if (!validDob(formData.dob)) {
-        setErrorMsg('Please enter a valid date of birth. It can’t be in the future.')
-        return false
-      }
-      if (!formData.photoName) {
-        setErrorMsg('Please upload a profile photo to continue.')
-        return false
-      }
-      if (!isValidNric(formData.nric)) {
-        setErrorMsg('Invalid NRIC / FIN format. Please use format like S1234567A.')
-        return false
-      }
-      if (formData.mobile.length !== 8) {
-        setErrorMsg('Mobile number must be exactly 8 digits.')
-        return false
-      }
+      if (!formData.fullName) found.fullName = 'Enter your full name.'
+      else if (formData.fullName.trim().split(/\s+/).length < 2) found.fullName = 'Enter your full name (first and last).'
+      if (!formData.nric) found.nric = 'Enter your NRIC or FIN.'
+      else if (!isValidNric(formData.nric)) found.nric = 'Use the format S1234567A.'
+      if (!formData.nationality) found.nationality = 'Select your nationality.'
+      if (!formData.dob) found.dob = 'Enter your date of birth.'
+      else if (!validDob(formData.dob)) found.dob = 'Enter a valid date of birth. It can’t be in the future.'
+      if (!formData.gender) found.gender = 'Select your gender.'
+      if (!formData.mobile) found.mobile = 'Enter your mobile number.'
+      else if (formData.mobile.length !== 8) found.mobile = 'Mobile number must be exactly 8 digits.'
+      if (!formData.address) found.address = 'Enter your residential address.'
+      if (!formData.photoName) found.photo = 'Upload a profile photo to continue.'
     }
-
     if (step === 2) {
-      if (!formData.principalDojo || !formData.membershipType || !formData.currentBelt) {
-        setErrorMsg('Please select your Dojo, Membership Type, and Current Belt.')
-        return false
-      }
+      if (!formData.principalDojo) found.principalDojo = 'Select your principal dojo.'
+      if (!formData.membershipType) found.membershipType = 'Select a membership type.'
+      if (!formData.currentBelt) found.currentBelt = 'Select your current belt.'
     }
-
     if (step === 3) {
-      if (!formData.emergencyName || !formData.emergencyRelationship || !formData.emergencyPhone) {
-        setErrorMsg('Please complete the emergency contact details.')
-        return false
-      }
-      if (formData.emergencyPhone.length !== 8) {
-        setErrorMsg('Emergency contact number must be exactly 8 digits.')
-        return false
-      }
-      if (isMinor && (!formData.guardianName || !formData.guardianNric || !formData.guardianRelationship || !formData.guardianPhone)) {
-        setShowGuardian(true)
-        setErrorMsg('Members under 18 must provide complete Guardian Information.')
-        return false
-      }
-      if (formData.guardianNric && !isValidNric(formData.guardianNric)) {
-        setErrorMsg('Invalid Guardian NRIC / FIN format.')
-        return false
-      }
-      if (formData.guardianPhone && formData.guardianPhone.length !== 8) {
-        setErrorMsg('Guardian contact number must be exactly 8 digits.')
-        return false
-      }
-      if (!waiverSigned) {
-        setErrorMsg('You must sign the Deed of Waiver & Indemnity to proceed.')
-        return false
-      }
+      if (!formData.emergencyName) found.emergencyName = 'Enter your emergency contact’s name.'
+      if (!formData.emergencyRelationship) found.emergencyRelationship = 'Select their relationship to you.'
+      if (!formData.emergencyPhone) found.emergencyPhone = 'Enter their contact number.'
+      else if (formData.emergencyPhone.length !== 8) found.emergencyPhone = 'Contact number must be exactly 8 digits.'
+      if (!waiverSigned) found.waiver = 'You must sign the Deed of Waiver & Indemnity to proceed.'
+      if (isMinor && !formData.guardianName) found.guardianName = 'Members under 18 must provide a guardian’s name.'
+      if (isMinor && !formData.guardianNric) found.guardianNric = 'Members under 18 must provide a guardian’s NRIC or FIN.'
+      else if (formData.guardianNric && !isValidNric(formData.guardianNric)) found.guardianNric = 'Use the format S1234567A.'
+      if (isMinor && !formData.guardianRelationship) found.guardianRelationship = 'Select the guardian’s relationship to the member.'
+      if (isMinor && !formData.guardianPhone) found.guardianPhone = 'Members under 18 must provide a guardian’s contact number.'
+      else if (formData.guardianPhone && formData.guardianPhone.length !== 8) found.guardianPhone = 'Contact number must be exactly 8 digits.'
     }
-
     if (step === 4) {
-      if (!isDeclared) {
-        setErrorMsg('You must agree to the declaration before submitting.')
-        return false
-      }
+      if (!isDeclared) found.declaration = 'You must agree to the declaration before submitting.'
     }
-    
-    return true
+    return found
+  }
+
+  /** Show a step's problems and move focus to the first one. Returns false if there are any. */
+  function passes(step: number) {
+    const found = stepErrors(step)
+    const first = Object.keys(found)[0]
+    setErrorMsg('')
+    setErrors(found)
+    if (!first) return true
+    if (first.startsWith('guardian')) setShowGuardian(true)
+    focusField.current = first
+    setCurrentStep(step)
+    return false
   }
 
   const handleNext = async () => {
     if (isSubmitting) return
-    if (!validateStep(currentStep)) return;
+    if (!passes(currentStep)) return
 
     if (currentStep < 4) {
       setCurrentStep(currentStep + 1)
     } else {
       for (let step = 1; step <= 3; step++) {
-        if (!validateStep(step)) {
-          setCurrentStep(step)
-          return
-        }
+        if (!passes(step)) return
       }
       const [firstName, ...rest] = formData.fullName.trim().split(/\s+/)
       setIsSubmitting(true)
@@ -271,6 +386,7 @@ export default function ApplyMembership() {
 
   const handleBack = () => {
     setErrorMsg('')
+    setErrors({})
     if (currentStep > 1) setCurrentStep(currentStep - 1)
   }
 
@@ -279,452 +395,377 @@ export default function ApplyMembership() {
     if (!file) return
     const problem = studentPhotoError(file)
     if (problem) {
-      setErrorMsg(problem)
+      setErrors(previous => ({ ...previous, photo: problem }))
       setPhotoFile(null)
-      setFormData({ ...formData, photoName: '' })
+      setFormData(previous => ({ ...previous, photoName: '' }))
       e.target.value = ''
       return
     }
-    setErrorMsg('')
+    clearError('photo')
     setPhotoFile(file)
-    setFormData({ ...formData, photoName: file.name })
+    setFormData(previous => ({ ...previous, photoName: file.name }))
   }
 
-  const formatPhone = (value: string) => {
-    return value.replace(/\D/g, '').slice(0, 8);
-  }
+  const errorCount = Object.keys(errors).length
+  const step = STEPS[currentStep - 1]
 
   return (
-    <div className="min-h-[calc(100vh-80px)] bg-[#f4f5f7] dark:bg-slate-950 py-6 sm:py-10 px-2 sm:px-8 transition-colors">
-      <div className="max-w-5xl mx-auto bg-white dark:bg-slate-900 rounded-xl shadow-sm dark:shadow-none p-5 sm:p-12 transition-colors">
-        
-        {/* 进度条 */}
-        <div className="mb-8 sm:mb-12 flex items-start justify-between relative w-full max-w-3xl mx-auto px-2 sm:px-0">
-          <div className="absolute top-4 sm:top-5 left-0 w-full h-[2px] bg-gray-200 dark:bg-slate-700 -z-10" />
-          {STEPS.map((step) => (
-            <div key={step.id} className="flex flex-col items-center relative z-10 w-16 sm:w-24">
-              <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-xs sm:text-sm font-bold mb-2 transition-colors ${
-                currentStep === step.id ? 'bg-[#2c3f67] dark:bg-blue-600 text-white' 
-                : currentStep > step.id ? 'bg-[#2c3f67] dark:bg-blue-600 text-white'
-                : 'bg-gray-300 dark:bg-slate-700 text-gray-600 dark:text-gray-400'
-              }`}>
-                {currentStep > step.id ? <Check className="w-4 h-4 sm:w-5 sm:h-5" /> : step.id}
-              </div>
-              <span className={`text-[10px] sm:text-xs text-center whitespace-pre-line font-medium transition-colors leading-tight ${
-                currentStep >= step.id ? 'text-[#2c3f67] dark:text-blue-400' : 'text-gray-500 dark:text-gray-500'
-              }`}>
-                {step.title}
-              </span>
-            </div>
-          ))}
-        </div>
+    <section className="w-full max-w-3xl space-y-6">
+      <PageHeader
+        title="Apply for membership"
+        description={`Four short steps, then a ${money.format(MEMBERSHIP_FEE)} membership fee paid securely on Stripe.`}
+      />
 
-        {cancelled && (
-          <p role="status" className="mb-6 rounded-lg bg-muted p-4 text-sm text-muted-foreground">
-            Payment was cancelled, so your membership isn't active yet. Submit the form again
-            whenever you're ready to pay.
-          </p>
-        )}
+      <Card>
+        <CardContent className="space-y-6">
+          {/* Progress */}
+          <div className="space-y-3">
+            <ol aria-label="Application steps" className="flex items-center gap-2">
+              {STEPS.map((item) => (
+                <li key={item.id} aria-current={currentStep === item.id ? 'step' : undefined} className="flex flex-1 items-center gap-2 last:flex-none">
+                  <span className={cn(
+                    'flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold',
+                    currentStep >= item.id ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground',
+                  )}>
+                    {currentStep > item.id ? <Check className="size-4" aria-hidden="true" /> : item.id}
+                    <span className="sr-only">{item.title}{currentStep > item.id ? ', completed' : ''}</span>
+                  </span>
+                  {item.id < STEPS.length && <span aria-hidden="true" className={cn('h-0.5 flex-1 rounded-full', currentStep > item.id ? 'bg-primary' : 'bg-border')} />}
+                </li>
+              ))}
+            </ol>
+            <p className="text-sm text-muted-foreground">Step {currentStep} of {STEPS.length}</p>
+          </div>
 
-        {errorMsg && (
-          <div className="mb-6 animate-in slide-in-from-top-2">
+          {cancelled && (
+            <Alert role="status">
+              <AlertDescription>
+                Payment was cancelled, so your membership isn’t active yet. Submit the form again whenever you’re ready to pay.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {errorMsg && (
             <Alert variant="destructive">
               <AlertDescription>{errorMsg}</AlertDescription>
             </Alert>
+          )}
+
+          {errorCount > 0 && (
+            <Alert variant="destructive">
+              <AlertDescription>
+                {errorCount === 1 ? 'Check the highlighted field below.' : `Check the ${errorCount} highlighted fields below.`}
+              </AlertDescription>
+            </Alert>
+          )}
+
+          <div className="space-y-1">
+            <h2 ref={headingRef} tabIndex={-1} className="text-lg font-semibold outline-none">{step.title}</h2>
+            <p className="text-sm text-muted-foreground">
+              {currentStep === 1 ? 'Your personal details for your membership profile. All fields are required.'
+                : currentStep === 2 ? 'Where and how you will train. All fields are required unless marked optional.'
+                  : currentStep === 3 ? 'Who to contact in an emergency, and anything we should know about your health.'
+                    : 'Check your details before paying.'}
+            </p>
           </div>
-        )}
 
-        {/* Step 1 */}
-        {currentStep === 1 && (
-          <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-            <div className="mb-6 sm:mb-8">
-              <h2 className="text-xl sm:text-2xl font-bold text-[#2c3f67] dark:text-white mb-1 sm:mb-2 transition-colors">Personal Information</h2>
-              <p className="text-gray-500 dark:text-gray-400 text-xs sm:text-sm transition-colors">Please fill in your personal details to create your membership profile</p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 sm:gap-y-6">
-              <div className="space-y-1.5 sm:space-y-2">
-                <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-sm sm:text-base transition-colors">Full Name</Label>
-                <Input placeholder="Enter full name" value={formData.fullName} onChange={(e) => setFormData({...formData, fullName: e.target.value})} className="h-11 sm:h-12 bg-gray-200/60 dark:bg-slate-800 border-transparent focus-visible:ring-[#2c3f67] text-black dark:text-white" />
-              </div>
-              <div className="space-y-1.5 sm:space-y-2">
-                <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-sm sm:text-base transition-colors">NRIC / FIN</Label>
-                <Input 
-                  placeholder="e.g. S1234567A" 
-                  value={formData.nric} 
-                  onChange={(e) => setFormData({...formData, nric: e.target.value.toUpperCase()})} 
-                  className="h-11 sm:h-12 bg-gray-200/60 dark:bg-slate-800 border-transparent focus-visible:ring-[#2c3f67] text-black dark:text-white uppercase" 
-                />
-              </div>
-              <div className="space-y-1.5 sm:space-y-2">
-                <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-sm sm:text-base transition-colors">Nationality</Label>
-                <select value={formData.nationality} onChange={(e) => setFormData({...formData, nationality: e.target.value})} className="w-full h-11 sm:h-12 bg-gray-200/60 dark:bg-slate-800 rounded-md border-transparent px-3 text-sm focus:ring-[#2c3f67] text-black dark:text-white">
+          {/* Step 1 */}
+          {currentStep === 1 && (
+            <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
+              <FormField name="fullName" label="Full name" error={errors.fullName}>
+                <Input {...control('fullName')} autoComplete="name" className={inputClass} value={formData.fullName} onChange={(e) => setField('fullName', e.target.value)} />
+              </FormField>
+              <FormField name="nric" label="NRIC / FIN" error={errors.nric} hint="For example S1234567A.">
+                <Input {...control('nric')} className={cn(inputClass, 'uppercase')} value={formData.nric} onChange={(e) => setField('nric', e.target.value.toUpperCase())} />
+              </FormField>
+              <FormField name="nationality" label="Nationality" error={errors.nationality}>
+                <NativeSelect {...control('nationality')} className={selectClass} value={formData.nationality} onChange={(e) => setField('nationality', e.target.value)}>
                   <option value="" disabled>Select nationality</option>
-                  <option value="singaporean">Singaporean</option>
-                  <option value="pr">Singapore PR</option>
-                  <option value="foreigner">Foreigner</option>
-                </select>
-              </div>
-              <div className="space-y-1.5 sm:space-y-2">
-                <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-sm sm:text-base transition-colors">Date of Birth</Label>
-                <Input
-                  type="date"
-                  min={MIN_DOB}
-                  max={MAX_DOB}
-                  aria-invalid={!!formData.dob && !validDob(formData.dob)}
-                  value={formData.dob}
-                  onChange={(e) => setFormData({...formData, dob: e.target.value})}
-                  className="h-11 sm:h-12 bg-gray-200/60 dark:bg-slate-800 border-transparent focus-visible:ring-[#2c3f67] text-black dark:text-white"
-                />
-                {formData.dob && !validDob(formData.dob) && (
-                  <p role="alert" className="text-sm text-brand-red-ink">Enter a real date of birth. It can’t be in the future.</p>
-                )}
-              </div>
-              <div className="space-y-1.5 sm:space-y-2">
-                <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-sm sm:text-base transition-colors">Gender</Label>
-                <select value={formData.gender} onChange={(e) => setFormData({...formData, gender: e.target.value})} className="w-full h-11 sm:h-12 bg-gray-200/60 dark:bg-slate-800 rounded-md border-transparent px-3 text-sm focus:ring-[#2c3f67] text-black dark:text-white">
+                  {NATIONALITIES.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                </NativeSelect>
+              </FormField>
+              <FormField name="dob" label="Date of birth" error={errors.dob}>
+                <Input {...control('dob')} type="date" min={MIN_DOB} max={MAX_DOB} autoComplete="bday" className={inputClass} value={formData.dob} onChange={(e) => setField('dob', e.target.value)} />
+              </FormField>
+              <FormField name="gender" label="Gender" error={errors.gender}>
+                <NativeSelect {...control('gender')} className={selectClass} value={formData.gender} onChange={(e) => setField('gender', e.target.value)}>
                   <option value="" disabled>Select gender</option>
-                  <option value="male">Male</option>
-                  <option value="female">Female</option>
-                </select>
-              </div>
-              
-              <div className="space-y-1.5 sm:space-y-2">
-                <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-sm sm:text-base transition-colors">Email Address</Label>
-                <Input 
-                  type="email" 
-                  value={formData.email} 
-                  readOnly 
-                  disabled 
-                  className="h-11 sm:h-12 bg-gray-200/60 dark:bg-slate-800 border-transparent opacity-70 cursor-not-allowed text-black dark:text-white" 
-                />
-                <p className="text-[10px] sm:text-xs text-gray-500">Linked to your login account.</p>
-              </div>
-
-              <div className="space-y-1.5 sm:space-y-2">
-                <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-sm sm:text-base transition-colors">Mobile Number</Label>
-                <div className="flex gap-2">
-                  <div className="w-16 sm:w-24 h-11 sm:h-12 bg-gray-200/60 dark:bg-slate-800 rounded-md flex items-center justify-center text-sm text-gray-600 dark:text-gray-400 shrink-0">+65</div>
-                  <Input 
-                    type="tel" 
-                    maxLength={8}
-                    placeholder="8-digit number" 
-                    value={formData.mobile} 
-                    onChange={(e) => setFormData({...formData, mobile: formatPhone(e.target.value)})} 
-                    className="flex-1 h-11 sm:h-12 lg:h-12 bg-gray-200/60 dark:bg-slate-800 border-transparent focus-visible:ring-[#2c3f67] text-black dark:text-white" 
-                  />
-                </div>
-              </div>
-              <div className="space-y-1.5 sm:space-y-2 sm:col-span-2">
-                <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-sm sm:text-base transition-colors">Residential Address</Label>
-                <textarea placeholder="Enter address" value={formData.address} onChange={(e) => setFormData({...formData, address: e.target.value})} className="w-full min-h-[80px] sm:min-h-[100px] bg-gray-200/60 dark:bg-slate-800 rounded-md p-3 text-sm border-transparent focus:ring-[#2c3f67] resize-none text-black dark:text-white" />
-              </div>
-              <div className="space-y-1.5 sm:space-y-2 sm:col-span-2">
-                <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-sm sm:text-base transition-colors">Profile Photo <span className="text-[#e62128]">*</span></Label>
-                <label className="flex flex-col items-center justify-center w-full h-28 sm:h-32 border-2 border-dashed border-gray-300 dark:border-slate-700 rounded-xl cursor-pointer bg-gray-50 dark:bg-slate-800/50">
-                  <div className="flex flex-col items-center justify-center text-gray-500 dark:text-gray-400">
-                    <UploadCloud className="w-6 h-6 sm:w-8 sm:h-8 mb-1 sm:mb-2" />
-                    <p className="text-xs sm:text-sm"><span className="font-semibold text-[#2c3f67] dark:text-blue-400">Click to upload</span></p>
-                    {formData.photoName && <p className="text-xs text-green-600 dark:text-green-400 font-bold mt-1">Selected: {formData.photoName}</p>}
-                    {!formData.photoName && <p className="text-[10px] sm:text-xs text-[#e62128] dark:text-red-400 font-medium mt-1">Profile photo is required to continue.</p>}
-                  </div>
-                  <input type="file" className="hidden" accept="image/jpeg,image/png,image/webp" onChange={handlePhotoUpload} required aria-required="true" />
+                  {GENDERS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                </NativeSelect>
+              </FormField>
+              <FormField name="email" label="Email address" hint="Linked to your login account.">
+                <Input id={fieldId('email')} type="email" className={inputClass} value={formData.email} readOnly disabled />
+              </FormField>
+              <FormField name="mobile" label="Mobile number" error={errors.mobile}>
+                <PhoneInput {...control('mobile')} autoComplete="tel-national" value={formData.mobile} onChange={(e) => setField('mobile', formatPhone(e.target.value))} />
+              </FormField>
+              <FormField name="address" label="Residential address" error={errors.address} className="sm:col-span-2">
+                <Textarea {...control('address')} rows={3} autoComplete="street-address" value={formData.address} onChange={(e) => setField('address', e.target.value)} />
+              </FormField>
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label htmlFor={fieldId('photo')}>Profile photo</Label>
+                <label
+                  htmlFor={fieldId('photo')}
+                  className={cn(
+                    'flex min-h-28 cursor-pointer items-center justify-center gap-4 rounded-lg border border-dashed p-4 text-sm text-muted-foreground transition-colors hover:bg-muted focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50',
+                    errors.photo && 'border-destructive',
+                  )}
+                >
+                  {photoPreview
+                    ? <img src={photoPreview} alt="" className="size-16 shrink-0 rounded-lg object-cover" />
+                    : <UploadCloud className="size-8 shrink-0" aria-hidden="true" />}
+                  <span className="min-w-0 [overflow-wrap:anywhere]">
+                    <span className="font-medium text-primary">{formData.photoName ? 'Change photo' : 'Choose a photo'}</span>
+                    <span className="block">{formData.photoName ? `Selected: ${formData.photoName}` : 'JPEG, PNG or WebP'}</span>
+                  </span>
+                  <input {...control('photo')} type="file" className="sr-only" accept="image/jpeg,image/png,image/webp" onChange={handlePhotoUpload} />
                 </label>
-                <p className="text-xs text-gray-500 flex items-center gap-1 mt-1">
-                  <Info className="w-3 h-3" /> Please bring 2 physical photos to your Principal Dojo for your membership booklet.
+                {errors.photo && <p id={`${fieldId('photo')}-error`} className="text-sm text-destructive">{errors.photo}</p>}
+                <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                  <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" /> Please bring 2 physical photos to your principal dojo for your membership booklet.
                 </p>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Step 2 */}
-        {currentStep === 2 && (
-          <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-            <div className="mb-6 sm:mb-8">
-              <h2 className="text-xl sm:text-2xl font-bold text-[#2c3f67] dark:text-white mb-1 sm:mb-2">Training Information</h2>
-            </div>
-            <div className="space-y-4 sm:space-y-6">
-              <div className="space-y-1.5 sm:space-y-2">
-                <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-sm sm:text-base">Principal Dojo</Label>
-                <select value={formData.principalDojo} disabled={dojosLoading || Boolean(dojosError)} onChange={(e) => setFormData({...formData, principalDojo: e.target.value})} className="w-full h-11 sm:h-12 bg-gray-200/60 dark:bg-slate-800 rounded-md border-transparent px-3 text-sm focus:ring-[#2c3f67] text-black dark:text-white">
+          {/* Step 2 */}
+          {currentStep === 2 && (
+            <div className="space-y-4">
+              <FormField name="principalDojo" label="Principal dojo" error={errors.principalDojo}
+                hint="Your principal dojo training fees must be paid before the start of each term.">
+                <NativeSelect {...control('principalDojo')} className={selectClass} value={formData.principalDojo} disabled={dojosLoading || Boolean(dojosError)} onChange={(e) => setField('principalDojo', e.target.value)}>
                   <option value="" disabled>{dojosLoading ? 'Loading dojos…' : 'Select dojo'}</option>
                   {dojos.map((dojo) => <option key={dojo.id} value={dojo.id}>{dojo.name}</option>)}
-                </select>
-                {dojosError && <p role="alert" className="text-sm text-destructive">{dojosError} <button type="button" className="underline" onClick={() => setDojoRevision(value => value + 1)}>Try again</button></p>}
+                </NativeSelect>
+                {dojosError && <p role="alert" className="text-sm text-destructive">{dojosError} <button type="button" className="rounded-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-ring" onClick={() => setDojoRevision(value => value + 1)}>Try again</button></p>}
                 {!dojosLoading && !dojosError && dojos.length === 0 && <p role="status" className="text-sm text-destructive">No active dojos are available. Please contact the dojo.</p>}
-                <p className="text-[10px] sm:text-xs text-[#e62128] dark:text-red-400 mt-1">
-                  Your Principal Dojo training fees must be paid before the start of each term.
-                </p>
-              </div>
-              <div className="space-y-1.5 sm:space-y-2">
-                <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-sm sm:text-base">Membership Type</Label>
-                <select value={formData.membershipType} onChange={(e) => setFormData({...formData, membershipType: e.target.value})} className="w-full h-11 sm:h-12 bg-gray-200/60 dark:bg-slate-800 rounded-md border-transparent px-3 text-sm focus:ring-[#2c3f67] text-black dark:text-white">
+              </FormField>
+              <FormField name="membershipType" label="Membership type" error={errors.membershipType}
+                hint={MEMBERSHIP_TYPES.find((type) => type.value === formData.membershipType)?.description
+                  ?? 'Your membership type determines which class passes you can purchase and any discounts applied.'}>
+                <NativeSelect {...control('membershipType')} className={selectClass} value={formData.membershipType} onChange={(e) => setField('membershipType', e.target.value)}>
                   <option value="" disabled>Select type</option>
                   {MEMBERSHIP_TYPES.map((type) => (
                     <option key={type.value} value={type.value}>{type.label}</option>
                   ))}
-                </select>
-                <p className="text-[10px] sm:text-xs text-gray-500">
-                  {MEMBERSHIP_TYPES.find((type) => type.value === formData.membershipType)?.description
-                    ?? 'Your membership type determines which class passes you can purchase and any discounts applied.'}
-                </p>
-              </div>
-              <div className="space-y-1.5 sm:space-y-2">
-                <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-sm sm:text-base">Current Belt Rank</Label>
-                <select value={formData.currentBelt} onChange={(e) => setFormData({...formData, currentBelt: e.target.value})} className="w-full h-11 sm:h-12 bg-gray-200/60 dark:bg-slate-800 rounded-md border-transparent px-3 text-sm focus:ring-[#2c3f67] text-black dark:text-white">
+                </NativeSelect>
+              </FormField>
+              <FormField name="currentBelt" label="Current belt" error={errors.currentBelt}>
+                <NativeSelect {...control('currentBelt')} className={selectClass} value={formData.currentBelt} onChange={(e) => setField('currentBelt', e.target.value)}>
                   <option value="" disabled>Select belt</option>
-                  <option value="white">White Belt (Mukyu)</option>
-                  <option value="yellow">Yellow Belt</option>
-                  <option value="orange">Orange Belt</option>
-                  <option value="green">Green Belt</option>
-                  <option value="blue">Blue Belt</option>
-                  <option value="brown">Brown Belt</option>
-                  <option value="black">Black Belt</option>
-                </select>
-              </div>
-              <div className="space-y-3 pt-2">
-                <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-sm sm:text-base">Previous Experience?</Label>
+                  {BELTS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                </NativeSelect>
+              </FormField>
+              <fieldset className="space-y-2">
+                <legend className="text-sm font-medium">Have you trained in aikido before?</legend>
                 <div className="flex items-center gap-6">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="radio" value="yes" checked={formData.hasExperience === 'yes'} onChange={(e) => setFormData({...formData, hasExperience: e.target.value})} className="w-4 h-4 sm:w-5 sm:h-5 text-[#2c3f67]" />
-                    <span className="text-sm font-medium dark:text-gray-300">Yes</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="radio" value="no" checked={formData.hasExperience === 'no'} onChange={(e) => setFormData({...formData, hasExperience: e.target.value})} className="w-4 h-4 sm:w-5 sm:h-5 text-[#2c3f67]" />
-                    <span className="text-sm font-medium dark:text-gray-300">No</span>
-                  </label>
+                  {[{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }].map((option) => (
+                    <label key={option.value} className="flex min-h-11 cursor-pointer items-center gap-2 text-sm">
+                      <input type="radio" name="hasExperience" value={option.value} checked={formData.hasExperience === option.value} onChange={(e) => setField('hasExperience', e.target.value)} className="size-4 accent-primary" />
+                      {option.label}
+                    </label>
+                  ))}
                 </div>
-              </div>
-              <div className="space-y-1.5 sm:space-y-2 pt-2">
-                <Label className="text-gray-700 dark:text-gray-400 text-xs sm:text-sm font-medium">If yes, provide details</Label>
-                <textarea placeholder="Enter details (optional)" value={formData.experienceDetails} onChange={(e) => setFormData({...formData, experienceDetails: e.target.value})} disabled={formData.hasExperience === 'no'} className="w-full min-h-[100px] bg-gray-200/60 dark:bg-slate-800 rounded-md p-3 text-sm border-transparent focus:ring-[#2c3f67] resize-none disabled:opacity-50 text-black dark:text-white" />
-              </div>
+              </fieldset>
+              {formData.hasExperience === 'yes' && (
+                <FormField name="experienceDetails" label="Details of your experience" optional>
+                  <Textarea id={fieldId('experienceDetails')} rows={3} value={formData.experienceDetails} onChange={(e) => setField('experienceDetails', e.target.value)} />
+                </FormField>
+              )}
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Step 3 */}
-        {currentStep === 3 && (
-          <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-            <div className="mb-6 sm:mb-8">
-              <h2 className="text-xl sm:text-2xl font-bold text-[#2c3f67] dark:text-white mb-1 sm:mb-2">Emergency & Medical</h2>
-            </div>
-            <div className="grid grid-cols-1 gap-4 sm:gap-6">
-              {/* 紧急联系人 */}
-              <div className="bg-[#f4f5f7] dark:bg-slate-800/50 p-4 sm:p-6 rounded-xl space-y-4 sm:space-y-5">
-                <h3 className="text-base sm:text-lg font-bold text-[#2c3f67] dark:text-blue-400 mb-2">Emergency Contact</h3>
-                <div className="space-y-1.5 sm:space-y-2">
-                  <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-xs sm:text-sm">Full Name</Label>
-                  <Input placeholder="Enter name" value={formData.emergencyName} onChange={(e) => setFormData({...formData, emergencyName: e.target.value})} className="h-11 sm:h-12 bg-white dark:bg-slate-900 border-transparent text-black dark:text-white" />
-                </div>
-                <div className="space-y-1.5 sm:space-y-2">
-                  <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-xs sm:text-sm">Relationship</Label>
-                  <select value={formData.emergencyRelationship} onChange={(e) => setFormData({...formData, emergencyRelationship: e.target.value})} className="w-full h-11 sm:h-12 bg-white dark:bg-slate-900 rounded-md border-transparent px-3 text-sm text-black dark:text-white">
+          {/* Step 3 */}
+          {currentStep === 3 && (
+            <div className="space-y-4">
+              <div className={groupClass}>
+                <h3 className="font-semibold">Emergency contact</h3>
+                <FormField name="emergencyName" label="Full name" error={errors.emergencyName}>
+                  <Input {...control('emergencyName')} className={inputClass} value={formData.emergencyName} onChange={(e) => setField('emergencyName', e.target.value)} />
+                </FormField>
+                <FormField name="emergencyRelationship" label="Relationship" error={errors.emergencyRelationship}>
+                  <NativeSelect {...control('emergencyRelationship')} className={selectClass} value={formData.emergencyRelationship} onChange={(e) => setField('emergencyRelationship', e.target.value)}>
                     <option value="" disabled>Select relationship</option>
-                    <option value="parent">Parent</option>
-                    <option value="spouse">Spouse</option>
-                    <option value="sibling">Sibling</option>
-                    <option value="friend">Friend</option>
-                  </select>
-                </div>
-                <div className="space-y-1.5 sm:space-y-2">
-                  <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-xs sm:text-sm">Contact Number</Label>
-                  <div className="flex gap-2">
-                    <div className="w-16 sm:w-24 h-11 sm:h-12 bg-white dark:bg-slate-900 rounded-md flex items-center justify-center text-sm text-gray-600 dark:text-gray-400 shrink-0">+65</div>
-                    <Input 
-                      type="tel" 
-                      maxLength={8}
-                      placeholder="8-digit number" 
-                      value={formData.emergencyPhone} 
-                      onChange={(e) => setFormData({...formData, emergencyPhone: formatPhone(e.target.value)})} 
-                      className="flex-1 h-11 sm:h-12 lg:h-12 bg-white dark:bg-slate-900 border-transparent text-black dark:text-white" 
-                    />
-                  </div>
-                </div>
+                    {EMERGENCY_RELATIONSHIPS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </NativeSelect>
+                </FormField>
+                <FormField name="emergencyPhone" label="Contact number" error={errors.emergencyPhone}>
+                  <PhoneInput {...control('emergencyPhone')} value={formData.emergencyPhone} onChange={(e) => setField('emergencyPhone', formatPhone(e.target.value))} />
+                </FormField>
               </div>
 
-              {/* 医疗声明 (PAR-Q) */}
-              <div className="bg-[#f4f5f7] dark:bg-slate-800/50 p-4 sm:p-6 rounded-xl space-y-4 sm:space-y-5">
-                <h3 className="text-base sm:text-lg font-bold text-[#2c3f67] dark:text-blue-400 mb-2">Medical Declaration (PAR-Q)</h3>
-                <p className="text-xs text-gray-500 mb-3">Please answer the following questions to the best of your knowledge.</p>
-                
-                {PARQ_QUESTIONS.map((q) => (
-                  <div key={q.key} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-3 border-b border-gray-200 dark:border-slate-700 last:border-0">
-                    <span className="text-sm text-gray-700 dark:text-gray-300 flex-1">{q.label}</span>
-                    <div className="flex items-center gap-4 shrink-0">
-                      <label className="flex items-center gap-1.5 cursor-pointer">
-                        <input 
-                          type="radio" 
-                          name={`parq-${q.key}`}
-                          checked={parqAnswers[q.key] === true} 
-                          onChange={() => setParqAnswers(prev => ({...prev, [q.key]: true}))}
-                          className="w-4 h-4 text-[#2c3f67]" 
-                        /> 
-                        <span className="text-sm">Yes</span>
-                      </label>
-                      <label className="flex items-center gap-1.5 cursor-pointer">
-                        <input 
-                          type="radio" 
-                          name={`parq-${q.key}`}
-                          checked={parqAnswers[q.key] === false} 
-                          onChange={() => setParqAnswers(prev => ({...prev, [q.key]: false}))}
-                          className="w-4 h-4 text-[#2c3f67]" 
-                        /> 
-                        <span className="text-sm">No</span>
-                      </label>
-                    </div>
-                  </div>
-                ))}
-                
-                <div className="pt-2">
-                  <Label className="text-gray-700 dark:text-gray-400 text-xs font-medium">Additional medical details (optional)</Label>
-                  <textarea placeholder="E.g. Allergies, asthma, past surgeries..." value={formData.medicalDetails} onChange={(e) => setFormData({...formData, medicalDetails: e.target.value})} className="w-full min-h-[80px] bg-white dark:bg-slate-900 rounded-md p-3 text-sm border-transparent resize-none text-black dark:text-white mt-1" />
+              <div className={groupClass}>
+                <div>
+                  <h3 className="font-semibold">Medical declaration (PAR-Q)</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">Answer to the best of your knowledge.</p>
                 </div>
+                <div className="divide-y">
+                  {PARQ_QUESTIONS.map((q) => (
+                    <fieldset key={q.key} className="flex flex-col justify-between gap-2 py-3 sm:flex-row sm:items-center sm:gap-4">
+                      <legend className="float-left text-sm sm:flex-1">{q.label}</legend>
+                      <div className="flex shrink-0 items-center gap-5">
+                        {[{ value: true, label: 'Yes' }, { value: false, label: 'No' }].map((option) => (
+                          <label key={option.label} className="flex min-h-11 cursor-pointer items-center gap-2 text-sm">
+                            <input
+                              type="radio"
+                              name={`parq-${q.key}`}
+                              checked={parqAnswers[q.key] === option.value}
+                              onChange={() => setParqAnswers(prev => ({ ...prev, [q.key]: option.value }))}
+                              className="size-4 accent-primary"
+                            />
+                            {option.label}
+                          </label>
+                        ))}
+                      </div>
+                    </fieldset>
+                  ))}
+                </div>
+                <FormField name="medicalDetails" label="Additional medical details" optional hint="For example allergies, asthma or past surgeries.">
+                  <Textarea id={fieldId('medicalDetails')} rows={3} value={formData.medicalDetails} onChange={(e) => setField('medicalDetails', e.target.value)} />
+                </FormField>
               </div>
 
-              {/* 免责声明 */}
-              <div className="bg-red-50 dark:bg-red-900/20 p-4 sm:p-6 rounded-xl border border-red-200 dark:border-red-900/50">
-                <label className="flex items-start gap-3 cursor-pointer">
-                  <input 
-                    type="checkbox" 
-                    checked={waiverSigned} 
-                    onChange={(e) => setWaiverSigned(e.target.checked)}
-                    className="mt-1 w-5 h-5 rounded border-red-400 text-[#2c3f67] focus:ring-[#2c3f67]" 
+              <div className={cn('rounded-lg border p-4', errors.waiver ? 'border-destructive' : 'border-destructive/30 bg-destructive/5')}>
+                <label className="flex cursor-pointer items-start gap-3 text-sm">
+                  <input
+                    {...control('waiver')}
+                    type="checkbox"
+                    checked={waiverSigned}
+                    onChange={(e) => { setWaiverSigned(e.target.checked); clearError('waiver') }}
+                    className="mt-0.5 size-5 shrink-0 accent-primary"
                   />
-                  <span className="text-sm text-red-700 dark:text-red-400 leading-relaxed">
-                    <b>Deed of Waiver & Indemnity (Mandatory)</b><br/>
-                    I have read and agree to the Deed of Waiver & Indemnity. I understand that <b>no training is allowed</b> without signing this form.
+                  <span className="leading-relaxed">
+                    <span className="block font-semibold">Deed of Waiver & Indemnity (required)</span>
+                    I have read and agree to the Deed of Waiver & Indemnity. I understand that no training is allowed without signing this form.
                   </span>
                 </label>
+                {errors.waiver && <p id={`${fieldId('waiver')}-error`} className="mt-2 text-sm text-destructive">{errors.waiver}</p>}
               </div>
 
-              {/* 监护人信息 */}
-              <div className="bg-[#f4f5f7] dark:bg-slate-800/50 p-4 sm:p-6 rounded-xl">
-                <div className="flex justify-between items-center">
+              <div className={groupClass}>
+                <div className="flex items-center justify-between gap-3">
                   <div>
-                    <h3 className="text-sm sm:text-base font-bold text-[#2c3f67] dark:text-blue-400">Guardian Information</h3>
-                    <p className={`text-xs ${isMinor ? 'text-[#e62128] dark:text-red-400 font-medium' : 'text-gray-500'}`}>
+                    <h3 className="font-semibold">Guardian information</h3>
+                    <p className={cn('mt-1 text-sm', isMinor ? 'font-medium text-destructive' : 'text-muted-foreground')}>
                       {isMinor ? 'Required because the member is under 18.' : 'Required for members under 18.'}
                     </p>
                   </div>
-                  <button type="button" onClick={() => setShowGuardian(!showGuardian)} className="text-sm font-semibold text-[#2c3f67] dark:text-blue-400 hover:underline flex items-center gap-1">
-                    {showGuardian ? 'Hide' : 'Add Info'}
-                    {showGuardian ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                  </button>
+                  {!isMinor && (
+                    <Button type="button" variant="ghost" size="sm" aria-expanded={showGuardian} onClick={() => setShowGuardian(!showGuardian)}>
+                      {showGuardian ? 'Hide' : 'Add'}
+                      {showGuardian ? <ChevronUp aria-hidden="true" /> : <ChevronDown aria-hidden="true" />}
+                    </Button>
+                  )}
                 </div>
-                
+
                 {showGuardian && (
-                  <div className="mt-4 space-y-4 animate-in fade-in duration-200">
-                     <div className="space-y-1.5">
-                        <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-xs">Guardian Name {isMinor && <span className="text-[#e62128]">*</span>}</Label>
-                        <Input placeholder="Enter name" value={formData.guardianName} onChange={(e) => setFormData({...formData, guardianName: e.target.value})} className="h-10 bg-white dark:bg-slate-900 border-transparent text-sm" />
-                     </div>
-                     <div className="space-y-1.5">
-                        <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-xs">Guardian NRIC / FIN {isMinor && <span className="text-[#e62128]">*</span>}</Label>
-                        <Input placeholder="e.g. S1234567A" value={formData.guardianNric} onChange={(e) => setFormData({...formData, guardianNric: e.target.value.toUpperCase()})} className="h-10 bg-white dark:bg-slate-900 border-transparent text-sm uppercase" />
-                     </div>
-                     <div className="space-y-1.5">
-                        <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-xs">Relationship to Member {isMinor && <span className="text-[#e62128]">*</span>}</Label>
-                        <select value={formData.guardianRelationship} onChange={(e) => setFormData({...formData, guardianRelationship: e.target.value})} className="w-full h-10 bg-white dark:bg-slate-900 rounded-md border-transparent px-3 text-sm text-black dark:text-white">
-                          <option value="" disabled>Select relationship</option>
-                          <option value="parent">Parent</option>
-                          <option value="guardian">Legal Guardian</option>
-                          <option value="sibling">Sibling</option>
-                          <option value="other">Other</option>
-                        </select>
-                     </div>
-                     <div className="space-y-1.5">
-                        <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-xs">Guardian Contact Number {isMinor && <span className="text-[#e62128]">*</span>}</Label>
-                        <div className="flex gap-2">
-                          <div className="w-16 h-10 bg-white dark:bg-slate-900 rounded-md flex items-center justify-center text-sm text-gray-600 shrink-0">+65</div>
-                          <Input type="tel" maxLength={8} placeholder="8-digit number" value={formData.guardianPhone} onChange={(e) => setFormData({...formData, guardianPhone: formatPhone(e.target.value)})} className="flex-1 h-10 bg-white dark:bg-slate-900 border-transparent text-sm" />
-                        </div>
-                     </div>
-                  </div>
+                  <>
+                    <FormField name="guardianName" label="Guardian name" optional={!isMinor} error={errors.guardianName}>
+                      <Input {...control('guardianName')} className={inputClass} value={formData.guardianName} onChange={(e) => setField('guardianName', e.target.value)} />
+                    </FormField>
+                    <FormField name="guardianNric" label="Guardian NRIC / FIN" optional={!isMinor} error={errors.guardianNric} hint="For example S1234567A.">
+                      <Input {...control('guardianNric')} className={cn(inputClass, 'uppercase')} value={formData.guardianNric} onChange={(e) => setField('guardianNric', e.target.value.toUpperCase())} />
+                    </FormField>
+                    <FormField name="guardianRelationship" label="Relationship to member" optional={!isMinor} error={errors.guardianRelationship}>
+                      <NativeSelect {...control('guardianRelationship')} className={selectClass} value={formData.guardianRelationship} onChange={(e) => setField('guardianRelationship', e.target.value)}>
+                        <option value="" disabled>Select relationship</option>
+                        {GUARDIAN_RELATIONSHIPS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                      </NativeSelect>
+                    </FormField>
+                    <FormField name="guardianPhone" label="Guardian contact number" optional={!isMinor} error={errors.guardianPhone}>
+                      <PhoneInput {...control('guardianPhone')} value={formData.guardianPhone} onChange={(e) => setField('guardianPhone', formatPhone(e.target.value))} />
+                    </FormField>
+                  </>
                 )}
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Step 4 */}
-        {currentStep === 4 && (
-          <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-            <div className="mb-6 sm:mb-8">
-              <h2 className="text-xl sm:text-2xl font-bold text-[#2c3f67] dark:text-white mb-1 sm:mb-2">Review & Submit</h2>
-              <p className="text-gray-500 text-xs sm:text-sm mb-4 sm:mb-6">Please review your information before submitting.</p>
-              
-              <div className="bg-[#f4f5f7] dark:bg-slate-800/50 rounded-xl p-4 sm:p-6 mb-4 sm:mb-6">
-                <div className="flex justify-between items-center mb-3 sm:mb-4 border-b border-gray-200 dark:border-slate-700 pb-2 sm:pb-3">
-                  <h3 className="text-sm sm:text-lg font-bold text-[#2c3f67] dark:text-blue-400">Personal Info</h3>
-                  <button onClick={() => setCurrentStep(1)} className="text-xs sm:text-sm text-[#e62128] font-semibold hover:underline">Edit</button>
+          {/* Step 4 */}
+          {currentStep === 4 && (
+            <div className="space-y-4">
+              <div className={groupClass}>
+                <div className="flex items-center justify-between gap-3 border-b pb-3">
+                  <h3 className="font-semibold">Personal information</h3>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setCurrentStep(1)}>Edit<span className="sr-only"> personal information</span></Button>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-2 sm:gap-y-3 text-xs sm:text-sm">
-                  <div><span className="text-gray-500 block text-[10px] sm:text-xs">Full Name</span>{formData.fullName || '-'}</div>
-                  <div><span className="text-gray-500 block text-[10px] sm:text-xs">NRIC</span>{formData.nric || '-'}</div>
-                  <div><span className="text-gray-500 block text-[10px] sm:text-xs">Nationality</span>{formData.nationality || '-'}</div>
-                  <div><span className="text-gray-500 block text-[10px] sm:text-xs">DOB</span>{formData.dob || '-'}</div>
-                </div>
+                <dl className="grid gap-3 text-sm sm:grid-cols-2">
+                  <ReviewItem term="Full name">{formData.fullName}</ReviewItem>
+                  <ReviewItem term="NRIC / FIN">{formData.nric}</ReviewItem>
+                  <ReviewItem term="Nationality">{labelOf(NATIONALITIES, formData.nationality)}</ReviewItem>
+                  <ReviewItem term="Date of birth">{validDob(formData.dob) ? formatDate(`${formData.dob}T00:00:00`) : ''}</ReviewItem>
+                  <ReviewItem term="Mobile number">{formData.mobile && `+65 ${formData.mobile}`}</ReviewItem>
+                  <ReviewItem term="Email address">{formData.email}</ReviewItem>
+                </dl>
               </div>
 
-              <div className="bg-[#f4f5f7] dark:bg-slate-800/50 rounded-xl p-4 sm:p-6 mb-4 sm:mb-6">
-                <div className="flex justify-between items-center mb-3 sm:mb-4 border-b border-gray-200 dark:border-slate-700 pb-2 sm:pb-3">
-                  <h3 className="text-sm sm:text-lg font-bold text-[#2c3f67] dark:text-blue-400">Training & Emergency</h3>
-                  <button onClick={() => setCurrentStep(2)} className="text-xs sm:text-sm text-[#e62128] font-semibold hover:underline">Edit</button>
+              <div className={groupClass}>
+                <div className="flex items-center justify-between gap-3 border-b pb-3">
+                  <h3 className="font-semibold">Training information</h3>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setCurrentStep(2)}>Edit<span className="sr-only"> training information</span></Button>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-2 sm:gap-y-3 text-xs sm:text-sm">
-                  <div><span className="text-gray-500 block text-[10px] sm:text-xs">Dojo</span>{centreName || '-'}</div>
-                  <div><span className="text-gray-500 block text-[10px] sm:text-xs">Type</span>{formData.membershipType ? membershipLabel(formData.membershipType) : '-'}</div>
-                  <div><span className="text-gray-500 block text-[10px] sm:text-xs">Belt</span>{formData.currentBelt || '-'}</div>
-                  <div><span className="text-gray-500 block text-[10px] sm:text-xs">Emergency Contact</span>{formData.emergencyName || '-'}</div>
-                </div>
+                <dl className="grid gap-3 text-sm sm:grid-cols-2">
+                  <ReviewItem term="Principal dojo">{centreName}</ReviewItem>
+                  <ReviewItem term="Membership type">{formData.membershipType ? membershipLabel(formData.membershipType) : ''}</ReviewItem>
+                  <ReviewItem term="Current belt">{labelOf(BELTS, formData.currentBelt)}</ReviewItem>
+                </dl>
               </div>
 
-              {/* 👇 费用摘要与照片提醒 */}
-              <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800/50 rounded-xl p-4 sm:p-6 mb-6">
-                <h4 className="font-bold text-[#2c3f67] dark:text-yellow-500 mb-3 text-sm sm:text-base">Registration Fee Summary</h4>
-                <div className="flex justify-between items-center text-sm py-2 border-b border-yellow-200/50 dark:border-yellow-800/50">
-                  <span className="text-gray-700 dark:text-gray-300">Membership Application Fee</span>
-                  <span className="font-bold text-lg text-[#2c3f67] dark:text-yellow-500">$60.00</span>
+              <div className={groupClass}>
+                <div className="flex items-center justify-between gap-3 border-b pb-3">
+                  <h3 className="font-semibold">Emergency contact</h3>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setCurrentStep(3)}>Edit<span className="sr-only"> emergency and medical details</span></Button>
                 </div>
-                <p className="text-xs text-gray-600 dark:text-gray-400 mt-2">
+                <dl className="grid gap-3 text-sm sm:grid-cols-2">
+                  <ReviewItem term="Name">{formData.emergencyName}</ReviewItem>
+                  <ReviewItem term="Relationship">{labelOf(EMERGENCY_RELATIONSHIPS, formData.emergencyRelationship)}</ReviewItem>
+                  <ReviewItem term="Contact number">{formData.emergencyPhone && `+65 ${formData.emergencyPhone}`}</ReviewItem>
+                </dl>
+              </div>
+
+              <div className="space-y-2 rounded-lg bg-muted p-4">
+                <h3 className="font-semibold">Fee summary</h3>
+                <div className="flex items-center justify-between gap-3 border-b pb-2 text-sm">
+                  <span>Membership application fee</span>
+                  <span className="text-lg font-semibold tabular-nums">{money.format(MEMBERSHIP_FEE)}</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
                   Includes current year membership fee, student handbook, and membership booklet.
                 </p>
-                <div className="flex items-start gap-2 mt-3 text-[#e62128] dark:text-red-400">
-                  <Info className="w-4 h-4 mt-0.5 shrink-0" />
-                  <p className="text-xs font-medium">
-                    Please remember to bring <b>2 current physical photos</b> to your Principal Dojo for your membership booklet.
-                  </p>
-                </div>
+                <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                  <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+                  Remember to bring 2 current physical photos to your principal dojo for your membership booklet.
+                </p>
+              </div>
+
+              <div className={cn('rounded-lg border p-4', errors.declaration && 'border-destructive')}>
+                <label className="flex cursor-pointer items-start gap-3 text-sm">
+                  <input
+                    {...control('declaration')}
+                    type="checkbox"
+                    checked={isDeclared}
+                    onChange={(e) => { setIsDeclared(e.target.checked); clearError('declaration') }}
+                    className="mt-0.5 size-5 shrink-0 accent-primary"
+                  />
+                  <span className="leading-relaxed">I declare that all the information provided is true and accurate.</span>
+                </label>
+                {errors.declaration && <p id={`${fieldId('declaration')}-error`} className="mt-2 text-sm text-destructive">{errors.declaration}</p>}
               </div>
             </div>
+          )}
 
-            <div className="mt-6 sm:mt-8 p-3 sm:p-4 bg-blue-50/50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900 rounded-lg">
-              <label className="flex items-start gap-2 sm:gap-3 cursor-pointer">
-                <input type="checkbox" checked={isDeclared} onChange={(e) => setIsDeclared(e.target.checked)} className="mt-0.5 w-4 h-4 sm:w-5 sm:h-5 rounded border-gray-300 text-[#2c3f67]" />
-                <span className="text-xs sm:text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
-                  I declare that all the information provided is true and accurate.
-                </span>
-              </label>
-            </div>
-          </div>
-        )}
-
-        {/* 底部按钮 */}
-        <div className="mt-8 sm:mt-10 flex justify-between items-center border-t border-gray-100 dark:border-slate-800 pt-4 sm:pt-6">
-          {currentStep > 1 ? (
-            <Button onClick={handleBack} disabled={isSubmitting} className="bg-gray-400 hover:bg-gray-500 text-white px-6 sm:px-10 h-10 sm:h-12 rounded-md text-sm sm:text-base">
-              Back
+          <div className="flex items-center justify-between gap-3 border-t pt-4">
+            {currentStep > 1 ? (
+              <Button type="button" variant="outline" size="touch" className="min-w-24" onClick={handleBack} disabled={isSubmitting}>
+                Back
+              </Button>
+            ) : <span />}
+            <Button type="button" size="touch" className="h-auto min-h-11 min-w-24 shrink py-2 whitespace-normal lg:min-h-10" onClick={handleNext} disabled={isSubmitting} aria-busy={isSubmitting}>
+              {currentStep < 4 ? 'Next' : isSubmitting ? 'Redirecting to payment…' : `Submit and pay ${money.format(MEMBERSHIP_FEE)}`}
             </Button>
-          ) : <div />}
-          
-          <Button onClick={handleNext} disabled={isSubmitting} className="bg-[#2c3f67] hover:bg-[#1f2d4a] text-white px-6 sm:px-10 h-10 sm:h-12 rounded-md text-sm sm:text-base">
-            {currentStep < 4 ? 'Next' : isSubmitting ? 'Redirecting to payment…' : 'Submit & Pay'}
-          </Button>
-        </div>
-
-      </div>
-    </div>
+          </div>
+        </CardContent>
+      </Card>
+    </section>
   )
 }

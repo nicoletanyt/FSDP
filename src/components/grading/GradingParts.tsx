@@ -4,7 +4,6 @@ import { ChevronLeft, ShieldCheck, TriangleAlert } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { InstructorAvatar } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { CardFooter } from '@/components/ui/card'
 import { singaporeToday } from '@/lib/grading/format'
 import { cn } from 'cn'
@@ -75,7 +74,7 @@ export function GradingPageHeader({ title, badges, facts, actions, children }: {
     <header className="flex flex-wrap items-start justify-between gap-4">
       <div className="min-w-0 space-y-3">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <h1 className="min-w-0 text-3xl font-semibold tracking-tight [overflow-wrap:anywhere]">{title}</h1>
+          <h1 className="min-w-0 text-2xl font-semibold tracking-tight md:text-3xl [overflow-wrap:anywhere]">{title}</h1>
           {badges}
         </div>
         {facts && <GradingFacts items={facts} />}
@@ -84,6 +83,23 @@ export function GradingPageHeader({ title, badges, facts, actions, children }: {
       {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
     </header>
   )
+}
+
+// A labelled fact: small caption above (with icon), value below. One look for
+// every grading detail (date, time, place, students, examiners).
+export const detailTermClass = 'flex items-center gap-1.5 text-sm text-muted-foreground'
+
+export function GradingDetail({ icon: Icon, term, children }: { icon: LucideIcon; term: string; children: ReactNode }) {
+  return (
+    <div className="min-w-0 space-y-1 text-sm">
+      <dt className={detailTermClass}><Icon className="size-4 shrink-0" aria-hidden="true" />{term}</dt>
+      <dd className="font-medium [overflow-wrap:anywhere]">{children}</dd>
+    </div>
+  )
+}
+
+export function GradingDetails({ children }: { children: ReactNode }) {
+  return <dl className="grid gap-x-8 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">{children}</dl>
 }
 
 export interface PanelExaminer {
@@ -104,16 +120,16 @@ export function ExaminerPanel({ panel, viewerIsChief = false, label, photos = {}
 }) {
   return (
     <div className="space-y-2">
-      {heading && <p className="flex items-center gap-2 text-sm font-medium">
-        <ShieldCheck className="size-4 text-primary" aria-hidden="true" />
-        Examiner panel
+      {heading && <p className={detailTermClass}>
+        <ShieldCheck className="size-4 shrink-0" aria-hidden="true" />
+        Examiners
       </p>}
       {panel.length ? (
         <ul className="flex flex-wrap gap-2" aria-label={label}>
           {panel.map(member => (
             <li key={member.instructorId} data-examiner
               className="inline-flex max-w-full items-center gap-2 rounded-full border bg-background py-1 pr-3 pl-1">
-              <InstructorAvatar interactive={false} avatarClassName="size-7" fallbackClassName="text-[11px]"
+              <InstructorAvatar interactive={false} avatarClassName="size-7" fallbackClassName="text-3xs"
                 profile={{ id: member.instructorId, name: member.name, role: 'Examiner', avatarUrl: photos[member.instructorId] }} />
               {member.isChief && (
                 <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
@@ -130,25 +146,7 @@ export function ExaminerPanel({ panel, viewerIsChief = false, label, photos = {}
   )
 }
 
-// Two or more mutually exclusive views (pressed buttons in one outlined group).
-export function Segmented<T extends string>({ label, value, options, onChange }: {
-  label: string
-  value: T
-  options: { value: T; text: string; icon?: LucideIcon }[]
-  onChange: (value: T) => void
-}) {
-  return (
-    <div role="group" aria-label={label} className="inline-flex rounded-lg border bg-background p-0.5">
-      {options.map(({ value: option, text, icon: Icon }) => (
-        <Button key={option} type="button" size="sm" variant={value === option ? 'secondary' : 'ghost'}
-          aria-pressed={value === option} onClick={() => onChange(option)} className="h-9 gap-1.5 px-3">
-          {Icon && <Icon className="size-4" aria-hidden="true" />}
-          <span className={cn(Icon && 'max-sm:sr-only')}>{text}</span>
-        </Button>
-      ))}
-    </div>
-  )
-}
+export { Segmented } from '@/components/shared/Segmented'
 
 // Things on a grading that need an administrator's attention.
 export function GradingWarnings({ warnings, quiet = false }: { warnings: string[]; quiet?: boolean }) {

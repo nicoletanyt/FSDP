@@ -1,3 +1,4 @@
+import { randomUUID } from '@/lib/uuid'
 import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from './use-auth'
@@ -79,7 +80,7 @@ export function useInstructorSessionSave(kind: 'assessment', pair: AssessmentKey
 
   function save(draft: Draft) {
     if (!isCurrent() || busy.current || active?.error || !session || profile?.role !== 'instructor' || draft.kind !== kind) return Promise.resolve(null)
-    const input: SessionSaveInput = { ...draft, ...pair, expectedUserId: parseEntityId(session.user.id, 'auth-user'), requestId: crypto.randomUUID() }
+    const input: SessionSaveInput = { ...draft, ...pair, expectedUserId: parseEntityId(session.user.id, 'auth-user'), requestId: randomUUID() }
     frozen.current = input
     return perform(input)
   }

@@ -19,6 +19,14 @@ type NearbyInstructor = {
   distance_km: number
 }
 
+// The database only previews cover for an upcoming class that still needs it.
+function coverErrorMessage(error: unknown) {
+  const code = (error as { code?: string } | null)?.code
+  if (code === '22023') return 'Cover preview is not available for this class.'
+  if (code === '42501') return 'Only administrators can check cover instructors.'
+  return 'Unable to check instructors.'
+}
+
 export default function CoverCandidatePreview({ eventId, className, startsAt, endsAt }: {
   eventId: string; className: string; startsAt: string; endsAt: string
 }) {
@@ -52,16 +60,16 @@ export default function CoverCandidatePreview({ eventId, className, startsAt, en
   const invited = new Set(invitations.data?.filter(item => item.status === 'accepted').map(item => item.instructor_id))
 
   return <section aria-label="Cover candidate preview" className="mt-4 flex flex-1 flex-col gap-2 border-t border-foreground/10 pt-4">
-    <h5 className="font-semibold">Nearby instructor preview</h5>
+    <h5 className="text-sm font-medium">Nearby instructor preview</h5>
     {preview.isPending && <p role="status">Checking linked instructors…</p>}
     {preview.isError && <div role="alert" className="flex flex-wrap items-center gap-2 text-destructive">
-      Unable to check instructors. <Button size="sm" variant="outline" onClick={() => void preview.refetch()}>Retry</Button>
+      {coverErrorMessage(preview.error)} <Button size="sm" variant="outline" onClick={() => void preview.refetch()}>Retry</Button>
     </div>}
     {preview.isSuccess && preview.data.length === 0 && <p>No available nearby instructors for this class.</p>}
     {preview.isSuccess && preview.data.length > 0 && <ul className="divide-y divide-foreground/10">
       {preview.data.map(candidate => <li key={candidate.instructor_id} className="py-2 first:pt-0">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="font-semibold">{candidate.instructor_name}</p>
+          <p className="font-medium">{candidate.instructor_name}</p>
           {invited.has(candidate.instructor_id) && <Badge variant="secondary" className="ml-auto bg-success/10 text-success" title="EmailJS accepted the invitation; delivery is not confirmed.">Invited</Badge>}
         </div>
         <p className="text-muted-foreground">{candidate.employment_type === 'full_time' ? 'Full time' : 'Part time'}</p>

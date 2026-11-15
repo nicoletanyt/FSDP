@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import ThemeToggle from '@/components/theme-toggle'
 import { supabase } from '@/lib/supabase'
+import { useFeedback } from '@/hooks/use-feedback'
 import { Mail, Lock, User, ArrowRight, Eye, EyeOff } from 'lucide-react'
 
 export default function Signup() {
@@ -17,6 +18,7 @@ export default function Signup() {
   const [showPassword, setShowPassword] = useState(false)
   const [pending, setPending] = useState(false)
   const [error, setError] = useState('')
+  const { notify, feedbackDialog } = useFeedback()
 
   async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -43,7 +45,7 @@ export default function Signup() {
         }
       })
       if (authError) throw authError
-      alert('Registration successful! Please check your email for verification.')
+      notify({ title: 'Registration successful', description: 'Please check your email to verify your account.' })
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : 'Unable to sign up. Try again.')
     } finally {
@@ -193,6 +195,7 @@ export default function Signup() {
           </div>
         </div>
       </div>
+      {feedbackDialog}
     </div>
   )
 }

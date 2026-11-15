@@ -73,7 +73,7 @@ after(async () => {
 async function open(width, scenario, page = 'dashboard') {
   await send('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: false })
   await send('Page.navigate', { url: `${origin}/tests/mobile-responsive/student-credits.html?scenario=${scenario}&page=${page}` })
-  await until(page === 'passes' ? `document.getElementById('my-passes-title') !== null` : `document.querySelector('h3') !== null`)
+  await until(page === 'passes' ? `document.getElementById('my-passes-title') !== null` : `document.querySelector('h2') !== null`)
 }
 
 test('dashboard waits for the paid receipt, then renders database balance at mobile and desktop sizes', async () => {
@@ -104,9 +104,9 @@ test('dashboard shows unlimited from the database flag', async () => {
 test('batch expiration warning preserves the card layout at mobile and desktop sizes', async () => {
   for (const width of [320, 1440]) {
     await open(width, 'expiring')
-    await until(`document.body.textContent.includes('Alert: 4 credits expiring in 14 days!')`)
+    await until(`document.body.textContent.includes('4 credits expire in 14 days')`)
     const contrast = await evaluate(`(() => {
-      const element = [...document.querySelectorAll('p[role="status"]')].find(el => el.textContent.includes('Alert:'));
+      const element = document.querySelector('p[data-expiry-notice]');
       const style = getComputedStyle(element);
       const canvas = document.createElement('canvas'); canvas.width = canvas.height = 1;
       const context = canvas.getContext('2d');
@@ -122,16 +122,16 @@ test('batch expiration warning preserves the card layout at mobile and desktop s
     })()`)
     assert.ok(contrast >= 4.5, `Expiration warning contrast: ${contrast}`)
     assert.equal(await evaluate('document.documentElement.scrollWidth <= innerWidth'), true)
-    assert.equal(await evaluate(`Array.from(document.querySelectorAll('a')).some(a => a.textContent.includes('Top Up'))`), true)
+    assert.equal(await evaluate(`Array.from(document.querySelectorAll('a')).some(a => a.textContent.includes('Top up'))`), true)
     const screenshot = await send('Page.captureScreenshot', { format: 'png' })
     await writeFile(join(temp, `credit-batches-${width}.png`), Buffer.from(screenshot.data, 'base64'))
   }
   await open(320, 'last-day')
-  await until(`document.body.textContent.includes('Alert: 4 credits expiring in 1 day!')`)
+  await until(`document.body.textContent.includes('4 credits expire in 1 day')`)
   for (const scenario of ['later', 'expired']) {
     await open(320, scenario)
     await until(`document.querySelector('[aria-live="polite"]')?.textContent === '10'`)
-    assert.equal(await evaluate(`document.body.textContent.includes('Alert:')`), false)
+    assert.equal(await evaluate(`document.querySelector('[data-expiry-notice]')`), null)
   }
 })
 
@@ -148,7 +148,7 @@ test('Credits page shows each saved pass expiry, remaining credits and truthful 
     assert.equal(await evaluate(`document.querySelector('[data-credit-batch="legacy"]').textContent.includes('No expiry recorded')`), true)
     assert.equal(await evaluate(`document.querySelector('[data-credit-batch="legacy"]').textContent.includes('Carried over on')`), true)
     assert.equal(await evaluate(`document.querySelector('[data-credit-batch="soon"]').textContent.includes('Purchased on')`), true)
-    assert.equal(await evaluate(`document.querySelector('[data-credit-batch="soon"]').textContent.includes('Expiring in 9 days!')`), true)
+    assert.equal(await evaluate(`document.querySelector('[data-credit-batch="soon"]').textContent.includes('Expires in 9 days')`), true)
     assert.deepEqual(await evaluate(`Array.from(document.querySelectorAll('[data-credit-batch]')).map(el => el.getAttribute('data-credit-batch'))`), ['expired','soon','later','legacy'])
     assert.equal(await evaluate(`document.querySelector('[data-credit-batch="soon"] time').dateTime.length > 0`), true)
     assert.equal(await evaluate('document.documentElement.scrollWidth <= innerWidth'), true)
@@ -159,7 +159,7 @@ test('Credits page shows each saved pass expiry, remaining credits and truthful 
 
 test('pass list has an empty state and a recoverable error instead of invented expiry dates', async () => {
   await open(320, 'empty', 'passes')
-  await until(`document.getElementById('my-passes').textContent.includes('No point batches with credits remaining.')`)
+  await until(`document.getElementById('my-passes').textContent.includes('No passes with credits remaining')`)
   await open(320, 'error', 'passes')
   await until(`document.getElementById('my-passes').textContent.includes('Unable to load your passes.')`)
   assert.equal(await evaluate(`document.querySelectorAll('[data-credit-batch]').length`), 0)

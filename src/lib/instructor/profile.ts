@@ -1,3 +1,4 @@
+import { randomUUID } from '../uuid'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { GradeRow, InstructorIdentity } from './types'
 import { InstructorDataError, toInstructorDataError } from './errors'
@@ -112,7 +113,7 @@ export function createInstructorProfileApi(client: ProfileClient,
       }
       try {
         await identityFor(expectedUserId)
-        const path = `${expectedUserId}/${crypto.randomUUID()}.jpg`
+        const path = `${expectedUserId}/${randomUUID()}.jpg`
         const { error } = await bucket().upload(path, image, { contentType: 'image/jpeg', upsert: false })
         if (error) throw error
         const url = await photoUrl(path)

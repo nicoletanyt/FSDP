@@ -227,8 +227,8 @@ test('once sorted, the grading day opens on the session list with each session\'
   assert.ok(text.includes('Grade not recorded'), 'missing grade shows the badge fallback')
   // Single-grade sessions don't repeat the grade on every row.
   assert.ok(!text.includes('Target grade'))
-  // The only badge is the status pill.
-  assert.equal(root.root.findAll(node => node.props?.['data-slot'] === 'badge' && typeof node.type === 'string').length, 1)
+  // The badges are the status pill and, for the chief, the draft/published schedule pill.
+  assert.equal(root.root.findAll(node => node.props?.['data-slot'] === 'badge' && typeof node.type === 'string').length, 2)
   // Examiners can't sort or move students.
   assert.ok(!text.includes('Sort into sessions') && !text.includes('Sort again') && !text.includes('Move to'))
   const hrefs = hrefsOf(root)

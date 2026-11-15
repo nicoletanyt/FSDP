@@ -1,20 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent, SubmitEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import {
-    Check,
-    ChevronRight,
-    LockKeyhole,
-    Pencil,
-    Trash2,
-    Upload,
-    X,
-} from "lucide-react";
-import { useLocation, useNavigate } from "react-router";
+import { Pencil, Trash2, Upload } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import GradeBadge from "@/components/instructor/DatabaseGradeBadge";
+import ChangePasswordDialog from "@/components/profile/ChangePasswordDialog";
+import { DatabaseGradeBadge as GradeBadge } from "@/components/shared/grade/GradeBadge";
 import TitleBadge from "@/components/instructor/TitleBadge";
 import { InstructorAvatar } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,9 +21,11 @@ import {
     DialogTrigger,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { PasswordInput } from "@/components/ui/password-input";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/use-auth";
+import { useFeedback } from "@/hooks/use-feedback";
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { useInstructorProfile } from "@/hooks/use-instructor-profile";
 import { prepareInstructorPhoto } from "@/lib/instructor-calendar";
 import { useInstructorApi } from "@/lib/instructor/data-context";
@@ -39,38 +33,33 @@ import { instructorQueryKeys } from "@/lib/instructor/query-keys";
 import { MAX_ADDRESS_LENGTH } from "@/lib/instructor/profile";
 import type { InstructorProfileDetails } from "@/lib/instructor/profile";
 import { queryGeneration } from "@/lib/query-generation";
-import { supabase } from "@/lib/supabase";
 
 const employmentStatusLabels = {
     part_time: "Part time",
     full_time: "Full time",
 };
 
+function ValueSkeleton() {
+    return <Skeleton aria-hidden="true" className="inline-block h-4 w-28 align-middle" />;
+}
+
 export default function InstructorProfile() {
     const { profile } = useAuth();
     const api = useInstructorApi();
     const queryClient = useQueryClient();
     const details = useInstructorProfile();
-    const location = useLocation();
-    const navigate = useNavigate();
-    const [pending, setPending] = useState(false);
-    const [error, setError] = useState("");
-    const [newPassword, setNewPassword] = useState("");
-    const [confirmPassword, setConfirmPassword] = useState("");
-    const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
-    const [passwordEdited, setPasswordEdited] = useState(false);
     const photo = details.data?.photoUrl;
     const photoInputRef = useRef<HTMLInputElement>(null);
     const photoRequestRef = useRef(0);
     const photoBusyRef = useRef(false);
     const [photoPending, setPhotoPending] = useState(false);
     const [photoError, setPhotoError] = useState("");
-    const [photoFeedback, setPhotoFeedback] = useState("");
+    const [confirmRemovePhoto, setConfirmRemovePhoto] = useState(false);
+    const { notify, feedbackDialog } = useFeedback();
     const [addressEditing, setAddressEditing] = useState(false);
     const [addressDraft, setAddressDraft] = useState("");
     const [addressPending, setAddressPending] = useState(false);
     const [addressError, setAddressError] = useState("");
-    const [addressFeedback, setAddressFeedback] = useState("");
     const addressBusyRef = useRef(false);
     const addressRequestRef = useRef(0);
     const addressEditRef = useRef<HTMLButtonElement>(null);
@@ -81,7 +70,7 @@ export default function InstructorProfile() {
     const profileReady = Boolean(
         profile?.id && details.isSuccess && !details.isFetching,
     );
-    const photoControlsDisabled = !profileReady || photoPending || pending;
+    const photoControlsDisabled = !profileReady || photoPending;
 
     async function updateSavedProfile(
         userId: string,
@@ -101,14 +90,12 @@ export default function InstructorProfile() {
 
     useEffect(() => {
         setPhotoError("");
-        setPhotoFeedback("");
         setPhotoPending(false);
         photoBusyRef.current = false;
         setAddressEditing(false);
         setAddressDraft("");
         setAddressPending(false);
         setAddressError("");
-        setAddressFeedback("");
         addressBusyRef.current = false;
         return () => {
             photoRequestRef.current += 1;
@@ -134,7 +121,6 @@ export default function InstructorProfile() {
         photoBusyRef.current = true;
         setPhotoPending(true);
         setPhotoError("");
-        setPhotoFeedback("");
         try {
             await queryClient.cancelQueries({
                 queryKey: instructorQueryKeys.profile(userId),
@@ -148,7 +134,7 @@ export default function InstructorProfile() {
             );
             await updateSavedProfile(userId, generation, saved);
             if (request !== photoRequestRef.current) return;
-            setPhotoFeedback("Profile picture updated.");
+            notify({ title: "Profile picture updated", description: "Your new photo is now saved." });
         } catch (failure) {
             if (request === photoRequestRef.current) {
                 setPhotoError(
@@ -180,7 +166,6 @@ export default function InstructorProfile() {
         photoBusyRef.current = true;
         setPhotoPending(true);
         setPhotoError("");
-        setPhotoFeedback("");
         try {
             await queryClient.cancelQueries({
                 queryKey: instructorQueryKeys.profile(userId),
@@ -188,7 +173,7 @@ export default function InstructorProfile() {
             const saved = await api.removeProfilePhoto(userId, previousPath);
             await updateSavedProfile(userId, generation, saved);
             if (request !== photoRequestRef.current) return;
-            setPhotoFeedback("Profile picture removed.");
+            notify({ title: "Profile picture removed", description: "Your account now shows your initials instead." });
         } catch (failure) {
             if (request === photoRequestRef.current)
                 setPhotoError(
@@ -218,7 +203,6 @@ export default function InstructorProfile() {
         }
         setAddressDraft(details.data?.address ?? "");
         setAddressError("");
-        setAddressFeedback("");
         setAddressEditing(true);
     }
 
@@ -231,7 +215,6 @@ export default function InstructorProfile() {
         addressBusyRef.current = true;
         setAddressPending(true);
         setAddressError("");
-        setAddressFeedback("");
         try {
             await queryClient.cancelQueries({
                 queryKey: instructorQueryKeys.profile(userId),
@@ -240,7 +223,7 @@ export default function InstructorProfile() {
             await updateSavedProfile(userId, generation, { address });
             if (request !== addressRequestRef.current) return;
             finishAddressEditing();
-            setAddressFeedback(address ? "Address updated." : "Address removed.");
+            notify(address ? { title: "Address updated", description: "Administrators can now reach you at your new address." } : { title: "Address removed", description: "No address is stored on your account." });
         } catch (failure) {
             if (request === addressRequestRef.current)
                 setAddressError(
@@ -255,91 +238,10 @@ export default function InstructorProfile() {
             }
         }
     }
-    const passwordsMatch =
-        newPassword.length > 0 && newPassword === confirmPassword;
-    const passwordRequirements = [
-        { label: "At least 8 characters", met: newPassword.length >= 8 },
-        { label: "At least one letter", met: /[a-zA-Z]/.test(newPassword) },
-        { label: "At least one number", met: /[0-9]/.test(newPassword) },
-    ];
-    const PasswordMatchIcon = passwordsMatch ? Check : X;
-    const canSavePassword =
-        passwordRequirements.every(({ met }) => met) &&
-        newPassword.length <= 128 &&
-        passwordsMatch;
-    const passwordChanged = location.state?.passwordChanged === true;
-
-    function handlePasswordDialogChange(open: boolean) {
-        if (pending) return;
-        setPasswordDialogOpen(open);
-        setNewPassword("");
-        setConfirmPassword("");
-        setPasswordEdited(false);
-        setError("");
-        if (open && passwordChanged) {
-            void navigate(location, {
-                replace: true,
-                state: { ...location.state, passwordChanged: false },
-            });
-        }
-    }
-
-    async function handlePasswordChange(event: SubmitEvent<HTMLFormElement>) {
-        event.preventDefault();
-        if (pending) return;
-
-        const form = event.currentTarget;
-        const values = new FormData(form);
-        const password = String(values.get("new-password") ?? "");
-        const confirmation = String(values.get("confirm-password") ?? "");
-        setError("");
-        if (passwordChanged) {
-            void navigate(location, {
-                replace: true,
-                state: { ...location.state, passwordChanged: false },
-            });
-        }
-
-        if (
-            password.length < 8 ||
-            password.length > 128 ||
-            !/[a-zA-Z]/.test(password) ||
-            !/[0-9]/.test(password)
-        ) {
-            setError("Use 8–128 characters, including a letter and a number.");
-            return;
-        }
-        if (password !== confirmation) {
-            setError("The passwords do not match.");
-            return;
-        }
-
-        setPending(true);
-        try {
-            const { error: authError } = await supabase.auth.updateUser({ password });
-            if (authError) throw authError;
-            form.reset();
-            setPasswordDialogOpen(false);
-            // Auth reloads the profile after USER_UPDATED; keep feedback across that remount.
-            void navigate(location, {
-                replace: true,
-                state: { ...location.state, passwordChanged: true },
-            });
-        } catch (failure) {
-            setError(
-                failure instanceof Error
-                    ? failure.message
-                    : "Unable to change your password. Try again.",
-            );
-        } finally {
-            setPending(false);
-        }
-    }
-
     return (
         <section className="w-full space-y-6">
             <header>
-                <h1 className="text-3xl font-semibold tracking-tight">Profile</h1>
+                <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Profile</h1>
             </header>
             <Card>
                 <CardContent className="space-y-5">
@@ -432,9 +334,7 @@ export default function InstructorProfile() {
                                     <Button
                                         type="button"
                                         variant="destructive"
-                                        onClick={() => {
-                                            void removePhoto();
-                                        }}
+                                        onClick={() => setConfirmRemovePhoto(true)}
                                         disabled={photoControlsDisabled}
                                     >
                                         <Trash2 aria-hidden="true" className="size-4" />
@@ -463,17 +363,6 @@ export default function InstructorProfile() {
                                 >
                                     Reload saved profile
                                 </Button>
-                            )}
-                            {photoFeedback && (
-                                <Alert
-                                    role="status"
-                                    className="col-span-full border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200"
-                                >
-                                    <Check aria-hidden="true" />
-                                    <AlertDescription className="text-emerald-800 dark:text-emerald-200">
-                                        {photoFeedback}
-                                    </AlertDescription>
-                                </Alert>
                             )}
                         </div>
                     </div>
@@ -509,15 +398,15 @@ export default function InstructorProfile() {
                                         }
                                         aria-label="Edit address"
                                         title="Edit address"
-                                        disabled={!profileReady || addressPending || pending}
+                                        disabled={!profileReady || addressPending}
                                     >
                                         <Pencil aria-hidden="true" className="size-4" />
                                     </DialogTrigger>
                                     <DialogContent
-                                        className="sm:max-w-md"
+                                        
                                         showCloseButton={!addressPending}
                                     >
-                                        <DialogHeader className="pr-10">
+                                        <DialogHeader>
                                             <DialogTitle>Edit address</DialogTitle>
                                             <DialogDescription>
                                                 Update the address associated with your instructor
@@ -591,30 +480,22 @@ export default function InstructorProfile() {
                             <dd className="min-w-0 flex-1 sm:text-right">
                                 <span className="whitespace-pre-wrap break-words">
                                     {details.isPending
-                                        ? "Loading…"
+                                        ? <ValueSkeleton />
                                         : details.isError
                                             ? "Unavailable"
                                             : details.data?.address || "Not provided"}
                                 </span>
-                                {addressFeedback && (
-                                    <p
-                                        role="status"
-                                        className="mt-2 text-xs text-emerald-700 dark:text-emerald-400"
-                                    >
-                                        {addressFeedback}
-                                    </p>
-                                )}
                             </dd>
                         </div>
                         <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
                             <dt className="text-muted-foreground">Grade</dt>
-                            <dd>{details.isPending ? "Loading…" : details.isError ? "Unavailable" : <GradeBadge grade={details.data?.grade ?? null} />}</dd>
+                            <dd>{details.isPending ? <ValueSkeleton /> : details.isError ? "Unavailable" : <GradeBadge grade={details.data?.grade ?? null} />}</dd>
                         </div>
                         <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
                             <dt className="text-muted-foreground">Instructor title</dt>
                             <dd>
                                 {details.isPending ? (
-                                    "Loading…"
+                                    <ValueSkeleton />
                                 ) : details.isError ? (
                                     "Unavailable"
                                 ) : details.data && details.data.instructorTitle !== "none" ? (
@@ -628,7 +509,7 @@ export default function InstructorProfile() {
                             <dt className="text-muted-foreground">Examiner</dt>
                             <dd className="min-w-0 sm:text-right">
                                 {details.isPending ? (
-                                    "Loading…"
+                                    <ValueSkeleton />
                                 ) : details.isError ? (
                                     "Unavailable"
                                 ) : details.data?.isExaminer ? (
@@ -645,7 +526,7 @@ export default function InstructorProfile() {
                             <dd className="min-w-0 sm:text-right">
                                 <Badge variant="secondary" className="h-auto px-2.5 py-1">
                                     {details.isPending
-                                        ? "Loading…"
+                                        ? <ValueSkeleton />
                                         : details.isError
                                             ? "Unavailable"
                                             : details.data?.employmentType
@@ -662,165 +543,22 @@ export default function InstructorProfile() {
                     <CardTitle>Account</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                    {passwordChanged && (
-                        <Alert
-                            role="status"
-                            className="border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200"
-                        >
-                            <AlertDescription className="text-emerald-800 dark:text-emerald-200">
-                                Your password has been changed successfully.
-                            </AlertDescription>
-                        </Alert>
-                    )}
-                    <Dialog
-                        open={passwordDialogOpen}
-                        onOpenChange={handlePasswordDialogChange}
-                    >
-                        <DialogTrigger
-                            render={<Button variant="ghost" />}
-                            className="h-auto w-full justify-start gap-3 px-3 py-2 font-normal"
-                            disabled={pending}
-                        >
-                            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted">
-                                <LockKeyhole
-                                    aria-hidden="true"
-                                    className="size-4 text-muted-foreground"
-                                />
-                            </span>
-                            <span>Change password</span>
-                            <ChevronRight
-                                aria-hidden="true"
-                                className="ml-auto size-4 text-muted-foreground"
-                            />
-                        </DialogTrigger>
-                        <DialogContent
-                            className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-md"
-                            showCloseButton={!pending}
-                        >
-                            <DialogHeader className="pr-8">
-                                <DialogTitle>Change password</DialogTitle>
-                                <DialogDescription>
-                                    Choose a new password for your instructor account.
-                                </DialogDescription>
-                            </DialogHeader>
-                            <form
-                                onSubmit={handlePasswordChange}
-                                onReset={() => {
-                                    setNewPassword("");
-                                    setConfirmPassword("");
-                                    setPasswordEdited(false);
-                                }}
-                                className="space-y-4"
-                                aria-busy={pending}
-                            >
-                                {error && (
-                                    <Alert variant="destructive">
-                                        <AlertDescription>{error}</AlertDescription>
-                                    </Alert>
-                                )}
-                                <fieldset disabled={pending} className="space-y-4">
-                                    <div className="space-y-2">
-                                        <Label htmlFor="new-password">New password</Label>
-                                        <PasswordInput
-                                            id="new-password"
-                                            name="new-password"
-                                            value={newPassword}
-                                            onChange={(event) => {
-                                                setNewPassword(event.target.value);
-                                                setPasswordEdited(true);
-                                            }}
-                                            autoComplete="new-password"
-                                            required
-                                            minLength={8}
-                                            maxLength={128}
-                                            pattern="(?=.*[a-zA-Z])(?=.*[0-9]).*"
-                                            title="Use 8–128 characters, including a letter and a number."
-                                            aria-describedby="new-password-hint"
-                                        />
-                                        <ul
-                                            id="new-password-hint"
-                                            aria-live="polite"
-                                            className="space-y-1 text-xs"
-                                        >
-                                            {passwordRequirements.map(({ label, met }) => {
-                                                const Icon = met ? Check : X;
-                                                return (
-                                                    <li
-                                                        key={label}
-                                                        className={`flex items-center gap-1.5 ${!passwordEdited ? "text-muted-foreground" : met ? "text-emerald-700 dark:text-emerald-400" : "text-destructive"}`}
-                                                    >
-                                                        <Icon
-                                                            aria-hidden="true"
-                                                            className="size-3.5 shrink-0"
-                                                        />
-                                                        <span className="sr-only">
-                                                            {!passwordEdited
-                                                                ? "Not yet checked: "
-                                                                : met
-                                                                    ? "Requirement met: "
-                                                                    : "Requirement not met: "}
-                                                        </span>
-                                                        {label}
-                                                    </li>
-                                                );
-                                            })}
-                                        </ul>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="confirm-password">
-                                            Confirm new password
-                                        </Label>
-                                        <PasswordInput
-                                            id="confirm-password"
-                                            name="confirm-password"
-                                            value={confirmPassword}
-                                            onChange={(event) =>
-                                                setConfirmPassword(event.target.value)
-                                            }
-                                            autoComplete="new-password"
-                                            required
-                                            minLength={8}
-                                            maxLength={128}
-                                            aria-describedby={
-                                                confirmPassword ? "password-match-hint" : undefined
-                                            }
-                                            aria-invalid={
-                                                confirmPassword.length > 0 && !passwordsMatch
-                                            }
-                                        />
-                                        {confirmPassword.length > 0 && (
-                                            <p
-                                                id="password-match-hint"
-                                                aria-live="polite"
-                                                className={`flex items-center gap-1.5 text-xs ${passwordsMatch ? "text-emerald-700 dark:text-emerald-400" : "text-destructive"}`}
-                                            >
-                                                <PasswordMatchIcon
-                                                    aria-hidden="true"
-                                                    className="size-3.5 shrink-0"
-                                                />
-                                                {passwordsMatch
-                                                    ? "Passwords match."
-                                                    : "Passwords must match."}
-                                            </p>
-                                        )}
-                                    </div>
-                                </fieldset>
-                                <DialogFooter>
-                                    <DialogClose
-                                        render={<Button type="button" variant="outline" />}
-                                        disabled={pending}
-                                    >
-                                        Cancel
-                                    </DialogClose>
-                                    <Button type="submit" disabled={pending || !canSavePassword}>
-                                        {pending ? "Saving…" : "Save Changes"}
-                                    </Button>
-                                </DialogFooter>
-                            </form>
-                        </DialogContent>
-                    </Dialog>
+                    <ChangePasswordDialog accountType="instructor" />
                 </CardContent>
             </Card>
+            {feedbackDialog}
+            <ConfirmDialog
+                open={confirmRemovePhoto}
+                onOpenChange={setConfirmRemovePhoto}
+                title="Remove profile picture?"
+                description="Your photo will be deleted and your initials will be shown instead."
+                confirmLabel="Remove photo"
+                destructive
+                onConfirm={() => {
+                    setConfirmRemovePhoto(false);
+                    void removePhoto();
+                }}
+            />
         </section>
     );
 }

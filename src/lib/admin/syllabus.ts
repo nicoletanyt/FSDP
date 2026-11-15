@@ -180,7 +180,7 @@ const adultColumns: SyllabusColumn[] = [
   { id: 'shihonage', label: 'Shihonage', group: 'technique' },
   { id: 'kokyunage', label: 'Kokyunage', group: 'technique' },
   { id: 'tenchinage', label: 'Techinage', group: 'technique' },
-  { id: 'kotegaishi', label: 'Kotegaishi', group: 'technique' },
+  { id: 'kotegaishi', label: 'Koteigashi', group: 'technique' },
   { id: 'kaitennage', label: 'Kaitennage', group: 'technique' },
   { id: 'jujinage', label: 'Jujinage', group: 'technique' },
   { id: 'jujigarami', label: 'Jujigarami', group: 'technique' },
@@ -512,7 +512,7 @@ const adultRows: RawRow[] = [
       },
       { column: 'ikkyo', source: 'Katatedori Shomenuchi' },
       { column: 'iriminage', source: 'Katatedori Shomenuchi' },
-      { column: 'shihonage', source: 'Katatedori Aihamni' },
+      { column: 'shihonage', source: 'Katatedori Aihanmi' },
       { column: 'kokyunage', source: 'Katatedori Gyakuhanmi' },
       { column: 'jiyuwaza', source: 'Katatedori Gyakuhanmi' },
     ],
@@ -536,7 +536,7 @@ const adultRows: RawRow[] = [
         source: 'Katatedori Gyakuhanmi, Yokomenuchi',
         items: ['Katatedori Gyakuhanmi', 'Yokomenuchi'],
       },
-      { column: 'kokyunage', source: 'Katatedori Aihamni' },
+      { column: 'kokyunage', source: 'Katatedori Aihanmi' },
       { column: 'tenchinage', source: 'Ryotedori' },
       { column: 'jujinage', source: 'Katatedori Aihanmi' },
       { column: 'jiyuwaza', source: 'Katatedori Aihanmi' },
@@ -726,9 +726,9 @@ const adultRows: RawRow[] = [
         column: 'basics',
         span: 15,
         source:
-          'Unarmed techniques in Techiwaza, Suwariwaza & Hanmihandachi. Take 20 Ukemis. Achieve a 3 points average on the scoring system.',
+          'Unarmed techniques in Tachiwaza, Suwariwaza & Hanmihandachi. Take 20 Ukemis. Achieve a 3 points average on the scoring system.',
         items: [
-          'Unarmed techniques in Techiwaza, Suwariwaza & Hanmihandachi',
+          'Unarmed techniques in Tachiwaza, Suwariwaza & Hanmihandachi',
           'Take 20 Ukemis',
           'Achieve a 3-point average on the scoring system',
         ],
@@ -742,7 +742,7 @@ const adultRows: RawRow[] = [
         column: 'basics',
         span: 15,
         source:
-          'Unarmed techniques in Techiwaza, Suwariwaza, Hanmihandachi for all form of strikes, thrusts, grasping of shoulders, elbows, collar, wrists and hands from front & rear. Take 30 Ukemis. Demonstrate unbendable arm. Achieve a 3 points average on the scoring system.',
+          'Unarmed techniques in Tachiwaza, Suwariwaza, Hanmihandachi for all form of strikes, thrusts, grasping of shoulders, elbows, collar, wrists and hands from front & rear. Take 30 Ukemis. Demonstrate unbendable arm. Achieve a 3 points average on the scoring system.',
         items: [
           'Unarmed techniques — all strikes, thrusts and grabs, front & rear',
           'Take 30 Ukemis',
@@ -763,7 +763,7 @@ const adultRows: RawRow[] = [
     cells: [
       {
         column: 'basics',
-        span: 15,
+        span: 14,
         source:
           'Unarmed techniques similar to above. Defence against kicks. Take 30 Ukemis. Demonstrate relaxation and unable to be lifted by 1 person. Submit an article related subjects. Achieve a 6 points average on the scoring system.',
         items: [
@@ -775,6 +775,11 @@ const adultRows: RawRow[] = [
           'Achieve a 6-point average on the scoring system',
         ],
       },
+      {
+        column: 'koshinage',
+        source: 'Candidates aged 50 & above (by year) are to take 20 Ukemis.',
+        items: ['Aged 50 & above (by year): take 20 Ukemis'],
+      },
       { column: 'jiyuwaza', source: '4 Attackers' },
       { column: 'jo-waza', source: '24 Jo Kata' },
     ],
@@ -784,7 +789,7 @@ const adultRows: RawRow[] = [
     cells: [
       {
         column: 'basics',
-        span: 15,
+        span: 14,
         source:
           'Unarmed techniques similar to above. Take 30 Ukemis. Demonstrate relaxation and unable to be lifted by 2 persons. Submit an article on Aikido related subjects. Achieve a 9 points average on the scoring system.',
         items: [
@@ -794,6 +799,11 @@ const adultRows: RawRow[] = [
           'Submit an article on an Aikido related subject',
           'Achieve a 9-point average on the scoring system',
         ],
+      },
+      {
+        column: 'koshinage',
+        source: 'Candidates aged 50 & above (by year) are to take 20 Ukemis.',
+        items: ['Aged 50 & above (by year): take 20 Ukemis'],
       },
       { column: 'jiyuwaza', source: '5 Attackers' },
       { column: 'jo-waza', source: '24 Jo Kumitachi' },
@@ -805,7 +815,7 @@ const adultRows: RawRow[] = [
     cells: [
       {
         column: 'basics',
-        span: 15,
+        span: 14,
         source:
           'Unarmed, Kaeshi & Henka (Counter & Change) techniques. Take 30 Ukemis. Demonstrate understanding of KI extension, relaxation and show stable seiza. Submit an article on Aikido related subjects. Achieve a 12 points average on the scoring system.',
         items: [
@@ -815,6 +825,11 @@ const adultRows: RawRow[] = [
           'Submit an article on an Aikido related subject',
           'Achieve a 12-point average on the scoring system',
         ],
+      },
+      {
+        column: 'koshinage',
+        source: 'Candidates aged 50 & above (by year) are to take 20 Ukemis.',
+        items: ['Aged 50 & above (by year): take 20 Ukemis'],
       },
       { column: 'jiyuwaza', source: '6 Attackers' },
       { column: 'jo-waza', source: '5 Kumi Jo' },

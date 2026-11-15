@@ -17,7 +17,7 @@ function SessionCard({ session, photos }: { session: ExaminerSession; photos: Re
         <Card className="relative transition-shadow hover:ring-primary/40 focus-within:ring-2 focus-within:ring-ring">
             <CardHeader className="border-b">
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                    <CardTitle className="text-lg font-semibold">
+                    <CardTitle>
                         <Link to={`/instructor/gradings/${session.eventId}`}
                             className="outline-none after:absolute after:inset-0 after:content-['']">
                             {gradingTitle(session)}
@@ -53,7 +53,7 @@ function SessionList({ id, title, sessions, empty, photos }: { id: string; title
     if (!sessions.length && !empty) return null;
     return (
         <section className="space-y-4" aria-labelledby={id}>
-            <h2 id={id} className="text-xl font-semibold">{title}</h2>
+            <h2 id={id} className="text-base font-medium">{title}</h2>
             {sessions.length ? (
                 <div className="grid gap-4">
                     {sessions.map((session) => <SessionCard key={session.eventId} session={session} photos={photos} />)}
@@ -72,7 +72,7 @@ export default function InstructorGradings() {
     return (
         <section className="w-full space-y-8">
             <header>
-                <h1 className="text-3xl font-semibold tracking-tight">Gradings</h1>
+                <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Gradings</h1>
             </header>
             {sessions.isPending ? (
                 <InstructorDataStatus loading onRetry={() => void sessions.refetch()} variant="card" />

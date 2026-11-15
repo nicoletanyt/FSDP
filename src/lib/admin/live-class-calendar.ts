@@ -1,6 +1,9 @@
 import type { AdminCalendarEvent } from './attendance-calendar'
 import type { Centre, SessionType } from './types'
 import { supabase } from '@/lib/supabase'
+import { rosterAttendance } from '@/lib/instructor/calendar-view'
+import { decodeRosterEntry } from '@/lib/instructor/decoders'
+import type { AttendanceState, GradeRow } from '@/lib/instructor/types'
 
 type CentreRow = { id: string; name: string; short_name: string; address: string; timezone: string; status: Centre['status'] }
 type EventRow = {
@@ -40,16 +43,20 @@ export async function loadCalendarCentres(signal?: AbortSignal): Promise<Centre[
   return rows.map(row => ({ id: row.id, name: row.name, shortName: row.short_name, address: row.address, timezone: row.timezone, status: row.status }))
 }
 
-export async function loadCalendarClasses(centre: Centre, firstDay: string, afterLastDay: string, signal?: AbortSignal): Promise<AdminCalendarEvent[]> {
+/** Classes in the visible range for one dojo, or every dojo when `centreId` is null. */
+export async function loadCalendarClasses(centres: Centre[], centreId: string | null, firstDay: string, afterLastDay: string, signal?: AbortSignal): Promise<AdminCalendarEvent[]> {
+  const centreNames = new Map(centres.map(centre => [centre.id, centre.name]))
   const rows: EventRow[] = []
-  // Bound each request to one dojo and the visible date range. Paginate rather
-  // than relying on PostgREST's default 1,000-row response limit.
+  // Bound each request to the visible date range (and dojo, when chosen). Paginate
+  // rather than relying on PostgREST's default 1,000-row response limit.
   for (let from = 0; ; from += 500) {
-    const { data, error } = await supabase.from('events')
+    let query = supabase.from('events')
       .select('id,centre_id,instructor_id,name,starts_at,ends_at,status,instructors(first_name,last_name),classes(class_type_id,class_types(label)),event_students(count),instructor_class_unavailability(id,status,notification_status,notification_http_status,notification_failure_reason,created_at,instructors(first_name,last_name))')
-      .eq('centre_id', centre.id).eq('event_type', 'class')
+      .eq('event_type', 'class')
       .gt('ends_at', `${firstDay}T00:00:00+08:00`).lt('starts_at', `${afterLastDay}T00:00:00+08:00`)
       .order('starts_at').order('id').range(from, from + 499).abortSignal(signal ?? new AbortController().signal)
+    if (centreId) query = query.eq('centre_id', centreId)
+    const { data, error } = await query
     if (error) throw error
     rows.push(...((data ?? []) as unknown as EventRow[]))
     if (!data || data.length < 500) break
@@ -77,7 +84,7 @@ export async function loadCalendarClasses(centre: Centre, firstDay: string, afte
           type: sessionType(classType), isExternal: false,
         },
         date: new Date(year, month - 1, date), startTime, endTime,
-        name: row.name, centreName: centre.name, instructorName, roster: [],
+        name: row.name, centreName: centreNames.get(row.centre_id) ?? 'Unknown dojo', instructorName, roster: [],
         rosterCount: row.event_students?.[0]?.count ?? 0,
         liveDetails: { eventId: row.id, status: row.status, classType, startsAt: row.starts_at, endsAt: row.ends_at,
           unavailability: row.instructor_class_unavailability ? {
@@ -93,4 +100,31 @@ export async function loadCalendarClasses(centre: Centre, firstDay: string, afte
     }
     return segments
   })
+}
+
+export interface ClassRosterEntry {
+  studentId: string
+  name: string
+  grade: GradeRow | null
+  attendance: AttendanceState
+}
+
+/** A class's students and their recorded attendance, decoded like the instructor roster. */
+export async function loadClassRoster(eventId: string, startsAt: string, signal?: AbortSignal): Promise<ClassRosterEntry[]> {
+  const rows: unknown[] = []
+  for (let from = 0; ; from += 500) {
+    const { data, error } = await supabase.from('event_students')
+      .select('*, student:students(*, grade:grades(*), centre:centres(*))')
+      .eq('event_id', eventId).order('student_id').range(from, from + 499)
+      .abortSignal(signal ?? new AbortController().signal)
+    if (error) throw error
+    rows.push(...(data ?? []))
+    if (!data || data.length < 500) break
+  }
+  return rows.map(decodeRosterEntry).map(({ record, student }) => ({
+    studentId: student.student.id,
+    name: [student.student.first_name, student.student.last_name].filter(Boolean).join(' ') || student.student.email,
+    grade: student.grade,
+    attendance: rosterAttendance(record, startsAt),
+  }))
 }

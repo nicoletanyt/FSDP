@@ -50,9 +50,9 @@ function StudentTrainingContent({ student }: { student: StudentEntry }) {
 
     return (
         <>
-            <DialogHeader className="shrink-0 gap-2 border-b p-4 sm:p-6">
+            <DialogHeader className="shrink-0 gap-2 border-b p-4 lg:p-6">
                 <div className="flex items-start justify-between gap-4">
-                    <DialogTitle className="min-w-0 break-words text-xl font-semibold">
+                    <DialogTitle className="min-w-0 break-words">
                         {profile.name}
                     </DialogTitle>
                     <DialogClose
@@ -72,7 +72,7 @@ function StudentTrainingContent({ student }: { student: StudentEntry }) {
                     {profile.memberNo}
                 </DialogDescription>
             </DialogHeader>
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-4 sm:p-6">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-4 lg:p-6">
                 {detail.status !== "success" ? (
                     <InstructorDataStatus
                         loading={detail.status === "loading"}
@@ -123,7 +123,7 @@ export default function StudentTrainingDialog({
                 <DialogContent
                     showCloseButton={false}
                     data-student-training-dialog=""
-                    className="student-detail-view flex h-[80dvh] max-h-[80dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl"
+                    className="student-detail-view flex flex-col gap-0 overflow-hidden p-0"
                 >
                     {payload && (
                         <StudentTrainingContent

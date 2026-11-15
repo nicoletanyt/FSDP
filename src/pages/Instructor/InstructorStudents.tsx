@@ -1,25 +1,15 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams, Link } from "react-router";
 import {
-    ChevronDown,
     ChevronLeft,
     ChevronRight,
     MapPin,
-    Search,
-    SlidersHorizontal,
     Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuRadioGroup,
-    DropdownMenuRadioItem,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
-import GradeBadge from "@/components/instructor/DatabaseGradeBadge";
+import FilterPopover, { FilterField } from "@/components/shared/filters/FilterPopover";
+import { DatabaseGradeBadge as GradeBadge } from "@/components/shared/grade/GradeBadge";
 import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
 import { useAuth } from "@/hooks/use-auth";
 import { useInstructorQuery } from "@/hooks/use-instructor-data";
@@ -27,14 +17,7 @@ import { instructorQueryKeys, instructorQueryTimes } from "@/lib/instructor/quer
 import type { QueryState } from "@/hooks/use-instructor-data";
 import { toInstructorDataError } from "@/lib/instructor/errors";
 import { useInstructorApi } from "@/lib/instructor/data-context";
-import type { GradeRow, StudentDirectory } from "@/lib/instructor/types";
-import { Label } from "@/components/ui/label";
-import {
-    Popover,
-    PopoverContent,
-    PopoverTitle,
-    PopoverTrigger,
-} from "@/components/ui/popover";
+import type { StudentDirectory } from "@/lib/instructor/types";
 import { studentDetailsHref } from "@/lib/instructor-calendar";
 import {
     changeDirectoryFilter,
@@ -45,157 +28,13 @@ import {
     loadDirectorySnapshot,
     singaporeToday,
 } from "@/lib/instructor/directory";
-
-function DirectoryFilter({
-    label,
-    value,
-    options,
-    onValueChange,
-}: {
-    label: "Dojo";
-    value: string;
-    options: { value: string; label: string }[];
-    onValueChange: (value: string) => void;
-}) {
-    const triggerId = useId();
-
-    return (
-        <div className="grid min-w-0 gap-1.5">
-            <Label
-                htmlFor={triggerId}
-                className="shrink-0 text-sm text-muted-foreground"
-            >
-                {label}
-            </Label>
-            <DropdownMenu>
-                <DropdownMenuTrigger
-                    id={triggerId}
-                    render={
-                        <Button
-                            variant="outline"
-                            size="touch"
-                            className="directory-control w-full min-w-0 justify-between gap-2"
-                        />
-                    }
-                    aria-label={`${label}: ${options.find((option) => option.value === value)?.label || value || "All"}`}
-                >
-                    <span className="truncate">
-                        {options.find((option) => option.value === value)?.label ||
-                            value ||
-                            "All"}
-                    </span>
-                    <ChevronDown aria-hidden="true" className="size-4" />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                    align="start"
-                    className="student-directory-filter-menu"
-                >
-                    <DropdownMenuRadioGroup
-                        value={value}
-                        onValueChange={onValueChange}
-                        aria-label={`${label} filter`}
-                    >
-                        <DropdownMenuRadioItem value="" closeOnClick>
-                            <span className="min-w-0 [overflow-wrap:anywhere]">
-                                All dojos
-                            </span>
-                        </DropdownMenuRadioItem>
-                        {options.map((option) => (
-                            <DropdownMenuRadioItem
-                                key={option.value}
-                                value={option.value}
-                                closeOnClick
-                            >
-                                <span className="min-w-0 [overflow-wrap:anywhere]">
-                                    {option.label}
-                                </span>
-                            </DropdownMenuRadioItem>
-                        ))}
-                    </DropdownMenuRadioGroup>
-                </DropdownMenuContent>
-            </DropdownMenu>
-        </div>
-    );
-}
-
-// One grade filter drawn with the same GradeBadge the list uses, in ladder order.
-function GradeFilter({
-    value,
-    grades,
-    onValueChange,
-}: {
-    value: string;
-    grades: GradeRow[];
-    onValueChange: (value: string) => void;
-}) {
-    const triggerId = useId();
-    const selected = grades.find((grade) => grade.id === value) ?? null;
-
-    return (
-        <div className="grid min-w-0 gap-1.5">
-            <Label
-                htmlFor={triggerId}
-                className="shrink-0 text-sm text-muted-foreground"
-            >
-                Grade
-            </Label>
-            <DropdownMenu>
-                <DropdownMenuTrigger
-                    id={triggerId}
-                    render={
-                        <Button
-                            variant="outline"
-                            size="touch"
-                            className="directory-control w-full min-w-0 justify-between gap-2"
-                        />
-                    }
-                    aria-label={`Grade: ${selected?.label || value || "All"}`}
-                >
-                    <span className="flex min-w-0 items-center">
-                        {selected ? (
-                            <GradeBadge grade={selected} showBeltLabel />
-                        ) : (
-                            <span className="truncate">{value || "All"}</span>
-                        )}
-                    </span>
-                    <ChevronDown aria-hidden="true" className="size-4" />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                    align="start"
-                    className="student-directory-filter-menu"
-                >
-                    <DropdownMenuRadioGroup
-                        value={value}
-                        onValueChange={onValueChange}
-                        aria-label="Grade filter"
-                    >
-                        <DropdownMenuRadioItem value="" closeOnClick>
-                            <span className="min-w-0 [overflow-wrap:anywhere]">All grades</span>
-                        </DropdownMenuRadioItem>
-                        {grades.map((grade) => (
-                            <DropdownMenuRadioItem
-                                key={grade.id}
-                                value={grade.id}
-                                closeOnClick
-                                aria-label={grade.label}
-                            >
-                                <GradeBadge grade={grade} showBeltLabel />
-                            </DropdownMenuRadioItem>
-                        ))}
-                    </DropdownMenuRadioGroup>
-                </DropdownMenuContent>
-            </DropdownMenu>
-        </div>
-    );
-}
+import SearchInput from "@/components/shared/filters/SearchInput";
 
 export default function InstructorStudents() {
     const api = useInstructorApi();
     const { session, profile } = useAuth();
     const [params, setParams] = useSearchParams();
     const searchRef = useRef<HTMLInputElement>(null);
-    const filterTriggerRef = useRef<HTMLButtonElement>(null);
-    const [filtersOpen, setFiltersOpen] = useState(false);
     const query = params.get("q") ?? "";
     const rank = params.get("rank") ?? "";
     const dojo = params.get("dojo") ?? "";
@@ -290,92 +129,52 @@ export default function InstructorStudents() {
     return (
         <section aria-busy={data.status === "loading" || outOfRange} className="student-directory-view space-y-2 md:space-y-6">
             <header>
-                <h1 className="text-3xl font-semibold tracking-tight">Students</h1>
+                <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Students</h1>
             </header>
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                <div className="relative min-w-0 flex-1 basis-32">
-                    <Search
-                        aria-hidden="true"
-                        className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+                <SearchInput
+                    ref={searchRef}
+                    aria-label="Search by name or student ID"
+                    placeholder="Name or ID…"
+                    value={query}
+                    maxLength={200}
+                    onChange={(event) => updateFilter("q", event.target.value)}
+                    className="directory-control"
+                    wrapperClassName="min-w-0 basis-32"
+                />
+                <FilterPopover
+                    title="Filter students"
+                    activeCount={activeFilterCount}
+                    onReset={resetFilters}
+                    controlClassName="directory-control"
+                    contentClassName="student-directory-filters"
+                    titleClassName="directory-popover-title"
+                >
+                    <FilterField
+                        label="Grade"
+                        value={rank}
+                        onChange={(value) => updateFilter("rank", value)}
+                        ariaLabel="Grade filter"
+                        emptyText="No grade found."
+                        className="directory-control h-11 lg:h-10"
+                        contentClassName="student-directory-filter-menu"
+                        options={[{ value: "", label: "All grades" }, ...grades.map((grade) => ({ value: grade.id, label: grade.label }))]}
+                        renderOption={(option) => {
+                            const grade = grades.find((item) => item.id === option.value);
+                            return grade ? <GradeBadge grade={grade} showBeltLabel /> : option.label;
+                        }}
                     />
-                    <Input
-                        type="search"
-                        ref={searchRef}
-                        aria-label="Search by name or student ID"
-                        placeholder="Name or ID…"
-                        value={query}
-                        maxLength={200}
-                        onChange={(event) => updateFilter("q", event.target.value)}
-                        className="directory-control h-11 bg-background pl-9 lg:h-10"
+                    <FilterField
+                        label="Dojo"
+                        value={dojo}
+                        onChange={(value) => updateFilter("dojo", value)}
+                        ariaLabel="Dojo filter"
+                        emptyText="No dojo found."
+                        className="directory-control h-11 lg:h-10"
+                        contentClassName="student-directory-filter-menu"
+                        options={[{ value: "", label: "All dojos" }, ...dojos]}
                     />
-                </div>
-                <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>
-                    <PopoverTrigger
-                        ref={filterTriggerRef}
-                        render={
-                            <Button
-                                variant="outline"
-                                size="touch"
-                                className="directory-control gap-2"
-                            />
-                        }
-                        aria-label={
-                            activeFilterCount
-                                ? `Filter students, ${activeFilterCount} active filters`
-                                : "Filter students"
-                        }
-                    >
-                        <SlidersHorizontal aria-hidden="true" className="size-4" />
-                        <span>Filter</span>
-                        {activeFilterCount > 0 && (
-                            <span
-                                aria-hidden="true"
-                                className="directory-filter-count flex size-5 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground"
-                            >
-                                {activeFilterCount}
-                            </span>
-                        )}
-                    </PopoverTrigger>
-                    <PopoverContent
-                        className="student-directory-filters w-80 gap-3"
-                        finalFocus={filterTriggerRef}
-                    >
-                        <div className="space-y-1">
-                            <PopoverTitle className="directory-popover-title">
-                                Filter students
-                            </PopoverTitle>
-                        </div>
-                        <GradeFilter
-                            value={rank}
-                            grades={grades}
-                            onValueChange={(value) => updateFilter("rank", value)}
-                        />
-                        <DirectoryFilter
-                            label="Dojo"
-                            value={dojo}
-                            options={dojos}
-                            onValueChange={(value) => updateFilter("dojo", value)}
-                        />
-                        <div className="flex flex-wrap justify-between gap-2 border-t pt-4">
-                            <Button
-                                variant="ghost"
-                                size="touch"
-                                className="directory-control h-auto min-h-11 max-w-full whitespace-normal py-2 lg:min-h-10"
-                                disabled={!activeFilterCount}
-                                onClick={resetFilters}
-                            >
-                                Reset filters
-                            </Button>
-                            <Button
-                                size="touch"
-                                className="directory-control h-auto min-h-11 max-w-full whitespace-normal py-2 lg:min-h-10"
-                                onClick={() => setFiltersOpen(false)}
-                            >
-                                Done
-                            </Button>
-                        </div>
-                    </PopoverContent>
-                </Popover>
+                </FilterPopover>
             </div>
             <div className="space-y-4">
                 <div className="flex min-h-11 flex-wrap items-center justify-between gap-2">
@@ -476,7 +275,7 @@ export default function InstructorStudents() {
                                     aria-hidden="true"
                                     className="mx-auto size-6 text-muted-foreground"
                                 />
-                                <h2 className="text-sm font-semibold">{hasFilters ? "No students found" : "No students yet"}</h2>
+                                <h2 className="text-base font-medium">{hasFilters ? "No students found" : "No students yet"}</h2>
                                 <p className="directory-copy text-sm text-muted-foreground">
                                     {hasFilters ? "Try another name, student ID, grade or dojo." : "No student records are available."}
                                 </p>

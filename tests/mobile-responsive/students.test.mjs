@@ -115,7 +115,7 @@ test('directory fits all widths with a horizontal toolbar and one filter popover
             if (width < 1024) assert.deepEqual(result.padding, [24, 24, 24, 24]);
             else {
                 assert.deepEqual(result.padding, [32, 0, 32, 0]);
-                assert.ok(Math.abs(result.mainWidth - Math.min(1200, result.viewportWidth * 0.92)) <= 1, JSON.stringify(result));
+                assert.ok(Math.abs(result.mainWidth - result.viewportWidth * 0.8) <= 1, JSON.stringify(result));
             }
             assert.equal(result.closedControls, 0);
             assert.equal(result.popupCount, 1);

@@ -3,9 +3,9 @@ import { useOutletContext } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { CalendarX2, ChevronDown, LogOut, Maximize, Nfc, UserCheck } from "lucide-react";
 import CheckInScanner from "@/components/instructor/CheckInScanner";
+import { GradeLabelBadge } from "@/components/shared/grade/GradeBadge";
 import { pendingNfcTagKey } from "@/components/instructor/NfcTagCapture";
 import type { ScanFeedback } from "@/components/instructor/CheckInScanner";
-import DatabaseGradeBadge from "@/components/instructor/DatabaseGradeBadge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
@@ -441,7 +441,7 @@ export default function InstructorCheckIn() {
                     className={cn("min-h-0 min-w-0 gap-0 py-0", isKiosk && "hidden")}
                 >
                     <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b px-4 py-3">
-                        <h2 className="text-sm font-semibold">Recent check-ins</h2>
+                        <h2 className="text-sm font-medium">Recent check-ins</h2>
                         <p
                             aria-live="polite"
                             aria-atomic="true"
@@ -468,7 +468,7 @@ export default function InstructorCheckIn() {
                                         <p className="break-words text-sm font-medium">
                                             {`${student.student.first_name} ${student.student.last_name}`.trim() || "Student"}
                                         </p>
-                                        <DatabaseGradeBadge grade={student.grade} />
+                                        <GradeLabelBadge label={student.grade?.label} />
                                     </div>
                                     {at && (
                                         <time

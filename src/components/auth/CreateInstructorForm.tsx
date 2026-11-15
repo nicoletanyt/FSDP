@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { SubmitEvent } from 'react'
 import AccountFields from './AccountFields'
+import { useFeedback } from '@/hooks/use-feedback'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { createInstructor } from '@/lib/instructors'
@@ -16,7 +17,7 @@ export default function CreateInstructorForm({ onCreated }: { onCreated?: (accou
   const formRef = useEmptyAuthForm()
   const [pending, setPending] = useState(false)
   const [error, setError] = useState('')
-  const [createdEmail, setCreatedEmail] = useState<string | null>(null)
+  const { notify, feedbackDialog } = useFeedback()
   const [grades, setGrades] = useState<GradeRow[]>([])
   const [gradesLoading, setGradesLoading] = useState(true)
   const [gradesError, setGradesError] = useState(false)
@@ -48,7 +49,6 @@ export default function CreateInstructorForm({ onCreated }: { onCreated?: (accou
     const form = new FormData(element)
     setPending(true)
     setError('')
-    setCreatedEmail(null)
     try {
       const account = await createInstructor({
         first_name: String(form.get('first_name')).trim(),
@@ -63,7 +63,7 @@ export default function CreateInstructorForm({ onCreated }: { onCreated?: (accou
       setTitle('none')
       setIsExaminer(false)
       if (onCreated) onCreated(account)
-      else setCreatedEmail(account.email)
+      else notify({ title: 'Instructor created', description: `An account for ${account.email} has been created.` })
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : 'Unable to create the instructor.')
     } finally {
@@ -73,11 +73,6 @@ export default function CreateInstructorForm({ onCreated }: { onCreated?: (accou
 
   return (
     <div className="space-y-4">
-      {createdEmail && (
-        <Alert role="status" className="border-success/30 bg-success/10">
-          <AlertDescription className="text-foreground">Instructor account created for {createdEmail}.</AlertDescription>
-        </Alert>
-      )}
       <form ref={formRef} autoComplete="off" onSubmit={handleSubmit} className="space-y-5" aria-busy={pending}>
         {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
         <AccountFields instructor />
@@ -126,6 +121,7 @@ export default function CreateInstructorForm({ onCreated }: { onCreated?: (accou
           {pending ? 'Creating instructor…' : 'Create instructor'}
         </Button>
       </form>
+      {feedbackDialog}
     </div>
   )
 }

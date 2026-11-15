@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogClose, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Link } from "react-router";
-import GradeBadge from "./DatabaseGradeBadge";
+import { DatabaseGradeBadge as GradeBadge } from "@/components/shared/grade/GradeBadge";
 import { directoryStudent, singaporeToday } from "@/lib/instructor/directory";
 import { studentDetailsHref } from "@/lib/instructor-calendar";
 import type { StudentDetail } from "@/lib/instructor/types";
@@ -96,8 +96,8 @@ export function StudentInformationActions({ detail, showDetailsLink = true }: { 
                                 </span>
                             )}
                         </DialogTrigger>
-                        <DialogContent showCloseButton={false} className="student-detail-view max-h-[85dvh] overflow-y-auto">
-                            <DialogHeader className="flex-row items-center justify-between gap-4">
+                        <DialogContent showCloseButton={false} className="student-detail-view overflow-y-auto">
+                            <DialogHeader className="flex-row items-center justify-between gap-4 pr-0">
                                 <DialogTitle>{action === "contact" ? "Contact details" : "Medical alerts"}</DialogTitle>
                                 <DialogClose render={<Button variant="ghost" size="icon-touch" className="-my-2 -mr-2" />}>
                                     <X aria-hidden="true" /><span className="sr-only">Close</span>

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { LoaderCircle } from 'lucide-react'
+import { PageSkeleton } from '@/components/shared/skeletons'
 import { Navigate, Outlet, useLocation } from 'react-router'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -24,13 +24,12 @@ function AuthStatus() {
   const { loading, error, reloadProfile, signOut } = useAuth()
   const { pathname } = useLocation()
   const [signOutError, setSignOutError] = useState('')
-  const shell = pathname.startsWith('/instructor') ? 'mx-auto w-full p-4 lg:w-[70%] lg:px-0 lg:py-6' : ''
+  const shell = pathname.startsWith('/instructor') ? 'mx-auto w-full p-4 lg:w-[80%] lg:px-0 lg:py-6' : ''
 
   if (loading) {
     return (
-      <div role="status" className={`flex min-h-48 items-center justify-center gap-2 text-muted-foreground ${shell}`}>
-        <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
-        Loading your account…
+      <div className={shell}>
+        <PageSkeleton label="Loading your account…" />
       </div>
     )
   }

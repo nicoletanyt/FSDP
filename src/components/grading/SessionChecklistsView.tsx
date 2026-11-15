@@ -2,10 +2,10 @@ import { CalendarDays, Clock3, MapPin, Users } from 'lucide-react'
 import { useSearchParams } from 'react-router'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import DatabaseGradeBadge from '@/components/instructor/DatabaseGradeBadge'
+import { DatabaseGradeBadge } from '@/components/shared/grade/GradeBadge'
 import GradingChecklistTable from '@/components/grading/GradingChecklistTable'
 import { GradingNote, GradingPageHeader, GradingStatusBadge } from '@/components/grading/GradingParts'
-import RetryAlert from '@/components/admin/RetryAlert'
+import RetryAlert from '@/components/shared/layout/RetryAlert'
 import { resultKey } from '@/lib/grading/checklist-results'
 import type { ExaminerResults } from '@/lib/grading/checklist-results'
 import { candidateCount, gradingDate, gradingStamp, gradingTimeLabel } from '@/lib/grading/format'
@@ -88,8 +88,8 @@ export function ExaminerChecklist({ examiner, session, scope }: { examiner: Exam
       {groups.map(group => (
         <div key={group.grade.id} className="space-y-3">
           {mixed && (
-            <h3 className="flex flex-wrap items-center gap-2 text-lg font-semibold">
-              {group.grade.label}
+            <h3 className="flex flex-wrap items-center gap-2 text-base font-medium">
+              <DatabaseGradeBadge grade={group.grade} showBeltLabel className="text-sm" />
               <span className="text-sm font-normal text-muted-foreground">{candidateCount(group.students.length)}</span>
             </h3>
           )}
@@ -145,7 +145,7 @@ export default function SessionChecklistsView({ day, session, results, scope }: 
           { key: 'candidates', icon: Users, label: candidateCount(sessionCandidates(session)) },
         ]} />
       <section className="space-y-4" aria-labelledby="examiner-results">
-        <h2 id="examiner-results" className="text-xl font-semibold">Examiner results</h2>
+        <h2 id="examiner-results" className="text-base font-medium">Examiner results</h2>
         {results.isPending ? (
           <p className="text-sm text-muted-foreground">Loading results…</p>
         ) : results.isError ? (

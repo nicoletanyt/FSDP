@@ -2,7 +2,7 @@ import { useCallback } from "react";
 import { CalendarDays, Clock3, MapPin } from "lucide-react";
 import { cn } from "cn";
 import { Card, CardContent } from "@/components/ui/card";
-import GradeBadge from "./DatabaseGradeBadge";
+import { DatabaseGradeBadge as GradeBadge } from "@/components/shared/grade/GradeBadge";
 import InstructorDataStatus from "./InstructorDataStatus";
 import { useInstructorQuery } from "@/hooks/use-instructor-data";
 import { useInstructorApi } from "@/lib/instructor/data-context";
@@ -51,7 +51,7 @@ export default function StudentApplications({ studentId, today }: { studentId: S
                                     className="space-y-2 not-first:border-t not-first:pt-4">
                                     <div className="flex flex-wrap items-start justify-between gap-2">
                                         <div className="min-w-0 space-y-1.5">
-                                            <h3 className="text-base font-semibold">{application.eventName}</h3>
+                                            <h3 className="text-base font-medium">{application.eventName}</h3>
                                             {application.targetGrade && <>
                                                 <span className="sr-only">Target grade:</span>
                                                 <GradeBadge grade={application.targetGrade} showBeltLabel />

@@ -6,9 +6,8 @@ import {
     Check,
     ChevronDown,
     CircleCheck,
-    CircleMinus,
     CircleX,
-    MessageSquare,
+    UserRound,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,7 +16,8 @@ import {
     PopoverTitle,
     PopoverTrigger,
 } from "@/components/ui/popover";
-import GradeBadge from "@/components/instructor/DatabaseGradeBadge";
+import AttendanceStateBadge from "@/components/shared/status/AttendanceStateBadge";
+import { DatabaseGradeBadge as GradeBadge } from "@/components/shared/grade/GradeBadge";
 import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
 import StudentTrainingDialog from "./StudentTrainingDialog";
 import ClassUnavailableDialog from "./ClassUnavailableDialog";
@@ -67,46 +67,7 @@ function AttendanceControls({
     readOnly?: boolean;
 }) {
     if (readOnly || value === "late" || value === "excused") {
-        const label =
-            value === "present"
-                ? "Present"
-                : value === "late"
-                    ? "Late"
-                    : value === "excused"
-                        ? "Excused"
-                        : value === "absent"
-                            ? "Absent"
-                            : "Unmarked";
-        return (
-            <div className="flex size-11 shrink-0 items-center justify-center text-xs lg:h-auto lg:w-15">
-                <span
-                    role="img"
-                    aria-label={`Attendance for ${student.name}: ${label}`}
-                    title={label}
-                    className={cn(
-                        "flex size-7 shrink-0 items-center justify-center rounded-full",
-                        value === "late" && "w-auto rounded-md px-1.5 text-xs font-medium",
-                        value === "present"
-                            ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
-                            : value === "late"
-                                ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200"
-                                : value === "absent"
-                                    ? "bg-red-100 text-red-600 dark:bg-red-950 dark:text-red-400"
-                                    : "bg-muted text-muted-foreground",
-                    )}
-                >
-                    {value === "late" ? (
-                        "Late"
-                    ) : value === "present" ? (
-                        <CircleCheck aria-hidden="true" className="size-4" />
-                    ) : value === "absent" ? (
-                        <CircleX aria-hidden="true" className="size-4" />
-                    ) : (
-                        <CircleMinus aria-hidden="true" className="size-4" />
-                    )}
-                </span>
-            </div>
-        );
+        return <AttendanceStateBadge name={student.name} value={value} />;
     }
 
     return (
@@ -362,7 +323,7 @@ export default function ClassSessionDetails({
                 {!summary && (
                     <div className="shrink-0 space-y-2 px-3 py-2.5">
                         <div className="flex items-center justify-between gap-2 text-xs">
-                            <h4 className="font-semibold">Attendance</h4>
+                            <h4 className="text-sm font-medium">Attendance</h4>
                             <span aria-live="polite" className="text-muted-foreground">
                                 {query.status === "success" && attendance.data
                                     ? `${marked}/${roster.length} marked`
@@ -529,7 +490,7 @@ export default function ClassSessionDetails({
                                                             )
                                                         }
                                                     >
-                                                        <MessageSquare aria-hidden="true" />
+                                                        <UserRound aria-hidden="true" />
                                                     </TooltipTrigger>
                                                     <TooltipContent>
                                                         {isGrading
@@ -541,7 +502,7 @@ export default function ClassSessionDetails({
                                             <div className="col-start-2 row-start-1 flex min-w-0 items-center gap-1 lg:col-start-1 lg:row-start-2">
                                                 <GradeBadge
                                                     grade={student.grade}
-                                                    className="h-auto max-w-16 flex-nowrap rounded-none border-0 bg-transparent p-0 text-[11px] text-muted-foreground lg:h-4 lg:max-w-full lg:leading-4 [&>span:first-child]:min-w-0 [&>span:first-child]:truncate [&>span:first-child]:font-normal [&>[aria-hidden]]:h-1.5 [&>[aria-hidden]]:w-2 lg:[&>[aria-hidden]]:w-3"
+                                                    className="h-auto max-w-16 flex-nowrap rounded-none border-0 bg-transparent p-0 text-3xs text-muted-foreground lg:h-4 lg:max-w-full lg:leading-4 [&>span:first-child]:min-w-0 [&>span:first-child]:truncate [&>span:first-child]:font-normal [&>[aria-hidden]]:h-1.5 [&>[aria-hidden]]:w-2 lg:[&>[aria-hidden]]:w-3"
                                                 />
                                                 {student.targetGrade && (
                                                     <>
@@ -552,7 +513,7 @@ export default function ClassSessionDetails({
                                                         <span className="sr-only">grading for</span>
                                                         <GradeBadge
                                                             grade={student.targetGrade}
-                                                            className="h-auto max-w-16 flex-nowrap rounded-none border-0 bg-transparent p-0 text-[11px] text-muted-foreground lg:h-4 lg:max-w-full lg:leading-4 [&>span:first-child]:min-w-0 [&>span:first-child]:truncate [&>span:first-child]:font-normal [&>[aria-hidden]]:h-1.5 [&>[aria-hidden]]:w-2 lg:[&>[aria-hidden]]:w-3"
+                                                            className="h-auto max-w-16 flex-nowrap rounded-none border-0 bg-transparent p-0 text-3xs text-muted-foreground lg:h-4 lg:max-w-full lg:leading-4 [&>span:first-child]:min-w-0 [&>span:first-child]:truncate [&>span:first-child]:font-normal [&>[aria-hidden]]:h-1.5 [&>[aria-hidden]]:w-2 lg:[&>[aria-hidden]]:w-3"
                                                         />
                                                     </>
                                                 )}

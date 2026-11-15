@@ -59,7 +59,7 @@ export async function loadGradingRules(): Promise<{ rules: ScheduleRules[]; dura
     supabase.from('grading_session_durations').select('id,track,from_grade_id,to_grade_id,minutes'),
     supabase.from('grades').select('id,label,sort_order,grade_tracks(track)').order('sort_order'),
   ])
-  if (rules.error || durations.error || grades.error) throw new Error('Unable to load the scheduling rules. Try again.')
+  if (rules.error || durations.error || grades.error) throw new Error('The grading schedule could not be loaded.')
   return {
     rules: ((rules.data ?? []) as RulesRow[]).map(row => ({
       track: row.track, defaultCapacity: row.default_capacity, minSessionSize: row.min_session_size,
@@ -78,11 +78,11 @@ export async function loadGradingRules(): Promise<{ rules: ScheduleRules[]; dura
 // Times must fit inside the day, with lunch inside it; the database checks the same.
 export function rulesProblem(rules: ScheduleRules): string | null {
   const whole = [rules.defaultCapacity, rules.minSessionSize, rules.defaultSessionMinutes]
-  if (whole.some(value => !Number.isInteger(value) || value < 1)) return 'Capacity, minimum session size and default length must be whole numbers above zero.'
-  if (!Number.isInteger(rules.changeoverMinutes) || rules.changeoverMinutes < 0 || rules.changeoverMinutes > 120) return 'Changeover must be 0–120 minutes.'
-  if (rules.defaultSessionMinutes < 5 || rules.defaultSessionMinutes > 600) return 'The default session length must be 5–600 minutes.'
-  if (!(rules.dayStart < rules.dayEnd)) return 'The day must end after it starts.'
-  if (!(rules.lunchStart < rules.lunchEnd) || rules.lunchStart < rules.dayStart || rules.lunchEnd > rules.dayEnd) return 'Lunch must be inside the day and end after it starts.'
+  if (whole.some(value => !Number.isInteger(value) || value < 1)) return 'Room size, smallest group and usual session length must be whole numbers above 0.'
+  if (!Number.isInteger(rules.changeoverMinutes) || rules.changeoverMinutes < 0 || rules.changeoverMinutes > 120) return 'The break between sessions must be 0–120 minutes.'
+  if (rules.defaultSessionMinutes < 5 || rules.defaultSessionMinutes > 600) return 'The usual session length must be 5–600 minutes.'
+  if (!(rules.dayStart < rules.dayEnd)) return 'The latest finish must be after the start time.'
+  if (!(rules.lunchStart < rules.lunchEnd) || rules.lunchStart < rules.dayStart || rules.lunchEnd > rules.dayEnd) return 'Lunch must start and end within the day.'
   return null
 }
 
@@ -95,7 +95,7 @@ export async function saveGradingRules(rules: ScheduleRules): Promise<void> {
     lunch_start: rules.lunchStart, lunch_end: rules.lunchEnd, changeover_minutes: rules.changeoverMinutes,
     updated_at: new Date().toISOString(),
   }).eq('track', rules.track)
-  if (error) throw new Error('Unable to save the scheduling rules. Try again.')
+  if (error) throw new Error('Your changes could not be saved. Check your connection and try again.')
 }
 
 export async function saveSessionDuration(duration: Omit<SessionDuration, 'id'> & { id?: string }): Promise<void> {
@@ -104,10 +104,10 @@ export async function saveSessionDuration(duration: Omit<SessionDuration, 'id'> 
   const { error } = duration.id
     ? await supabase.from('grading_session_durations').update(row).eq('id', duration.id)
     : await supabase.from('grading_session_durations').insert(row)
-  if (error) throw new Error(error.code === '23505' ? 'That transition already has a length.' : 'Unable to save the session length. Try again.')
+  if (error) throw new Error(error.code === '23505' ? 'That grade already has its own session length.' : 'A session length could not be saved. Check your connection and try again.')
 }
 
 export async function deleteSessionDuration(id: string): Promise<void> {
   const { error } = await supabase.from('grading_session_durations').delete().eq('id', id)
-  if (error) throw new Error('Unable to remove the session length. Try again.')
+  if (error) throw new Error('A session length could not be removed. Check your connection and try again.')
 }
