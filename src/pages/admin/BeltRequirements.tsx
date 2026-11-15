@@ -103,6 +103,9 @@ export default function BeltRequirements() {
               ...(requirement.sessions !== undefined
                   ? [{ label: "Training sessions", value: `${requirement.sessions} since last grading` }]
                   : []),
+              ...(requirement.directEntry !== undefined
+                  ? [{ label: "Direct entry", value: `From ${requirement.directEntry} at the last Adult Grading, with regular training in between` }]
+                  : []),
           ]
         : [];
 

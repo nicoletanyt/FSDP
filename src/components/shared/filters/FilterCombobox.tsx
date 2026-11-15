@@ -67,6 +67,8 @@ export default function FilterCombobox({
       onValueChange={(next) => onChange(next ?? selected)}
       itemToStringLabel={(item) => byValue.get(item)?.label ?? ''}
       isItemEqualToValue={(item, current) => item === current}
+      // Without a search box nothing can be typed, so never filter on a stale query.
+      filter={searchable ? undefined : null}
       disabled={disabled}
       open={open}
       onOpenChange={setOpen}

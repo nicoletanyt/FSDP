@@ -267,7 +267,7 @@ const adultSyllabus: Partial<Record<RankId, RawSyllabus>> = {
         grade: "Blue (6th Kyu)", minMonths: 3, sessions: 20,
         categories: [
             ["Basics", "Breakfalls", "Movements", "Attacks", "Suwariwaza Kokyuho"], ["Ikkyo", "Katatedori Shomenuchi"],
-            ["Iriminage", "Katatedori Shomenuchi"], ["Shihonage", "Katatedori Aihamni"],
+            ["Iriminage", "Katatedori Shomenuchi"], ["Shihonage", "Katatedori Aihanmi"],
             ["Kokyunage", "Katatedori Gyakuhanmi"], ["Jiyuwaza", "Katatedori Gyakuhanmi"],
         ],
     },
@@ -276,7 +276,7 @@ const adultSyllabus: Partial<Record<RankId, RawSyllabus>> = {
         categories: [
             ["Ikkyo", "Suwariwaza Katatedori", "Suwariwaza Shomenuchi"], ["Nikyo", "Katadori"],
             ["Iriminage", "Suwariwaza Katatedori", "Suwariwaza Shomenuchi"], ["Shihonage", "Katatedori Gyakuhanmi", "Yokomenuchi"],
-            ["Kokyunage", "Katatedori Aihamni"], ["Tenchinage", "Ryotedori"], ["Jujinage", "Katatedori Aihanmi"], ["Jiyuwaza", "Katatedori Aihanmi"],
+            ["Kokyunage", "Katatedori Aihanmi"], ["Tenchinage", "Ryotedori"], ["Jujinage", "Katatedori Aihanmi"], ["Jiyuwaza", "Katatedori Aihanmi"],
         ],
     },
     "4-kyu": {
@@ -323,7 +323,7 @@ const adultSyllabus: Partial<Record<RankId, RawSyllabus>> = {
     },
     "junior-dan": {
         grade: "Junior Dan", minMonths: 9, sessions: 62, maxAge: 14,
-        categories: [["Basics", "Unarmed techniques in Techiwaza, Suwariwaza & Hanmihandachi", "Take 20 Ukemis", "Achieve a 3-point average on the scoring system"]],
+        categories: [["Basics", "Unarmed techniques in Tachiwaza, Suwariwaza & Hanmihandachi", "Take 20 Ukemis", "Achieve a 3-point average on the scoring system"]],
     },
     "1-dan": {
         grade: "1st Dan", minMonths: 9, sessions: 70, minAge: 15,
@@ -336,21 +336,21 @@ const adultSyllabus: Partial<Record<RankId, RawSyllabus>> = {
         grade: "2nd Dan", minMonths: 18, sessions: 150,
         categories: [
             ["Basics", "Unarmed techniques similar to 1st Dan", "Defence against kicks", "Take 30 Ukemis", "Demonstrate relaxation and unable to be lifted by 1 person", "Submit an article on a related subject", "Achieve a 6-point average on the scoring system"],
-            ["Jiyuwaza", "4 Attackers"], ["Jo Waza", "24 Jo Kata"],
+            ["Koshinage", "Aged 50 & above (by year): take 20 Ukemis"], ["Jiyuwaza", "4 Attackers"], ["Jo Waza", "24 Jo Kata"],
         ],
     },
     "3-dan": {
         grade: "3rd Dan", minMonths: 30, sessions: 240,
         categories: [
             ["Basics", "Unarmed techniques similar to 2nd Dan", "Take 30 Ukemis", "Demonstrate relaxation and unable to be lifted by 2 persons", "Submit an article on an Aikido related subject", "Achieve a 9-point average on the scoring system"],
-            ["Jiyuwaza", "5 Attackers"], ["Jo Waza", "24 Jo Kumitachi"], ["Ken Waza", "5 Kumi Ken"],
+            ["Koshinage", "Aged 50 & above (by year): take 20 Ukemis"], ["Jiyuwaza", "5 Attackers"], ["Jo Waza", "24 Jo Kumitachi"], ["Ken Waza", "5 Kumi Ken"],
         ],
     },
     "4-dan": {
         grade: "4th Dan", minMonths: 42, sessions: 400, minAge: 26,
         categories: [
             ["Basics", "Unarmed, Kaeshi & Henka (Counter & Change) techniques", "Take 30 Ukemis", "Demonstrate KI extension, relaxation and stable seiza", "Submit an article on an Aikido related subject", "Achieve a 12-point average on the scoring system"],
-            ["Jiyuwaza", "6 Attackers"], ["Jo Waza", "5 Kumi Jo"],
+            ["Koshinage", "Aged 50 & above (by year): take 20 Ukemis"], ["Jiyuwaza", "6 Attackers"], ["Jo Waza", "5 Kumi Jo"],
         ],
     },
 };

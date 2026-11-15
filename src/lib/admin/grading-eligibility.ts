@@ -24,6 +24,8 @@ export interface GradeRequirement {
   minAge?: number
   /** Maximum age (calendar-year): Junior Dan is for 14 and below. */
   maxAge?: number
+  /** Adult sheet: grades awarded at the last Adult Grading that let a candidate apply directly. */
+  directEntry?: string
 }
 
 /**
@@ -54,7 +56,7 @@ export const gradingRequirements: Record<RankedGrade, GradeRequirement> = {
   'Black-Silver (2nd Kyu)': { minMonths: 10 },
 
   // Adult grading — Blue (6th Kyu) to 4th Dan
-  'Black-Gold (1st Kyu)': { minMonths: 9, sessions: 62 },
+  'Black-Gold (1st Kyu)': { minMonths: 9, sessions: 62, directEntry: 'Black-Silver (2nd Kyu)' },
   'Junior Dan': { minMonths: 9, sessions: 62, maxAge: 14 },
   '1st Dan': { minMonths: 9, sessions: 70, minAge: 15 },
   '2nd Dan': { minMonths: 18, sessions: 150 },
@@ -66,10 +68,10 @@ export const gradingRequirements: Record<RankedGrade, GradeRequirement> = {
 // keys, so the rule above keeps the children's months and the adult sheet's
 // session minimums are applied by track below.
 const adultRequirements: Partial<Record<RankedGrade, GradeRequirement>> = {
-  'Blue (6th Kyu)': { minMonths: 3, sessions: 20 },
-  'Blue-Gold (5th Kyu)': { minMonths: 0, sessions: 24 },
+  'Blue (6th Kyu)': { minMonths: 3, sessions: 20, directEntry: 'Purple or Green (7th or 8th Kyu)' },
+  'Blue-Gold (5th Kyu)': { minMonths: 0, sessions: 24, directEntry: 'Blue-Silver (6th Kyu)' },
   'Brown (4th Kyu)': { minMonths: 0, sessions: 32 },
-  'Brown-Gold (3rd Kyu)': { minMonths: 6, sessions: 36 },
+  'Brown-Gold (3rd Kyu)': { minMonths: 6, sessions: 36, directEntry: 'Brown-Silver (4th Kyu)' },
   'Black (2nd Kyu)': { minMonths: 6, sessions: 56 },
 }
 
