@@ -1,16 +1,15 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router";
-import {
-  ClipboardCheck,
-  CreditCard,
-  IdCard,
-  Presentation,
-  UserCheck,
-} from "lucide-react";
+import { CircleCheck, ClipboardCheck, Presentation, UserCheck } from "lucide-react";
 
 import AttendanceQrCard from "@/components/student/AttendanceQrCard";
-import { buttonVariants } from "@/components/student/button";
-import { Tile, type TileProps } from "@/components/student/DashboardTile";
+import PageHeader from "@/components/shared/layout/PageHeader";
+import RetryAlert from "@/components/shared/layout/RetryAlert";
+import StatCard from "@/components/shared/layout/StatCard";
+import { PageSkeleton } from "@/components/shared/skeletons";
+import { StatusBadge } from "@/components/shared/status/StatusBadge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
 import { useAuth } from "@/hooks/use-auth";
@@ -51,10 +50,10 @@ function Requirement({ label, value, done }: { label: string; value: string; don
   return (
     <li className="min-w-0 rounded-lg bg-muted px-4 py-3 text-sm">
       <span className="text-muted-foreground">{label}</span>
-      <b className="block text-base tabular-nums">
+      <span className="flex items-center gap-1.5 text-base font-semibold tabular-nums">
         {value}
-        {done && <span className="ml-1 text-primary">✓</span>}
-      </b>
+        {done && <><CircleCheck className="size-4 shrink-0 text-success" aria-hidden="true" /><span className="sr-only">(met)</span></>}
+      </span>
     </li>
   );
 }
@@ -90,25 +89,21 @@ export default function StudentDashboard() {
     return () => clearTimeout(timer);
   }, [returnedFromCheckout, status, confirmChecks, reload, setSearchParams]);
 
-  if (loading) {
-    return <p className="text-sm text-muted-foreground">Loading your dashboard…</p>;
-  }
+  if (loading) return <PageSkeleton label="Loading your dashboard…" />;
   if (error || !status) {
-    return (
-      <p role="alert" className="text-sm text-brand-red-ink">
-        We couldn't load your dashboard. Please refresh the page.
-      </p>
-    );
+    return <RetryAlert message="We couldn't load your dashboard." onRetry={reload} />;
   }
   if (status !== "active") {
     return (
       <>
         {returnedFromCheckout && (
-          <p role="status" className="mb-6 rounded-lg bg-primary/10 p-4 text-sm font-medium text-primary">
-            {confirmChecks < CONFIRM_ATTEMPTS
-              ? "Thanks! Confirming your payment…"
-              : "We've received your payment, but confirmation is taking longer than usual. Refresh this page in a minute."}
-          </p>
+          <Alert role="status" className="mb-6">
+            <AlertDescription>
+              {confirmChecks < CONFIRM_ATTEMPTS
+                ? "Thanks. Confirming your payment…"
+                : "We've received your payment, but confirmation is taking longer than usual. Refresh this page in a minute."}
+            </AlertDescription>
+          </Alert>
         )}
         <NonMemberDashboard firstName={firstName} status={status} />
       </>
@@ -118,17 +113,11 @@ export default function StudentDashboard() {
 }
 
 function MemberDashboard({ firstName }: { firstName: string }) {
-  const { summary, loading, error } = useStudentDashboard();
+  const { summary, loading, error, reload } = useStudentDashboard();
 
-  if (loading) {
-    return <p className="text-sm text-muted-foreground">Loading your dashboard…</p>;
-  }
+  if (loading) return <PageSkeleton label="Loading your dashboard…" />;
   if (error || !summary) {
-    return (
-      <p role="alert" className="text-sm text-brand-red-ink">
-        We couldn't load your training details. Please refresh the page.
-      </p>
-    );
+    return <RetryAlert message="We couldn't load your training details." onRetry={reload} />;
   }
   return <MemberDashboardView firstName={firstName} summary={summary} />;
 }
@@ -151,164 +140,147 @@ function MemberDashboardView({ firstName, summary }: { firstName: string; summar
       ? `${money.format(r.feeCents / 100)} due`
       : "Not set";
 
-  const tiles: TileProps[] = [
-    { title: "Class Credits", to: "/student/credits", icon: CreditCard, status: "Top up your balance" },
-    {
-      title: "Attendance History",
-      to: "/timetable",
-      icon: UserCheck,
-      status: counts.attendanceRate === null ? "No sessions marked yet" : `${counts.attendanceRate}% attendance`,
-    },
-    { title: "Classes", to: "/classes", icon: Presentation, status: `${counts.classesBooked} booked` },
-    {
-      title: "Grading Applications",
-      to: "/grading",
-      icon: ClipboardCheck,
-      status: grading.status,
-      badge: grading.badge,
-      badgeLabel: `${grading.badge} saved or pending grading applications`,
-      busy: grading.loading,
-    },
-    { title: "Membership Profile", to: "/profile", icon: IdCard, status: "Status: Active" },
-  ];
-
   return (
-      <main className="w-full">
-        <header className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-semibold">
-              {greetingFor(new Date().getHours())}{firstName ? `, ${firstName}` : ""}
-            </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Your training progress, upcoming classes and student services.
-            </p>
-          </div>
-          {/* Members are already members; the apply button lives on NonMemberDashboard. */}
-          <p className="inline-flex rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
-            Membership active
-          </p>
-        </header>
+    <section className="w-full">
+      <PageHeader
+        title={`${greetingFor(new Date().getHours())}${firstName ? `, ${firstName}` : ""}`}
+        description="Your training progress, upcoming classes and student services."
+        // Members are already members; the apply button lives on NonMemberDashboard.
+        actions={<StatusBadge tone="success">Membership active</StatusBadge>}
+      />
 
-        <div className="mt-6">
-          <CreditBalanceCard />
+      {/* Key figures, each linking to its page */}
+      <section aria-label="Key figures" className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3">
+        <StatCard
+          label="Attendance"
+          value={counts.attendanceRate === null ? "—" : `${counts.attendanceRate}%`}
+          detail={counts.attendanceRate === null ? "No sessions marked yet" : undefined}
+          icon={UserCheck}
+          to="/timetable"
+        />
+        <StatCard label="Classes booked" value={String(counts.classesBooked)} icon={Presentation} to="/classes" />
+        <div className="col-span-2 sm:col-span-1">
+        <StatCard
+          label="Grading applications"
+          value={grading.loading ? "—" : String(grading.badge)}
+          detail={grading.status}
+          icon={ClipboardCheck}
+          tone={grading.badge ? "warning" : "default"}
+          to="/grading"
+        />
         </div>
+      </section>
 
-        {/* Overview */}
-        <section aria-label="Overview" className="mt-6 grid gap-4 xl:grid-cols-2">
-          {/* Belt rank */}
-          <Card className="min-w-0 gap-5 p-5">
-            <div className="flex items-center gap-4">
-              <div className="grid size-16 shrink-0 place-items-center rounded-2xl bg-primary/10">
-                <BeltIcon hex={beltHexFor(belt?.colour ?? null)} />
-              </div>
-              <div className="min-w-0">
-                <h3 className="text-lg font-semibold">{belt?.label ?? "Unranked"}</h3>
-                <p className="text-sm text-muted-foreground">
-                  {nextBelt
-                    ? `Training towards ${nextBelt.label}`
-                    : "You've reached the highest grade on your track. Speak to your instructor about further gradings."}
-                </p>
-              </div>
-            </div>
-
-            {nextBelt && (
-              <>
+      {/* Overview */}
+      <section aria-label="Overview" className="mt-6 grid gap-4 xl:grid-cols-2">
+        {/* Next class */}
+        <Card className="min-w-0 gap-4 p-5">
+          <h2 className="text-lg font-semibold">Your next class</h2>
+          {nextClass ? (
+            <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_11rem] sm:items-end xl:grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_11rem]">
+              <dl className="min-w-0 space-y-4">
                 <div>
-                  <div className="mb-1.5 flex justify-between gap-3 text-sm">
-                    <span>Progress to {nextBelt.label} grading</span>
-                    <strong className="tabular-nums">{pct}%</strong>
-                  </div>
+                  <dt className="text-xs text-muted-foreground">When</dt>
+                  <dd className="text-lg font-semibold tracking-tight">{formatDateTime(nextClass.startsAt)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">Class</dt>
+                  <dd className="font-semibold">{nextClass.title}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">Where</dt>
+                  <dd className="font-semibold">
+                    {[nextClass.centre, nextClass.instructor].filter(Boolean).join(", ")}
+                  </dd>
+                </div>
+              </dl>
+              {/* Live, signed code for today's booked class. */}
+              <AttendanceQrCard />
+            </div>
+          ) : (
+            <div className="grid gap-3">
+              <p className="text-muted-foreground">No upcoming classes.</p>
+              <Link
+                to="/classes"
+                className={buttonVariants({ variant: "outline", className: "w-fit" })}
+              >
+                Browse classes
+              </Link>
+            </div>
+          )}
+        </Card>
 
-                  <div
-                    role="progressbar"
-                    aria-label={`Progress to ${nextBelt.label} grading`}
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                    aria-valuenow={pct}
-                    className="h-3 overflow-hidden rounded-full bg-muted"
-                  >
-                    <div
-                      className="h-full bg-primary transition-all"
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
+        {/* Belt rank */}
+        <Card className="min-w-0 gap-5 p-5">
+          <div className="flex items-center gap-4">
+            <div className="grid size-16 shrink-0 place-items-center rounded-2xl bg-primary/10">
+              <BeltIcon hex={beltHexFor(belt?.colour ?? null)} />
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-lg font-semibold">{belt?.label ?? "Unranked"}</h2>
+              <p className="text-sm text-muted-foreground">
+                {nextBelt
+                  ? `Training towards ${nextBelt.label}`
+                  : "You've reached the highest grade on your track. Speak to your instructor about further gradings."}
+              </p>
+            </div>
+          </div>
+
+          {nextBelt && (
+            <>
+              <div>
+                <div className="mb-1.5 flex justify-between gap-3 text-sm">
+                  <span>Progress to {nextBelt.label} grading</span>
+                  <strong className="tabular-nums">{pct}%</strong>
                 </div>
 
-                <ul className="grid gap-2.5 sm:grid-cols-3">
-                  {r.sessionsRequired !== null && (
-                    <Requirement
-                      label="Sessions attended"
-                      value={`${r.sessionsDone} / ${r.sessionsRequired}`}
-                      done={r.sessionsDone >= r.sessionsRequired}
-                    />
-                  )}
-                  {r.monthsRequired !== null && (
-                    <Requirement
-                      label="Time in rank"
-                      value={`${r.monthsDone} / ${r.monthsRequired} months`}
-                      done={r.monthsDone >= r.monthsRequired}
-                    />
-                  )}
-                  <Requirement label="Grading fee" value={feeValue} done={r.feePaid} />
-                </ul>
-              </>
-            )}
-
-            <Link
-              to={cta.to}
-              className={buttonVariants({ className: "mt-auto w-full self-start whitespace-normal sm:w-auto" })}
-            >
-              {cta.label}
-            </Link>
-          </Card>
-
-          {/* Next class */}
-          <Card className="min-w-0 gap-4 p-5">
-            <h3 className="text-lg font-semibold">Your next class</h3>
-            {nextClass ? (
-              <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_11rem] sm:items-end xl:grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_11rem]">
-                <dl className="min-w-0 space-y-4">
-                  <div>
-                    <dt className="text-xs text-muted-foreground">When</dt>
-                    <dd className="text-lg font-semibold tracking-tight">{formatDateTime(nextClass.startsAt)}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs text-muted-foreground">Class</dt>
-                    <dd className="font-semibold">{nextClass.title}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs text-muted-foreground">Where</dt>
-                    <dd className="font-semibold">
-                      {[nextClass.centre, nextClass.instructor].filter(Boolean).join(", ")}
-                    </dd>
-                  </div>
-                </dl>
-                {/* Live, signed code for today's booked class. */}
-                <AttendanceQrCard />
-              </div>
-            ) : (
-              <div className="grid gap-3">
-                <p className="text-muted-foreground">No upcoming classes.</p>
-                <Link
-                  to="/classes"
-                  className={buttonVariants({ variant: "outline", className: "w-fit" })}
+                <div
+                  role="progressbar"
+                  aria-label={`Progress to ${nextBelt.label} grading`}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={pct}
+                  className="h-3 overflow-hidden rounded-full bg-muted"
                 >
-                  Browse classes
-                </Link>
+                  <div
+                    className="h-full bg-primary transition-all"
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
               </div>
-            )}
-          </Card>
-        </section>
 
-        {/* Tiles */}
-        <section aria-labelledby="self-service-heading" className="mt-8">
-          <h3 id="self-service-heading" className="mb-3.5 text-lg font-semibold">Self-service</h3>
-          <nav aria-label="Student self-service" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {tiles.map((t) => (
-              <Tile key={t.to} {...t} />
-            ))}
-          </nav>
-        </section>
-      </main>
+              <ul className="grid gap-2.5 sm:grid-cols-3">
+                {r.sessionsRequired !== null && (
+                  <Requirement
+                    label="Sessions attended"
+                    value={`${r.sessionsDone} / ${r.sessionsRequired}`}
+                    done={r.sessionsDone >= r.sessionsRequired}
+                  />
+                )}
+                {r.monthsRequired !== null && (
+                  <Requirement
+                    label="Time in rank"
+                    value={`${r.monthsDone} / ${r.monthsRequired} months`}
+                    done={r.monthsDone >= r.monthsRequired}
+                  />
+                )}
+                <Requirement label="Grading fee" value={feeValue} done={r.feePaid} />
+              </ul>
+            </>
+          )}
+
+          <Link
+            to={cta.to}
+            className={buttonVariants({ className: "mt-auto h-auto min-h-10 w-full self-start py-2 whitespace-normal sm:w-auto" })}
+          >
+            {cta.label}
+          </Link>
+        </Card>
+      </section>
+
+      <div className="mt-6">
+        <CreditBalanceCard />
+      </div>
+    </section>
   );
 }

@@ -1,16 +1,27 @@
 import { useMemo, useState } from 'react'
 import { Link, useOutletContext } from 'react-router'
-import { Clock3, MapPin, Plus, UserRound, X } from 'lucide-react'
-import AttendanceCalendar, { attendanceClassStyle, AttendanceToolbar } from '@/components/student/AttendanceCalendar'
+import { CalendarClock, CalendarDays, CalendarRange, CircleCheck, Clock, Clock3, Hourglass, List, MapPin, Plus, UserRound, X } from 'lucide-react'
+import MobileCalendarHeader from '@/components/shared/calendar/MobileCalendarHeader'
+import type { MobileViewOption } from '@/components/shared/calendar/MobileCalendarHeader'
+import WeekStrip from '@/components/shared/calendar/WeekStrip'
+import { NativeSelect } from '@/components/admin/form-controls'
+import CalendarToolbar from '@/components/shared/calendar/CalendarToolbar'
+import type { CalendarDisplayMode } from '@/components/shared/calendar/CalendarToolbar'
+import StatCard from '@/components/shared/layout/StatCard'
+import { Label } from '@/components/ui/label'
+import { useCalendarShortcuts } from '@/hooks/use-calendar-shortcuts'
+import AttendanceCalendar, { attendanceClassStyle } from '@/components/student/AttendanceCalendar'
 import type { AttendanceEntry, AttendanceView } from '@/components/student/AttendanceCalendar'
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import ClassDetailsOverlay from '@/components/shared/calendar/ClassDetailsOverlay'
 import { useMediaQuery } from '@/hooks/use-media-query'
 import { useFeedback } from '@/hooks/use-feedback'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
-import { addDays, addMonths, dateKey } from '@/lib/instructor-calendar'
+import { addDays, addMonths, classTypes, dateKey, weekDates, weekLabel } from '@/lib/instructor-calendar'
 import { cn } from '@/lib/utils'
-import { Button } from '@/components/student/button'
+import PageHeader from '@/components/shared/layout/PageHeader'
+import { StatusBadge, type BadgeTone } from '@/components/shared/status/StatusBadge'
+import { Button } from '@/components/ui/button'
 import {
   Card,
   CardContent,
@@ -45,6 +56,22 @@ const statusText = (e: AttendanceEntry) => {
   return e.status === 'make-up' ? 'Make-up class' : 'Enrolled'
 }
 
+const statusTones: Record<string, BadgeTone> = {
+  Attended: 'success',
+  Late: 'warning',
+  Absent: 'danger',
+  Enrolled: 'info',
+  'Make-up class': 'info',
+}
+
+type MobileView = AttendanceView | 'list'
+const mobileViews: MobileViewOption<MobileView>[] = [
+  { value: 'day', label: 'Day', icon: Clock },
+  { value: 'week', label: 'Week', icon: CalendarRange },
+  { value: 'month', label: 'Month', icon: CalendarDays },
+  { value: 'list', label: 'List', icon: List },
+]
+
 const emptyFilters = { centre: '', title: '', instructor: '', status: '' }
 
 export default function StudentAttendance() {
@@ -55,7 +82,7 @@ export default function StudentAttendance() {
   const [view, setView] = useState<AttendanceView>('week')
   const [list, setList] = useState(false)
   const [filters, setFilters] = useState(emptyFilters)
-  const desktop = useMediaQuery('(min-width: 1200px)')
+  const desktop = useMediaQuery('(min-width: 1024px)')
   const [pending, setPending] = useState<Pending | null>(null)
   const [rescheduleId, setRescheduleId] = useState<string | null>(
     null
@@ -133,6 +160,39 @@ export default function StudentAttendance() {
         c.bookable && !schedule.isBooked(c.id) && !schedule.isFull(c)
     )
     .slice(0, 50)
+  const alternativeDays = [...alternatives.reduce((days, session) => {
+    const key = dateKey(session.date)
+    days.set(key, [...(days.get(key) ?? []), session])
+    return days
+  }, new Map<string, ClassOffering[]>())]
+
+  const heading = view === 'month'
+    ? selectedDate.toLocaleDateString('en-SG', { month: 'long', year: 'numeric' })
+    : view === 'week' && desktop ? weekLabel(selectedDate) : prettyDate(selectedDate)
+
+  function changeView(next: AttendanceView) {
+    setView(next)
+    // The month view is always a calendar.
+    if (next === 'month') setList(false)
+    setSelectedId(null)
+  }
+
+  function changeDisplayMode(mode: CalendarDisplayMode) {
+    if (view === 'month') return
+    setList(mode === 'list')
+    setSelectedId(null)
+  }
+
+  useCalendarShortcuts({
+    disabled: Boolean(pending || rescheduleId),
+    onEscape: () => {
+      if (!selectedId) return false
+      setSelectedId(null)
+      return true
+    },
+    onView: changeView,
+    onDisplayMode: changeDisplayMode,
+  })
 
   function selectDate(date: Date) {
     setSelectedDate(date)
@@ -157,7 +217,7 @@ export default function StudentAttendance() {
     if (pending.kind === 'cancel') {
       const error = await schedule.cancel(pending.id)
       if (!error) setSelectedId(null)
-      report(error, 'Class cancelled', 'Your booking for this class has been cancelled.')
+      report(error, 'Booking cancelled', 'Your booking for this class has been cancelled.')
     } else if (pending.kind === 'leave') {
       const error = await schedule.leaveWaitlist(pending.id)
       report(error, 'Left waitlist', 'You have been removed from the waitlist.')
@@ -209,18 +269,18 @@ export default function StudentAttendance() {
                 </p>
               </div>
 
-              {!detail && <span className="rounded-full bg-primary/10 px-2 py-1 text-xs font-medium text-primary">{statusText(e)}</span>}
+              {!detail && <StatusBadge tone={statusTones[statusText(e)] ?? 'neutral'}>{statusText(e)}</StatusBadge>}
             </div>
 
             <p className={cn('mt-2 flex items-center gap-2 text-sm', !detail && 'text-muted-foreground')}>
-              <Clock3 className="size-4" />
+              <Clock3 aria-hidden="true" className="size-4" />
               {formatTime(e.session.startTime)}
               {' – '}
               {formatTime(e.session.endTime)}
             </p>
 
             <p className={cn('mt-1 flex items-center gap-2 text-sm', !detail && 'text-muted-foreground')}>
-              <MapPin className="size-4" />
+              <MapPin aria-hidden="true" className="size-4" />
               {e.session.centre}
             </p>
 
@@ -269,7 +329,7 @@ export default function StudentAttendance() {
                   })
                 }
               >
-                Cancel class
+                Cancel booking
               </Button>
             </div>
           )}
@@ -278,75 +338,162 @@ export default function StudentAttendance() {
     })
   }
 
-  return (
-    <div className="relative left-1/2 w-[min(94vw,1440px)] -translate-x-1/2 space-y-3 lg:w-[min(88vw,1440px)]">
-      <h2 className="text-2xl font-semibold tracking-tight lg:text-3xl">Your calendar</h2>
+  const stats = (
+    <section aria-label="Key figures" className="grid grid-cols-3 gap-2 sm:gap-3">
+      <StatCard label="Upcoming" value={String(upcoming.length)} icon={CalendarClock} />
+      <StatCard label="Attended" value={String(past.filter(e => e.status === 'attended' || e.status === 'late').length)} icon={CircleCheck} tone="success" />
+      <StatCard label="Waitlisted" value={String(waiting.length)} icon={Hourglass} />
+    </section>
+  )
 
-      <AttendanceToolbar
-        date={selectedDate}
-        view={view}
-        list={list}
-        desktop={desktop}
-        actions={(
-          <>
-            <Button variant="outline" nativeButton={false} render={<Link to="/classes" />} className="h-10">
-              <Plus aria-hidden="true" /> Browse classes
-            </Button>
-          </>
+  const legend = (
+    <ul className="flex flex-wrap gap-2">
+      {Object.values(classTypes).map(style => (
+        <li key={style.label} className={cn('rounded-md border px-2 py-1 text-xs', style.badge)}>{style.label}</li>
+      ))}
+    </ul>
+  )
+
+  const filter = (
+    <FilterPopover
+      title="Filter classes"
+      activeCount={filterCount}
+      onReset={() => {
+        setFilters(emptyFilters)
+        setSelectedId(null)
+      }}
+      className="lg:h-10"
+    >
+      {filterFields.map(({ key, label, all, options }) => (
+        <FilterField
+          key={key}
+          label={label}
+          ariaLabel={`${label} filter`}
+          value={filters[key]}
+          onChange={value => {
+            setFilters(previous => ({ ...previous, [key]: value }))
+            setSelectedId(null)
+          }}
+          options={[{ value: '', label: all }, ...[...new Set(options)].sort().map(option => ({ value: option, label: option }))]}
+        />
+      ))}
+    </FilterPopover>
+  )
+
+  function entryButton(entry: AttendanceEntry) {
+    return (
+      <button
+        key={entry.id}
+        type="button"
+        onClick={() => selectEntry(entry)}
+        className={cn(
+          'block min-h-11 w-full rounded-md border-l-[3px] p-2 text-left text-sm hover:brightness-95 focus-visible:outline-2 focus-visible:outline-ring',
+          attendanceClassStyle(entry.session.classType ?? entry.session.title)
         )}
-        filter={(
-          <FilterPopover
-            title="Filter classes"
-            activeCount={filterCount}
-            onReset={() => {
-              setFilters(emptyFilters)
-              setSelectedId(null)
-            }}
-            className="lg:h-10"
-          >
-            {filterFields.map(({ key, label, all, options }) => (
-              <FilterField
-                key={key}
-                label={label}
-                ariaLabel={`${label} filter`}
-                value={filters[key]}
-                onChange={value => {
-                  setFilters(previous => ({ ...previous, [key]: value }))
+      >
+        <span className="block font-semibold">{entry.session.title}</span>
+        <span>{formatTime(entry.session.startTime)} · {statusText(entry)}</span>
+      </button>
+    )
+  }
+
+  // Phones show the week as a list of days; seven timeline columns do not fit.
+  const weekAgenda = (
+    <div aria-label="Classes this week" className="min-w-0 space-y-4">
+      {weekDates(selectedDate).map(day => {
+        const items = calendarEntries.get(dateKey(day)) ?? []
+        return (
+          <section key={dateKey(day)} className="space-y-2">
+            <h2 className={cn(
+              'flex items-baseline justify-between border-b py-2 text-sm font-semibold',
+              dateKey(day) === dateKey(today) && 'text-brand-red-ink'
+            )}>
+              <span>{day.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'long' })}</span>
+              <span className="text-xs font-normal text-muted-foreground">{items.length === 1 ? '1 class' : `${items.length} classes`}</span>
+            </h2>
+            {items.length ? items.map(entryButton) : <p className="text-sm text-muted-foreground">No classes</p>}
+          </section>
+        )
+      })}
+    </div>
+  )
+
+  return (
+    <div className="space-y-3">
+      {desktop ? (
+        <>
+          <PageHeader title="My schedule" />
+          {stats}
+      <CalendarToolbar
+            view={view}
+            onViewChange={changeView}
+            displayMode={list ? 'list' : 'timeline'}
+            onDisplayModeChange={changeDisplayMode}
+            heading={heading}
+            onToday={() => selectDate(new Date())}
+            onPrevious={() => navigateDate(-1)}
+            onNext={() => navigateDate(1)}
+            actions={(
+              <Button variant="outline" nativeButton={false} render={<Link to="/classes" />} className="h-11 lg:h-10">
+                <Plus aria-hidden="true" /> Browse classes
+              </Button>
+            )}
+            legend={legend}
+            filter={filter}
+          />
+        </>
+      ) : (
+        <>
+          {/* Same phone header and week strip as the instructor and administrator calendars. */}
+          <div className="-mx-2 -mt-2">
+            <MobileCalendarHeader
+              date={selectedDate}
+              view={list ? 'list' : view}
+              views={mobileViews}
+              onViewChange={next => {
+                if (next === 'list') {
+                  if (view === 'month') setView('week')
+                  setList(true)
                   setSelectedId(null)
-                }}
-                options={[{ value: '', label: all }, ...[...new Set(options)].sort().map(option => ({ value: option, label: option }))]}
-              />
-            ))}
-          </FilterPopover>
-        )}
-        onViewChange={nextView => {
-          setView(nextView)
-          setList(false)
-          setSelectedId(null)
-        }}
-        onListChange={nextList => {
-          setList(nextList)
-          setSelectedId(null)
-        }}
-        onNavigate={navigateDate}
-        onToday={() => selectDate(new Date())}
-      />
+                } else {
+                  setList(false)
+                  changeView(next)
+                }
+              }}
+              stepUnit={view === 'month' ? 'month' : 'day'}
+              onToday={() => selectDate(new Date())}
+              onPrevious={() => navigateDate(-1)}
+              onNext={() => navigateDate(1)}
+              extras={(
+                <>
+                  <Button variant="ghost" size="icon-touch" nativeButton={false} render={<Link to="/classes" />} aria-label="Browse classes">
+                    <Plus aria-hidden="true" />
+                  </Button>
+                  {filter}
+                </>
+              )}
+              legendTitle="Class colours"
+              legend={legend}
+            />
+          </div>
+          {!list && view !== 'month' && <WeekStrip date={selectedDate} today={today} onSelectDate={selectDate} />}
+        </>
+      )}
 
       {!list ? (
         <div className={cn(
           'grid min-w-0 items-start gap-3',
           (view === 'month' || selectedEntry) && 'lg:grid-cols-[minmax(0,1fr)_clamp(13rem,20%,18rem)]'
         )}>
-          <AttendanceCalendar
+          {!desktop && view === 'week' ? weekAgenda : <AttendanceCalendar
             date={selectedDate}
             today={today}
             view={view}
-            desktop={desktop}
             entriesByDate={calendarEntries}
             selectedId={selectedId}
             onSelectDate={selectDate}
             onSelectEntry={selectEntry}
-          />
+          />}
 
           {desktop && selectedEntry ? (
             <aside aria-label="Class details" className={cn(
@@ -364,20 +511,7 @@ export default function StudentAttendance() {
               <CardContent>
                 <div className="space-y-2">
                   {dayEntries.length === 0 && <p className="text-sm text-muted-foreground">No classes for this selection.</p>}
-                  {dayEntries.map(entry => (
-                    <button
-                      key={entry.id}
-                      type="button"
-                      onClick={() => selectEntry(entry)}
-                      className={cn(
-                        'block w-full rounded-md border-l-[3px] p-2 text-left text-sm hover:brightness-95 focus-visible:outline-2 focus-visible:outline-ring',
-                        attendanceClassStyle(entry.session.classType ?? entry.session.title)
-                      )}
-                    >
-                      <span className="block font-semibold">{entry.session.title}</span>
-                      <span>{formatTime(entry.session.startTime)} · {statusText(entry)}</span>
-                    </button>
-                  ))}
+                  {dayEntries.map(entryButton)}
                 </div>
               </CardContent>
             </Card>
@@ -406,40 +540,7 @@ export default function StudentAttendance() {
         </div>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <CardTitle>Upcoming</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-semibold">
-              {upcoming.length}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Attended</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-semibold">
-              {past.filter(e => e.status === 'attended' || e.status === 'late').length}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Waitlisted</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-semibold">
-              {waiting.length}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+      {!desktop && stats}
 
       {waiting.length > 0 && (
         <Card>
@@ -482,7 +583,7 @@ export default function StudentAttendance() {
 
             <p className="mt-3 text-xs text-muted-foreground">
               Being waitlisted does not guarantee a spot.
-              Check the timetable for an available spot.
+              Check Classes for an available spot.
             </p>
           </CardContent>
         </Card>
@@ -498,58 +599,51 @@ export default function StudentAttendance() {
       <Dialog open={Boolean(rescheduleId) && !pending} onOpenChange={open => {
         if (!open) setRescheduleId(null)
       }}>
-        <DialogContent showCloseButton={false}>
-          <DialogTitle>Choose a replacement class</DialogTitle>
-          <DialogDescription>Your current booking stays until you confirm the replacement.</DialogDescription>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Choose a replacement class</DialogTitle>
+            <DialogDescription>Your current booking stays until you confirm the replacement.</DialogDescription>
+          </DialogHeader>
 
-          <label className="block space-y-2 text-sm">
-            <span>Available sessions</span>
-
-            <select
+          <div className="space-y-1.5">
+            <Label htmlFor="replacement-class">Available sessions</Label>
+            <NativeSelect
+              id="replacement-class"
               value={replacementId}
               onChange={e => setReplacementId(e.target.value)}
-              className="w-full rounded-lg border border-input bg-background p-3"
+              className="h-11 lg:h-10"
             >
-              <option value="">
-                Select a class
-              </option>
-
-              {alternatives.map(c => (
-                <option key={c.id} value={c.id}>
-                  {prettyDate(c.date)} · {c.title} ·{' '}
-                  {formatTime(c.startTime)}
-                </option>
+              <option value="">Select a class</option>
+              {alternativeDays.map(([day, sessions]) => (
+                <optgroup key={day} label={prettyDate(sessions[0].date)}>
+                  {sessions.map(c => (
+                    <option key={c.id} value={c.id}>
+                      {formatTime(c.startTime)} · {c.title} · {c.centre} · {c.instructor}
+                    </option>
+                  ))}
+                </optgroup>
               ))}
-            </select>
-          </label>
+            </NativeSelect>
+            {alternatives.length === 0 && <p className="text-sm text-muted-foreground">No other sessions are open for booking right now.</p>}
+          </div>
 
-          <div className="flex justify-end gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setRescheduleId(null)}
-            >
-              Back
+          <DialogFooter>
+            <Button variant="outline" className="min-h-11" onClick={() => setRescheduleId(null)}>
+              Cancel
             </Button>
-
             <Button
+              className="min-h-11"
               disabled={!replacementId}
               onClick={() => {
-                const replacement = classes.find(
-                  c => c.id === replacementId
-                )
-
+                const replacement = classes.find(c => c.id === replacementId)
                 if (rescheduleId && replacement) {
-                  setPending({
-                    kind: 'reschedule',
-                    id: rescheduleId,
-                    replacement
-                  })
+                  setPending({ kind: 'reschedule', id: rescheduleId, replacement })
                 }
               }}
             >
               Continue
             </Button>
-          </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -559,23 +653,23 @@ export default function StudentAttendance() {
         pending={schedule.saving}
         destructive={pending?.kind !== 'reschedule'}
         title={pending?.kind === 'cancel'
-          ? 'Cancel this class?'
+          ? 'Cancel this booking?'
           : pending?.kind === 'leave'
             ? 'Leave this waitlist?'
-            : 'Confirm rescheduling?'}
+            : 'Reschedule this class?'}
         description={pending?.kind === 'cancel'
-          ? 'Are you sure you want to cancel this enrolment?'
+          ? 'Your place in this class will be released.'
           : pending?.kind === 'leave'
-            ? 'Are you sure you want to remove your name from the waitlist?'
+            ? 'Your name will be removed from the waitlist.'
             : pending?.kind === 'reschedule'
               ? `Your original class will be replaced with ${pending.replacement.title} on ${prettyDate(pending.replacement.date)}.`
               : ''}
-        cancelLabel="No, go back"
+        cancelLabel={pending?.kind === 'cancel' ? 'Keep booking' : pending?.kind === 'leave' ? 'Stay on waitlist' : 'Cancel'}
         confirmLabel={pending?.kind === 'cancel'
-          ? 'Yes, cancel class'
+          ? 'Cancel booking'
           : pending?.kind === 'leave'
-            ? 'Yes, leave waitlist'
-            : 'Yes, reschedule'}
+            ? 'Leave waitlist'
+            : 'Reschedule'}
         onConfirm={confirm}
       />
       {feedbackDialog}

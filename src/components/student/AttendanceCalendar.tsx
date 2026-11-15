@@ -1,23 +1,11 @@
 import { useCallback } from 'react'
 import type { ReactNode } from 'react'
-import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Info, List } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
-import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from '@/components/ui/popover'
-import {
-  addDays,
   classTypes,
   dateKey,
   formatTime,
   monthDates,
-  weekDates,
-  weekLabel
+  weekDates
 } from '@/lib/instructor-calendar'
 import {
   layoutTimelineItems,
@@ -34,113 +22,12 @@ export type AttendanceEntry = Enrollment & { session: ClassOffering }
 
 const viewLabels = { day: 'Day', week: 'Week', month: 'Month' } as const
 export type AttendanceView = keyof typeof viewLabels
-const views: AttendanceView[] = ['day', 'week', 'month']
 const classStyles = new Map<string, string>(
   Object.values(classTypes).map(style => [style.label, style.card])
 )
 
 export function attendanceClassStyle(title: string) {
   return classStyles.get(title) ?? 'border-primary bg-primary/10 text-primary'
-}
-
-export function AttendanceToolbar({
-  date, view, list, desktop, actions, filter, onViewChange, onListChange, onNavigate, onToday
-}: {
-  date: Date
-  view: AttendanceView
-  list: boolean
-  desktop: boolean
-  actions: ReactNode
-  /** The Filter button, always last (far right). */
-  filter?: ReactNode
-  onViewChange: (view: AttendanceView) => void
-  onListChange: (list: boolean) => void
-  onNavigate: (direction: number) => void
-  onToday: () => void
-}) {
-  const heading = view === 'month'
-    ? date.toLocaleDateString('en-SG', { month: 'long', year: 'numeric' })
-    : view === 'week' && desktop
-      ? weekLabel(date)
-      : prettyDate(date)
-  const step = view === 'week' && !desktop ? 'day' : view
-
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-3">
-      {!list && (
-        <div className="flex flex-wrap items-center gap-2 lg:gap-4">
-          <div role="group" aria-label="Calendar navigation" className="flex items-center gap-2">
-            <Button variant="outline" className="mr-1 h-11 px-4 lg:h-10" onClick={onToday}>Today</Button>
-            <Button variant="ghost" size="icon-lg" className="size-11 lg:size-10" aria-label={`Previous ${step}`} onClick={() => onNavigate(-1)}>
-              <ChevronLeft aria-hidden="true" />
-            </Button>
-            <Button variant="ghost" size="icon-lg" className="size-11 lg:size-10" aria-label={`Next ${step}`} onClick={() => onNavigate(1)}>
-              <ChevronRight aria-hidden="true" />
-            </Button>
-          </div>
-          <h3 className="w-full text-sm font-medium lg:w-auto" aria-live="polite">{heading}</h3>
-        </div>
-      )}
-      <div className="ml-auto flex flex-wrap items-center gap-2">
-        {actions}
-        <DropdownMenu>
-        <DropdownMenuTrigger
-          render={<Button variant="outline" className="h-11 min-w-28 justify-between gap-3 px-4 lg:h-10" />}
-          aria-label={`Calendar view: ${viewLabels[view]}`}
-        >
-          {viewLabels[view]}
-          <ChevronDown aria-hidden="true" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="p-1.5">
-          <DropdownMenuRadioGroup
-            value={view}
-            onValueChange={value => {
-              const next = views.find(mode => mode === value)
-              if (next) onViewChange(next)
-            }}
-            aria-label="Calendar view"
-          >
-            {views.map(mode => (
-              <DropdownMenuRadioItem key={mode} value={mode} closeOnClick className="py-2.5 pr-4 pl-9">
-                {viewLabels[mode]}
-              </DropdownMenuRadioItem>
-            ))}
-          </DropdownMenuRadioGroup>
-        </DropdownMenuContent>
-        </DropdownMenu>
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={<Button variant="outline" className="h-10 justify-between gap-2" />}
-            aria-label={`Calendar display: ${list ? 'List' : view === 'month' ? 'Calendar' : 'Timeline'}`}
-          >
-            {list ? <List aria-hidden="true" /> : <CalendarDays aria-hidden="true" />}
-            {list ? 'List' : view === 'month' ? 'Calendar' : 'Timeline'}
-            <ChevronDown aria-hidden="true" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuRadioGroup value={list ? 'list' : 'calendar'} onValueChange={value => onListChange(value === 'list')} aria-label="Calendar display">
-              <DropdownMenuRadioItem value="calendar" closeOnClick>{view === 'month' ? 'Calendar' : 'Timeline'}</DropdownMenuRadioItem>
-              <DropdownMenuRadioItem value="list" closeOnClick>List</DropdownMenuRadioItem>
-            </DropdownMenuRadioGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <Popover>
-          <PopoverTrigger render={<Button variant="ghost" size="icon" />} aria-label="Calendar legend">
-            <Info aria-hidden="true" />
-          </PopoverTrigger>
-          <PopoverContent align="end" className="max-h-[min(24rem,70dvh)] overflow-auto">
-            <PopoverTitle>Class colours</PopoverTitle>
-            <ul className="flex flex-wrap gap-2">
-              {Object.values(classTypes).map(style => (
-                <li key={style.label} className={cn('rounded-md border px-2 py-1 text-xs', style.badge)}>{style.label}</li>
-              ))}
-            </ul>
-          </PopoverContent>
-        </Popover>
-        {filter}
-      </div>
-    </div>
-  )
 }
 
 function DateButton({
@@ -182,12 +69,11 @@ function DateButton({
 }
 
 export default function AttendanceCalendar({
-  date, today, view, desktop, entriesByDate, selectedId, onSelectDate, onSelectEntry
+  date, today, view, entriesByDate, selectedId, onSelectDate, onSelectEntry
 }: {
   date: Date
   today: Date
   view: AttendanceView
-  desktop: boolean
   entriesByDate: ReadonlyMap<string, AttendanceEntry[]>
   selectedId: string | null
   onSelectDate: (date: Date) => void
@@ -237,11 +123,10 @@ export default function AttendanceCalendar({
   }
 
   return <AttendanceTimeline
-    key={`${view}-${desktop}`}
+    key={view}
     date={date}
     today={today}
     view={view}
-    desktop={desktop}
     entriesByDate={entriesByDate}
     selectedId={selectedId}
     onSelectDate={onSelectDate}
@@ -250,19 +135,17 @@ export default function AttendanceCalendar({
 }
 
 function AttendanceTimeline({
-  date, today, view, desktop, entriesByDate, selectedId, onSelectDate, onSelectEntry
+  date, today, view, entriesByDate, selectedId, onSelectDate, onSelectEntry
 }: {
   date: Date
   today: Date
   view: 'day' | 'week'
-  desktop: boolean
   entriesByDate: ReadonlyMap<string, AttendanceEntry[]>
   selectedId: string | null
   onSelectDate: (date: Date) => void
   onSelectEntry: (entry: AttendanceEntry) => void
 }) {
-  const week = weekDates(date)
-  const days = view === 'day' ? [date] : desktop ? week : [date, addDays(date, 1)]
+  const days = view === 'day' ? [date] : weekDates(date)
   const columns = days.map(day => ({
     day,
     items: (entriesByDate.get(dateKey(day)) ?? []).map(entry => ({ ...entry.session, entry }))
@@ -281,15 +164,6 @@ function AttendanceTimeline({
 
   return (
     <section aria-label={view === 'week' ? 'Weekly hourly timeline' : 'Daily hourly timeline'} className="min-w-0 space-y-3">
-      {!desktop && (
-        <div role="group" aria-label="Select a day" className="grid grid-cols-7 gap-px overflow-hidden rounded-xl border bg-border">
-          {week.map(day => (
-            <DateButton key={dateKey(day)} day={day} date={date} today={today} onSelectDate={onSelectDate} className="min-h-12">
-              <span className="truncate">{day.toLocaleDateString('en-SG', { weekday: 'short' })}</span>
-            </DateButton>
-          ))}
-        </div>
-      )}
       <div ref={positionTimeline} className="relative h-[min(65dvh,46rem)] overflow-auto rounded-xl border bg-card lg:h-[clamp(24rem,calc(100dvh-15rem),56rem)]">
         {!items.length && <p className="pointer-events-none absolute inset-x-0 top-20 z-20 mx-auto w-fit rounded-md border bg-card px-3 py-2 text-sm text-muted-foreground">No classes for this selection.</p>}
         <div className="grid" style={{ gridTemplateColumns: `2.75rem repeat(${days.length}, minmax(0, 1fr))` }}>

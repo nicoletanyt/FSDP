@@ -89,7 +89,7 @@ export default function MobileNavigation({
                                 Shinju-Kai
                             </span>
                         </span>
-                        {(profile?.role === "instructor" || profile?.role === "administrator") && (
+                        {profile && (
                             <span className="mt-0.5 block text-3xs leading-none font-normal tracking-normal text-muted-foreground">
                                 {role}
                             </span>

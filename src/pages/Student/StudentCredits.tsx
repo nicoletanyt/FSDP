@@ -1,6 +1,10 @@
 import { useMemo, useState } from 'react'
 import { Link, Navigate, useSearchParams } from 'react-router'
-import { BadgeCheck, CreditCard, GraduationCap, ShieldCheck, Sparkles, User, Loader2 } from 'lucide-react'
+import { BadgeCheck, GraduationCap, ShieldCheck, Sparkles, User, Loader2 } from 'lucide-react'
+
+import PageHeader from '@/components/shared/layout/PageHeader'
+import { StatusBadge } from '@/components/shared/status/StatusBadge'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -15,6 +19,7 @@ import { money } from '@/lib/format'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/hooks/use-auth'
 import CreditBatchList from '@/components/student/CreditBatchList'
+import CreditBalanceCard from './CreditBalanceCard'
 
 const UNLIMITED_CREDITS = 9999
 
@@ -89,7 +94,7 @@ export default function StudentCredits() {
     return isStudent ? applyStudentDiscount(base) : base
   }, [audience, isStudent])
 
-  const heading = audience === 'junior' ? 'Junior Class Passes' : 'Adult Class Passes'
+  const heading = audience === 'junior' ? 'Junior class passes' : 'Adult class passes'
   const description = isStudent
     ? 'Student members receive 50% off adult class pass rates. Please bring your full-time student ID when collecting your pass.'
     : membershipType === 'senior'
@@ -131,69 +136,68 @@ export default function StudentCredits() {
   if (checkoutState === 'success') return <Navigate to={`/dashboard?${searchParams}`} replace />
 
   return (
-    <main className="mx-auto w-full max-w-4xl">
-      <header className="text-center">
-        <span className="inline-flex items-center justify-center rounded-full bg-primary/10 p-3 text-primary">
-          <CreditCard className="size-8" aria-hidden="true" />
-        </span>
-        <h1 className="mt-4 text-2xl font-bold tracking-tight sm:text-3xl">{heading}</h1>
-        <p className="mx-auto mt-2 max-w-xl text-sm text-muted-foreground">{description}</p>
+    <section className="w-full">
+      <PageHeader title={heading} description={description} />
 
-        <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-sm">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 font-semibold text-primary">
-            {isStudent ? <GraduationCap className="size-4" aria-hidden="true" /> : <User className="size-4" aria-hidden="true" />}
+      <div className="mt-4 flex flex-wrap items-center gap-2 text-sm">
+          <StatusBadge tone="info" dot={false}>
+            {isStudent ? <GraduationCap aria-hidden="true" /> : <User aria-hidden="true" />}
             {membershipLabel(membershipType)}
-          </span>
+          </StatusBadge>
           {isStudent && (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-red/10 px-3 py-1 font-semibold text-brand-red-ink">
-              <BadgeCheck className="size-4" aria-hidden="true" />
+            <StatusBadge tone="success" dot={false}>
+              <BadgeCheck aria-hidden="true" />
               50% student discount applied
-            </span>
+            </StatusBadge>
           )}
           <Link to="/apply-membership" className="text-muted-foreground underline-offset-4 hover:underline">
             Change membership type
           </Link>
-        </div>
-      </header>
+      </div>
 
       {checkoutState === 'cancel' && (
-        <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">
-          Checkout was canceled. No payment was taken.
-        </div>
+        <Alert role="status" className="mt-6">
+          <AlertDescription>Checkout was cancelled. No payment was taken.</AlertDescription>
+        </Alert>
       )}
 
       {error && (
-        <div className="mt-6 p-4 rounded-xl bg-red-50 text-red-600 text-sm border border-red-100">
-          {error}
-        </div>
+        <Alert variant="destructive" className="mt-6">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
+
+      <div className="mt-6">
+        <CreditBalanceCard topUp={false} />
+      </div>
 
       <CreditBatchList userId={profile?.id} />
 
       <section className="mt-8 space-y-4" aria-label="Class passes">
         <h2 className="text-lg font-semibold">Buy a new pass</h2>
+        <div className="grid gap-4 xl:grid-cols-2">
         {packages.map((pass) => (
           <Card
             key={pass.id}
-            className={`relative flex flex-col justify-between gap-4 p-5 sm:flex-row sm:items-center sm:p-6 ${
-              pass.popular ? 'border-primary/40 bg-primary/5' : ''
+            className={`relative flex flex-col justify-between gap-4 p-4 sm:flex-row sm:items-center ${
+              pass.popular ? 'bg-primary/5 ring-primary/40' : ''
             }`}
           >
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-lg font-bold">{pass.title}</h2>
+                <h3 className="text-lg font-semibold">{pass.title}</h3>
                 {pass.popular && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-destructive px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-destructive-foreground">
-                    <Sparkles className="size-3" aria-hidden="true" />
+                  <StatusBadge tone="info" dot={false}>
+                    <Sparkles aria-hidden="true" />
                     Popular
-                  </span>
+                  </StatusBadge>
                 )}
               </div>
               <p className="mt-1 text-sm text-muted-foreground">
-                {pass.credits === UNLIMITED_CREDITS ? 'Unlimited credits' : `${pass.credits} credits`} · {pass.validity}
+                {pass.credits === UNLIMITED_CREDITS ? 'Unlimited classes' : `${pass.credits} credits`} · {pass.validity}
               </p>
               <div className="mt-2 flex flex-wrap items-baseline gap-2">
-                <span className="text-2xl font-extrabold tabular-nums">{money.format(pass.price)}</span>
+                <span className="text-2xl font-semibold tabular-nums">{money.format(pass.price)}</span>
                 {pass.originalPrice !== undefined && (
                   <span className="text-sm text-muted-foreground line-through tabular-nums">
                     {money.format(pass.originalPrice)}
@@ -212,8 +216,8 @@ export default function StudentCredits() {
             >
               {loadingPassId === pass.id ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Redirecting to Stripe...
+                  <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                  Redirecting to Stripe…
                 </>
               ) : (
                 'Purchase'
@@ -221,12 +225,13 @@ export default function StudentCredits() {
             </Button>
           </Card>
         ))}
+        </div>
       </section>
 
-      <p className="mt-8 flex items-center justify-center gap-1.5 text-center text-xs text-muted-foreground">
+      <p className="mt-8 flex items-start gap-1.5 text-xs text-muted-foreground">
         <ShieldCheck className="size-4" aria-hidden="true" />
         All prices are in SGD. Secure payments handled by Stripe. Pass validity starts when payment is confirmed.
       </p>
-    </main>
+    </section>
   )
 }

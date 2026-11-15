@@ -9,11 +9,17 @@ import {
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useOutletContext, useSearchParams } from 'react-router'
 import {
-  ArrowLeft,
   CalendarDays,
+  CalendarX,
   Coins,
+  MapPin,
 } from 'lucide-react'
-import { Button, buttonVariants } from '@/components/student/button'
+import BackLink from '@/components/shared/layout/BackLink'
+import EmptyState from '@/components/shared/layout/EmptyState'
+import PageHeader from '@/components/shared/layout/PageHeader'
+import RetryAlert from '@/components/shared/layout/RetryAlert'
+import { StatusBadge } from '@/components/shared/status/StatusBadge'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Calendar } from '@/components/ui/calendar'
 import {
   Card,
@@ -112,7 +118,7 @@ function ClassSessionPicker({
         />
       </div>
       <div className="min-w-0 space-y-3">
-        <h3 className="font-semibold" aria-live="polite">{prettyDate(date)}</h3>
+        <h2 className="font-semibold" aria-live="polite">{prettyDate(date)}</h2>
         <div role="group" aria-label="Session times" className="grid max-h-80 gap-2 overflow-y-auto p-1">
           {daySessions.map(session => {
             const { tone, label } = sessionAvailability(session)
@@ -308,21 +314,16 @@ export default function StudentClasses() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-semibold">
-            Classes
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Choose a class type to see its available dates and times.
-          </p>
-        </div>
-
-        <Link to="/timetable" className={buttonVariants({ variant: 'outline' })}>
-          <CalendarDays className="size-4" />
-          My schedule
-        </Link>
-      </div>
+      <PageHeader
+        title="Classes"
+        description="Pick a class type to see its dates and times."
+        actions={(
+          <Link to="/timetable" className={buttonVariants({ variant: 'outline' })}>
+            <CalendarDays aria-hidden="true" className="size-4" />
+            My schedule
+          </Link>
+        )}
+      />
 
       <SessionFilters
         title="Find a class"
@@ -333,37 +334,49 @@ export default function StudentClasses() {
         onChange={next => setParams(next, { replace: true })}
       />
 
-      <h3 className="text-lg font-semibold">Upcoming sessions</h3>
+      <h2 className="text-lg font-semibold">Upcoming sessions</h2>
       {groups.length === 0 ? (
-        <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
-          {upcoming.length ? 'No upcoming sessions match these filters.' : 'No upcoming sessions are scheduled.'}
-        </div>
+        <EmptyState
+          icon={CalendarX}
+          title={upcoming.length ? 'No upcoming sessions match these filters' : 'No upcoming sessions are scheduled'}
+          description={upcoming.length ? 'Try another dojo, day, time or instructor.' : undefined}
+        />
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
           {groups.map(([type, sessions]) => {
             const bookingParams = new URLSearchParams(params)
             bookingParams.set('type', type)
             if (pathname === '/timetable') bookingParams.set('from', 'timetable')
+            const next = sessions.reduce((first, session) => dateTime(session) < dateTime(first) ? session : first)
+            const dojos = [...new Set(sessions.map(session => session.centre))].sort()
             return (
-              <Card key={type} className="gap-5 py-6 sm:py-7">
+              <Card key={type} className="gap-4">
                 <CardHeader>
                   <div className="flex flex-wrap items-center gap-2">
                     <CardTitle className="text-lg">{type}</CardTitle>
                     {isRecommendedForGrade(type, schedule.grade) && (
-                      <span className="rounded-full bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
-                        Recommended for your grade
-                      </span>
+                      <StatusBadge tone="info" dot={false}>Recommended for your grade</StatusBadge>
                     )}
                   </div>
                   {sessions[0]?.level && <p className="text-sm text-muted-foreground">{sessions[0].level}</p>}
                 </CardHeader>
-                <CardContent>
+                <CardContent className="space-y-4">
+                  <ul className="space-y-1.5 text-sm text-muted-foreground">
+                    <li className="flex items-start gap-1.5">
+                      <CalendarDays aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+                      <span>Next: {prettyDate(next.date)}, {sessionTime(next)} · {sessions.length} upcoming {sessions.length === 1 ? 'session' : 'sessions'}</span>
+                    </li>
+                    <li className="flex items-start gap-1.5">
+                      <MapPin aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+                      <span className="min-w-0 [overflow-wrap:anywhere]">{dojos.join(', ')}</span>
+                    </li>
+                  </ul>
                   <Link
                     to={`/classes/choose?${bookingParams}`}
-                    aria-label={`Choose class: ${type}`}
+                    aria-label={`View sessions: ${type}`}
                     className={buttonVariants({ className: 'w-full' })}
                   >
-                    Choose class
+                    View sessions
                   </Link>
                 </CardContent>
               </Card>
@@ -373,21 +386,18 @@ export default function StudentClasses() {
       )}
 
       {catalogError ? (
-        <div role="alert" className="flex flex-wrap items-center gap-2 text-sm">
-          <p>Could not load the full class list.</p>
-          <Button variant="outline" size="sm" onClick={() => {
-            setCatalogError(false)
-            setCatalogRevision(revision => revision + 1)
-          }}>Try again</Button>
-        </div>
+        <RetryAlert message="Could not load the full class list." onRetry={() => {
+          setCatalogError(false)
+          setCatalogRevision(revision => revision + 1)
+        }} />
       ) : !catalog ? (
         <CardListSkeleton count={2} label="Loading the full class list…" />
       ) : unscheduled && unscheduled.length > 0 && (
         <section aria-labelledby="other-class-types" className="space-y-3">
-          <h3 id="other-class-types" className="text-lg font-semibold">Other class types</h3>
+          <h2 id="other-class-types" className="text-lg font-semibold">Other class types</h2>
           <div className="grid gap-4 lg:grid-cols-2">
             {unscheduled.map(type => (
-              <Card key={type.id} className="gap-2 py-6 sm:py-7">
+              <Card key={type.id} className="gap-2">
                 <CardHeader>
                   <CardTitle className="text-lg">{type.label}</CardTitle>
                   {type.description && <p className="text-sm text-muted-foreground">{type.description}</p>}
@@ -413,9 +423,7 @@ export function StudentClassBooking() {
 
   return (
     <div className="space-y-5">
-      <Link to={backTo} className={buttonVariants({ variant: 'ghost' })}>
-        <ArrowLeft aria-hidden="true" className="size-4" /> Back to classes
-      </Link>
+      <BackLink to={backTo}>{backPath === '/timetable' ? 'Back to my schedule' : 'Back to classes'}</BackLink>
       <ClassBooking key={params.toString()} type={type} initialParams={backParams} />
     </div>
   )
@@ -572,10 +580,9 @@ function ClassBooking({ type, initialParams }: { type: string; initialParams: UR
 
   return (
     <section className="space-y-4" aria-labelledby="booking-class-title">
-      <header className="space-y-1">
-        <h2 id="booking-class-title" className="text-2xl font-semibold">{type || 'Choose a class'}</h2>
-        {classSessions[0]?.level && <p className="text-sm text-muted-foreground">{classSessions[0].level}</p>}
-      </header>
+      <div id="booking-class-title">
+        <PageHeader title={type || 'Choose a class'} description={classSessions[0]?.level || undefined} />
+      </div>
       <SessionFilters
         title="Filter sessions"
         sessions={classSessions}
@@ -626,9 +633,19 @@ function ClassBooking({ type, initialParams }: { type: string; initialParams: UR
           </div>
         </CardContent>
       </Card> : (
-        <p className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
-          {classSessions.length ? 'No sessions match these filters.' : 'No upcoming sessions for this class.'}
-        </p>
+        <EmptyState
+          icon={CalendarX}
+          title={classSessions.length ? 'No sessions match these filters' : 'No upcoming sessions for this class'}
+        />
+      )}
+
+      {/* Phones: keep the action in reach while the times list scrolls. Leaves room for the help button. */}
+      {selected.length > 0 && schedule.active && (
+        <div className="fixed inset-x-0 bottom-0 z-30 flex items-center gap-3 border-t bg-background/95 px-4 pt-3 pr-20 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur lg:hidden">
+          <Button size="touch" disabled={busy} onClick={() => setAction({ kind: 'enroll', sessions: selected })}>
+            Enrol in {selected.length} {selected.length === 1 ? 'class' : 'classes'}
+          </Button>
+        </div>
       )}
 
       <ConfirmDialog
@@ -683,13 +700,13 @@ function ClassBooking({ type, initialParams }: { type: string; initialParams: UR
             )}
             {actionError && <p role="alert" className="whitespace-pre-line rounded-md bg-destructive/10 p-3 text-sm text-destructive">{actionError}</p>}
             <AlertDialogFooter>
-              <AlertDialogCancel disabled={busy} onClick={closeAction}>Back</AlertDialogCancel>
+              <AlertDialogCancel disabled={busy} onClick={closeAction}>Cancel</AlertDialogCancel>
               <AlertDialogAction onClick={confirm} disabled={busy || (action.kind === 'enroll' && insufficientCredits)}>
                 {busy ? 'Saving…' : action.kind === 'enroll'
-                  ? 'Yes, enrol'
+                  ? 'Enrol'
                   : action.kind === 'waitlist'
-                    ? 'Yes, join waitlist'
-                    : 'Yes, leave waitlist'}
+                    ? 'Join waitlist'
+                    : 'Leave waitlist'}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

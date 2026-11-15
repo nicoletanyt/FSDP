@@ -1,12 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router'
-import { ArrowLeft, CreditCard, GraduationCap, Loader2, ShieldCheck } from 'lucide-react'
+import { CreditCard, GraduationCap, Loader2, ShieldCheck } from 'lucide-react'
+import BackLink from '@/components/shared/layout/BackLink'
+import PageHeader from '@/components/shared/layout/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { useAuth } from '@/hooks/use-auth'
 import { money } from '@/lib/format'
+import { gradingDate } from '@/lib/grading/format'
 import { getGradingQuote, getGradingCheckoutUrl, type GradingQuote } from '@/lib/grading-checkout'
 import type { GradingPaymentLocationState } from '@/lib/grading-payment'
+
+// Dates arrive as YYYY-MM-DD; anything else is shown as given.
+const readableDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value) ? gradingDate(value) : value
 
 export default function GradingPayment() {
   const location = useLocation()
@@ -55,14 +61,14 @@ export default function GradingPayment() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
-      <Link to="/grading/applications" className="inline-flex items-center gap-2 rounded text-sm text-muted-foreground underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-4">
-        <ArrowLeft className="size-4" aria-hidden="true" /> Back to grading applications
-      </Link>
-      <header className="my-6">
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Complete your grading payment</h1>
-        <p className="mt-2 text-sm text-muted-foreground">Review your total, then pay securely on Stripe. Your application is submitted only after payment is verified.</p>
-      </header>
+    <section className="w-full max-w-3xl">
+      <BackLink to="/grading/applications">Back to grading applications</BackLink>
+      <div className="mb-6">
+        <PageHeader
+          title="Complete your grading payment"
+          description="Review your total, then pay securely on Stripe. Your application is submitted only after payment is verified."
+        />
+      </div>
 
       {!eventId || !gradeId ? <Card className="p-6">
         <p>Select an eligible grading session before making payment.</p>
@@ -79,13 +85,13 @@ export default function GradingPayment() {
             <dl className="space-y-4 text-sm">
               <div className="flex flex-wrap justify-between gap-2"><dt className="text-muted-foreground">Applicant</dt><dd className="font-medium">{name}</dd></div>
               <div className="flex flex-wrap justify-between gap-2"><dt className="text-muted-foreground">Target grade</dt><dd className="font-medium">{quote.gradeLabel}</dd></div>
-              {state.gradingDate && <div className="flex flex-wrap justify-between gap-2"><dt className="text-muted-foreground">Grading date</dt><dd>{state.gradingDate}</dd></div>}
-              <div className="flex flex-wrap justify-between gap-2"><dt className="text-muted-foreground">Application closing date</dt><dd>{quote.applicationDeadline} · Singapore time</dd></div>
+              {state.gradingDate && <div className="flex flex-wrap justify-between gap-2"><dt className="text-muted-foreground">Grading date</dt><dd>{readableDate(state.gradingDate)}</dd></div>}
+              <div className="flex flex-wrap justify-between gap-2"><dt className="text-muted-foreground">Application closing date</dt><dd>{readableDate(quote.applicationDeadline)} · Singapore time</dd></div>
               <div className="flex justify-between gap-3 border-t pt-4"><dt className="text-muted-foreground">Grading examination fee</dt><dd className="font-medium tabular-nums">{money.format(quote.baseFeeCents / 100)}</dd></div>
               <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Late submission charge</dt><dd className="font-medium tabular-nums">{money.format(quote.lateFeeCents / 100)}</dd></div>
               <div className="flex items-baseline justify-between gap-3 border-t pt-4"><dt className="font-semibold">Total due</dt><dd data-testid="grading-total" className="text-3xl font-bold tabular-nums">{money.format(quote.totalCents / 100)}</dd></div>
             </dl>
-            {quote.lateFeeCents > 0 && <p className="mt-4 text-sm text-muted-foreground">This session is still open for late applications. Your total includes the S$22 late submission charge.</p>}
+            {quote.lateFeeCents > 0 && <p className="mt-4 text-sm text-muted-foreground">This session is still open for late applications. Your total includes the {money.format(quote.lateFeeCents / 100)} late submission charge.</p>}
           </>}
           {error && <div role="alert" className="mt-4 text-sm text-destructive">{error} {!quote && !processing && <button type="button" className="ml-2 rounded underline underline-offset-4" onClick={() => setRevision((previous) => previous + 1)}>Review fee again</button>}</div>}
           <Button type="button" size="lg" className="mt-6 w-full" disabled={loading || processing || !quote} onClick={() => void pay()}>
@@ -94,6 +100,6 @@ export default function GradingPayment() {
           <p className="mt-4 flex items-start justify-center gap-2 text-xs text-muted-foreground"><ShieldCheck className="size-4 shrink-0" aria-hidden="true" /> All prices are in SGD. Payment details are entered on Stripe, not on this website.</p>
         </div>
       </Card>}
-    </main>
+    </section>
   )
 }

@@ -18,7 +18,6 @@ export default function RootLayout() {
   const { pathname } = useLocation()
   const isAdmin = pathname === '/admin' || pathname.startsWith('/admin/')
   const isAdminCalendar = pathname === '/admin/calendar'
-  const isGradingPayment = pathname === '/grading' || pathname === '/grading/payment'
   const isInstructorPortal = useMatch('/instructor/*')
   const isStudent = Boolean(session && profile?.role === 'student')
   const homePath =
@@ -81,7 +80,7 @@ export default function RootLayout() {
       className={cn(
         'flex flex-col text-foreground',
         isAdminCalendar ? 'h-dvh overflow-hidden' : 'min-h-screen',
-        isAdmin ? 'bg-muted/30' : 'bg-background',
+        isAdmin || isStudent ? 'bg-muted/30' : 'bg-background',
       )}
     >
       {isStudent ? (
@@ -178,11 +177,7 @@ export default function RootLayout() {
         </Suspense>
       ) : (
         <main
-          className={cn(
-            'mx-auto w-full',
-            isGradingPayment ? 'p-0' : cn('p-6', pageWidth),
-            !isGradingPayment && (isStudent ? 'lg:py-8' : 'lg:py-12'),
-          )}
+          className={cn('p-6', pageWidth, isStudent ? 'lg:py-8' : 'lg:py-12')}
         >
           <Suspense
             fallback={

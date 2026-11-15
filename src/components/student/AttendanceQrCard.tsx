@@ -140,7 +140,7 @@ export default function AttendanceQrCard() {
             <DialogTitle className="text-xl font-semibold">Attendance QR</DialogTitle>
             <DialogDescription className="mt-2">
               {qr?.status === 'checked_in'
-                ? `You’re checked in to ${qr.className}. Enjoy class!`
+                ? `You’re checked in to ${qr.className}. Enjoy your class.`
                 : qr?.status === 'ready'
                   ? `Show this to your instructor to check in to ${qr.className}. The code changes every minute, so screenshots won’t work.`
                   : 'Check-in isn’t open right now.'}

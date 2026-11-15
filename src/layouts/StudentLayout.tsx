@@ -1,5 +1,6 @@
 import { matchPath, Outlet, useLocation, useSearchParams } from 'react-router'
-import { Button } from '@/components/ui/button'
+import RetryAlert from '@/components/shared/layout/RetryAlert'
+import { PageSkeleton } from '@/components/shared/skeletons'
 import { useAuth } from '@/hooks/use-auth'
 import { useLiveStudentSchedule } from '@/lib/use-live-student-schedule'
 import { useStudentCredits } from '@/hooks/use-student-credits'
@@ -34,13 +35,8 @@ type CreditsContext = {
 
 function StudentScheduleOutlet(creditContext: CreditsContext) {
   const schedule = useLiveStudentSchedule(creditContext.creditAccount.retry)
-  if (schedule.loading) return <p role="status" className="text-sm text-muted-foreground">Loading class schedule…</p>
-  if (schedule.error) return (
-    <div role="alert" className="space-y-3">
-      <p>{schedule.error}</p>
-      <Button variant="outline" onClick={schedule.retry}>Try again</Button>
-    </div>
-  )
+  if (schedule.loading) return <PageSkeleton label="Loading class schedule…" />
+  if (schedule.error) return <RetryAlert message={schedule.error} onRetry={schedule.retry} />
   return <Outlet context={{ ...creditContext, classes: schedule.classes, schedule }} />
 }
 

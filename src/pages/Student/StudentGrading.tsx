@@ -1,13 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
-import { CheckCircle2, AlertCircle, ShieldCheck, Info, Loader2 } from 'lucide-react'
+import { CheckCircle2, ShieldCheck, Info, Loader2 } from 'lucide-react'
+import { NativeSelect } from '@/components/admin/form-controls'
+import PageHeader from '@/components/shared/layout/PageHeader'
+import RetryAlert from '@/components/shared/layout/RetryAlert'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { GradeLabelBadge } from '@/components/shared/grade/GradeBadge'
-import { Card } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { useAuth } from '@/hooks/use-auth'
 import { supabase } from '@/lib/supabase'
 import { money } from '@/lib/format'
+import { gradingDate } from '@/lib/grading/format'
 import EligibilityChecklist from '@/components/grading/EligibilityChecklist'
 import type { ChecklistRequirement } from '@/components/grading/EligibilityChecklist'
 import { gradingProgression } from '@/lib/grading-progression'
@@ -40,8 +45,6 @@ export default function GradingApplication() {
   const available = options.filter((option) => !option.applied && option.target_grade === targetBelt)
   const matching = available.filter((option) => option.target_grade === targetBelt)
   const selected = matching.find((option) => option.id === eventId) ?? matching[0]
-  const selectedRule = Boolean(selected)
-  const checks = readiness.filter((check) => check.target_grade_id === targetBelt)
   const isEligible = Boolean(selected)
   const testCheckout = !selected && !paidRequest && !verifyingRequest && Boolean(progression?.target && progression.feeCents) &&
     (import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ?? '').startsWith('pk_test_') &&
@@ -158,153 +161,164 @@ export default function GradingApplication() {
     }
   }
 
+  const alreadyApplied = options.some((option) => option.applied && option.target_grade === targetBelt)
+  // Why the pay button is unavailable, shown under it.
+  const blockedReason = loading || error ? ''
+    : paidRequest ? 'Your payment is recorded. No further payment is needed.'
+    : verifyingRequest ? 'Your payment is being verified. Do not pay again.'
+    : selected || testCheckout ? ''
+    : alreadyApplied ? 'You have already applied for this grading.'
+    : 'No eligible grading applications are open for your account. Your dojo must confirm your membership and training requirements before a formal grading application.'
+
   return (
-    <main className="mx-auto w-full max-w-5xl py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-[#2c3f67]">Grading Application</h1>
-        <p className="text-gray-500 mt-2">Apply for your next belt promotion based on the Aikido Shinju-Kai syllabus.</p>
-        <Link to="/grading/requirements" className="mt-2 inline-block text-sm font-medium text-primary underline-offset-4 hover:underline">View grading requirements</Link>
-      </div>
+    <section className="w-full space-y-6" aria-busy={loading}>
+      <PageHeader
+        title="Grading application"
+        description="Apply for your next belt promotion based on the Aikido Shinju-Kai syllabus."
+        actions={<Button variant="outline" nativeButton={false} render={<Link to="/grading/requirements" />}>View grading requirements</Button>}
+      />
 
-      {payment && <p role="status" className="mb-6 rounded-xl bg-primary/10 p-4 text-sm text-primary">{payment}</p>}
-      {params.get('checkout') === 'cancel' && <p role="status" className="mb-6 text-sm text-muted-foreground">Stripe checkout was canceled. Your application has not been submitted.</p>}
-      {params.get('checkout') === 'test-cancel' && <p role="status" className="mb-6 text-sm text-muted-foreground">Payment preview canceled. No payment was made.</p>}
-      {error && <div role="alert" className="mb-6 text-sm text-destructive">{error} <button type="button" className="underline" onClick={() => setRevision((previous) => previous + 1)}>Try again</button></div>}
-      {loading && <p role="status" className="mb-6 text-sm text-muted-foreground">Loading your grading opportunities…</p>}
-      
-      {/* 👇 合并了同学的 ReadinessCard 和你的防重逻辑 */}
-      {!loading && !error && <ReadinessCard readiness={readiness.length ? { targetLabel: readiness[0].target_grade_label, requirements: readiness } : null} />}
-      
-      {!loading && !error && available.length === 0 && !paidRequest && !payment && (
-        <p className="mb-6 text-sm text-muted-foreground">No eligible grading applications are open for your account. Your dojo must confirm your membership and training requirements before a formal grading application.</p>
-      )}
-      
-      {options.filter((option) => option.applied).map((option) => <p key={option.id} className="mb-4 rounded-xl border p-4 text-sm"><CheckCircle2 className="mr-2 inline size-4 text-primary" />Application submitted: {option.grade_label} · {option.name}</p>)}
-      
-      {!loading && savedDraft && <p role="status" className="mb-4 rounded-lg border p-4 text-sm">{paidRequest
-        ? `Payment confirmed: ${progression?.target?.label}. Your request is awaiting dojo eligibility review. Do not pay again.`
-        : verifyingRequest ? 'Payment verification pending. Do not pay again; contact your dojo if this persists.'
-          : `Application draft saved: ${progression?.target?.label}. Not submitted. Formal submission requires an eligible grading session.`}</p>}
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* 👈 左侧：选择与条件核对 */}
-        <div className="lg:col-span-2 space-y-6">
-          <Card className="p-6 shadow-sm border-gray-200">
-            <h2 className="text-lg font-bold text-[#2c3f67] mb-4">1. Grading Details</h2>
-            <div className="space-y-2">
-              <p className="text-sm">Current Rank: <span className="font-bold">{loading ? 'Loading…' : progression?.current.label ?? 'Not recorded'}</span></p>
-              <p id="target-grade-label" className="text-sm font-medium">Target grade</p>
-              <div id="target-grade" aria-labelledby="target-grade-label" className="flex min-h-12 flex-wrap items-center justify-between gap-3 rounded-lg border bg-background px-3 py-3 text-sm">
-                <span className="font-semibold">{loading ? 'Loading…' : progression?.target?.label ?? (progression ? 'No further grade in your track' : 'Unavailable')}</span>
-                {progression?.target && <span className="shrink-0 text-muted-foreground">Base fee: <span className="font-semibold text-foreground">{progression.feeCents === null ? 'Not configured' : money.format(progression.feeCents / 100)}</span></span>}
-              </div>
-              {progression?.target && <p className="text-sm text-muted-foreground">Your target grade is based on your recorded rank and grading track.</p>}
-              {selected && <>
-                <Label htmlFor="grading-event">Grading session</Label>
-                <select id="grading-event" disabled={processing} value={selected.id} onChange={(event) => setEventId(event.target.value)} className="h-12 w-full rounded-lg border bg-background px-3 text-base">
-                  {matching.map((option) => <option key={option.id} value={option.id}>{option.name} · {option.grading_date}</option>)}
-                </select>
-                <p className="text-sm text-muted-foreground">{selected.centre_name} · Closing date: {selected.application_deadline} (Singapore time)</p>
-              </>}
-            </div>
-          </Card>
-
-          {selectedRule && (
-            <Card className="p-6 shadow-sm border-gray-200 animate-in fade-in slide-in-from-bottom-2">
-              <h2 className="text-lg font-bold text-[#2c3f67] mb-4">2. Eligibility Check</h2>
-              <p className="text-sm text-gray-500 mb-4">Based on Aikido Shinju-Kai SOP:</p>
-
-              <div className="space-y-4">
-                {checks.map((check) => <div key={check.key} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
-                  <div><p className="font-semibold">{check.label}</p><p className="mt-1 text-xs text-muted-foreground">Required: {check.required}</p></div>
-                  <p className="text-sm font-medium">{check.actual} {check.met && <CheckCircle2 className="ml-1 inline size-4 text-primary" />}</p>
-                </div>)}
-              </div>
-
-              {!isEligible && (
-                <div className="mt-4 flex items-start gap-2 text-sm text-red-600 bg-red-50 p-3 rounded-lg">
-                  <AlertCircle className="w-5 h-5 shrink-0" />
-                  <p>You have not met the minimum requirements. Please continue training before applying.</p>
-                </div>
-              )}
-            </Card>
+      {/* Status: every message about this application, in one place and one style. */}
+      {(payment || params.get('checkout') === 'cancel' || params.get('checkout') === 'test-cancel' || error
+        || options.some((option) => option.applied) || (!loading && savedDraft)) && (
+        <div className="space-y-2">
+          {error && <RetryAlert message={error} onRetry={() => setRevision((previous) => previous + 1)} />}
+          {payment && <Alert role="status"><AlertDescription>{payment}</AlertDescription></Alert>}
+          {params.get('checkout') === 'cancel' && <Alert role="status"><AlertDescription>Stripe checkout was cancelled. Your application has not been submitted.</AlertDescription></Alert>}
+          {params.get('checkout') === 'test-cancel' && <Alert role="status"><AlertDescription>Payment preview cancelled. No payment was made.</AlertDescription></Alert>}
+          {options.filter((option) => option.applied).map((option) => (
+            <Alert key={option.id} role="status">
+              <CheckCircle2 className="text-success" aria-hidden="true" />
+              <AlertDescription>Application submitted: {option.grade_label} · {option.name}</AlertDescription>
+            </Alert>
+          ))}
+          {!loading && savedDraft && (
+            <Alert role="status">
+              <AlertDescription>{paidRequest
+                ? `Payment confirmed: ${progression?.target?.label}. Your request is awaiting dojo eligibility review. Do not pay again.`
+                : verifyingRequest ? 'Payment verification pending. Do not pay again; contact your dojo if this persists.'
+                  : `Application draft saved: ${progression?.target?.label}. Not submitted. Formal submission requires an eligible grading session.`}</AlertDescription>
+            </Alert>
           )}
         </div>
+      )}
+      {loading && <p role="status" className="sr-only">Loading your grading opportunities…</p>}
 
-        {/* 👈 右侧：费用与检查 */}
-        <div className="lg:col-span-1">
-          <Card className="p-6 shadow-sm border-gray-200 sticky top-24">
-            <h2 className="text-lg font-bold text-[#2c3f67] mb-4">Order Summary</h2>
-
-            <div className="space-y-3 text-sm border-b border-gray-100 pb-4 mb-4">
-              <div className="flex justify-between">
-                <span className="text-gray-500">Applicant</span>
-                <span className="font-medium">{studentName}</span>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="space-y-6 lg:col-span-2">
+          <Card>
+            <CardHeader>
+              <h2 className="text-base leading-snug font-medium">Grading details</h2>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm">Current grade: <span className="font-semibold">{loading ? 'Loading…' : progression?.current.label ?? 'Not recorded'}</span></p>
+              <div className="space-y-1.5">
+                <p id="target-grade-label" className="text-sm font-medium">Target grade</p>
+                <div id="target-grade" aria-labelledby="target-grade-label" className="flex min-h-11 flex-wrap items-center justify-between gap-3 rounded-lg border bg-background px-3 py-2 text-sm">
+                  <span className="font-semibold">{loading ? 'Loading…' : progression?.target?.label ?? (progression ? 'No further grade in your track' : 'Unavailable')}</span>
+                  {progression?.target && <span className="shrink-0 text-muted-foreground">Base fee: <span className="font-semibold text-foreground">{progression.feeCents === null ? 'Not configured' : money.format(progression.feeCents / 100)}</span></span>}
+                </div>
+                {progression?.target && <p className="text-xs text-muted-foreground">Your target grade is based on your recorded grade and grading track.</p>}
               </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Target Grade</span>
-                <span className="font-medium">{progression?.target?.label ?? '-'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Base Fee</span>
-                <span className="font-medium">{selected || paidRequest ? money.format(baseFee) : progression?.feeCents != null ? money.format(progression.feeCents / 100) : '—'}</span>
-              </div>
-              {isLateSubmission && (
-                <div className="flex justify-between text-red-600 bg-red-50 p-2 rounded">
-                  <span className="flex items-center gap-1"><Info className="w-3 h-3"/> Late Submission</span>
-                  <span className="font-medium">+{money.format(lateFee)}</span>
+              {selected && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="grading-event">Grading session</Label>
+                  <NativeSelect id="grading-event" disabled={processing} value={selected.id} onChange={(event) => setEventId(event.target.value)} className="h-11 lg:h-10">
+                    {matching.map((option) => <option key={option.id} value={option.id}>{option.name} · {gradingDate(option.grading_date)}</option>)}
+                  </NativeSelect>
+                  <p className="text-xs text-muted-foreground">{selected.centre_name} · Applications close {gradingDate(selected.application_deadline)} (Singapore time)</p>
                 </div>
               )}
-            </div>
+            </CardContent>
+          </Card>
 
-            <div className="flex justify-between items-end mb-6">
-              <span className="text-gray-900 font-bold">{paidRequest ? 'Amount Paid' : 'Total Due'}</span>
-              <span className="text-3xl font-extrabold text-[#2c3f67]">{selected || testCheckout || paidRequest ? money.format(totalFee) : '—'}</span>
-            </div>
+          {!loading && !error && <ReadinessCard readiness={readiness.length ? { targetLabel: readiness[0].target_grade_label, requirements: readiness } : null} />}
+        </div>
 
-            <Button
-              onClick={() => void handleProceedToPayment()}
-              disabled={Boolean(paidRequest || verifyingRequest) || (!isEligible && !testCheckout) || loading || processing || Boolean(error)}
-              aria-describedby={testCheckout ? 'payment-preview-note' : undefined}
-              className={`w-full h-12 text-base font-medium ${paidRequest ? 'bg-gray-400 cursor-not-allowed hover:bg-gray-400 text-white' : 'bg-[#2c3f67] hover:bg-[#1f2d4a] text-white'}`}
-            >
-              {paidRequest ? 'Payment Confirmed' : verifyingRequest ? 'Verifying Payment' : processing ? <><Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> Redirecting to Stripe…</> : 'Proceed to Payment'}
-            </Button>
+        <div className="lg:col-span-1">
+          <Card className="lg:sticky lg:top-6">
+            <CardHeader>
+              <h2 className="text-base leading-snug font-medium">Order summary</h2>
+            </CardHeader>
+            <CardContent>
+              <dl className="space-y-3 border-b pb-4 text-sm">
+                <div className="flex justify-between gap-3">
+                  <dt className="text-muted-foreground">Applicant</dt>
+                  <dd className="min-w-0 text-right font-medium [overflow-wrap:anywhere]">{studentName}</dd>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <dt className="text-muted-foreground">Target grade</dt>
+                  <dd className="text-right font-medium">{progression?.target?.label ?? '—'}</dd>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <dt className="text-muted-foreground">Base fee</dt>
+                  <dd className="font-medium tabular-nums">{selected || paidRequest ? money.format(baseFee) : progression?.feeCents != null ? money.format(progression.feeCents / 100) : '—'}</dd>
+                </div>
+                {isLateSubmission && (
+                  <div className="flex justify-between gap-3 rounded-md bg-warning/15 px-2 py-1.5 text-warning-foreground dark:text-warning">
+                    <dt className="flex items-center gap-1"><Info className="size-3.5" aria-hidden="true" /> Late submission</dt>
+                    <dd className="font-medium tabular-nums">+{money.format(lateFee)}</dd>
+                  </div>
+                )}
+              </dl>
 
-            <p className="text-xs text-center text-muted-foreground mt-4 flex items-center justify-center gap-1">
-              <ShieldCheck className="w-3 h-3" /> Secure checkout powered by Stripe
-            </p>
-            {testCheckout && <p id="payment-preview-note" className="mt-2 text-center text-xs text-muted-foreground">Payment preview only. No charge or formal grading application.</p>}
+              <div className="mt-4 mb-5 flex items-end justify-between gap-3">
+                <span className="font-semibold">{paidRequest ? 'Amount paid' : 'Total due'}</span>
+                <span className="text-3xl font-semibold tabular-nums">{selected || testCheckout || paidRequest ? money.format(totalFee) : '—'}</span>
+              </div>
+
+              <Button
+                size="lg"
+                onClick={() => void handleProceedToPayment()}
+                disabled={Boolean(paidRequest || verifyingRequest) || (!isEligible && !testCheckout) || loading || processing || Boolean(error)}
+                aria-describedby={testCheckout ? 'payment-preview-note' : blockedReason ? 'payment-blocked-reason' : undefined}
+                className="w-full"
+              >
+                {paidRequest ? 'Payment confirmed' : verifyingRequest ? 'Verifying payment' : processing ? <><Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> Redirecting to Stripe…</> : 'Proceed to payment'}
+              </Button>
+              {blockedReason && <p id="payment-blocked-reason" className="mt-3 text-sm text-muted-foreground">{blockedReason}</p>}
+
+              <p className="mt-4 flex items-center justify-center gap-1 text-center text-xs text-muted-foreground">
+                <ShieldCheck className="size-3.5" aria-hidden="true" /> Secure checkout powered by Stripe
+              </p>
+              {testCheckout && <p id="payment-preview-note" className="mt-2 text-center text-xs text-muted-foreground">Payment preview only. No charge or formal grading application.</p>}
+            </CardContent>
           </Card>
         </div>
       </div>
-    </main>
+    </section>
   )
 }
 
 function ReadinessCard({ readiness }: { readiness: { targetLabel: string; requirements: ChecklistRequirement[] } | null }) {
   if (!readiness) {
-    return <Card className="gap-1 p-6">
-      <h2 className="text-xl font-semibold">Your next grade</h2>
-      <p className="text-sm text-muted-foreground">You have reached the highest grade on your grading ladder.</p>
+    return <Card>
+      <CardHeader>
+        <h2 className="text-base leading-snug font-medium">Your next grade</h2>
+      </CardHeader>
+      <CardContent className="text-sm text-muted-foreground">You have reached the highest grade on your grading ladder.</CardContent>
     </Card>
   }
   const met = readiness.requirements.filter((requirement) => requirement.met).length
   const total = readiness.requirements.length
   const eligible = met === total
-  return <Card className="gap-4 p-6 mt-6">
-    <div className="flex flex-wrap items-baseline justify-between gap-2">
-      <div>
-        <p className="text-sm text-muted-foreground">Your next grade</p>
-        <h2 className="mt-1 text-xl font-semibold"><GradeLabelBadge label={readiness.targetLabel} /></h2>
+  return <Card>
+    <CardHeader>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div>
+          <p className="text-sm text-muted-foreground">Your next grade</p>
+          <h2 className="mt-1 text-base leading-snug font-medium"><GradeLabelBadge label={readiness.targetLabel} /></h2>
+        </div>
+        <p className={eligible ? 'text-sm font-medium text-success' : 'text-sm font-medium text-muted-foreground'}>
+          {eligible ? 'Eligible to grade' : `${met} of ${total} requirements met`}
+        </p>
       </div>
-      <p className={eligible ? 'text-sm font-medium text-green-600' : 'text-sm font-medium text-muted-foreground'}>
-        {eligible ? 'Eligible to grade' : `${met} of ${total} requirements met`}
+    </CardHeader>
+    <CardContent className="space-y-3">
+      <EligibilityChecklist requirements={readiness.requirements} compact />
+      <p className="text-xs text-muted-foreground">
+        Requirements follow the published ASK grading sheets. Time and training sessions count from your last grading (or from joining if you have not graded yet).
       </p>
-    </div>
-    <EligibilityChecklist requirements={readiness.requirements} compact />
-    <p className="text-xs text-muted-foreground">
-      Requirements follow the published ASK grading sheets. Time and training sessions count from your last grading (or from joining if you have not graded yet).
-    </p>
+    </CardContent>
   </Card>
 }
