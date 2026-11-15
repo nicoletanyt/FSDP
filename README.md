@@ -400,6 +400,7 @@ npx supabase@latest functions deploy create-checkout-session --project-ref YOUR_
 npx supabase@latest functions deploy stripe-webhook --project-ref YOUR_PROJECT_REF --use-api
 npx supabase@latest functions deploy send-grading-invitation --project-ref YOUR_PROJECT_REF --use-api
 npx supabase@latest functions deploy create-grading-checkout --project-ref YOUR_PROJECT_REF --use-api
+npx supabase@latest functions deploy create-credit-checkout --project-ref YOUR_PROJECT_REF --use-api
 ```
 
 Set `APP_URL` to the frontend origin for Checkout redirects and CORS. Configure
@@ -407,6 +408,24 @@ Stripe's test-mode webhook destination as
 `https://YOUR_PROJECT_REF.supabase.co/functions/v1/stripe-webhook` for
 `checkout.session.completed` and `checkout.session.async_payment_succeeded`.
 Store its signing secret as `STRIPE_WEBHOOK_SECRET` in Supabase.
+
+Credit purchases use `credit_accounts` (balance) and `credit_purchases` (one
+receipt per Stripe session). The verified webhook calls
+`finalize_credit_checkout` to save the receipt and increment the balance in one
+transaction. Re-delivering the same event cannot add credits twice. The student
+dashboard reads the account from Supabase, and after Checkout it waits for that
+session's receipt before showing payment confirmation. Deploy the frontend as
+well as the functions; older dashboards use a browser-local credit balance.
+
+`stripe-webhook` is shared by credit, membership, and grading payments. Preserve
+all three branches when merging/deploying it: deploying an older branch can
+acknowledge credit payments without topping up their accounts. Check
+`Credit purchase finalized` in function logs and the corresponding receipt row;
+the generic Stripe metadata flag `checkout_payment_verified` alone does not
+prove credits were granted. For a verified paid checkout missing its receipt,
+use Stripe's **Resend** event action after fixing the webhook; do not ask the
+student to purchase again. Run `node --test tests/credit-checkout-db.test.mjs`
+and the function tests before deployment.
 
 Create a **new** EmailJS template (keep the old one unchanged) with To
 `{{to_email}}`, BCC `{{bcc_emails}}`, Subject `{{email_subject}}`, and the body:
@@ -431,6 +450,29 @@ The All selection combines current open grading recipients (maximum 50 BCC
 addresses including the dummy); it refuses, rather than truncates, larger lists.
 Only a signed-in administrator can preview and explicitly confirm a request;
 saving wording or deploying never sends an invitation. An accepted request does
-not establish delivery to any recipient. `STRIPE_GRADING_FEE_ID` must be an active test-mode
-one-time price of SGD 60.00; only the verified Stripe webhook submits grading
-applications. The guest Checkout price remains separate.
+not establish delivery to any recipient. Grading checkout uses the database's
+`grade_requirements.fee_cents`, with the S$22 late fee quoted server-side; only
+the verified Stripe webhook submits formal grading applications. The guest
+Checkout price remains separate.
+
+When `VITE_STRIPE_PUBLISHABLE_KEY` is a test key and the student has no eligible
+session, **Proceed to Payment** offers a clearly labelled Stripe test checkout
+for the next grade's base fee. The server independently resolves the signed-in
+student's next grade and price, rejects live secret keys and verifies return
+sessions against their owner. These preview sessions never create formal
+applications, real-money payment records, membership activation or training records.
+Preview checkout now saves the form to `grading_application_drafts` before
+redirecting. The row contains the authenticated owner, student, current/target
+grades, track, fee, request ID and Stripe session. Verified preview payments
+atomically create a `grading_payment_receipts` record and move the request to
+`pending_review`. The dashboard shows “payment confirmed — awaiting dojo review”,
+not an unpaid draft. These receipts retain `livemode=false`; they are not counted
+as real-money payments or accepted grading-event applications. A paid request
+blocks another checkout for the same target grade. Legacy `preview_paid` flags
+must be reconciled against Stripe before they can claim a saved receipt.
+Saved drafts reload on `/grading`. Owners and administrators can read drafts;
+only server code can write them. Apply
+`20261113135904_grading_application_drafts.sql` and
+`20261113144249_grading_payment_receipts.sql`, deploy both
+`create-grading-checkout` and `stripe-webhook`, and rebuild the frontend with
+the test publishable key. Never enter real card information in test mode.

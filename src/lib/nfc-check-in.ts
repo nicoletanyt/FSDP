@@ -15,6 +15,7 @@ export interface NfcScanResult {
   starts_at?: string
   ends_at?: string
   already_marked?: boolean
+  event_id?: string
   classes?: NfcClass[]
 }
 

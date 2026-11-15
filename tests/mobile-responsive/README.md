@@ -49,24 +49,24 @@ Use `FSDP_BASE_URL` and `WEBDRIVER_URL` if those services run elsewhere. The
 WebDriver service must be free to create a new session. Run the suites
 sequentially when sharing a driver.
 
-`grading-payment.html` mounts the student grading payment page with a fixed
-profile and a stubbed `record_grading_payment` RPC for manual responsive/state
-checks (idle, processing, success, sync failure). Use `?rpc=fail` or
-`?rpc=slow` to exercise the failure and saving states. It never contacts
-Supabase or charges a card.
+`grading-payment.html` mounts the real grading application/payment pages with
+database-shaped options and stubbed Checkout quotes/status. Use
+`?appRoute=%2Fgrading` for the application or `?application=1` for the review
+route. `?onTime=1` shows SGD 55; the default 5th Kyu late quote is SGD 77.
+`?rpc=fail`, `?rpc=slow`, `?empty=1`, and `?repriced=1` exercise edge cases.
+There are no simulated card fields or browser application writes.
 
-Add `?appRoute=%2Fgrading` to check the actual app route, student navigation,
-protected gate and layout using the fixture account. The Grading tab now opens
-the payment page directly; the opportunity list remains at `/grading/applications`.
+`grading-payment.test.mjs` uses installed headless Chrome over CDP. Start Vite
+on port 5180, then run `node --test tests/mobile-responsive/grading-payment.test.mjs`.
+It checks 320–1440px layouts, exact SGD 77 consistency, Proceed to Payment
+redirecting directly to Stripe, legacy review links, errors, missing application
+context and waiting for verified payment status on return. Stripe navigation is
+intercepted by the test; no real charge or Supabase write occurs.
 
-`grading-payment.test.mjs` uses installed headless Chrome over CDP (no browser
-package required). Start Vite on port 5180, then run
-`node --test tests/mobile-responsive/grading-payment.test.mjs`. Override
-`FSDP_BASE_URL` and `CHROME_PATH` as needed. It checks 320–1440px routes,
-all three methods, per-grade totals, S$22 late fees, demo-only receipts,
-application-context saving and sync failure. Fixture options: `?grade=4-dan`,
-`?deadline=2020-01-01`, and `?application=1` (stubbed application write).
-Without `application=1`, previews must never write to the database.
+`student-credits.test.mjs` uses the same Chrome setup and port 5180 to check the
+real dashboard's database-backed balance at mobile and desktop sizes. It covers
+waiting for the checkout receipt, the updated balance, database failures/retry,
+and unlimited accounts. Its fixture never contacts Supabase or charges a card.
 
 The NFC suite simulates Android Chrome 89+, tablets, Edge, missing Web NFC,
 old Chrome, iPhones and insecure contexts without using real NFC hardware or

@@ -5,8 +5,9 @@ import { buttonVariants } from '@/components/student/button'
 import type { StudentContext } from '@/layouts/StudentLayout'
 
 export default function CreditBalanceCard() {
-  const { credits } = useOutletContext<StudentContext>()
-  const display = credits >= 9999 ? 'Unlimited' : String(credits)
+  const { creditAccount } = useOutletContext<StudentContext>()
+  const { credits, unlimited, loading, error, payment, retry } = creditAccount
+  const display = loading ? 'Loading…' : error ? 'Unavailable' : unlimited ? 'Unlimited' : String(credits)
 
   return (
     <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary to-primary/80 p-6 text-primary-foreground shadow-lg">
@@ -20,10 +21,24 @@ export default function CreditBalanceCard() {
             <h3 className="font-medium">Available Credits</h3>
           </div>
           <div className="mt-2 flex items-baseline gap-1">
-            <span className="text-4xl font-extrabold tabular-nums">{display}</span>
-            {credits < 9999 && <span className="text-sm opacity-80">/ classes</span>}
+            <span className="text-4xl font-extrabold tabular-nums" aria-live="polite">{display}</span>
+            {!loading && !error && !unlimited && <span className="text-sm opacity-80">/ classes</span>}
           </div>
           <p className="mt-2 text-xs opacity-80">1 credit = 1 training session</p>
+          <div className="mt-2 max-w-md text-sm" role="status">
+            {error || (payment === 'pending'
+              ? 'Confirming your payment. Your balance will update automatically.'
+              : payment === 'confirmed'
+                ? 'Payment confirmed. Your purchased credits are included in this balance.'
+                : payment === 'delayed'
+                  ? 'Payment confirmation is taking longer than expected. Check again shortly; do not purchase again.'
+                  : '')}
+            {(error || payment === 'delayed') && (
+              <button type="button" onClick={retry} className="ml-2 rounded underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-4">
+                Refresh balance
+              </button>
+            )}
+          </div>
         </div>
 
         <Link

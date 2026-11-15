@@ -3,7 +3,7 @@ export type Payment = {
   date: string; // ISO date
   item: string; // the class or package this payment belongs to
   description: string; // e.g. "Term 4 fee"
-  method: "Stripe" | "PayNow";
+  method: string;
   amount: number; // SGD
   status: "Paid" | "Pending" | "Refunded";
 };

@@ -21,6 +21,10 @@ verify_jwt = false
 [functions.create-grading-checkout]
 verify_jwt = false
 
+# The handler authenticates the student JWT and resolves pass prices server-side.
+[functions.create-credit-checkout]
+verify_jwt = false
+
 # The handler authenticates the bearer JWT and checks the instructor role.
 [functions.nfc-check-in]
 verify_jwt = false
@@ -35,4 +39,8 @@ verify_jwt = false
 
 # The handler authenticates the JWT and requires the current instructor role.
 [functions.instructor-chat]
+verify_jwt = false
+
+# The handler verifies the JWT, student role, recipient and stored membership ID.
+[functions.send-membership-email]
 verify_jwt = false

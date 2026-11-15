@@ -27,14 +27,6 @@ const PARQ_QUESTIONS = [
   { key: 'joint', label: 'Do you have a bone or joint problem that could be made worse by a change in your physical activity?' },
 ]
 
-const generateMembershipId = () => {
-  const year = new Date().getFullYear();
-  const randomNum = Math.floor(1000 + Math.random() * 9000);
-  return `ASJ${year}${randomNum}`;
-};
-
-const getTodayDate = () => new Date().toISOString().split('T')[0];
-
 const isValidNric = (nric: string) => {
   return /^[STFGM]\d{7}[A-Z]$/i.test(nric);
 }
@@ -47,6 +39,10 @@ export default function ApplyMembership() {
   const [errorMsg, setErrorMsg] = useState('')
   const [isDeclared, setIsDeclared] = useState(false)
   const [waiverSigned, setWaiverSigned] = useState(false)
+  const [dojos, setDojos] = useState<{ id: string; name: string }[]>([])
+  const [dojosLoading, setDojosLoading] = useState(true)
+  const [dojosError, setDojosError] = useState('')
+  const [dojoRevision, setDojoRevision] = useState(0)
 
   const [formData, setFormData] = useState({
     fullName: '', nric: '', nationality: '', dob: '', gender: '',
@@ -57,7 +53,6 @@ export default function ApplyMembership() {
     guardianName: '', guardianNric: '', guardianRelationship: '', guardianPhone: '',
   })
 
-  // PAR-Q 医疗问卷状态 (默认全选 No)
   const [parqAnswers, setParqAnswers] = useState<Record<string, boolean>>({
     heart: false,
     dizziness: false,
@@ -74,10 +69,28 @@ export default function ApplyMembership() {
     fetchUserEmail()
   }, [])
 
+  useEffect(() => {
+    const controller = new AbortController()
+    setDojosLoading(true)
+    setDojosError('')
+    void (async () => {
+      try {
+        const { data, error } = await supabase.from('centres')
+          .select('id, name').eq('status', 'active').order('name').abortSignal(controller.signal)
+        if (error) throw error
+        if (!controller.signal.aborted) setDojos(data ?? [])
+      } catch {
+        if (!controller.signal.aborted) setDojosError('Unable to load dojos. Please try again.')
+      } finally {
+        if (!controller.signal.aborted) setDojosLoading(false)
+      }
+    })()
+    return () => controller.abort()
+  }, [dojoRevision])
+
   const age = calculateAge(formData.dob)
   const isMinor = age !== null && age < 18
 
-  // Members under 18 must provide guardian details, so keep the section open for them.
   useEffect(() => {
     if (isMinor) setShowGuardian(true)
   }, [isMinor])
@@ -122,7 +135,7 @@ export default function ApplyMembership() {
       }
       if (isMinor && (!formData.guardianName || !formData.guardianNric || !formData.guardianRelationship || !formData.guardianPhone)) {
         setShowGuardian(true)
-        setErrorMsg('Members under 18 must provide complete Guardian Information (name, NRIC / FIN, relationship, and contact number).')
+        setErrorMsg('Members under 18 must provide complete Guardian Information.')
         return false
       }
       if (formData.guardianNric && !isValidNric(formData.guardianNric)) {
@@ -133,7 +146,6 @@ export default function ApplyMembership() {
         setErrorMsg('Guardian contact number must be exactly 8 digits.')
         return false
       }
-      // 强制检查免责声明
       if (!waiverSigned) {
         setErrorMsg('You must sign the Deed of Waiver & Indemnity to proceed.')
         return false
@@ -151,36 +163,56 @@ export default function ApplyMembership() {
   }
 
   const handleNext = async () => {
+    if (isSubmitting) return
     if (!validateStep(currentStep)) return;
 
     if (currentStep < 4) {
       setCurrentStep(currentStep + 1)
     } else {
+      for (let step = 1; step <= 3; step++) {
+        if (!validateStep(step)) {
+          setCurrentStep(step)
+          return
+        }
+      }
       setIsSubmitting(true)
       try {
-        const finalDataToSubmit = {
-          ...formData,
-          parq: parqAnswers,
-          waiver_signed: waiverSigned,
-          membership_id: generateMembershipId(),
-          start_date: getTodayDate(),
-          belt_rank: 'Mukyu (White)',
-        }
+        // One authenticated transaction writes students, private application
+        // details and contacts. Ownership, member ID and grade are server-owned.
+        const { data, error } = await supabase.rpc('submit_my_membership_application', {
+          application: { ...formData, parqAnswers, waiverSigned, isDeclared },
+        })
+        if (error) throw error
+        if (!data?.membershipId || !data?.startDate) throw new Error('The server did not return a membership record.')
+
+        // SPA navigation does not cancel this request. Do not await it: email
+        // failure must never undo a committed application or block the success page.
+        void supabase.functions.invoke('send-membership-email', {
+          body: {
+            email: formData.email,
+            name: formData.fullName,
+            membershipId: data.membershipId,
+          },
+        }).then(({ error: emailError }) => {
+          if (emailError) console.warn('Membership saved, but the confirmation email could not be sent.')
+        }).catch(() => {
+          console.warn('Membership saved, but the confirmation email request failed.')
+        })
+
+        // Optional display preferences must not turn a successful DB commit into
+        // a failed submission when browser storage is unavailable.
+        try {
+          localStorage.setItem(DATE_OF_BIRTH_STORAGE_KEY, formData.dob)
+          localStorage.setItem(MEMBERSHIP_TYPE_STORAGE_KEY, formData.membershipType)
+        } catch { /* The database remains authoritative. */ }
         
-        // 模拟网络请求
-        await new Promise(resolve => setTimeout(resolve, 1000))
-        
-        // 将生日和会员类型存入本地，供 Credits 页面筛选对应课卡
-        localStorage.setItem(DATE_OF_BIRTH_STORAGE_KEY, formData.dob)
-        localStorage.setItem(MEMBERSHIP_TYPE_STORAGE_KEY, formData.membershipType)
-        
-        navigate('/apply-membership/success', { state: { 
-            membershipId: finalDataToSubmit.membership_id,
-            startDate: finalDataToSubmit.start_date,
-            beltRank: finalDataToSubmit.belt_rank
-        }}) 
+        // Keep the persisted application values returned by the database.
+        navigate('/apply-membership/success', { state: data })
       } catch (error) {
-        setErrorMsg("Failed to submit application. Please try again.")
+        const failure = error as { code?: string; message?: string }
+        setErrorMsg(failure?.code === 'PGRST202'
+          ? 'Membership setup is missing. Please apply the membership_application_submit database migration.'
+          : failure?.message || 'Failed to submit to database. Please try again.')
       } finally {
         setIsSubmitting(false)
       }
@@ -336,12 +368,12 @@ export default function ApplyMembership() {
             <div className="space-y-4 sm:space-y-6">
               <div className="space-y-1.5 sm:space-y-2">
                 <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-sm sm:text-base">Principal Dojo</Label>
-                <select value={formData.principalDojo} onChange={(e) => setFormData({...formData, principalDojo: e.target.value})} className="w-full h-11 sm:h-12 bg-gray-200/60 dark:bg-slate-800 rounded-md border-transparent px-3 text-sm focus:ring-[#2c3f67] text-black dark:text-white">
-                  <option value="" disabled>Select dojo</option>
-                  <option value="central">Central Dojo</option>
-                  <option value="east">East Dojo</option>
-                  <option value="west">West Dojo</option>
+                <select value={formData.principalDojo} disabled={dojosLoading || Boolean(dojosError)} onChange={(e) => setFormData({...formData, principalDojo: e.target.value})} className="w-full h-11 sm:h-12 bg-gray-200/60 dark:bg-slate-800 rounded-md border-transparent px-3 text-sm focus:ring-[#2c3f67] text-black dark:text-white">
+                  <option value="" disabled>{dojosLoading ? 'Loading dojos…' : 'Select dojo'}</option>
+                  {dojos.map((dojo) => <option key={dojo.id} value={dojo.id}>{dojo.name}</option>)}
                 </select>
+                {dojosError && <p role="alert" className="text-sm text-destructive">{dojosError} <button type="button" className="underline" onClick={() => setDojoRevision(value => value + 1)}>Try again</button></p>}
+                {!dojosLoading && !dojosError && dojos.length === 0 && <p role="status" className="text-sm text-destructive">No active dojos are available. Please contact the dojo.</p>}
                 <p className="text-[10px] sm:text-xs text-[#e62128] dark:text-red-400 mt-1">
                   Your Principal Dojo training fees must be paid before the start of each term.
                 </p>

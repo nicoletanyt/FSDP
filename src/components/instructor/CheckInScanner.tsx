@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
     Camera,
     CameraOff,
@@ -14,6 +14,7 @@ import { Card } from "@/components/ui/card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import GradeBadge from "@/components/GradeBadge";
 import type { StudentRank } from "@/lib/student-grades";
+import type { NfcScanResult } from "@/lib/nfc-check-in";
 import { useQrCamera } from "@/hooks/use-qr-camera";
 import { cn } from "@/lib/utils";
 
@@ -27,26 +28,48 @@ export type ScanFeedback = {
 export default function CheckInScanner({
     feedback,
     onScan,
+    choice,
+    choicePending = false,
+    onChooseClass,
+    onCancelChoice,
+    cameraPaused = false,
+    onCameraRunningChange,
+    onCameraEnabledChange,
+    onCameraErrorChange,
     isKiosk = false,
 }: {
     feedback: ScanFeedback | null;
     onScan: (payload: string) => void;
+    choice?: NfcScanResult | null;
+    choicePending?: boolean;
+    onChooseClass?: (eventId: string) => void;
+    onCancelChoice?: () => void;
+    cameraPaused?: boolean;
+    onCameraRunningChange?: (running: boolean, live: boolean) => void;
+    onCameraEnabledChange?: (enabled: boolean) => void;
+    onCameraErrorChange?: (failed: boolean) => void;
     isKiosk?: boolean;
 }) {
     const [enabled, setEnabled] = useState(false);
     const [cameraId, setCameraId] = useState("");
     const [settingsOpen, setSettingsOpen] = useState(false);
-    const { videoRef, status, error, cameras, activeCameraId, restart } =
+    const { videoRef, frozenCanvasRef, hasFrozenFrame, status, error, cameras, activeCameraId, restart } =
         useQrCamera({
-            enabled,
+            enabled: enabled && !cameraPaused,
             cameraId,
-            paused: !!feedback,
+            paused: !!feedback || !!choice || choicePending,
+            freezeOnStop: cameraPaused,
             onScan,
         });
     const live = status === "live";
     const starting = status === "starting";
 
+    useEffect(() => { onCameraRunningChange?.(live || starting, live); }, [live, starting, onCameraRunningChange]);
+    useEffect(() => { onCameraEnabledChange?.(enabled); }, [enabled, onCameraEnabledChange]);
+    useEffect(() => { onCameraErrorChange?.(status === "error"); }, [status, onCameraErrorChange]);
+
     function startCamera() {
+        if (cameraPaused) return;
         if (enabled) restart();
         else setEnabled(true);
     }
@@ -67,6 +90,12 @@ export default function CheckInScanner({
                 autoPlay
                 aria-label="QR scanner camera preview"
                 className="absolute inset-0 size-full object-contain"
+            />
+            <canvas
+                ref={frozenCanvasRef}
+                role="img"
+                aria-label="Last camera frame (camera off)"
+                className={cn("absolute inset-0 size-full object-contain", (!hasFrozenFrame || live) && "hidden")}
             />
             <div
                 className={cn(
@@ -143,7 +172,7 @@ export default function CheckInScanner({
                 </Popover>
             </div>
 
-            {!live && (
+            {!live && !cameraPaused && (
                 <div className={cn("absolute inset-0 overflow-y-auto overscroll-contain px-4 text-center text-white", isKiosk ? "pt-14 pb-3" : "pt-16 pb-4")}>
                   <div className="flex min-h-full flex-col items-center justify-center gap-3">
                     {starting ? (
@@ -183,6 +212,21 @@ export default function CheckInScanner({
                 </div>
             )}
 
+            {choice?.status === "select_class" && (
+                <div role="group" aria-label="Choose NFC class" className="absolute inset-0 z-30 overflow-y-auto overscroll-contain bg-amber-100 px-4 py-6 text-center text-amber-950">
+                    <div className="flex min-h-full flex-col items-center justify-center gap-3">
+                        <CircleAlert aria-hidden="true" className="size-12" />
+                        <h2 className="text-xl font-semibold sm:text-3xl">Choose a class for {choice.student_name || "this student"}</h2>
+                        <p className="text-sm">More than one class is open. No attendance has been changed.</p>
+                        <div className="flex w-full max-w-md flex-col gap-2">
+                            {choice.classes?.map(item => <Button key={item.event_id} type="button" variant="outline"
+                                disabled={choicePending} className="h-auto min-h-11 whitespace-normal py-3 text-amber-950"
+                                onClick={() => onChooseClass?.(item.event_id)}>{item.class_name} · {new Intl.DateTimeFormat("en-SG", { timeZone: "Asia/Singapore", hour: "numeric", minute: "2-digit" }).format(new Date(item.starts_at))}</Button>)}
+                            <Button type="button" variant="ghost" className="min-h-11 text-amber-950" disabled={choicePending} onClick={onCancelChoice}>Cancel</Button>
+                        </div>
+                    </div>
+                </div>
+            )}
             {feedback && (
                 <div
                     role={feedback.tone === "invalid" ? "alert" : "status"}
