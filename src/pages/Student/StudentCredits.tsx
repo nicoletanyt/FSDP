@@ -13,6 +13,8 @@ import {
 } from '@/lib/membership'
 import { money } from '@/lib/format'
 import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/hooks/use-auth'
+import CreditBatchList from '@/components/student/CreditBatchList'
 
 const UNLIMITED_CREDITS = 9999
 
@@ -72,6 +74,7 @@ function applyStudentDiscount(packages: PassPackage[]): PassPackage[] {
 }
 
 export default function StudentCredits() {
+  const { profile } = useAuth()
   const [searchParams] = useSearchParams()
   const [membershipType] = useState<MembershipType>(() => resolveMembershipType())
   const [loadingPassId, setLoadingPassId] = useState<string | null>(null)
@@ -102,6 +105,8 @@ export default function StudentCredits() {
 
     try {
       // The Edge Function resolves the price server-side; never send an amount.
+      // Only the verified webhook creates a batch and its expiration. Returning
+      // from Checkout must never insert credits from the browser.
       const { data, error: fnError } = await supabase.functions.invoke<{ url: string }>(
         'create-credit-checkout',
         {
@@ -163,7 +168,10 @@ export default function StudentCredits() {
         </div>
       )}
 
+      <CreditBatchList userId={profile?.id} />
+
       <section className="mt-8 space-y-4" aria-label="Class passes">
+        <h2 className="text-lg font-semibold">Buy a new pass</h2>
         {packages.map((pass) => (
           <Card
             key={pass.id}
@@ -217,7 +225,7 @@ export default function StudentCredits() {
 
       <p className="mt-8 flex items-center justify-center gap-1.5 text-center text-xs text-muted-foreground">
         <ShieldCheck className="size-4" aria-hidden="true" />
-        All prices are in SGD. Secure payments handled by Stripe.
+        All prices are in SGD. Secure payments handled by Stripe. Pass validity starts when payment is confirmed.
       </p>
     </main>
   )

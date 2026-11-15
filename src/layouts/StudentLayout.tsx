@@ -1,5 +1,4 @@
 import { matchPath, Outlet, useLocation, useSearchParams } from 'react-router'
-import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/hooks/use-auth'
 import { useLiveStudentSchedule } from '@/lib/use-live-student-schedule'
@@ -12,19 +11,9 @@ export default function StudentLayout() {
   const [params] = useSearchParams()
   const sessionId = params.get('checkout') === 'success' ? params.get('session_id') : null
   const creditAccount = useStudentCredits(profile?.id, sessionId)
-  // Preserve the booking flow's in-session deductions without writing a
-  // browser-controlled balance back to the database-backed credit account.
-  const creditKey = JSON.stringify([profile?.id, creditAccount.credits])
-  const [spent, setSpent] = useState({ key: creditKey, amount: 0 })
-  const credits = Math.max(0, creditAccount.credits - (spent.key === creditKey ? spent.amount : 0))
-  const deductCredit = () => {
-    if (creditAccount.unlimited) return true
-    if (credits <= 0) return false
-    setSpent(previous => ({ key: creditKey, amount: (previous.key === creditKey ? previous.amount : 0) + 1 }))
-    return true
-  }
-
-  const creditContext = { credits, creditAccount: { ...creditAccount, credits }, deductCredit }
+  // Booking RPCs debit/refund batches in the same transaction as the class seat.
+  // Never simulate a separate browser deduction on top of that committed debit.
+  const creditContext = { credits: creditAccount.credits, creditAccount }
   if (!['/timetable', '/classes', '/classes/choose'].some(path => matchPath(path, pathname))) {
     return <Outlet context={creditContext} />
   }
@@ -34,11 +23,10 @@ export default function StudentLayout() {
 type CreditsContext = {
   credits: number
   creditAccount: ReturnType<typeof useStudentCredits>
-  deductCredit: () => boolean
 }
 
 function StudentScheduleOutlet(creditContext: CreditsContext) {
-  const schedule = useLiveStudentSchedule()
+  const schedule = useLiveStudentSchedule(creditContext.creditAccount.retry)
   if (schedule.loading) return <p role="status" className="text-sm text-muted-foreground">Loading class schedule…</p>
   if (schedule.error) return (
     <div role="alert" className="space-y-3">
