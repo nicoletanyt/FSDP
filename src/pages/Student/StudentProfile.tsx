@@ -176,7 +176,7 @@ export default function StudentProfile() {
 
   return (
       <section className="w-full">
-        <PageHeader title="Profile" description="Your membership card and account settings." />
+        <PageHeader title="Profile" />
 
         {loading && <div className="mt-6"><DetailSkeleton label="Loading your membership…" /></div>}
         {!loading && (error || !profile) && (

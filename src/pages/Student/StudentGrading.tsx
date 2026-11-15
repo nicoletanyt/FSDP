@@ -18,6 +18,7 @@ import EligibilityChecklist from '@/components/grading/EligibilityChecklist'
 import type { ChecklistRequirement } from '@/components/grading/EligibilityChecklist'
 import { gradingProgression } from '@/lib/grading-progression'
 import { getGradingQuote, getGradingCheckoutUrl, getGradingTestCheckoutUrl, gradingCheckoutRequest, type GradingCheckoutOption } from '@/lib/grading-checkout'
+import { randomUUID } from '@/lib/uuid'
 
 type Readiness = ChecklistRequirement & { target_grade_id: string; target_grade_label: string }
 type ApplicationDraft = { id: string; target_grade_id: string; status: string; created_at: string; base_fee_cents: number }
@@ -44,7 +45,7 @@ function GradingApplication() {
   const [payment, setPayment] = useState('')
   const [processing, setProcessing] = useState(false)
   const submitting = useRef(false)
-  const testRequestId = useRef(crypto.randomUUID())
+  const testRequestId = useRef(randomUUID())
   const targetBelt = progression?.target?.id ?? ''
   const targetDrafts = drafts.filter((draft) => draft.target_grade_id === targetBelt)
   const paidRequest = targetDrafts.find((draft) => draft.status === 'pending_review')
@@ -183,7 +184,6 @@ function GradingApplication() {
     <section className="w-full space-y-6" aria-busy={loading}>
       <PageHeader
         title="Grading application"
-        description="Apply for your next belt promotion based on the Aikido Shinju-Kai syllabus."
         actions={<Button variant="outline" nativeButton={false} render={<Link to="/grading/requirements" />}>View grading requirements</Button>}
       />
 

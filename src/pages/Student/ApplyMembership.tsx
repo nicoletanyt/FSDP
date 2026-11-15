@@ -22,6 +22,7 @@ import {
   membershipLabel,
 } from '@/lib/membership'
 import { cn } from '@/lib/utils'
+import { randomUUID } from '@/lib/uuid'
 
 const STEPS = [
   { id: 1, title: 'Personal information' },
@@ -147,7 +148,7 @@ export default function ApplyMembership() {
   const [dojosError, setDojosError] = useState('')
   const [dojoRevision, setDojoRevision] = useState(0)
   // Same key for retries of an unchanged submission; Stripe then returns the same session.
-  const retryKey = useRef(crypto.randomUUID())
+  const retryKey = useRef(randomUUID())
   const [photoFile, setPhotoFile] = useState<File | null>(null)
   const [photoPreview, setPhotoPreview] = useState('')
   // Reuse an upload when the student retries with the same photo.
@@ -413,7 +414,6 @@ export default function ApplyMembership() {
     <section className="w-full max-w-3xl space-y-6">
       <PageHeader
         title="Apply for membership"
-        description={`Four short steps, then a ${money.format(MEMBERSHIP_FEE)} membership fee paid securely on Stripe.`}
       />
 
       <Card>

@@ -21,6 +21,7 @@ import { useAuth } from '@/hooks/use-auth'
 import CreditBatchList from '@/components/student/CreditBatchList'
 import CreditBalanceCard from './CreditBalanceCard'
 import MembershipGate from '@/components/student/MembershipGate'
+import { randomUUID } from '@/lib/uuid'
 
 const UNLIMITED_CREDITS = 9999
 
@@ -96,13 +97,6 @@ export default function StudentCredits() {
   }, [audience, isStudent])
 
   const heading = audience === 'junior' ? 'Junior class passes' : 'Adult class passes'
-  const description = isStudent
-    ? 'Student members receive 50% off adult class pass rates. Please bring your full-time student ID when collecting your pass.'
-    : membershipType === 'senior'
-      ? 'You are registered as a Senior member. The adult class passes below apply to your membership.'
-      : membershipType === 'junior'
-        ? 'You are registered as a Junior member. Children class passes are shown below.'
-        : 'You are registered as an Adult member. Purchase your class passes below.'
 
   // 👇 核心逻辑：直接跳转真实 Stripe Checkout
   const handlePurchase = async (pass: PassPackage) => {
@@ -117,7 +111,7 @@ export default function StudentCredits() {
         'create-credit-checkout',
         {
           body: { passId: pass.id, membershipType },
-          headers: { 'Idempotency-Key': crypto.randomUUID() },
+          headers: { 'Idempotency-Key': randomUUID() },
         },
       )
 
@@ -139,7 +133,7 @@ export default function StudentCredits() {
   return (
     <MembershipGate title="Credits" feature="Buying class passes">
     <section className="w-full">
-      <PageHeader title="Credits" description={description} />
+      <PageHeader title="Credits" />
 
       <div className="mt-4 flex flex-wrap items-center gap-2 text-sm">
           <StatusBadge tone="info" dot={false}>

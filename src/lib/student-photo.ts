@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { randomUUID } from '@/lib/uuid'
 
 // Matches the private student-photos bucket (20261115062916_student_profile_photos.sql).
 const BUCKET = 'student-photos'
@@ -14,7 +15,7 @@ export function studentPhotoError(file: File) {
 
 /** Uploads into the student's own folder under a new random name and returns its path. */
 export async function uploadStudentPhoto(file: File, userId: string) {
-  const path = `${userId}/${crypto.randomUUID()}.${EXTENSIONS[file.type]}`
+  const path = `${userId}/${randomUUID()}.${EXTENSIONS[file.type]}`
   const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
     contentType: file.type, upsert: false, cacheControl: '3600',
   })

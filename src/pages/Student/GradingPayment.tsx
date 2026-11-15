@@ -66,7 +66,6 @@ export default function GradingPayment() {
       <div className="mb-6">
         <PageHeader
           title="Complete your grading payment"
-          description="Review your total, then pay securely on Stripe. Your application is submitted only after payment is verified."
         />
       </div>
 

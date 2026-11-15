@@ -563,7 +563,6 @@ export default function StudentClasses() {
         <div className="space-y-6">
             <PageHeader
                 title="Find a class"
-                description="Choose a class, then pick a date, time and dojo."
             />
 
             {!schedule.active && <BookingEligibility linked={schedule.linked} />}
@@ -927,7 +926,6 @@ function ClassBooking({
             <div id="booking-class-title">
                 <PageHeader
                     title={type || "Choose a class"}
-                    description={classSessions[0]?.level || undefined}
                     actions={(
                         <FilterPopover
                                     title="Filter sessions"
