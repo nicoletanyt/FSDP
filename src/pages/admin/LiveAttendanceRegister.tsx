@@ -10,7 +10,7 @@ import CalendarToolbar from '@/components/shared/calendar/CalendarToolbar'
 import type { CalendarDisplayMode, CalendarRange } from '@/components/shared/calendar/CalendarToolbar'
 import DayClassDetails from '@/components/shared/calendar/DayClassDetails'
 import { Button } from '@/components/ui/button'
-import { Drawer, DrawerBody, DrawerClose, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from '@/components/ui/drawer'
+import ClassDetailsOverlay from '@/components/shared/calendar/ClassDetailsOverlay'
 import { useAuth } from '@/hooks/use-auth'
 import { useCalendarShortcuts } from '@/hooks/use-calendar-shortcuts'
 import { useMediaQuery } from '@/hooks/use-media-query'
@@ -28,7 +28,8 @@ function unique(values: string[]) {
 
 export default function LiveAttendanceRegister() {
   const { session } = useAuth()
-  const isDesktop = useMediaQuery('(min-width: 1024px)')
+  // The side panel needs the 4+ day layout; the 3-day layout (785–1199px) uses the bottom sheet.
+  const isDesktop = useMediaQuery('(min-width: 1200px)')
   const weekSpan = useWeekSpan()
   // From 785px the full toolbar and timeline are used; below it, the phone layout.
   const wide = useMediaQuery('(min-width: 785px)')
@@ -217,22 +218,10 @@ export default function LiveAttendanceRegister() {
             : <aside aria-label="Calendar selection details" className="flex min-h-0 min-w-0 flex-col overflow-hidden">{details}</aside>)}
         </div>
       </>}
-      {!isDesktop && <Drawer open={showSidePanel} onOpenChange={(open) => { if (!open) closeDetails() }}>
-        <DrawerContent>
-          <DrawerHeader>
-            <div className="min-w-0">
-              <DrawerTitle className="text-base font-medium">Class details</DrawerTitle>
-              <DrawerDescription className="text-xs text-muted-foreground">
-                {lastSelected.current?.date.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}
-              </DrawerDescription>
-            </div>
-            <DrawerClose render={<Button variant="ghost" className="h-11 rounded-full px-3 text-sm text-primary" />}>Done</DrawerClose>
-          </DrawerHeader>
-          <DrawerBody className="pb-[max(1rem,env(safe-area-inset-bottom))]">
-            {lastSelected.current && <EventCard key={lastSelected.current.id} event={lastSelected.current} layout="panel" expanded onToggle={closeDetails} />}
-          </DrawerBody>
-        </DrawerContent>
-      </Drawer>}
+      {!isDesktop && <ClassDetailsOverlay open={showSidePanel} onClose={closeDetails} title="Class details"
+        description={lastSelected.current?.date.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}>
+        {lastSelected.current && <EventCard key={lastSelected.current.id} event={lastSelected.current} layout="panel" expanded onToggle={closeDetails} />}
+      </ClassDetailsOverlay>}
     </section>
   )
 }

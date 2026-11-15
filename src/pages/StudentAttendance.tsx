@@ -4,7 +4,7 @@ import { Clock3, MapPin, Plus, UserRound, X } from 'lucide-react'
 import AttendanceCalendar, { attendanceClassStyle, AttendanceToolbar } from '@/components/student/AttendanceCalendar'
 import type { AttendanceEntry, AttendanceView } from '@/components/student/AttendanceCalendar'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
-import { Drawer, DrawerBody, DrawerClose, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from '@/components/ui/drawer'
+import ClassDetailsOverlay from '@/components/shared/calendar/ClassDetailsOverlay'
 import { useMediaQuery } from '@/hooks/use-media-query'
 import { useFeedback } from '@/hooks/use-feedback'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
@@ -55,7 +55,7 @@ export default function StudentAttendance() {
   const [view, setView] = useState<AttendanceView>('week')
   const [list, setList] = useState(false)
   const [filters, setFilters] = useState(emptyFilters)
-  const desktop = useMediaQuery('(min-width: 1024px)')
+  const desktop = useMediaQuery('(min-width: 1200px)')
   const [pending, setPending] = useState<Pending | null>(null)
   const [rescheduleId, setRescheduleId] = useState<string | null>(
     null
@@ -489,22 +489,10 @@ export default function StudentAttendance() {
       )}
 
       {!desktop && (
-        <Drawer open={Boolean(selectedEntry) && !pending && !rescheduleId} onOpenChange={open => {
-          if (!open) setSelectedId(null)
-        }}>
-          <DrawerContent>
-            <DrawerHeader>
-              <div>
-                <DrawerTitle className="font-semibold">Class details</DrawerTitle>
-                <DrawerDescription className="text-sm text-muted-foreground">{selectedEntry && prettyDate(selectedEntry.session.date)}</DrawerDescription>
-              </div>
-              <DrawerClose render={<Button variant="ghost" size="icon" aria-label="Close class details" />}>
-                <X aria-hidden="true" />
-              </DrawerClose>
-            </DrawerHeader>
-            <DrawerBody className="pt-0">{selectedEntry && rows([selectedEntry])}</DrawerBody>
-          </DrawerContent>
-        </Drawer>
+        <ClassDetailsOverlay open={Boolean(selectedEntry) && !pending && !rescheduleId} onClose={() => setSelectedId(null)}
+          title="Class details" description={selectedEntry && prettyDate(selectedEntry.session.date)}>
+          {selectedEntry && rows([selectedEntry])}
+        </ClassDetailsOverlay>
       )}
 
       <Dialog open={Boolean(rescheduleId) && !pending} onOpenChange={open => {

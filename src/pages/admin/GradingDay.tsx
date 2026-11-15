@@ -1,245 +1,585 @@
-import { useState } from 'react'
-import { DetailSkeleton } from '@/components/shared/skeletons'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useParams } from 'react-router'
-import { ArrowRightLeft, Ellipsis } from 'lucide-react'
-import GradingPanelDialog from '@/components/admin/GradingPanelDialog'
-import RetryAlert from '@/components/shared/layout/RetryAlert'
-import SplitSessionDialog from '@/components/admin/SplitSessionDialog'
-import GradingDayView from '@/components/grading/GradingDayView'
-import type { MoveControl, SessionControl } from '@/components/grading/GradingDayView'
-import { ScheduleStatusPills } from '@/components/grading/ScheduleNotice'
-import { GradingBackLink, GradingNote } from '@/components/grading/GradingParts'
-import { DatabaseGradeBadge } from '@/components/shared/grade/GradeBadge'
-import { Button } from '@/components/ui/button'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
-import { useFeedback } from '@/hooks/use-feedback'
-import { useAuth } from '@/hooks/use-auth'
-import { useGradingDayLayout } from '@/hooks/use-grading-day-layout'
-import { useExaminerPhotos } from '@/hooks/use-examiner-photos'
-import { loadInstructorPhotos } from '@/lib/instructor/api'
-import { supabase } from '@/lib/supabase'
+import { useState } from "react";
+import { DetailSkeleton } from "@/components/shared/skeletons";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link, useParams } from "react-router";
 import {
-  addGradingSession, adminGradingKeys, loadAdminGradingDay, loadBatchSummaries, mergeGradingSessions, moveGradingCandidate,
-  publishGradingSchedule, sortGradingSessions, splitGradingSession, unpublishGradingSchedule,
-} from '@/lib/admin/grading-results'
-import type { BatchSummary } from '@/lib/admin/grading-results'
-import { gradingScheduleAccountKey } from '@/lib/admin/grading-schedule'
-import { gradingDate, gradingTimeLabel, singaporeToday } from '@/lib/grading/format'
-import { sessionCandidates, sessionLabel } from '@/lib/instructor/grading-panels'
-import type { GradingDay, GradingSessionSummary } from '@/lib/instructor/grading-panels'
+    ArrowRightLeft,
+    CircleCheck,
+    Ellipsis,
+    RefreshCw,
+    Send,
+    Settings,
+} from "lucide-react";
+import GradingPanelDialog from "@/components/admin/GradingPanelDialog";
+import RetryAlert from "@/components/shared/layout/RetryAlert";
+import SplitSessionDialog from "@/components/admin/SplitSessionDialog";
+import GradingDayView from "@/components/grading/GradingDayView";
+import type {
+    MoveControl,
+    SessionControl,
+} from "@/components/grading/GradingDayView";
+import { ScheduleStatusPills } from "@/components/grading/ScheduleNotice";
+import {
+    GradingBackLink,
+    GradingNote,
+} from "@/components/grading/GradingParts";
+import { DatabaseGradeBadge } from "@/components/shared/grade/GradeBadge";
+import { Button } from "@/components/ui/button";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
+import { useFeedback } from "@/hooks/use-feedback";
+import { useAuth } from "@/hooks/use-auth";
+import { useGradingDayLayout } from "@/hooks/use-grading-day-layout";
+import { useExaminerPhotos } from "@/hooks/use-examiner-photos";
+import { loadInstructorPhotos } from "@/lib/instructor/api";
+import { supabase } from "@/lib/supabase";
+import {
+    addGradingSession,
+    adminGradingKeys,
+    loadAdminGradingDay,
+    loadBatchSummaries,
+    mergeGradingSessions,
+    moveGradingCandidate,
+    publishGradingSchedule,
+    sortGradingSessions,
+    splitGradingSession,
+    unpublishGradingSchedule,
+} from "@/lib/admin/grading-results";
+import type { BatchSummary } from "@/lib/admin/grading-results";
+import { gradingScheduleAccountKey } from "@/lib/admin/grading-schedule";
+import {
+    gradingDate,
+    gradingTimeLabel,
+    singaporeToday,
+} from "@/lib/grading/format";
+import {
+    sessionCandidates,
+    sessionLabel,
+} from "@/lib/instructor/grading-panels";
+import type {
+    GradingDay,
+    GradingSessionSummary,
+} from "@/lib/instructor/grading-panels";
 
 // How many of the panel have submitted this session's checklist.
-function panelProgress(day: GradingDay, session: GradingSessionSummary, summaries: BatchSummary[] | undefined) {
-  if (!day.panel.length) return 'No examiners assigned'
-  if (!summaries) return 'Loading progress…'
-  const submitted = summaries.filter(item => item.sessionId === session.id && item.status === 'submitted').length
-  return `${submitted} of ${day.panel.length} examiner${day.panel.length === 1 ? '' : 's'} submitted`
+function panelProgress(
+    day: GradingDay,
+    session: GradingSessionSummary,
+    summaries: BatchSummary[] | undefined,
+) {
+    if (!day.panel.length) return "No examiners assigned";
+    if (!summaries) return "Loading progress…";
+    const submitted = summaries.filter(
+        (item) => item.sessionId === session.id && item.status === "submitted",
+    ).length;
+    return `${submitted} of ${day.panel.length} examiner${day.panel.length === 1 ? "" : "s"} submitted`;
 }
 
 // Where a candidate in `from` can be moved: every other session. Moving the
 // last candidate out removes their session, so the menu says so.
-export function moveOptions(sessions: GradingSessionSummary[], from: GradingSessionSummary) {
-  const removesFrom = sessionCandidates(from) === 1
-  return sessions.filter(option => option.id !== from.id).map(option => ({ option, removesFrom }))
+export function moveOptions(
+    sessions: GradingSessionSummary[],
+    from: GradingSessionSummary,
+) {
+    const removesFrom = sessionCandidates(from) === 1;
+    return sessions
+        .filter((option) => option.id !== from.id)
+        .map((option) => ({ option, removesFrom }));
 }
 
 // Scheduling is possible once applications close, until an examiner starts
 // grading. Private gradings are scheduled by hand instead.
 function canSort(day: GradingDay) {
-  return day.status !== 'cancelled' && !day.gradingStarted && !day.isPrivate && day.students.length > 0
-    && (!day.applicationDeadline || singaporeToday() > day.applicationDeadline)
+    return (
+        day.status !== "cancelled" &&
+        !day.gradingStarted &&
+        !day.isPrivate &&
+        day.students.length > 0 &&
+        (!day.applicationDeadline || singaporeToday() > day.applicationDeadline)
+    );
 }
 
 // Publishing is refused while anyone is unplaced or a session is empty.
 const publishBlocker = (day: GradingDay) =>
-  day.warnings.find(warning => warning.code === 'unscheduled' || warning.code === 'empty_session')?.message ?? null
+    day.warnings.find(
+        (warning) =>
+            warning.code === "unscheduled" || warning.code === "empty_session",
+    )?.message ?? null;
 
 function GradingDayPage() {
-  const { eventId = '' } = useParams()
-  const { session } = useAuth()
-  const view = useGradingDayLayout()
-  const client = useQueryClient()
-  const { notify, feedbackDialog } = useFeedback()
-  const [confirm, setConfirm] = useState<'publish' | 'regenerate' | null>(null)
-  const day = useQuery({ queryKey: adminGradingKeys.day(eventId), queryFn: () => loadAdminGradingDay(eventId), enabled: Boolean(eventId), retry: false })
-  const photos = useExaminerPhotos(day.data?.panel.map(member => member.instructorId) ?? [], ids => loadInstructorPhotos(supabase, ids))
-  const summaries = useQuery({ queryKey: adminGradingKeys.summaries(eventId), queryFn: () => loadBatchSummaries(eventId), enabled: Boolean(eventId), retry: false })
-  const [splitting, setSplitting] = useState<GradingSessionSummary | null>(null)
-  // Every schedule change returns the whole updated day.
-  const update = (updated: GradingDay) => {
-    client.setQueryData(adminGradingKeys.day(eventId), updated)
-    void client.invalidateQueries({ queryKey: gradingScheduleAccountKey(session?.user.id) })
-  }
-  const sort = useMutation({
-    mutationFn: () => sortGradingSessions(eventId),
-    onSuccess: updated => {
-      update(updated)
-      view.setList('sessions')
-      notify({ title: 'Draft schedule generated', description: `${updated.sessions.length === 1 ? '1 session was' : `${updated.sessions.length} sessions were`} created.` })
-    },
-  })
-  const move = useMutation({
-    mutationFn: ({ applicationId, sessionId }: { applicationId: string; sessionId: string; name: string; from: string | null }) =>
-      moveGradingCandidate(applicationId, sessionId),
-    onSuccess: (updated, { sessionId, name }) => {
-      update(updated)
-      const to = updated.sessions.find(session => session.id === sessionId)
-      notify({ title: 'Student moved', description: `${name} is now in ${to ? sessionLabel(to.position) : 'another session'}.` })
-    },
-  })
-  const split = useMutation({
-    mutationFn: ({ sessionId, applicationIds }: { sessionId: string; applicationIds: string[] }) => splitGradingSession(sessionId, applicationIds),
-    onSuccess: updated => { update(updated); setSplitting(null); notify({ title: 'Session split', description: 'The students were moved to a new session.' }) },
-  })
-  const merge = useMutation({
-    mutationFn: ({ sourceId, intoId }: { sourceId: string; intoId: string; label: string }) => mergeGradingSessions(sourceId, intoId),
-    onSuccess: (updated, { label }) => { update(updated); notify({ title: 'Sessions merged', description: `Students were merged into ${label}.` }) },
-  })
-  const add = useMutation({
-    mutationFn: () => addGradingSession(eventId),
-    onSuccess: updated => { update(updated); view.setList('sessions'); notify({ title: 'Session added', description: 'An empty session was added to the schedule.' }) },
-  })
-  const publish = useMutation({
-    mutationFn: (next: boolean) => next ? publishGradingSchedule(eventId) : unpublishGradingSchedule(eventId),
-    onSuccess: updated => {
-      update(updated)
-      notify(updated.publishedAt ? { title: 'Schedule published', description: 'The schedule is now published.' } : { title: 'Schedule returned to draft', description: 'The schedule is now a draft again.' })
-    },
-  })
-  const changing = sort.isPending || move.isPending || split.isPending || merge.isPending || add.isPending || publish.isPending
-  const error = sort.error ?? move.error ?? split.error ?? merge.error ?? add.error ?? publish.error
+    const { eventId = "" } = useParams();
+    const { session } = useAuth();
+    const view = useGradingDayLayout();
+    const client = useQueryClient();
+    const { notify, feedbackDialog } = useFeedback();
+    const [confirm, setConfirm] = useState<"publish" | "regenerate" | null>(null);
+    const day = useQuery({
+        queryKey: adminGradingKeys.day(eventId),
+        queryFn: () => loadAdminGradingDay(eventId),
+        enabled: Boolean(eventId),
+        retry: false,
+    });
+    const photos = useExaminerPhotos(
+        day.data?.panel.map((member) => member.instructorId) ?? [],
+        (ids) => loadInstructorPhotos(supabase, ids),
+    );
+    const summaries = useQuery({
+        queryKey: adminGradingKeys.summaries(eventId),
+        queryFn: () => loadBatchSummaries(eventId),
+        enabled: Boolean(eventId),
+        retry: false,
+    });
+    const [splitting, setSplitting] = useState<GradingSessionSummary | null>(
+        null,
+    );
+    // Every schedule change returns the whole updated day.
+    const update = (updated: GradingDay) => {
+        client.setQueryData(adminGradingKeys.day(eventId), updated);
+        void client.invalidateQueries({
+            queryKey: gradingScheduleAccountKey(session?.user.id),
+        });
+    };
+    const sort = useMutation({
+        mutationFn: () => sortGradingSessions(eventId),
+        onSuccess: (updated) => {
+            update(updated);
+            view.setList("sessions");
+            notify({
+                title: "Draft schedule generated",
+                description: `${updated.sessions.length === 1 ? "1 session was" : `${updated.sessions.length} sessions were`} created.`,
+            });
+        },
+    });
+    const move = useMutation({
+        mutationFn: ({
+            applicationId,
+            sessionId,
+        }: {
+            applicationId: string;
+            sessionId: string;
+            name: string;
+            from: string | null;
+        }) => moveGradingCandidate(applicationId, sessionId),
+        onSuccess: (updated, { sessionId, name }) => {
+            update(updated);
+            const to = updated.sessions.find((session) => session.id === sessionId);
+            notify({
+                title: "Student moved",
+                description: `${name} is now in ${to ? sessionLabel(to.position) : "another session"}.`,
+            });
+        },
+    });
+    const split = useMutation({
+        mutationFn: ({
+            sessionId,
+            applicationIds,
+        }: {
+            sessionId: string;
+            applicationIds: string[];
+        }) => splitGradingSession(sessionId, applicationIds),
+        onSuccess: (updated) => {
+            update(updated);
+            setSplitting(null);
+            notify({
+                title: "Session split",
+                description: "The students were moved to a new session.",
+            });
+        },
+    });
+    const merge = useMutation({
+        mutationFn: ({
+            sourceId,
+            intoId,
+        }: {
+            sourceId: string;
+            intoId: string;
+            label: string;
+        }) => mergeGradingSessions(sourceId, intoId),
+        onSuccess: (updated, { label }) => {
+            update(updated);
+            notify({
+                title: "Sessions merged",
+                description: `Students were merged into ${label}.`,
+            });
+        },
+    });
+    const add = useMutation({
+        mutationFn: () => addGradingSession(eventId),
+        onSuccess: (updated) => {
+            update(updated);
+            view.setList("sessions");
+            notify({
+                title: "Session added",
+                description: "An empty session was added to the schedule.",
+            });
+        },
+    });
+    const publish = useMutation({
+        mutationFn: (next: boolean) =>
+            next
+                ? publishGradingSchedule(eventId)
+                : unpublishGradingSchedule(eventId),
+        onSuccess: (updated) => {
+            update(updated);
+            notify(
+                updated.publishedAt
+                    ? {
+                        title: "Schedule published",
+                        description: "The schedule is now published.",
+                    }
+                    : {
+                        title: "Schedule returned to draft",
+                        description: "The schedule is now a draft again.",
+                    },
+            );
+        },
+    });
+    const changing =
+        sort.isPending ||
+        move.isPending ||
+        split.isPending ||
+        merge.isPending ||
+        add.isPending ||
+        publish.isPending;
+    const error =
+        sort.error ??
+        move.error ??
+        split.error ??
+        merge.error ??
+        add.error ??
+        publish.error;
 
-  if (day.isPending) return <DetailSkeleton sections={3} label="Loading grading day…" />
-  if (day.isError) return <RetryAlert message={day.error.message} onRetry={() => void day.refetch()} />
-  const data = day.data
-  const sessions = data.sessions
-  const sortable = canSort(data)
+    if (day.isPending)
+        return <DetailSkeleton sections={3} label="Loading grading day…" />;
+    if (day.isError)
+        return (
+            <RetryAlert
+                message={day.error.message}
+                onRetry={() => void day.refetch()}
+            />
+        );
+    const data = day.data;
+    const sessions = data.sessions;
+    const sortable = canSort(data);
 
-  const editable = data.status !== 'cancelled' && !data.gradingStarted
-  const blocker = publishBlocker(data)
-  const overflow = data.warnings.find(warning => warning.code === 'overflow')
+    const editable = data.status !== "cancelled" && !data.gradingStarted;
+    const blocker = publishBlocker(data);
+    const overflow = data.warnings.find((warning) => warning.code === "overflow");
 
-  // One main action for where the schedule is; the rarer ones sit in "More".
-  const regenerateText = `Candidates are re-sorted from the scheduling rules and given new candidate numbers. Anything you moved, split or merged by hand is lost${data.publishedAt ? ', and the schedule goes back to draft' : ''}.`
-  const primary = data.isPrivate ? (
-    <Button type="button" variant={sessions.length ? 'outline' : 'default'} disabled={changing} onClick={() => add.mutate()}>
-      {add.isPending ? 'Adding…' : 'Add session'}
-    </Button>
-  ) : !sessions.length ? (
-    <Button type="button" disabled={!sortable || changing} onClick={() => sort.mutate()}>
-      {sort.isPending ? 'Generating…' : 'Generate draft schedule'}
-    </Button>
-  ) : null
-  const regenerate = !data.isPrivate && sessions.length > 0 ? (
-    <Button type="button" variant="outline" disabled={!sortable || changing} onClick={() => setConfirm('regenerate')}>
-      {sort.isPending ? 'Generating…' : 'Generate again'}
-    </Button>
-  ) : null
-  // Publishing is the main step once sessions exist; it reads "Published" once done.
-  const publishButton = sessions.length > 0 ? (
-    <Button type="button" disabled={changing || Boolean(blocker) || Boolean(data.publishedAt)} title={blocker ?? undefined} onClick={() => setConfirm('publish')}>
-      {publish.isPending ? 'Publishing…' : data.publishedAt ? 'Published' : 'Publish schedule'}
-    </Button>
-  ) : null
+    // One main action for where the schedule is; the rarer ones sit in "More".
+    const regenerateText = `Candidates are re-sorted from the scheduling rules and given new candidate numbers. Anything you moved, split or merged by hand is lost${data.publishedAt ? ", and the schedule goes back to draft" : ""}.`;
+    const primary = data.isPrivate ? (
+        <Button
+            type="button"
+            variant={sessions.length ? "outline" : "default"}
+            disabled={changing}
+            onClick={() => add.mutate()}
+        >
+            {add.isPending ? "Adding…" : "Add session"}
+        </Button>
+    ) : !sessions.length ? (
+        <Button
+            type="button"
+            disabled={!sortable || changing}
+            onClick={() => sort.mutate()}
+        >
+            {sort.isPending ? "Generating…" : "Generate draft schedule"}
+        </Button>
+    ) : null;
+    const regenerate =
+        !data.isPrivate && sessions.length > 0 ? (
+            <Button
+                type="button"
+                variant="outline"
+                disabled={!sortable || changing}
+                onClick={() => setConfirm("regenerate")}
+            >
+                <RefreshCw aria-hidden="true" />
+                {sort.isPending ? "Generating…" : "Generate again"}
+            </Button>
+        ) : null;
+    // Publishing is the main step once sessions exist; it reads "Published" once done.
+    const publishButton =
+        sessions.length > 0 ? (
+            <Button
+                type="button"
+                disabled={changing || Boolean(blocker) || Boolean(data.publishedAt)}
+                title={blocker ?? undefined}
+                onClick={() => setConfirm("publish")}
+            >
+                {data.publishedAt && !publish.isPending ? (
+                    <CircleCheck aria-hidden="true" />
+                ) : (
+                    <Send aria-hidden="true" />
+                )}
+                {publish.isPending
+                    ? "Publishing…"
+                    : data.publishedAt
+                        ? "Published"
+                        : "Publish schedule"}
+            </Button>
+        ) : null;
 
-  const headerActions = data.status === 'cancelled' ? undefined : data.gradingStarted ? (
-    <p className="text-sm text-muted-foreground">Sessions are locked because grading has started.</p>
-  ) : <div className="flex flex-wrap gap-2">{primary}{regenerate}{publishButton}</div>
+    const headerActions =
+        data.status === "cancelled" ? undefined : data.gradingStarted ? (
+            <p className="text-sm text-muted-foreground">
+                Sessions are locked because grading has started.
+            </p>
+        ) : (
+            <div className="flex flex-wrap gap-2">
+                {primary}
+                {regenerate}
+                {publishButton}
+                <Button
+                    render={<Link to="/admin/settings/grading-rules" />}
+                    nativeButton={false}
+                    variant="outline"
+                >
+                    <Settings aria-hidden="true" />
+                    Configurations
+                </Button>
+            </div>
+        );
 
-  // Split off some candidates, or fold this session into another.
-  const renderSessionActions: SessionControl | undefined = editable ? session => {
-    const others = sessions.filter(option => option.id !== session.id)
-    const canSplit = sessionCandidates(session) > 1
-    if (!canSplit && !others.length) return null
+    // Split off some candidates, or fold this session into another.
+    const renderSessionActions: SessionControl | undefined = editable
+        ? (session) => {
+            const others = sessions.filter((option) => option.id !== session.id);
+            const canSplit = sessionCandidates(session) > 1;
+            if (!canSplit && !others.length) return null;
+            return (
+                <DropdownMenu>
+                    <DropdownMenuTrigger
+                        render={
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon-touch"
+                                disabled={changing}
+                                aria-label={`Change ${sessionLabel(session.position)}`}
+                            />
+                        }
+                    >
+                        <Ellipsis aria-hidden="true" />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="w-64">
+                        {canSplit && (
+                            <DropdownMenuItem onClick={() => setSplitting(session)}>
+                                Split session…
+                            </DropdownMenuItem>
+                        )}
+                        {others.map((option) => (
+                            <DropdownMenuItem
+                                key={option.id}
+                                className="flex-col items-start gap-1"
+                                onClick={() =>
+                                    merge.mutate({
+                                        sourceId: session.id,
+                                        intoId: option.id,
+                                        label: sessionLabel(option.position),
+                                    })
+                                }
+                            >
+                                <span>
+                                    {sessionCandidates(session)
+                                        ? "Merge into"
+                                        : "Remove, merging into"}{" "}
+                                    {sessionLabel(option.position)}
+                                </span>
+                                <span className="text-xs text-muted-foreground">
+                                    {gradingTimeLabel(option.startsAt, option.endsAt)}
+                                </span>
+                            </DropdownMenuItem>
+                        ))}
+                    </DropdownMenuContent>
+                </DropdownMenu>
+            );
+        }
+        : undefined;
+
+    // A row action rather than an always-on select, so a slip can't move anyone.
+    const renderMove: MoveControl | undefined =
+        editable && sessions.length > 1
+            ? (candidate, session) => {
+                return (
+                    <DropdownMenu>
+                        <DropdownMenuTrigger
+                            render={
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon-touch"
+                                    disabled={changing}
+                                    aria-label={`Move ${candidate.name} to another session`}
+                                    className="md:w-auto lg:w-auto md:gap-1.5 md:px-3"
+                                />
+                            }
+                        >
+                            <ArrowRightLeft aria-hidden="true" />
+                            <span aria-hidden="true" className="hidden text-sm md:inline">
+                                Move
+                            </span>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent className="w-72">
+                            {moveOptions(sessions, session).map(
+                                ({ option, removesFrom }) => (
+                                    <DropdownMenuItem
+                                        key={option.id}
+                                        className="flex-col items-start gap-1"
+                                        onClick={() =>
+                                            move.mutate({
+                                                applicationId: candidate.applicationId,
+                                                sessionId: option.id,
+                                                name: candidate.name,
+                                                from: session.id,
+                                            })
+                                        }
+                                    >
+                                        <span className="font-medium">
+                                            Move to {sessionLabel(option.position)}
+                                        </span>
+                                        <span className="text-xs text-muted-foreground">
+                                            {gradingTimeLabel(option.startsAt, option.endsAt)}
+                                        </span>
+                                        <span className="flex flex-wrap gap-1">
+                                            {option.grades.map((group) => (
+                                                <DatabaseGradeBadge
+                                                    key={group.grade.id}
+                                                    grade={group.grade}
+                                                />
+                                            ))}
+                                        </span>
+                                        {removesFrom && (
+                                            <span className="text-xs text-muted-foreground">
+                                                {sessionLabel(session.position)} will be removed
+                                            </span>
+                                        )}
+                                    </DropdownMenuItem>
+                                ),
+                            )}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                );
+            }
+            : undefined;
+
     return (
-      <DropdownMenu>
-        <DropdownMenuTrigger render={<Button type="button" variant="ghost" size="icon-touch" disabled={changing}
-          aria-label={`Change ${sessionLabel(session.position)}`} />}>
-          <Ellipsis aria-hidden="true" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent className="w-64">
-          {canSplit && <DropdownMenuItem onClick={() => setSplitting(session)}>Split session…</DropdownMenuItem>}
-          {others.map(option => (
-            <DropdownMenuItem key={option.id} className="flex-col items-start gap-1"
-              onClick={() => merge.mutate({ sourceId: session.id, intoId: option.id, label: sessionLabel(option.position) })}>
-              <span>{sessionCandidates(session) ? 'Merge into' : 'Remove, merging into'} {sessionLabel(option.position)}</span>
-              <span className="text-xs text-muted-foreground">{gradingTimeLabel(option.startsAt, option.endsAt)}</span>
-            </DropdownMenuItem>
-          ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
-    )
-  } : undefined
-
-  // A row action rather than an always-on select, so a slip can't move anyone.
-  const renderMove: MoveControl | undefined = editable && sessions.length > 1 ? (candidate, session) => {
-    return (
-      <DropdownMenu>
-        <DropdownMenuTrigger render={<Button type="button" variant="ghost" size="icon-touch" disabled={changing}
-          aria-label={`Move ${candidate.name} to another session`} className="md:w-auto lg:w-auto md:gap-1.5 md:px-3" />}>
-          <ArrowRightLeft aria-hidden="true" /><span aria-hidden="true" className="hidden text-sm md:inline">Move</span>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent className="w-72">
-          {moveOptions(sessions, session).map(({ option, removesFrom }) => (
-            <DropdownMenuItem key={option.id} className="flex-col items-start gap-1"
-              onClick={() => move.mutate({ applicationId: candidate.applicationId, sessionId: option.id, name: candidate.name, from: session.id })}>
-              <span className="font-medium">Move to {sessionLabel(option.position)}</span>
-              <span className="text-xs text-muted-foreground">{gradingTimeLabel(option.startsAt, option.endsAt)}</span>
-              <span className="flex flex-wrap gap-1">
-                {option.grades.map(group => <DatabaseGradeBadge key={group.grade.id} grade={group.grade} />)}
-              </span>
-              {removesFrom && <span className="text-xs text-muted-foreground">{sessionLabel(session.position)} will be removed</span>}
-            </DropdownMenuItem>
-          ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
-    )
-  } : undefined
-
-  return (
-    <div className="space-y-4">
-      {summaries.isError && <RetryAlert message={summaries.error.message} onRetry={() => void summaries.refetch()} />}
-      {error && <p role="alert" className="text-sm text-destructive">{error.message}</p>}
-      <GradingDayView day={data} list={view.list} onListChange={view.setList}
-        studentHref={studentId => `/admin/students/${studentId}`}
-        headerActions={headerActions}
-        statusPills={<ScheduleStatusPills day={data} />}
-        renderSessionActions={renderSessionActions}
-        photos={photos}
-        panelAction={<GradingPanelDialog eventId={data.eventId} gradingLabel={gradingDate(data.gradingDate)} panel={data.panel}
-          onSaved={() => { void day.refetch(); void client.invalidateQueries({ queryKey: gradingScheduleAccountKey(session?.user.id) }); notify({ title: 'Grading panel saved', description: 'The examiners for this grading have been updated.' }) }} />}
-        emptySessions={<GradingNote>{data.isPrivate
-          ? 'No sessions yet. This is a private grading, so add sessions by hand.'
-          : 'No sessions yet. Generate a draft schedule once applications close.'}</GradingNote>}
-        renderMove={renderMove}
-        actionFor={session => ({
-          href: `/admin/grading/days/${data.eventId}/${encodeURIComponent(session.id)}`,
-          // Nothing to call "results" until someone has submitted.
-          label: summaries.data?.some(item => item.sessionId === session.id && item.status === 'submitted') ? 'View results' : 'View checklists',
-          status: panelProgress(data, session, summaries.data),
-        })} />
-      {splitting && <SplitSessionDialog key={splitting.id} session={splitting} open busy={split.isPending}
-        onOpenChange={open => { if (!open) setSplitting(null) }}
-        onSplit={applicationIds => split.mutate({ sessionId: splitting.id, applicationIds })} />}
-      <ConfirmDialog open={confirm === 'regenerate'} onOpenChange={open => { if (!open) setConfirm(null) }}
-        title="Generate the schedule again?" description={regenerateText} confirmLabel="Generate again"
-        onConfirm={() => { setConfirm(null); sort.mutate() }} />
-      <ConfirmDialog open={confirm === 'publish'} onOpenChange={open => { if (!open) setConfirm(null) }}
-        title="Publish this schedule?"
-        description={`Every examiner on the panel will see the sessions, and students get the reporting time once its release date arrives.${overflow ? ` ${overflow.message}` : ''} Changing anything afterwards returns the schedule to draft.`}
-        confirmLabel="Publish" onConfirm={() => { setConfirm(null); publish.mutate(true) }} />
-      {feedbackDialog}
-    </div>
-  )
+        <div className="space-y-4">
+            {summaries.isError && (
+                <RetryAlert
+                    message={summaries.error.message}
+                    onRetry={() => void summaries.refetch()}
+                />
+            )}
+            {error && (
+                <p role="alert" className="text-sm text-destructive">
+                    {error.message}
+                </p>
+            )}
+            <GradingDayView
+                day={data}
+                list={view.list}
+                onListChange={view.setList}
+                studentHref={(studentId) => `/admin/students/${studentId}`}
+                headerActions={headerActions}
+                statusPills={<ScheduleStatusPills day={data} />}
+                renderSessionActions={renderSessionActions}
+                photos={photos}
+                panelAction={
+                    <GradingPanelDialog
+                        eventId={data.eventId}
+                        gradingLabel={gradingDate(data.gradingDate)}
+                        panel={data.panel}
+                        onSaved={() => {
+                            void day.refetch();
+                            void client.invalidateQueries({
+                                queryKey: gradingScheduleAccountKey(session?.user.id),
+                            });
+                            notify({
+                                title: "Grading panel saved",
+                                description:
+                                    "The examiners for this grading have been updated.",
+                            });
+                        }}
+                    />
+                }
+                emptySessions={
+                    <GradingNote>
+                        {data.isPrivate
+                            ? "No sessions yet. This is a private grading, so add sessions by hand."
+                            : "No sessions yet. Generate a draft schedule once applications close."}
+                    </GradingNote>
+                }
+                renderMove={renderMove}
+                actionFor={(session) => ({
+                    href: `/admin/grading/days/${data.eventId}/${encodeURIComponent(session.id)}`,
+                    // Nothing to call "results" until someone has submitted.
+                    label: summaries.data?.some(
+                        (item) =>
+                            item.sessionId === session.id && item.status === "submitted",
+                    )
+                        ? "View results"
+                        : "View checklists",
+                    status: panelProgress(data, session, summaries.data),
+                })}
+            />
+            {splitting && (
+                <SplitSessionDialog
+                    key={splitting.id}
+                    session={splitting}
+                    open
+                    busy={split.isPending}
+                    onOpenChange={(open) => {
+                        if (!open) setSplitting(null);
+                    }}
+                    onSplit={(applicationIds) =>
+                        split.mutate({ sessionId: splitting.id, applicationIds })
+                    }
+                />
+            )}
+            <ConfirmDialog
+                open={confirm === "regenerate"}
+                onOpenChange={(open) => {
+                    if (!open) setConfirm(null);
+                }}
+                title="Generate the schedule again?"
+                description={regenerateText}
+                confirmLabel="Generate again"
+                onConfirm={() => {
+                    setConfirm(null);
+                    sort.mutate();
+                }}
+            />
+            <ConfirmDialog
+                open={confirm === "publish"}
+                onOpenChange={(open) => {
+                    if (!open) setConfirm(null);
+                }}
+                title="Publish this schedule?"
+                description={`Every examiner on the panel will see the sessions, and students get the reporting time once its release date arrives.${overflow ? ` ${overflow.message}` : ""} Changing anything afterwards returns the schedule to draft.`}
+                confirmLabel="Publish"
+                onConfirm={() => {
+                    setConfirm(null);
+                    publish.mutate(true);
+                }}
+            />
+            {feedbackDialog}
+        </div>
+    );
 }
 
 export default function AdminGradingDay() {
-  return (
-    <div className="space-y-4">
-      <GradingBackLink to="/admin/grading/opportunities">Back to schedule</GradingBackLink>
-      <GradingDayPage />
-    </div>
-  )
+    return (
+        <div className="space-y-4">
+            <GradingBackLink to="/admin/grading/opportunities">
+                Back to schedule
+            </GradingBackLink>
+            <GradingDayPage />
+        </div>
+    );
 }

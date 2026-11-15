@@ -26,7 +26,7 @@ import { needsCalendarEventLookup } from "@/lib/instructor/calendar-queries";
 import { calendarClassStyle, calendarEventsForDate, calendarRange, calendarTimeLabel, rosterSizeLabel, singaporeClock } from "@/lib/instructor/calendar-view";
 import type { CalendarEventsForDate, CalendarViewEvent as CalendarEvent } from "@/lib/instructor/calendar-view";
 import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
-import { Drawer, DrawerBody, DrawerClose, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
+import ClassDetailsOverlay from "@/components/shared/calendar/ClassDetailsOverlay";
 import MobileInstructorCalendar from "@/components/instructor/MobileInstructorCalendar";
 import type { MobileCalendarView } from "@/components/instructor/MobileInstructorCalendar";
 import {
@@ -494,7 +494,8 @@ function CalendarMonth({
 
 export default function InstructorDashboard() {
     const { session } = useAuth();
-    const isDesktop = useMediaQuery("(min-width: 1024px)");
+    // The side panel needs the 4+ day layout; the 3-day layout (785–1199px) uses the bottom sheet.
+    const isDesktop = useMediaQuery("(min-width: 1200px)");
     const weekSpan = useWeekSpan();
     // From 785px the toolbar and timeline are used; below it, the phone layout.
     const wide = useMediaQuery("(min-width: 785px)");
@@ -855,17 +856,12 @@ export default function InstructorDashboard() {
                 </div>
             </section>
             </>}
-            {!isDesktop && <Drawer open={Boolean(expandedClassId)} onOpenChange={(open) => { if (!open) updateSelection(selectedDate); }}>
-                <DrawerContent finalFocus={() => classTriggerRef.current?.isConnected ? classTriggerRef.current : document.querySelector<HTMLElement>('[data-mobile-calendar] button')}>
-                    <DrawerHeader>
-                        <div className="min-w-0"><DrawerTitle className="text-base font-medium">{lastSelectedSession.current?.type === "grading" ? "Grading session details" : "Class details"}</DrawerTitle><DrawerDescription className="text-xs text-muted-foreground">{lastSelectedSession.current?.date.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</DrawerDescription></div>
-                        <DrawerClose render={<Button variant="ghost" className="h-11 rounded-full px-3 text-sm text-primary" />}>Done</DrawerClose>
-                    </DrawerHeader>
-                    <DrawerBody className="pb-[max(1rem,env(safe-area-inset-bottom))]">
-                        {lastSelectedSession.current && <EventCard key={lastSelectedSession.current.id} event={lastSelectedSession.current} layout="panel" expanded onToggle={() => updateSelection(selectedDate)} />}
-                    </DrawerBody>
-                </DrawerContent>
-            </Drawer>}
+            {!isDesktop && <ClassDetailsOverlay open={Boolean(expandedClassId)} onClose={() => updateSelection(selectedDate)}
+                title={lastSelectedSession.current?.type === "grading" ? "Grading session details" : "Class details"}
+                description={lastSelectedSession.current?.date.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}
+                finalFocus={() => classTriggerRef.current?.isConnected ? classTriggerRef.current : document.querySelector<HTMLElement>('[data-mobile-calendar] button')}>
+                {lastSelectedSession.current && <EventCard key={lastSelectedSession.current.id} event={lastSelectedSession.current} layout="panel" expanded onToggle={() => updateSelection(selectedDate)} />}
+            </ClassDetailsOverlay>}
             {feedbackDialog}
             {canUseAvailability && availabilityDialog && <InstructorAvailabilityEditor
                 key={`${session?.user.id}-${availabilityDialog.editingId ?? "new"}-${dateKey(availabilityDialog.range.date)}-${availabilityDialog.range.startTime}`}
