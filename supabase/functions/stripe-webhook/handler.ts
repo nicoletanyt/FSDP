@@ -1,6 +1,7 @@
 import { cryptoProvider, getStripe, requireEnv } from '../_shared/stripe.ts'
 import { adminClient } from '../_shared/grading.ts'
 import { resolveCreditPass } from '../_shared/credit-passes.ts'
+import { sendMembershipPaidEmail } from '../send-membership-email/handler.ts'
 import { confirmGradingPreview } from '../_shared/grading-drafts.ts'
 
 export async function handleRequest(request: Request): Promise<Response> {
@@ -42,7 +43,8 @@ export async function handleRequest(request: Request): Promise<Response> {
 
     console.log(`Stripe event ${event.type} (${event.id})`)
 
-    // Preserve membership cleanup from the deployed webhook.
+    // An abandoned or failed membership checkout is not a payment: remove its
+    // pending row so payment history doesn't show it as pending forever.
     if (
       event.type === 'checkout.session.expired' ||
       event.type === 'checkout.session.async_payment_failed'
@@ -73,7 +75,7 @@ export async function handleRequest(request: Request): Promise<Response> {
         if (session.metadata?.grading_attempt_id) {
           const verified = await stripe.checkout.sessions.retrieve(session.id)
           const db = adminClient()
-          // The live grading flow fixes a per-grade fee on the checkout attempt.
+          // The live grading flow fixes a per-grade fee on the checkout attempt, when checkout started.
           const { data: attemptRow, error: attemptError } = await db.from('grading_checkout_attempts')
             .select('amount_cents').eq('id', session.metadata.grading_attempt_id).maybeSingle()
           if (attemptError) throw attemptError
@@ -91,10 +93,14 @@ export async function handleRequest(request: Request): Promise<Response> {
         }
 
         if (session.metadata?.membership_student_id) {
-          // Preserve the newer deployed membership flow when adding credit handling.
+          // Re-read the session from Stripe rather than trusting the event body.
           const verified = await stripe.checkout.sessions.retrieve(session.id)
           const studentId = verified.metadata?.membership_student_id
           const db = adminClient()
+          // Expect the amount fixed when this checkout started (the pending payment row that
+          // create-checkout-session wrote from Stripe's price), so later price changes or
+          // per-membership-type prices never strand a paid student. Fall back to the
+          // configured price only if that row is missing.
           const { data: pending, error: pendingError } = await db.from('payments')
             .select('student_id, amount_cents').eq('stripe_session_id', session.id).maybeSingle()
           if (pendingError) throw pendingError
@@ -112,6 +118,12 @@ export async function handleRequest(request: Request): Promise<Response> {
             paid_amount: verified.amount_total, paid_currency: verified.currency,
           })
           if (error) throw error
+          // Best-effort: an email outage must not make Stripe retry a payment that is already recorded.
+          try {
+            await sendMembershipPaidEmail(studentId)
+          } catch {
+            console.error('Membership payment email could not be sent.')
+          }
           return Response.json({ received: true })
         }
 

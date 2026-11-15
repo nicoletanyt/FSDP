@@ -1,4 +1,3 @@
-import { Resend } from 'npm:resend@6.38.0'
 import { adminClient, authenticate, gradingHeaders } from '../_shared/grading.ts'
 import { requireEnv } from '../_shared/stripe.ts'
 
@@ -29,6 +28,8 @@ const defaults: Dependencies = {
     return data
   },
   async send(message, key) {
+    // Loaded on first send so importing this module (e.g. from the webhook) needs no provider package.
+    const { Resend } = await import('npm:resend@6.38.0')
     const resend = new Resend(requireEnv('RESEND_API_KEY'))
     const { data, error } = await resend.emails.send({
       from: requireEnv('MEMBERSHIP_EMAIL_FROM'),
@@ -68,6 +69,37 @@ export function membershipMessage(member: Member): Message {
 </body></html>`,
     text: `Dear ${name},\n\nWelcome to Aikido Shinju-Kai!\nWe have received your membership application.\n\nYour Membership ID: ${member.member_no}\n\nPayment Instructions\nYou will receive your payment instructions within one business day. Please check your inbox and spam folder.\n\nYour application is pending review. This is not confirmation of payment or membership activation.\n\nAikido Shinju-Kai Membership Team`,
   }
+}
+
+/** Sent once Stripe has confirmed payment and the membership is active. */
+export function membershipPaidMessage(member: Member): Message {
+  const name = [member.first_name, member.last_name].filter(Boolean).join(' ')
+  return {
+    to: member.email,
+    subject: 'Welcome to Aikido Shinju-Kai!',
+    html: `<!doctype html>
+<html lang="en"><head><meta charset="UTF-8"></head>
+<body style="margin:0;background:#f4f5f7;font-family:Arial,sans-serif;color:#24324a">
+  <main style="max-width:560px;margin:32px auto;padding:32px;background:#ffffff;border-radius:16px">
+    <h1 style="font-size:24px;color:#2c3f67">Welcome to Aikido Shinju-Kai!</h1>
+    <p>Dear ${escapeHtml(name)},</p>
+    <p>Thank you for joining Aikido Shinju-Kai. We have received your payment and your membership is now active.</p>
+    <p>Your Membership ID:</p>
+    <p style="padding:20px;background:#eef2f8;border-radius:8px;font-size:26px;font-weight:bold;color:#2c3f67;letter-spacing:1px">${escapeHtml(member.member_no)}</p>
+    <p>We look forward to welcoming you to the dojo!</p>
+    <p>Aikido Shinju-Kai Membership Team</p>
+  </main>
+</body></html>`,
+    text: `Dear ${name},\n\nWelcome to Aikido Shinju-Kai!\nWe have received your payment and your membership is now active.\n\nYour Membership ID: ${member.member_no}\n\nAikido Shinju-Kai Membership Team`,
+  }
+}
+
+/** Called by the verified Stripe webhook after finalize_membership_checkout. Retries reuse the idempotency key. */
+export async function sendMembershipPaidEmail(studentId: string, dependencies: Pick<Dependencies, 'send'> = defaults) {
+  const { data: member, error } = await adminClient().from('students')
+    .select('id, email, first_name, last_name, member_no').eq('id', studentId).maybeSingle<Member>()
+  if (error || !member?.email) throw new Error('Membership lookup failed.')
+  return dependencies.send(membershipPaidMessage(member), `membership-paid/${member.id}/${member.member_no}/v1`)
 }
 
 export async function handleRequest(request: Request, dependencies: Dependencies = defaults): Promise<Response> {

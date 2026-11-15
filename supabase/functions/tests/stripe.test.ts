@@ -1,14 +1,12 @@
 import assert from 'node:assert/strict'
 import { cryptoProvider, getStripe } from '../_shared/stripe.ts'
-import { handleRequest as checkout } from '../create-checkout-session/handler.ts'
 import { handleRequest as webhook } from '../stripe-webhook/handler.ts'
 
-Deno.test('Stripe Checkout and webhook security', async (test) => {
+// Membership checkout itself is covered in membership.test.ts.
+Deno.test('Stripe webhook security', async (test) => {
   const environment = {
     STRIPE_SECRET_KEY: 'sk_test_unit_test_only',
     STRIPE_WEBHOOK_SECRET: 'whsec_unit_test_only',
-    STRIPE_PRICE_ID: 'price_server_configured',
-    APP_URL: 'http://localhost:5173',
   }
   const originalEnvironment = new Map(
     Object.keys(environment).map((name) => [name, Deno.env.get(name)]),
@@ -45,17 +43,6 @@ Deno.test('Stripe Checkout and webhook security', async (test) => {
     })
   }
 
-  function checkoutRequest(options: RequestInit = {}) {
-    return new Request('http://localhost/functions/v1/create-checkout-session', {
-      method: 'POST',
-      headers: {
-        origin: environment.APP_URL,
-        'idempotency-key': '00000000-0000-4000-8000-000000000001',
-      },
-      ...options,
-    })
-  }
-
   async function signedEvent(
     type = 'checkout.session.completed',
     options: { paid?: boolean; live?: boolean; timestamp?: number } = {},
@@ -88,70 +75,6 @@ Deno.test('Stripe Checkout and webhook security', async (test) => {
   }
 
   try {
-    await test.step('allows the configured CORS preflight without calling Stripe', async () => {
-      const response = await checkout(checkoutRequest({ method: 'OPTIONS' }))
-      assert.equal(response.status, 204)
-      assert.equal(
-        response.headers.get('access-control-allow-origin'),
-        environment.APP_URL,
-      )
-      assert.ok(
-        response.headers.get('access-control-allow-headers')?.includes('idempotency-key'),
-      )
-      assert.equal(calls.length, 0)
-    })
-
-    await test.step('uses server pricing and redirects and preserves the retry key', async () => {
-      calls.length = 0
-      for (let attempt = 0; attempt < 2; attempt++) {
-        const response = await checkout(checkoutRequest({
-          body: JSON.stringify({
-            price: 'price_attacker',
-            quantity: 100,
-            success_url: 'https://attacker.test',
-          }),
-        }))
-        assert.equal(response.status, 200)
-        assert.equal(
-          (await response.json()).url,
-          'https://checkout.stripe.com/c/pay/test_session',
-        )
-      }
-      const body = new URLSearchParams(calls[0].body)
-      assert.equal(body.get('mode'), 'payment')
-      assert.equal(body.get('line_items[0][price]'), environment.STRIPE_PRICE_ID)
-      assert.equal(body.get('line_items[0][quantity]'), '1')
-      assert.equal(
-        body.get('success_url'),
-        `${environment.APP_URL}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
-      )
-      assert.equal(body.get('cancel_url'), `${environment.APP_URL}/checkout/cancel`)
-      assert.equal(calls[0].key, 'checkout-00000000-0000-4000-8000-000000000001')
-      assert.deepEqual(calls[0], calls[1])
-    })
-
-    await test.step('rejects invalid origins, methods, and missing retry keys before Stripe', async () => {
-      calls.length = 0
-      const foreignOrigin = checkoutRequest({
-        headers: { origin: 'https://attacker.test' },
-      })
-      assert.equal((await checkout(foreignOrigin)).status, 403)
-      assert.equal((await checkout(checkoutRequest({ method: 'GET' }))).status, 405)
-      assert.equal((await checkout(checkoutRequest({ headers: {} }))).status, 400)
-      assert.equal(calls.length, 0)
-    })
-
-    await test.step('rejects live secret keys before calling Stripe', async () => {
-      calls.length = 0
-      Deno.env.set('STRIPE_SECRET_KEY', 'sk_live_unit_test_only')
-      try {
-        assert.equal((await checkout(checkoutRequest())).status, 500)
-        assert.equal(calls.length, 0)
-      } finally {
-        Deno.env.set('STRIPE_SECRET_KEY', environment.STRIPE_SECRET_KEY)
-      }
-    })
-
     await test.step('rejects missing, tampered, and expired webhook signatures', async () => {
       calls.length = 0
       const unsigned = new Request('http://localhost', { method: 'POST' })

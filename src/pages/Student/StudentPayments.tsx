@@ -79,7 +79,7 @@ export default function StudentPayments() {
               <Button variant="outline" onClick={retry}>Try again</Button>
             </div>
           ) : rows.length === 0 ? (
-            <p className="p-5 text-muted-foreground">No payments yet. Credit top-ups and other payments will show up here once confirmed.</p>
+            <p className="p-5 text-muted-foreground">No payments yet. Membership, grading and class pass payments will show up here once confirmed.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[40rem] text-left text-sm">

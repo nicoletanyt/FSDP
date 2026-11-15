@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router' 
+import { useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { createMembershipCheckout } from '@/lib/stripe'
+import { saveStudentPhoto, studentPhotoError, uploadStudentPhoto } from '@/lib/student-photo'
 import { supabase } from '@/lib/supabase'
 import {
   DATE_OF_BIRTH_STORAGE_KEY,
@@ -21,6 +23,15 @@ const STEPS = [
   { id: 4, title: 'Review &\nSubmit' },
 ]
 
+// Same range the database accepts: not in the future, at most 120 years ago.
+function localDate(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+const today = new Date()
+const MAX_DOB = localDate(today)
+const MIN_DOB = localDate(new Date(today.getFullYear() - 120, today.getMonth(), today.getDate()))
+const validDob = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value) && value >= MIN_DOB && value <= MAX_DOB
+
 const PARQ_QUESTIONS = [
   { key: 'heart', label: 'Has a doctor ever said you have a heart condition and should only do physical activity recommended by a doctor?' },
   { key: 'dizziness', label: 'Do you lose your balance because of dizziness, or do you ever lose consciousness?' },
@@ -32,7 +43,8 @@ const isValidNric = (nric: string) => {
 }
 
 export default function ApplyMembership() {
-  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const cancelled = searchParams.get('checkout') === 'cancel'
   const [currentStep, setCurrentStep] = useState(1)
   const [showGuardian, setShowGuardian] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -43,6 +55,11 @@ export default function ApplyMembership() {
   const [dojosLoading, setDojosLoading] = useState(true)
   const [dojosError, setDojosError] = useState('')
   const [dojoRevision, setDojoRevision] = useState(0)
+  // Same key for retries of an unchanged submission; Stripe then returns the same session.
+  const retryKey = useRef(crypto.randomUUID())
+  const [photoFile, setPhotoFile] = useState<File | null>(null)
+  // Reuse an upload when the student retries with the same photo.
+  const uploadedPhoto = useRef<{ file: File; path: string } | null>(null)
 
   const [formData, setFormData] = useState({
     fullName: '', nric: '', nationality: '', dob: '', gender: '',
@@ -88,6 +105,8 @@ export default function ApplyMembership() {
     return () => controller.abort()
   }, [dojoRevision])
 
+  const centreName = dojos.find((d) => d.id === formData.principalDojo)?.name
+
   const age = calculateAge(formData.dob)
   const isMinor = age !== null && age < 18
 
@@ -101,6 +120,14 @@ export default function ApplyMembership() {
     if (step === 1) {
       if (!formData.fullName || !formData.nric || !formData.nationality || !formData.dob || !formData.gender || !formData.mobile || !formData.address) {
         setErrorMsg('Please fill in all required Personal Information fields.')
+        return false
+      }
+      if (formData.fullName.trim().split(/\s+/).length < 2) {
+        setErrorMsg('Please enter your full name (first and last).')
+        return false
+      }
+      if (!validDob(formData.dob)) {
+        setErrorMsg('Please enter a valid date of birth. It can’t be in the future.')
         return false
       }
       if (!formData.photoName) {
@@ -175,8 +202,27 @@ export default function ApplyMembership() {
           return
         }
       }
+      const [firstName, ...rest] = formData.fullName.trim().split(/\s+/)
       setIsSubmitting(true)
+      // The Credits page picks class passes from these. Save them before leaving
+      // for Stripe; blocked storage (e.g. private browsing) must not stop checkout.
       try {
+        localStorage.setItem(DATE_OF_BIRTH_STORAGE_KEY, formData.dob)
+        localStorage.setItem(MEMBERSHIP_TYPE_STORAGE_KEY, formData.membershipType)
+      } catch {
+        // The Credits page falls back to the date of birth or adult passes.
+      }
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) throw new Error('Please sign in again to submit your application.')
+        // Upload the photo first: if that fails, nothing has been submitted or charged.
+        let photoPath = uploadedPhoto.current?.file === photoFile ? uploadedPhoto.current.path : null
+        if (photoFile && !photoPath) {
+          photoPath = await uploadStudentPhoto(photoFile, user.id)
+          uploadedPhoto.current = { file: photoFile, path: photoPath }
+        }
+
+        // 1. Save the full application as a pending membership (safe to repeat on retry).
         // One authenticated transaction writes students, private application
         // details and contacts. Ownership, member ID and grade are server-owned.
         const { data, error } = await supabase.rpc('submit_my_membership_application', {
@@ -185,34 +231,38 @@ export default function ApplyMembership() {
         if (error) throw error
         if (!data?.membershipId || !data?.startDate) throw new Error('The server did not return a membership record.')
 
-        // SPA navigation does not cancel this request. Do not await it: email
-        // failure must never undo a committed application or block the success page.
-        void supabase.functions.invoke('send-membership-email', {
-          body: {
-            email: formData.email,
-            name: formData.fullName,
-            membershipId: data.membershipId,
-          },
-        }).then(({ error: emailError }) => {
-          if (emailError) console.warn('Membership saved, but the confirmation email could not be sent.')
-        }).catch(() => {
-          console.warn('Membership saved, but the confirmation email request failed.')
-        })
+        // The application now has a student record, so the photo can become their
+        // profile photo. Best-effort: a failure here must never block the payment.
+        if (photoPath) {
+          try {
+            await saveStudentPhoto(user.id, photoPath)
+          } catch (photoError) {
+            console.warn('Could not attach the profile photo:', photoError)
+          }
+        }
 
-        // Optional display preferences must not turn a successful DB commit into
-        // a failed submission when browser storage is unavailable.
-        try {
-          localStorage.setItem(DATE_OF_BIRTH_STORAGE_KEY, formData.dob)
-          localStorage.setItem(MEMBERSHIP_TYPE_STORAGE_KEY, formData.membershipType)
-        } catch { /* The database remains authoritative. */ }
-        
-        // Keep the persisted application values returned by the database.
-        navigate('/apply-membership/success', { state: data })
+        // 2. Pay. The membership activates, and the welcome email is sent, only after Stripe's verified webhook.
+        const checkoutUrl = await createMembershipCheckout({
+          first_name: firstName,
+          last_name: rest.join(' '),
+          phone: formData.mobile.trim(), // same plain number the application saved
+          date_of_birth: formData.dob,
+          home_centre_id: formData.principalDojo,
+          emergency_contact: {
+            name: formData.emergencyName.trim(),
+            relationship: formData.emergencyRelationship,
+            phone: formData.emergencyPhone.trim(),
+          },
+          medical_details: formData.medicalDetails.trim(),
+        }, retryKey.current)
+        // The browser is now leaving for Stripe Checkout, so stay in the submitting state.
+        window.location.assign(checkoutUrl)
+        return
       } catch (error) {
         const failure = error as { code?: string; message?: string }
         setErrorMsg(failure?.code === 'PGRST202'
           ? 'Membership setup is missing. Please apply the membership_application_submit database migration.'
-          : failure?.message || 'Failed to submit to database. Please try again.')
+          : failure?.message || 'Unable to start checkout. Please try again.')
       } finally {
         setIsSubmitting(false)
       }
@@ -226,7 +276,18 @@ export default function ApplyMembership() {
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (file) setFormData({ ...formData, photoName: file.name })
+    if (!file) return
+    const problem = studentPhotoError(file)
+    if (problem) {
+      setErrorMsg(problem)
+      setPhotoFile(null)
+      setFormData({ ...formData, photoName: '' })
+      e.target.value = ''
+      return
+    }
+    setErrorMsg('')
+    setPhotoFile(file)
+    setFormData({ ...formData, photoName: file.name })
   }
 
   const formatPhone = (value: string) => {
@@ -257,6 +318,13 @@ export default function ApplyMembership() {
             </div>
           ))}
         </div>
+
+        {cancelled && (
+          <p role="status" className="mb-6 rounded-lg bg-muted p-4 text-sm text-muted-foreground">
+            Payment was cancelled, so your membership isn't active yet. Submit the form again
+            whenever you're ready to pay.
+          </p>
+        )}
 
         {errorMsg && (
           <div className="mb-6 animate-in slide-in-from-top-2">
@@ -299,7 +367,18 @@ export default function ApplyMembership() {
               </div>
               <div className="space-y-1.5 sm:space-y-2">
                 <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-sm sm:text-base transition-colors">Date of Birth</Label>
-                <Input type="date" value={formData.dob} onChange={(e) => setFormData({...formData, dob: e.target.value})} className="h-11 sm:h-12 bg-gray-200/60 dark:bg-slate-800 border-transparent focus-visible:ring-[#2c3f67] text-black dark:text-white" />
+                <Input
+                  type="date"
+                  min={MIN_DOB}
+                  max={MAX_DOB}
+                  aria-invalid={!!formData.dob && !validDob(formData.dob)}
+                  value={formData.dob}
+                  onChange={(e) => setFormData({...formData, dob: e.target.value})}
+                  className="h-11 sm:h-12 bg-gray-200/60 dark:bg-slate-800 border-transparent focus-visible:ring-[#2c3f67] text-black dark:text-white"
+                />
+                {formData.dob && !validDob(formData.dob) && (
+                  <p role="alert" className="text-sm text-brand-red-ink">Enter a real date of birth. It can’t be in the future.</p>
+                )}
               </div>
               <div className="space-y-1.5 sm:space-y-2">
                 <Label className="text-[#2c3f67] dark:text-gray-300 font-bold text-sm sm:text-base transition-colors">Gender</Label>
@@ -349,7 +428,7 @@ export default function ApplyMembership() {
                     {formData.photoName && <p className="text-xs text-green-600 dark:text-green-400 font-bold mt-1">Selected: {formData.photoName}</p>}
                     {!formData.photoName && <p className="text-[10px] sm:text-xs text-[#e62128] dark:text-red-400 font-medium mt-1">Profile photo is required to continue.</p>}
                   </div>
-                  <input type="file" className="hidden" accept="image/*" onChange={handlePhotoUpload} required aria-required="true" />
+                  <input type="file" className="hidden" accept="image/jpeg,image/png,image/webp" onChange={handlePhotoUpload} required aria-required="true" />
                 </label>
                 <p className="text-xs text-gray-500 flex items-center gap-1 mt-1">
                   <Info className="w-3 h-3" /> Please bring 2 physical photos to your Principal Dojo for your membership booklet.
@@ -595,7 +674,7 @@ export default function ApplyMembership() {
                   <button onClick={() => setCurrentStep(2)} className="text-xs sm:text-sm text-[#e62128] font-semibold hover:underline">Edit</button>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-2 sm:gap-y-3 text-xs sm:text-sm">
-                  <div><span className="text-gray-500 block text-[10px] sm:text-xs">Dojo</span>{formData.principalDojo || '-'}</div>
+                  <div><span className="text-gray-500 block text-[10px] sm:text-xs">Dojo</span>{centreName || '-'}</div>
                   <div><span className="text-gray-500 block text-[10px] sm:text-xs">Type</span>{formData.membershipType ? membershipLabel(formData.membershipType) : '-'}</div>
                   <div><span className="text-gray-500 block text-[10px] sm:text-xs">Belt</span>{formData.currentBelt || '-'}</div>
                   <div><span className="text-gray-500 block text-[10px] sm:text-xs">Emergency Contact</span>{formData.emergencyName || '-'}</div>
@@ -641,7 +720,7 @@ export default function ApplyMembership() {
           ) : <div />}
           
           <Button onClick={handleNext} disabled={isSubmitting} className="bg-[#2c3f67] hover:bg-[#1f2d4a] text-white px-6 sm:px-10 h-10 sm:h-12 rounded-md text-sm sm:text-base">
-            {isSubmitting ? 'Processing...' : (currentStep === 4 ? 'Submit Application' : 'Next')}
+            {currentStep < 4 ? 'Next' : isSubmitting ? 'Redirecting to payment…' : 'Submit & Pay'}
           </Button>
         </div>
 

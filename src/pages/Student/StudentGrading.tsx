@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { CheckCircle2, AlertCircle, ShieldCheck, Info, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -162,6 +162,7 @@ export default function GradingApplication() {
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-[#2c3f67]">Grading Application</h1>
         <p className="text-gray-500 mt-2">Apply for your next belt promotion based on the Aikido Shinju-Kai syllabus.</p>
+        <Link to="/grading/requirements" className="mt-2 inline-block text-sm font-medium text-primary underline-offset-4 hover:underline">View grading requirements</Link>
       </div>
 
       {payment && <p role="status" className="mb-6 rounded-xl bg-primary/10 p-4 text-sm text-primary">{payment}</p>}
