@@ -35,7 +35,12 @@ export function studentRoutes(status: MembershipStatus | null) {
   return [dashboard, classes, schedule, grading, credits]
 }
 
-/** Whether today's attendance QR is (or is about to be) available, for a shortcut in the phone menu. */
+/**
+ * Whether check-in is open right now (from 10 minutes before a booked class
+ * until it ends, as decided by student_attendance_qr), for a shortcut in the
+ * phone menu. Re-checks when check-in opens and every minute while it is open,
+ * so the shortcut appears on time and disappears after check-in or class end.
+ */
 function useTodayCheckIn(enabled: boolean) {
   const [available, setAvailable] = useState(false)
   useEffect(() => {
@@ -44,16 +49,28 @@ function useTodayCheckIn(enabled: boolean) {
       return
     }
     let active = true
+    let timer: number | undefined
     const check = () => {
+      window.clearTimeout(timer)
       fetchAttendanceQr()
-        .then(qr => { if (active) setAvailable(qr.status === 'ready' || qr.status === 'upcoming') })
+        .then(qr => {
+          if (!active) return
+          setAvailable(qr.status === 'ready')
+          const opensIn = qr.status === 'upcoming' ? Date.parse(qr.opensAt) - Date.now() : NaN
+          const delay = qr.status === 'ready' ? 60_000
+            : opensIn > 0 && opensIn < 24 * 60 * 60 * 1000 ? opensIn + 1_000
+              : null
+          if (delay !== null) timer = window.setTimeout(check, delay)
+        })
         .catch(() => { if (active) setAvailable(false) })
     }
     check()
+    // Background tabs throttle timers, so check again on return.
     const onVisible = () => { if (document.visibilityState === 'visible') check() }
     document.addEventListener('visibilitychange', onVisible)
     return () => {
       active = false
+      window.clearTimeout(timer)
       document.removeEventListener('visibilitychange', onVisible)
     }
   }, [enabled])

@@ -1,18 +1,19 @@
 import { useEffect, useState } from "react";
 import type { ComponentType, ReactNode } from "react";
-import { Link, useSearchParams } from "react-router";
+import { Link, useOutletContext, useSearchParams } from "react-router";
 import {
     ArrowRight,
     CalendarCheck,
     CalendarDays,
     ChevronRight,
-    Clock,
     CreditCard,
     GraduationCap,
     IdCard,
     MapPin,
     Receipt,
+    Plus,
     Ticket,
+    TriangleAlert,
     UserRound,
     UserCheck,
 } from "lucide-react";
@@ -24,7 +25,6 @@ import { DatabaseGradeBadge, gradeFromId } from "@/components/shared/grade/Grade
 import PageHeader from "@/components/shared/layout/PageHeader";
 import RetryAlert from "@/components/shared/layout/RetryAlert";
 import { PageSkeleton } from "@/components/shared/skeletons";
-import { StatusBadge } from "@/components/shared/status/StatusBadge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -36,12 +36,11 @@ import { useGradingReadiness } from "@/hooks/use-grading-readiness";
 import { useMembershipStatus } from "@/hooks/use-membership-status";
 import { useStudentDashboard } from "@/hooks/use-student-dashboard";
 import { useStudentPayments } from "@/hooks/use-student-payments";
-import { useStudentProfile } from "@/hooks/use-student-profile";
 import { formatDate, greetingFor, money } from "@/lib/format";
 import type { Belt, DashboardSummary } from "@/lib/student-dashboard";
 import type { Payment } from "@/lib/student-profile";
 import { cn } from "@/lib/utils";
-import CreditBalanceCard from "./CreditBalanceCard";
+import type { StudentContext } from "@/layouts/StudentLayout";
 import NonMemberDashboard from "./NonMemberDashboard";
 
 /* ---------- Page ---------- */
@@ -130,13 +129,12 @@ function relativeDay(iso: string) {
     return days <= 0 ? "Today" : days === 1 ? "Tomorrow" : `In ${days} days`;
 }
 
-/** e.g. "Mon 16 Nov, 11:00 pm": the one line a student scans for. */
-const classWhen = (iso: string) => {
-    const date = new Date(iso);
-    const day = date.toLocaleDateString("en-SG", { weekday: "short", day: "numeric", month: "short" });
-    const time = date.toLocaleTimeString("en-SG", { hour: "numeric", minute: "2-digit" });
-    return `${day}, ${time}`;
-};
+/** e.g. "Mon 16 Nov". */
+const classDay = (iso: string) =>
+    new Date(iso).toLocaleDateString("en-SG", { weekday: "short", day: "numeric", month: "short" });
+/** e.g. "11:50 pm": the fact a student plans around, so it gets the most weight. */
+const classTime = (iso: string) =>
+    new Date(iso).toLocaleTimeString("en-SG", { hour: "numeric", minute: "2-digit" });
 
 /* ---------- Building blocks ---------- */
 type Icon = ComponentType<{
@@ -152,6 +150,7 @@ function SlideCard({
     emphasis = false,
     footer,
     children,
+    aside,
     id,
 }: {
     icon: Icon;
@@ -160,6 +159,8 @@ function SlideCard({
     emphasis?: boolean;
     footer: ReactNode;
     children: ReactNode;
+    /** Shown to the right of the heading and body, aligned to the top of the card. */
+    aside?: ReactNode;
     id?: string;
 }) {
     return (
@@ -171,6 +172,8 @@ function SlideCard({
                 "bg-linear-to-br from-primary/10 via-card to-card ring-primary/30!",
             )}
         >
+            <div className="flex flex-1 items-stretch gap-3 sm:gap-4">
+            <div className="grid min-w-0 flex-1 content-start gap-4">
             <div className="flex items-center justify-between gap-3">
                 <h2 className="flex min-w-0 items-center gap-2 text-xs font-medium text-muted-foreground">
                     <span
@@ -187,7 +190,10 @@ function SlideCard({
                 </h2>
                 {badge}
             </div>
-            <div className="grid min-w-0 flex-1 content-start gap-4">{children}</div>
+            <div className="grid min-w-0 content-start gap-4">{children}</div>
+            </div>
+            {aside}
+            </div>
             <div className="mt-auto">{footer}</div>
         </Card>
     );
@@ -253,29 +259,29 @@ function NextClassCard({
                     <ArrowRight className="size-4" aria-hidden="true" />
                 </Link>
             }
+            // Live, signed code for today's booked class: a tile at the top right of the card.
+            aside={<AttendanceQrCard compact inline hideUnavailable onStatus={setCheckIn} />}
         >
-            <div className="grid gap-1">
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                    <p className="min-w-0 text-2xl font-semibold tracking-tight max-sm:text-xl [overflow-wrap:anywhere]">
-                        {nextClass.title}
-                    </p>
-                    <StatusBadge tone="info" dot={false}>
-                        {relativeDay(nextClass.startsAt)}
-                    </StatusBadge>
+            {/* When first (day, then the time in large type), then what and where. */}
+                <div className="grid min-w-0 gap-3">
+                    <div className="grid gap-0.5">
+                        <p className="text-sm text-muted-foreground">
+                            <span className="font-semibold text-primary">{relativeDay(nextClass.startsAt)}</span>
+                            {" · "}
+                            {classDay(nextClass.startsAt)}
+                        </p>
+                        <p className="text-2xl font-semibold tracking-tight whitespace-nowrap tabular-nums sm:text-3xl">
+                            {classTime(nextClass.startsAt)}
+                        </p>
+                        <p className="text-lg font-semibold [overflow-wrap:anywhere]">{nextClass.title}</p>
+                    </div>
+                    <ul className="grid gap-2">
+                        {nextClass.centre && <Fact icon={MapPin}>{nextClass.centre}</Fact>}
+                        {nextClass.instructor && (
+                            <Fact icon={UserRound}>{nextClass.instructor}</Fact>
+                        )}
+                    </ul>
                 </div>
-                <p className="flex items-center gap-2 text-lg font-semibold tabular-nums">
-                    <Clock className="size-4 shrink-0 text-primary" aria-hidden="true" />
-                    {classWhen(nextClass.startsAt)}
-                </p>
-            </div>
-            <ul className="grid gap-2">
-                {nextClass.centre && <Fact icon={MapPin}>{nextClass.centre}</Fact>}
-                {nextClass.instructor && (
-                    <Fact icon={UserRound}>{nextClass.instructor}</Fact>
-                )}
-            </ul>
-            {/* Live, signed code for today's booked class. */}
-            <AttendanceQrCard compact hideUnavailable onStatus={setCheckIn} />
         </SlideCard>
     );
 }
@@ -348,68 +354,59 @@ function TrainingCard({ belt, nextBelt }: Pick<DashboardSummary, "belt" | "nextB
     );
 }
 
-function MembershipCard() {
-    const { profile, loading, error, reload } = useStudentProfile();
-    const lastFee = profile?.payments
-        .filter((p) => p.item === "Membership" && p.status === "Paid")
-        .sort((a, b) => b.date.localeCompare(a.date))[0];
-    const rows = profile
-        ? [
-            ["Member ID", profile.memberId],
-            [
-                "Member since",
-                profile.memberSince && formatDate(profile.memberSince),
-            ],
-            ["Home dojo", profile.homeDojo],
-            ["Last paid", lastFee && formatDate(lastFee.date)],
-        ].filter((row): row is [string, string] => Boolean(row[1]))
-        : [];
+/** The class-credit balance from the database (same data and notices as the Credits page). */
+function CreditsCard() {
+    const { creditAccount } = useOutletContext<StudentContext>();
+    const { credits, unlimited, loading, error, payment, retry, expiring } = creditAccount;
+    const daysLeft = expiring ? Math.ceil((Date.parse(expiring.expiresAt) - Date.now()) / 86_400_000) : 0;
+    const display = loading ? "Loading…" : error ? "Unavailable" : unlimited ? "Unlimited" : String(credits);
+    const notice = error || (payment === "pending"
+        ? "Confirming your payment. Your balance will update automatically."
+        : payment === "confirmed"
+            ? "Payment confirmed. Your purchased credits are included in this balance."
+            : payment === "delayed"
+                ? "Payment confirmation is taking longer than expected. Check again shortly; do not purchase again."
+                : "");
 
     return (
         <SlideCard
-            icon={IdCard}
-            eyebrow="Membership"
-            badge={<StatusBadge tone="success">Active</StatusBadge>}
+            icon={Ticket}
+            eyebrow="Available credits"
             footer={
-                <Link to="/profile" className={ctaClass()}>
-                    View membership details
+                <Link to="/student/credits" className={ctaClass()}>
+                    <Plus className="size-4" aria-hidden="true" />
+                    Top up credits
                 </Link>
             }
         >
-            {loading ? (
-                <div
-                    role="status"
-                    aria-label="Loading membership details"
-                    className="grid gap-3"
-                >
-                    {[0, 1, 2].map((i) => (
-                        <Skeleton key={i} className="h-10" />
-                    ))}
-                </div>
-            ) : error || !profile ? (
-                <div className="grid gap-2">
-                    <p className="text-muted-foreground">
-                        We couldn&apos;t load your membership details.
-                    </p>
-                    <Button variant="link" className="h-auto w-fit p-0" onClick={reload}>
-                        Try again
-                    </Button>
-                </div>
-            ) : (
-                <dl className="grid divide-y">
-                    {rows.map(([label, value]) => (
-                        <div
-                            key={label}
-                            className="flex min-w-0 items-baseline justify-between gap-4 py-2 first:pt-0 last:pb-0"
-                        >
-                            <dt className="shrink-0 text-muted-foreground">{label}</dt>
-                            <dd className="min-w-0 text-right font-medium [overflow-wrap:anywhere]">
-                                {value}
-                            </dd>
-                        </div>
-                    ))}
-                </dl>
+            <div className="grid gap-1">
+                <p className="flex items-baseline gap-2">
+                    <span className="text-4xl font-semibold tracking-tight tabular-nums" aria-live="polite">{display}</span>
+                    {!loading && !error && !unlimited && (
+                        <span className="text-muted-foreground">{credits === 1 ? "credit" : "credits"}</span>
+                    )}
+                </p>
+                <p className="text-sm text-muted-foreground">1 credit = 1 class</p>
+            </div>
+            {!loading && !error && expiring && daysLeft > 0 && daysLeft <= 21 && (
+                <p role="status" data-expiry-notice className="flex items-start gap-2 rounded-lg bg-warning/15 px-3 py-2 text-sm font-medium text-warning-foreground dark:text-warning">
+                    <TriangleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+                    <span>{expiring.credits} {expiring.credits === 1 ? "credit expires" : "credits expire"} in {daysLeft} {daysLeft === 1 ? "day" : "days"}</span>
+                </p>
             )}
+            {notice && (
+                <p role="status" className="text-sm">
+                    {notice}
+                    {(error || payment === "delayed") && (
+                        <button type="button" onClick={retry} className="ml-2 rounded-sm font-medium text-primary underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-ring">
+                            Refresh balance
+                        </button>
+                    )}
+                </p>
+            )}
+            <Link to="/student/credits#my-passes" className="w-fit text-sm font-medium text-primary underline-offset-4 hover:underline">
+                View my passes and expiry
+            </Link>
         </SlideCard>
     );
 }
@@ -560,13 +557,13 @@ function MemberDashboardView({
                 label="Your overview"
                 slideLabels={[
                     "Your next class",
+                    "Available credits",
                     "Your training progress",
-                    "Membership",
                 ]}
             >
                 <NextClassCard nextClass={nextClass} />
+                <CreditsCard />
                 <TrainingCard belt={belt} nextBelt={nextBelt} />
-                <MembershipCard />
             </DashboardCarousel>
 
             <section aria-labelledby="quick-actions" className="grid gap-3">
@@ -610,13 +607,7 @@ function MemberDashboardView({
                 </div>
             </section>
 
-            <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]">
-                <RecentActivity {...payments} />
-                {/* Credits gate booking and carry the expiry warning, so they come first below desktop. */}
-                <div className="order-first min-w-0 lg:order-none">
-                    <CreditBalanceCard />
-                </div>
-            </div>
+            <RecentActivity {...payments} />
         </section>
     );
 }

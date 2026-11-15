@@ -6,10 +6,9 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 /**
- * Scroll-snap carousel for the student dashboard cards. Phones show one card
- * with the next one peeking, tablets two, and desktop lays every card out in a
- * row (controls hidden). Native scrolling keeps swipe, keyboard and
- * reduced-motion behaviour without a carousel dependency.
+ * Scroll-snap carousel for the student dashboard cards: one card at a time at
+ * every width; dots and arrows (or a swipe) move between them. Native scrolling
+ * keeps swipe, keyboard and reduced-motion behaviour without a carousel dependency.
  */
 export default function DashboardCarousel({
   label,
@@ -76,10 +75,11 @@ export default function DashboardCarousel({
         className={cn(
           // Phones bleed to the page edge so the next card peeks in.
           // A scrolling track clips vertically too, so pad it (and pull it back) to keep the cards' rings visible.
-          "-mx-6 -my-1 flex snap-x snap-mandatory scroll-px-6 gap-3 overflow-x-auto px-6 py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
-          "md:gap-4",
-          // Desktop: every card visible, the first (next class) a little wider.
-          "lg:mx-0 lg:grid lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)] lg:overflow-visible lg:px-0 lg:py-0 lg:my-0",
+          "-mx-6 -my-1 flex snap-x snap-mandatory scroll-px-6 gap-8 overflow-x-auto px-6 py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+          // The gap matches the 24px bleed, so neighbouring cards sit just off screen (one card per view).
+          "lg:gap-4",
+          // Desktop has no side padding to bleed into, so the track sits flush with the page.
+          "lg:-mx-1 lg:scroll-px-1 lg:px-1",
         )}
       >
         {slides.map((slide, index) => (
@@ -90,14 +90,14 @@ export default function DashboardCarousel({
             aria-label={`${index + 1} of ${slides.length}: ${slideLabels[index] ?? ""}`}
             // relative: keeps absolutely positioned content (e.g. sr-only labels) inside the scroller,
             // otherwise off-screen slides widen the whole page.
-            className="relative flex w-[calc(100%-2.5rem)] max-w-md shrink-0 snap-start sm:w-[70%] md:w-[calc(50%-0.5rem)] md:max-w-none lg:w-auto"
+            className="relative flex w-full shrink-0 snap-start"
           >
             {slide}
           </div>
         ))}
       </div>
 
-      <div className="flex items-center justify-between gap-3 lg:hidden">
+      <div className="flex items-center justify-between gap-3">
         <div className="flex items-center" role="group" aria-label="Choose a card">
           {slideLabels.map((name, index) => (
             <button
