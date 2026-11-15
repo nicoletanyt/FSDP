@@ -78,7 +78,7 @@ export default function CoverInvitationDialog({ invitationId, onClose }: { invit
     (invitation.data?.state === 'open' && outcome === messages.covered)
 
   return <Dialog open onOpenChange={open => { if (!open && !pending) onClose() }}>
-    <DialogContent showCloseButton={!pending} className="sm:max-w-lg">
+    <DialogContent showCloseButton={!pending} >
       <DialogHeader>
         <DialogTitle>Class cover invitation</DialogTitle>
         <DialogDescription>{covered ? 'No response is needed.' : 'Review this test invitation before responding.'}</DialogDescription>

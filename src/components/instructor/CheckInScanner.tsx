@@ -12,7 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import GradeBadge from "@/components/GradeBadge";
+import GradeBadge from "@/components/shared/grade/GradeBadge";
 import type { StudentRank } from "@/lib/student-grades";
 import type { NfcScanResult } from "@/lib/nfc-check-in";
 import { useQrCamera } from "@/hooks/use-qr-camera";

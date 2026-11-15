@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { CardListSkeleton } from '@/components/shared/skeletons'
 import { Link, useSearchParams } from 'react-router'
-import { CalendarDays, ChevronRight, Clock3, History, MapPin, Users } from 'lucide-react'
-import EmptyState from '@/components/admin/EmptyState'
+import { CalendarDays, ChevronRight, Clock3, History, MapPin, TriangleAlert, Users } from 'lucide-react'
+import EmptyState from '@/components/shared/layout/EmptyState'
 import GradingPanelDialog from '@/components/admin/GradingPanelDialog'
-import RetryAlert from '@/components/admin/RetryAlert'
+import RetryAlert from '@/components/shared/layout/RetryAlert'
 import {
-  ExaminerPanel, GradingFacts, GradingStatusPill, GradingWarnings, Segmented, gradingActionClass,
+  ExaminerPanel, detailTermClass, GradingDetail, GradingDetails, GradingStatusPill, GradingWarnings, Segmented, gradingActionClass,
 } from '@/components/grading/GradingParts'
 import { useExaminerPhotos } from '@/hooks/use-examiner-photos'
 import { loadInstructorPhotos } from '@/lib/instructor/api'
@@ -13,35 +15,17 @@ import { Card } from '@/components/ui/card'
 import { candidateCount, daysUntil, endsAfter, gradingDate, gradingStage, gradingTimeLabel, singaporeToday } from '@/lib/grading/format'
 import { gradingTitle } from '@/lib/instructor/grading-panels'
 import { supabase } from '@/lib/supabase'
-import { panelSelect, toPanel } from '@/lib/admin/grading-panels'
-
-interface Schedule {
-  event_id: string
-  track: 'adult' | 'children'
-  grading_date: string
-  application_opens_on: string
-  application_deadline: string
-  reporting_release_on: string
-  reporting_time: string | null
-  events: ScheduleEvent | ScheduleEvent[]
-  grading_panel_members: Parameters<typeof toPanel>[0]
-  grading_applications: { status: string }[]
-  grading_sessions: { id: string; ends_at: string | null }[]
-}
-
-interface ScheduleEvent {
-  name: string
-  starts_at: string | null
-  ends_at: string | null
-  centres: { name: string; address: string } | { name: string; address: string }[]
-}
+import { useFeedback } from '@/hooks/use-feedback'
+import { useAuth } from '@/hooks/use-auth'
+import { toPanel } from '@/lib/admin/grading-panels'
+import { gradingScheduleAccountKey, gradingScheduleKey, loadGradingSchedule } from '@/lib/admin/grading-schedule'
+import { adminGradingKeys } from '@/lib/admin/grading-results'
+import type { Schedule, ScheduleEvent } from '@/lib/admin/grading-schedule'
 
 function related<T>(value: T | T[] | null | undefined): T | undefined {
   return Array.isArray(value) ? value[0] : value ?? undefined
 }
 
-const scheduleSelect = `event_id,track,grading_date,application_opens_on,application_deadline,reporting_release_on,reporting_time,
-  events!inner(name,starts_at,ends_at,centres(name,address)),${panelSelect},grading_applications(status),grading_sessions(id,ends_at)`
 // Candidates are active (non-withdrawn) applications, counted the same way on the instructor side.
 const candidates = (item: Schedule) => item.grading_applications.filter(row => row.status !== 'withdrawn').length
 
@@ -63,7 +47,7 @@ function warningsFor(item: Schedule, event: ScheduleEvent | undefined, stageKey:
   const until = daysUntil(item.grading_date, now)
   return [
     ...(!panel.length ? ['No examiners assigned'] : !panel.some(member => member.isChief) ? ['No chief examiner'] : []),
-    ...(stageKey === 'unsorted' && until <= 3 ? [`Not sorted, grading ${until === 0 ? 'today' : until === 1 ? 'tomorrow' : `in ${until} days`}`] : []),
+    ...(stageKey === 'unsorted' && until <= 3 ? [`Students not arranged into sessions yet. Grading ${until === 0 ? 'is today' : until === 1 ? 'is tomorrow' : `is in ${until} days`}`] : []),
     ...(underReview ? [`${underReview} application${underReview === 1 ? '' : 's'} under review`] : []),
     ...(stageKey !== 'not-open' && stageKey !== 'open' && !candidates(item) ? ['No candidates'] : []),
     ...(ends.some(end => endsAfter(end, '21:00')) ? ['Runs past 9:00 pm'] : []),
@@ -85,34 +69,44 @@ function ScheduleCard({ item, next, now, photos, onPanelSaved }: {
   const until = daysUntil(item.grading_date, now)
   const action = nextAction[stage.key]
   const actionHref = action.list ? `${dayHref}?list=${action.list}` : dayHref
+  const warnings = warningsFor(item, event, stage.key, now)
   return (
-    <Card className="gap-3 px-5 py-4">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <h3 className="text-lg font-semibold">
-          <Link to={dayHref} className="hover:underline focus-visible:outline-2 focus-visible:outline-ring">{title}</Link>
-        </h3>
-        <GradingStatusPill opensOn={item.application_opens_on} closesOn={item.application_deadline} gradingDate={item.grading_date} today={now} />
-        {next && <span className="text-sm text-muted-foreground">{until === 0 ? 'Next grading, today' : until === 1 ? 'Next grading, tomorrow' : `Next grading, in ${until} days`}</span>}
+    <Card className="gap-5 px-5 py-5">
+      <div className="space-y-1">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <h3 className="text-lg font-semibold">
+            <Link to={dayHref} className="hover:underline focus-visible:outline-2 focus-visible:outline-ring">{title}</Link>
+          </h3>
+          <GradingStatusPill opensOn={item.application_opens_on} closesOn={item.application_deadline} gradingDate={item.grading_date} today={now} />
+        </div>
+        {next && <p className="text-sm text-muted-foreground">{until === 0 ? 'Next grading, today' : until === 1 ? 'Next grading, tomorrow' : `Next grading, in ${until} days`}</p>}
       </div>
-      <GradingFacts items={[
-        { key: 'date', icon: CalendarDays, label: gradingDate(item.grading_date) },
-        { key: 'time', icon: Clock3, label: gradingTimeLabel(event?.starts_at ?? null, event?.ends_at ?? null, item.reporting_time) },
-        { key: 'centre', icon: MapPin, label: venue?.name ?? 'Aikido Shinju-Kai Headquarters' },
-        { key: 'candidates', icon: Users, label: candidateCount(candidates(item)) },
-      ]} />
-      <div className="flex flex-wrap items-end justify-between gap-3 border-t pt-3">
-        <div className="flex min-w-0 flex-wrap items-end gap-3">
-          <ExaminerPanel panel={panel} photos={photos} label={`Examiners for ${title}, ${gradingDate(item.grading_date)}`} />
-          <GradingPanelDialog eventId={item.event_id} gradingLabel={gradingDate(item.grading_date)} panel={panel} onSaved={onPanelSaved} />
+
+      <GradingDetails>
+        <GradingDetail icon={CalendarDays} term="Date">{gradingDate(item.grading_date)}</GradingDetail>
+        <GradingDetail icon={Clock3} term="Time">{gradingTimeLabel(event?.starts_at ?? null, event?.ends_at ?? null, item.reporting_time)}</GradingDetail>
+        <GradingDetail icon={MapPin} term="Place">{venue?.name ?? 'Aikido Shinju-Kai Headquarters'}</GradingDetail>
+        <GradingDetail icon={Users} term="Students">{candidateCount(candidates(item))}</GradingDetail>
+      </GradingDetails>
+
+      <div className="space-y-3">
+        <ExaminerPanel panel={panel} photos={photos} label={`Examiners for ${title}, ${gradingDate(item.grading_date)}`} />
+        <GradingPanelDialog eventId={item.event_id} gradingLabel={gradingDate(item.grading_date)} panel={panel} onSaved={onPanelSaved} />
+      </div>
+
+      {warnings.length > 0 && (
+        <div className="space-y-2">
+          <p className={detailTermClass}><TriangleAlert className="size-4 shrink-0" aria-hidden="true" />Needs your attention</p>
+          <GradingWarnings warnings={warnings} quiet />
         </div>
-        <div className="flex flex-wrap items-center justify-end gap-3">
-          <GradingWarnings warnings={warningsFor(item, event, stage.key, now)} quiet />
-          <Link to={actionHref} className={gradingActionClass} data-grading-stage={stage.key}>
-            {action.label}
-            <span className="sr-only">: {title}, {gradingDate(item.grading_date)}</span>
-            <ChevronRight className="size-4" aria-hidden="true" />
-          </Link>
-        </div>
+      )}
+
+      <div className="flex justify-end">
+        <Link to={actionHref} className={gradingActionClass} data-grading-stage={stage.key}>
+          {action.label}
+          <span className="sr-only">: {title}, {gradingDate(item.grading_date)}</span>
+          <ChevronRight className="size-4" aria-hidden="true" />
+        </Link>
       </div>
     </Card>
   )
@@ -150,32 +144,25 @@ function PastGradings({ items }: { items: Schedule[] }) {
 }
 
 export default function GradingOpportunities() {
-  const [upcoming, setUpcoming] = useState<Schedule[]>([])
-  const [past, setPast] = useState<Schedule[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const { session } = useAuth()
+  const client = useQueryClient()
+  const { notify, feedbackDialog } = useFeedback()
   const [search, setSearch] = useSearchParams()
   const when = search.get('when') === 'past' ? 'past' : 'upcoming'
-  const now = singaporeToday()
+  const [now, setNow] = useState(singaporeToday)
+  useEffect(() => {
+    const timer = setInterval(() => setNow(singaporeToday()), 60_000)
+    return () => clearInterval(timer)
+  }, [])
+  const schedule = useQuery({
+    queryKey: gradingScheduleKey(session?.user.id, now),
+    queryFn: () => loadGradingSchedule(now),
+    enabled: Boolean(session),
+  })
+  const upcoming = schedule.data?.upcoming ?? []
+  const past = schedule.data?.past ?? []
   const photos = useExaminerPhotos([...upcoming, ...past].flatMap(item => (item.grading_panel_members ?? []).map(member => member.instructor_id)),
     ids => loadInstructorPhotos(supabase, ids))
-
-  const reload = useCallback(async () => {
-    const official = () => supabase.from('gradings').select(scheduleSelect).eq('official_schedule', true)
-    const [next, previous] = await Promise.all([
-      official().gte('grading_date', singaporeToday()).order('grading_date'),
-      official().lt('grading_date', singaporeToday()).order('grading_date', { ascending: false }).limit(20),
-    ])
-    if (next.error || previous.error) setError('Unable to load the official grading schedule.')
-    else {
-      setUpcoming((next.data ?? []) as Schedule[])
-      setPast((previous.data ?? []) as Schedule[])
-      setError('')
-    }
-    setLoading(false)
-  }, [])
-
-  useEffect(() => { void reload() }, [reload])
 
   const showWhen = (value: 'upcoming' | 'past') => setSearch(current => {
     const params = new URLSearchParams(current)
@@ -190,21 +177,22 @@ export default function GradingOpportunities() {
         { value: 'upcoming', text: upcoming.length ? `Upcoming (${upcoming.length})` : 'Upcoming' },
         { value: 'past', text: 'Past' },
       ]} />
-      {loading ? <p className="text-sm text-muted-foreground">Loading schedule…</p>
-        : error ? <RetryAlert message={error} onRetry={() => void reload()} />
+      {schedule.isPending ? <CardListSkeleton label="Loading schedule…" />
+        : schedule.isError ? <RetryAlert message={schedule.error.message} onRetry={() => void schedule.refetch()} />
         : when === 'upcoming' ? (
           upcoming.length === 0 ? (
             <EmptyState icon={CalendarDays} title="No upcoming gradings" description="Future grading dates will appear here when scheduled." />
           ) : (
             <section className="grid gap-4" aria-label="Upcoming gradings">
               {upcoming.map((item, index) => (
-                <ScheduleCard key={item.event_id} item={item} next={index === 0} now={now} photos={photos} onPanelSaved={() => void reload()} />
+                <ScheduleCard key={item.event_id} item={item} next={index === 0} now={now} photos={photos} onPanelSaved={() => { void client.invalidateQueries({ queryKey: gradingScheduleAccountKey(session?.user.id) }); void client.invalidateQueries({ queryKey: adminGradingKeys.day(item.event_id) }); notify({ title: 'Grading panel saved', description: 'The examiners for this grading have been updated.' }) }} />
               ))}
             </section>
           )
         ) : past.length ? <PastGradings items={past} /> : (
           <EmptyState icon={History} title="No past gradings yet" description="Finished gradings appear here so their results can be reviewed." />
         )}
+      {feedbackDialog}
     </div>
   )
 }

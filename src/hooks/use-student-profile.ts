@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '@/hooks/use-auth'
 import { studentPhotoUrl } from '@/lib/student-photo'
 import { supabase } from '@/lib/supabase'
@@ -116,6 +116,7 @@ export function useStudentProfile() {
   const userId = session?.user.id
   const accountName = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || profile?.email || ''
   const [result, setResult] = useState<{ userId: string; profile: Profile | null; error: boolean } | null>(null)
+  const [version, setVersion] = useState(0)
 
   useEffect(() => {
     if (!userId) return
@@ -129,12 +130,18 @@ export function useStudentProfile() {
     return () => {
       cancelled = true
     }
-  }, [userId, accountName])
+  }, [userId, accountName, version])
+
+  const reload = useCallback(() => {
+    setResult(null)
+    setVersion((v) => v + 1)
+  }, [])
 
   const current = result?.userId === userId ? result : null
   return {
     profile: current?.profile ?? null,
     loading: !!userId && !current,
     error: current?.error ?? false,
+    reload,
   }
 }

@@ -1,3 +1,4 @@
+import { randomUUID } from "@/lib/uuid";
 import { useEffect, useId, useRef, useState } from "react";
 import { Link } from "react-router";
 import {
@@ -58,7 +59,7 @@ function createMessage(
     role: ChatMessage["role"],
     content: string,
 ): ChatMessage {
-    return { id: crypto.randomUUID(), role, content, timestamp: new Date() };
+    return { id: randomUUID(), role, content, timestamp: new Date() };
 }
 
 function AssistantAvatar({ className }: { className?: string }) {
@@ -584,7 +585,7 @@ export default function FloatingChatbot({ userId }: { userId: string }) {
                     data-expanded-chat
                     initialFocus={inputRef}
                     finalFocus={false}
-                    className="flex h-[min(52rem,calc(100dvh-2rem-env(safe-area-inset-top)-env(safe-area-inset-bottom)))] max-w-[calc(100vw-2rem)] flex-col gap-0 overflow-hidden rounded-3xl bg-card p-0 text-card-foreground sm:max-w-4xl"
+                    className="flex flex-col gap-0 overflow-hidden rounded-3xl bg-card p-0 text-card-foreground"
                 >
                     {chatContent}
                 </DialogContent>

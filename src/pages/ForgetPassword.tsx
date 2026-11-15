@@ -6,19 +6,19 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { supabase } from '@/lib/supabase'
+import { useFeedback } from '@/hooks/use-feedback'
 import { Mail, ArrowLeft, ArrowRight } from 'lucide-react'
 
 export default function ForgetPassword() {
   const [email, setEmail] = useState('')
   const [pending, setPending] = useState(false)
   const [error, setError] = useState('')
-  const [success, setSuccess] = useState(false)
+  const { notify, feedbackDialog } = useFeedback()
 
   async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault()
     setPending(true)
     setError('')
-    setSuccess(false)
 
     try {
       const { error: authError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
@@ -26,7 +26,7 @@ export default function ForgetPassword() {
         redirectTo: `${window.location.origin}/update-password`,
       })
       if (authError) throw authError
-      setSuccess(true)
+      notify({ title: 'Reset link sent', description: 'Please check your inbox for a link to reset your password.' })
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : 'Unable to send reset link.')
     } finally {
@@ -85,14 +85,6 @@ export default function ForgetPassword() {
               </p>
             </div>
 
-            {success && (
-              <Alert className="mb-6 bg-green-50 text-green-800 border-green-200">
-                <AlertDescription>
-                  Reset link sent! Please check your inbox.
-                </AlertDescription>
-              </Alert>
-            )}
-
             {error && (
               <Alert variant="destructive" className="mb-6">
                 <AlertDescription>{error}</AlertDescription>
@@ -143,6 +135,7 @@ export default function ForgetPassword() {
           </div>
         </div>
       </div>
+      {feedbackDialog}
     </div>
   )
 }

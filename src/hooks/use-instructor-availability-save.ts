@@ -1,3 +1,4 @@
+import { randomUUID } from '@/lib/uuid'
 import { useEffect, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from './use-auth'
@@ -46,7 +47,7 @@ export function useInstructorAvailabilitySave(initial: AvailabilityRange, slotId
       let slot
       if (slotId) {
         if (!frozen.current) {
-          const base = { requestId: crypto.randomUUID(), expectedUserId: parseEntityId(userId, 'auth-user'), slotId, expected: { ...expected.current } }
+          const base = { requestId: randomUUID(), expectedUserId: parseEntityId(userId, 'auth-user'), slotId, expected: { ...expected.current } }
           frozen.current = kind === 'update' ? { ...base, kind, value: valueOf(range) } : { ...base, kind }
         }
         // Ambiguous failures retry the *exact* request, including its snapshot.

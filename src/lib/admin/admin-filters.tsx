@@ -1,13 +1,10 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 
-export type AdminDateRange = 30 | 90 | 180
 
 interface AdminFiltersValue {
   centreId: string
   setCentreId: (centreId: string) => void
-  dateRange: AdminDateRange
-  setDateRange: (range: AdminDateRange) => void
 }
 
 const STORAGE_KEY = 'fsdp-admin-centre'
@@ -24,7 +21,6 @@ function readStoredCentre(): string {
 
 export function AdminFiltersProvider({ children }: { children: ReactNode }) {
   const [centreId, setCentreId] = useState(readStoredCentre)
-  const [dateRange, setDateRange] = useState<AdminDateRange>(30)
 
   useEffect(() => {
     try {
@@ -36,8 +32,8 @@ export function AdminFiltersProvider({ children }: { children: ReactNode }) {
   }, [centreId])
 
   const value = useMemo(
-    () => ({ centreId, setCentreId, dateRange, setDateRange }),
-    [centreId, dateRange],
+    () => ({ centreId, setCentreId }),
+    [centreId],
   )
 
   return <AdminFiltersContext.Provider value={value}>{children}</AdminFiltersContext.Provider>

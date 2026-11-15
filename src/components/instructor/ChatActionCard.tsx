@@ -1,3 +1,4 @@
+import { randomUUID } from "@/lib/uuid";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Check, LoaderCircle, X } from "lucide-react";
@@ -39,7 +40,7 @@ export default function ChatActionCard({ action, userId }: { action: ChatAction;
             .find((item) => item.record.student_id === studentId);
         if (!entry) throw new Error("This student’s attendance is read-only or they are no longer on the roster.");
         await api.saveAttendance({
-            requestId: crypto.randomUUID(),
+            requestId: randomUUID(),
             expectedUserId: parseEntityId(userId, "auth-user"),
             eventId,
             scope: "student",

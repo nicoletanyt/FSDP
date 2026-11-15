@@ -25,7 +25,7 @@ import {
     PopoverTitle,
     PopoverTrigger,
 } from "@/components/ui/popover";
-import DatabaseGradeBadge from "@/components/instructor/DatabaseGradeBadge";
+import { DatabaseGradeBadge } from "@/components/shared/grade/GradeBadge";
 import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
 import GradingSignatureDialog from "@/components/instructor/GradingSignatureDialog";
 import GradingChecklistTable from "@/components/grading/GradingChecklistTable";
@@ -48,6 +48,7 @@ import {
 } from "@/lib/grading/format";
 import { useInstructorApi } from "@/lib/instructor/data-context";
 import { useInstructorQuery } from "@/hooks/use-instructor-data";
+import { useFeedback } from "@/hooks/use-feedback";
 import { useInstructorGradingBatch } from "@/hooks/use-instructor-grading-batch";
 import { parseEntityId } from "@/lib/instructor/adapters";
 import {
@@ -130,6 +131,7 @@ function GradingTable({
             item,
         ]),
     );
+    const { notify, feedbackDialog } = useFeedback();
     const batch = useInstructorGradingBatch({
         session,
         entries,
@@ -274,7 +276,10 @@ function GradingTable({
                                 <Button
                                     variant="outline"
                                     disabled={!canSave || batch.retryMode === "submit"}
-                                    onClick={() => void batch.save(false)}
+                                    onClick={async () => {
+                                        if (await batch.save(false))
+                                            notify({ title: "Draft saved", description: "Your grading draft has been saved. You can keep editing it." });
+                                    }}
                                 >
                                     {batch.pending && batch.retryMode !== "submit"
                                         ? "Saving…"
@@ -306,8 +311,14 @@ function GradingTable({
                 pending={batch.pending}
                 error={batch.error}
                 retrying={batch.retryMode === "submit"}
-                onSubmit={(signature) => batch.save(true, signature)}
+                onSubmit={async (signature) => {
+                    const ok = await batch.save(true, signature);
+                    if (ok)
+                        notify({ title: "Grading submitted", description: "Your grading batch has been submitted. No final grades have been assigned." });
+                    return ok;
+                }}
             />
+            {feedbackDialog}
             {day.isChief && gradingSession && examiners.length > 1 && (
                 <ExaminerPicker
                     examiners={examiners}
@@ -402,8 +413,8 @@ function GradingTable({
                                 groups.map((group) => (
                                     <div key={group.grade.id} className="space-y-3">
                                         {mixed && (
-                                            <h2 className="flex flex-wrap items-center gap-2 text-lg font-semibold">
-                                                {group.grade.label}
+                                            <h2 className="flex flex-wrap items-center gap-2 text-base font-medium">
+                                                <DatabaseGradeBadge grade={group.grade} showBeltLabel className="text-sm" />
                                                 <span className="text-sm font-normal text-muted-foreground">
                                                     {candidateCount(group.students.length)}
                                                 </span>
@@ -685,7 +696,7 @@ function GradingSessionBody({
         !query.data.day ||
         !query.data.reference ||
         !query.data.identity ? (
-        <h1 className="text-2xl font-semibold">Grading session not found</h1>
+        <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Grading session not found</h1>
     ) : (
         <GradingTable
             key={`${eventId}:${sessionId}`}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '@/hooks/use-auth'
 import { fetchDashboardSummary, type DashboardSummary } from '@/lib/student-dashboard'
 
@@ -11,6 +11,7 @@ export function useStudentDashboard() {
     summary: DashboardSummary | null
     error: boolean
   } | null>(null)
+  const [version, setVersion] = useState(0)
 
   useEffect(() => {
     if (!userId) return
@@ -21,7 +22,12 @@ export function useStudentDashboard() {
     return () => {
       cancelled = true
     }
-  }, [userId])
+  }, [userId, version])
+
+  const reload = useCallback(() => {
+    setResult(null)
+    setVersion((v) => v + 1)
+  }, [])
 
   // Ignore a result left over from a previously signed-in user.
   const current = result?.userId === userId ? result : null
@@ -30,5 +36,6 @@ export function useStudentDashboard() {
     summary: current?.summary ?? null,
     loading: !!userId && !current,
     error: current?.error ?? false,
+    reload,
   }
 }

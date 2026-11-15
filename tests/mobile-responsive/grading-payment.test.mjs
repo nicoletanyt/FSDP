@@ -101,14 +101,14 @@ test('5th Kyu stays $77 through application, review and Stripe redirect at 320â€
     await until(`document.querySelector('#target-grade')?.textContent.includes('Blue-Gold (5th Kyu)')`)
     assert.equal(await evaluate(`document.querySelector('select#target-grade')`), null)
     assert.match(await evaluate(`document.querySelector('#target-grade').textContent`), /55\.00/)
-    assert.match(await evaluate(`document.body.textContent`), /Current Rank: Blue \(6th Kyu\)/)
+    assert.match(await evaluate(`document.body.textContent`), /Current grade: Blue \(6th Kyu\)/)
     assert.equal(await evaluate(`document.documentElement.scrollWidth <= innerWidth`), true, `${width}px application`)
     if (width === 320 || width === 1440) {
       const screenshot = await send('Page.captureScreenshot', { format: 'png' })
       await writeFile(join(process.env.LOCALAPPDATA, 'Temp', 'opencode', `grading-application-${width}.png`), Buffer.from(screenshot.data, 'base64'))
     }
     assert.match(await evaluate(`document.body.textContent`), /77\.00/)
-    await evaluate(`Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Proceed to Payment')).click()`)
+    await evaluate(`Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Proceed to payment')).click()`)
     await until(`window.gradingCheckoutCalls?.some(c => c.action === 'checkout')`)
     const body = await evaluate(`window.gradingCheckoutCalls.find(c => c.action === 'checkout')`)
     assert.equal(body.action, 'checkout')
@@ -144,10 +144,21 @@ test('children follow the database children ladder, not the adult ladder', async
 })
 
 test('unlinked accounts cannot invent a current rank or pay', async () => {
+  // No student record means no membership: the page explains that instead of showing a rank or a pay button.
   await open(390, '?appRoute=%2Fgrading&missingStudent=1')
-  await until(`document.querySelector('[role="alert"]') !== null`)
-  assert.match(await evaluate(`document.querySelector('[role="alert"]').textContent`), /No student record is linked/)
-  assert.equal(await evaluate(`document.querySelector('#target-grade').textContent`), 'Unavailable')
+  await until(`document.body.textContent.includes('You need a membership first')`)
+  assert.equal(await evaluate(`document.querySelector('#target-grade')`), null)
+  assert.equal(await evaluate(`Array.from(document.querySelectorAll('button')).some(b => b.textContent.includes('Proceed to payment'))`), false)
+  assert.equal(await evaluate(`Array.from(document.querySelectorAll('a')).some(a => a.getAttribute('href') === '/apply-membership')`), true)
+})
+
+test('expired and pending members are told why they cannot apply', async () => {
+  await open(390, '?appRoute=%2Fgrading&membership=expired')
+  await until(`document.body.textContent.includes('Your membership has expired')`)
+  assert.equal(await evaluate(`document.querySelector('#target-grade')`), null)
+  await open(390, '?appRoute=%2Fgrading&membership=pending')
+  await until(`document.body.textContent.includes('isnâ€™t active yet')`)
+  assert.equal(await evaluate(`Array.from(document.querySelectorAll('a')).some(a => a.getAttribute('href') === '/apply-membership')`), false)
 })
 
 test('a checkout option for a skipped grade is not offered', async () => {
@@ -189,18 +200,18 @@ test('direct payment without an application cannot start Stripe checkout', async
   assert.equal(await evaluate(`window.gradingCheckoutCalls.length`), 0)
 })
 
-test('Proceed to Payment opens Stripe test checkout without an eligible formal session', async () => {
+test('Proceed to payment opens Stripe test checkout without an eligible formal session', async () => {
   for (const width of [320, 1440]) {
     await open(width, '?appRoute=%2Fgrading&empty=1')
     await until(`document.querySelector('#payment-preview-note') !== null`)
     assert.match(await evaluate(`document.body.textContent`), /Payment preview only/)
     assert.equal(await evaluate(`document.body.textContent.includes('Stripe test mode')`), false)
-    assert.equal(await evaluate(`document.querySelector('h2').textContent`), '1. Grading Details')
-    assert.equal(await evaluate(`Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Proceed to Payment')).disabled`), false)
+    assert.equal(await evaluate(`document.querySelector('h2').textContent`), 'Grading details')
+    assert.equal(await evaluate(`Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Proceed to payment')).disabled`), false)
     assert.equal(await evaluate(`document.documentElement.scrollWidth <= innerWidth`), true)
     const screenshot = await send('Page.captureScreenshot', { format: 'png' })
     await writeFile(join(process.env.LOCALAPPDATA, 'Temp', 'opencode', `grading-test-checkout-${width}.png`), Buffer.from(screenshot.data, 'base64'))
-    await evaluate(`Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Proceed to Payment')).click()`)
+    await evaluate(`Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Proceed to payment')).click()`)
     await until(`window.gradingCheckoutCalls.some(c => c.action === 'test-checkout')`)
     const body = await evaluate(`window.gradingCheckoutCalls.find(c => c.action === 'test-checkout')`)
     assert.equal(body.expected_amount, 5500)
@@ -216,20 +227,20 @@ test('test success is verified without claiming a formal application was submitt
   assert.match(await evaluate(`document.body.textContent`), /awaiting dojo eligibility review/)
   assert.equal(await evaluate(`document.body.textContent.includes('Application submitted:')`), false)
   await until(`document.body.textContent.includes('Payment confirmed:')`)
-  assert.equal(await evaluate(`Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Payment Confirmed')).disabled`), true)
+  assert.equal(await evaluate(`Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Payment confirmed')).disabled`), true)
 })
 
 test('previously recorded payments reload as paid and prevent repeat payment', async () => {
   await open(390, '?empty=1&savedDraft=1&appRoute=%2Fgrading')
   await until(`document.body.textContent.includes('Payment confirmed:')`)
   assert.match(await evaluate(`document.body.textContent`), /Blue-Gold \(5th Kyu\).*awaiting dojo eligibility review/)
-  assert.equal(await evaluate(`Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Payment Confirmed')).disabled`), true)
+  assert.equal(await evaluate(`Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Payment confirmed')).disabled`), true)
 })
 
 test('test checkout errors preserve a retry without pretending payment succeeded', async () => {
   await open(390, '?appRoute=%2Fgrading&empty=1&rpc=fail')
   await until(`document.querySelector('#payment-preview-note') !== null`)
-  await evaluate(`Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Proceed to Payment')).click()`)
+  await evaluate(`Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Proceed to payment')).click()`)
   await until(`document.querySelector('[role="alert"]') !== null`)
   assert.match(await evaluate(`document.querySelector('[role="alert"]').textContent`), /Unable to contact checkout/)
   assert.equal(await evaluate(`document.body.textContent.includes('payment confirmed')`), false)

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router'
 import QRCode from 'qrcode'
 import { CircleCheck, QrCode } from 'lucide-react'
 import {
@@ -96,6 +97,16 @@ export default function AttendanceQrCard() {
     if (next) void load()
   }
 
+  // "Show check-in QR" in the phone menu links here with #check-in.
+  const { hash, pathname, search } = useLocation()
+  const navigate = useNavigate()
+  useEffect(() => {
+    if (hash !== '#check-in') return
+    setOpen(true)
+    void load()
+    navigate({ pathname, search }, { replace: true })
+  }, [hash, pathname, search, navigate, load])
+
   const usable = qr?.status === 'ready' || qr?.status === 'checked_in'
   const label = failed
     ? { title: 'QR unavailable', hint: 'Refresh the page to try again' }
@@ -140,7 +151,7 @@ export default function AttendanceQrCard() {
             <DialogTitle className="text-xl font-semibold">Attendance QR</DialogTitle>
             <DialogDescription className="mt-2">
               {qr?.status === 'checked_in'
-                ? `You’re checked in to ${qr.className}. Enjoy class!`
+                ? `You’re checked in to ${qr.className}. Enjoy your class.`
                 : qr?.status === 'ready'
                   ? `Show this to your instructor to check in to ${qr.className}. The code changes every minute, so screenshots won’t work.`
                   : 'Check-in isn’t open right now.'}

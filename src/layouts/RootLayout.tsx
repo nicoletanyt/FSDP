@@ -1,12 +1,14 @@
 import { Suspense, useState } from 'react'
 import { Link, Outlet, useLocation, useMatch } from 'react-router'
 import { LayoutDashboard, LogIn, UserPlus } from 'lucide-react'
-import MobileNavigation from '@/components/MobileNavigation'
+import { PageSkeleton } from '@/components/shared/skeletons'
+import MobileNavigation from '@/components/shared/layout/MobileNavigation'
 import StudentNavigation from '@/components/student/StudentNavigation'
 import ThemeToggle from '@/components/theme-toggle'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/hooks/use-auth'
 import { dashboardPaths } from '@/lib/auth'
+import { pageWidth } from '@/lib/page-width'
 import { cn } from "@/lib/utils";
 
 export default function RootLayout() {
@@ -16,7 +18,6 @@ export default function RootLayout() {
   const { pathname } = useLocation()
   const isAdmin = pathname === '/admin' || pathname.startsWith('/admin/')
   const isAdminCalendar = pathname === '/admin/calendar'
-  const isGradingPayment = pathname === '/grading' || pathname === '/grading/payment'
   const isInstructorPortal = useMatch('/instructor/*')
   const isStudent = Boolean(session && profile?.role === 'student')
   const homePath =
@@ -64,12 +65,9 @@ export default function RootLayout() {
     return (
       <Suspense
         fallback={
-          <p
-            role="status"
-            className="mx-auto w-full p-6 text-muted-foreground lg:w-[70%] lg:px-0 lg:py-6"
-          >
-            Loading…
-          </p>
+          <div className="mx-auto w-full p-4 lg:w-[80%] lg:px-0 lg:py-6">
+            <PageSkeleton />
+          </div>
         }
       >
         <Outlet />
@@ -82,7 +80,7 @@ export default function RootLayout() {
       className={cn(
         'flex flex-col text-foreground',
         isAdminCalendar ? 'h-dvh overflow-hidden' : 'min-h-screen',
-        isAdmin ? 'bg-muted/30' : 'bg-background',
+        isAdmin || isStudent ? 'bg-muted/30' : 'bg-background',
       )}
     >
       {isStudent ? (
@@ -100,7 +98,7 @@ export default function RootLayout() {
             <header className="sticky top-0 z-40 hidden border-b border-border bg-background/90 backdrop-blur lg:block">
               <nav
                 aria-label="Main navigation"
-                className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-y-2 px-4 py-3 lg:gap-4 lg:px-6 lg:py-5"
+                className={cn(pageWidth, "flex flex-wrap items-center justify-between gap-y-2 px-4 py-3 lg:gap-4 lg:py-5")}
               >
                 <Link
                   to={homePath}
@@ -160,7 +158,7 @@ export default function RootLayout() {
               {error && (
                 <p
                   role="alert"
-                  className="mx-auto w-full px-4 pb-3 text-sm break-words text-destructive lg:w-[70%] lg:px-0"
+                  className={cn(pageWidth, "px-4 pb-3 text-sm break-words text-destructive")}
                 >
                   {error}
                 </p>
@@ -172,29 +170,18 @@ export default function RootLayout() {
       {isAdmin ? (
         <Suspense
           fallback={
-            <p
-              role="status"
-              className="px-4 py-12 text-muted-foreground sm:px-6"
-            >
-              Loading…
-            </p>
+            <div className="px-4 py-8 sm:px-6"><PageSkeleton /></div>
           }
         >
           <Outlet />
         </Suspense>
       ) : (
         <main
-          className={cn(
-            'mx-auto w-full',
-            isGradingPayment ? 'p-0' : 'p-6 lg:w-[70%] lg:px-0',
-            !isGradingPayment && (isStudent ? 'lg:py-8' : 'lg:py-12'),
-          )}
+          className={cn('p-6', pageWidth, isStudent ? 'lg:py-8' : 'lg:py-12')}
         >
           <Suspense
             fallback={
-              <p role="status" className="py-12 text-muted-foreground">
-                Loading…
-              </p>
+              <PageSkeleton />
             }
           >
             <Outlet />
@@ -203,14 +190,6 @@ export default function RootLayout() {
       )}
       {!isAdmin && (
         <div aria-hidden="true" className="h-24 shrink-0 lg:hidden" />
-      )}
-      {!isAdmin && !isStudent && (
-        <footer className="border-t border-border">
-          <div className="mx-auto flex w-full max-w-5xl flex-col gap-1 px-6 py-6 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-            <p>&copy; {new Date().getFullYear()} Aikido Shinju-Kai</p>
-            <p>FSDP project portal</p>
-          </div>
-        </footer>
       )}
     </div>
   )

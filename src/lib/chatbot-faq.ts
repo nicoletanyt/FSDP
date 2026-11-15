@@ -233,8 +233,8 @@ async function classes(): Promise<FaqAnswer> {
   if (error) throw error
   const lines = (data ?? []).map((c) => `• ${c.label}${c.description ? ` — ${c.description}` : ''}`)
   return {
-    text: `We run these classes:\n${lines.join('\n')}\n\nThe timetable shows which sessions suit your grade.`,
-    links: [{ label: 'Class timetable', to: '/classes' }],
+    text: `We run these classes:\n${lines.join('\n')}\n\nThe Classes page marks the classes recommended for your grade.`,
+    links: [{ label: 'Browse classes', to: '/classes' }],
     followUps: ['enrol', 'membership'],
   }
 }
@@ -243,12 +243,12 @@ function enrol(): FaqAnswer {
   return {
     text: [
       'To enrol in a class:',
-      '1. Open the Classes tab to see the timetable.',
+      '1. Open the Classes tab to see upcoming sessions.',
       '2. Filter by centre, day or class type. Classes recommended for your grade are marked.',
       '3. Choose a session and select Enrol.',
-      '4. Your enrolled classes show up under Attendance and on your dashboard.',
+      '4. Your enrolled classes show up under My schedule and on your dashboard.',
     ].join('\n'),
-    links: [{ label: 'Class timetable', to: '/classes' }],
+    links: [{ label: 'Browse classes', to: '/classes' }],
     followUps: ['classes', 'membership'],
   }
 }

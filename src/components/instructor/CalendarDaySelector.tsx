@@ -7,7 +7,7 @@ export default function CalendarDaySelector({ date, today, onSelectDate }: {
     today: Date;
     onSelectDate: (day: Date) => void;
 }) {
-    return <div role="group" aria-label="Select agenda day" className="grid grid-cols-4 gap-2 sm:grid-cols-7 lg:hidden">
+    return <div role="group" aria-label="Select agenda day" className="grid grid-cols-4 gap-2 sm:grid-cols-7 min-[785px]:hidden">
         {weekDates(date).map((day) => {
             const selected = dateKey(day) === dateKey(date);
             const isToday = dateKey(day) === dateKey(today);

@@ -2,31 +2,31 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import {
     ChevronDown,
-    ChevronLeft,
-    ChevronRight,
     Clock3,
-    CalendarDays as CalendarDaysIcon,
-    Info,
-    List,
     MapPin,
     Plus,
     Users,
 } from "lucide-react";
 import ClassSessionDetails from "@/components/instructor/ClassSessionDetails";
 import CoverInvitationDialog from "@/components/instructor/CoverInvitationDialog";
-import DayClassDetails from "@/components/instructor/DayClassDetails";
+import DayClassDetails from "@/components/shared/calendar/DayClassDetails";
 import SelectedClassIndicator from "@/components/instructor/SelectedClassIndicator";
 import CalendarTimeline from "@/components/instructor/CalendarTimeline";
 import CalendarDaySelector from "@/components/instructor/CalendarDaySelector";
+import CalendarToolbar from "@/components/shared/calendar/CalendarToolbar";
+import { useCalendarShortcuts } from "@/hooks/use-calendar-shortcuts";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { useInstructorCalendarRange, useInstructorSelectedEvent } from "@/hooks/use-instructor-class-queries";
 import { useInstructorPrefetch } from "@/hooks/use-instructor-prefetch";
 import { useAuth } from "@/hooks/use-auth";
+import { useWeekSpan } from "@/hooks/use-week-span";
+import { stepWeekWindow, visibleWeekDays, weeksCovering, windowLabel } from "@/lib/calendar-window";
+import { useFeedback } from "@/hooks/use-feedback";
 import { needsCalendarEventLookup } from "@/lib/instructor/calendar-queries";
 import { calendarClassStyle, calendarEventsForDate, calendarRange, calendarTimeLabel, rosterSizeLabel, singaporeClock } from "@/lib/instructor/calendar-view";
 import type { CalendarEventsForDate, CalendarViewEvent as CalendarEvent } from "@/lib/instructor/calendar-view";
 import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
-import { Drawer, DrawerBody, DrawerClose, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
+import ClassDetailsOverlay from "@/components/shared/calendar/ClassDetailsOverlay";
 import MobileInstructorCalendar from "@/components/instructor/MobileInstructorCalendar";
 import type { MobileCalendarView } from "@/components/instructor/MobileInstructorCalendar";
 import {
@@ -35,21 +35,6 @@ import {
 import InstructorAvailabilityEditor from "@/components/instructor/InstructorAvailabilityEditor";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Kbd } from "@/components/ui/kbd";
-import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@/components/ui/popover";
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuRadioGroup,
-    DropdownMenuRadioItem,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-    Tooltip,
-    TooltipContent,
-    TooltipProvider,
-    TooltipTrigger,
-} from "@/components/ui/tooltip";
 import type { AvailabilityRange, AvailabilitySlot } from "@/lib/instructor-availability";
 import { availabilityError, minutesTime } from "@/lib/instructor-availability";
 import {
@@ -62,7 +47,6 @@ import {
     monthDates,
     parseCalendarDate,
     weekDates,
-    weekLabel,
 } from "@/lib/instructor-calendar";
 import { cn } from "@/lib/utils";
 
@@ -217,7 +201,8 @@ function CalendarDays({
     view: "day" | "week";
     expandSelectedDay: boolean;
 }) {
-    const days = view === "day" ? [date] : weekDates(date);
+    const span = useWeekSpan();
+    const days = view === "day" ? [date] : visibleWeekDays(date, today, weekDates(date), span, addDays);
 
     return (
         <div
@@ -226,15 +211,15 @@ function CalendarDays({
                     ? "Daily class calendar"
                     : "Weekly class calendar"
             }
-            className="flex flex-col gap-3 lg:min-h-0 lg:flex-1"
+            className="flex flex-col gap-3 min-[785px]:min-h-0 min-[785px]:flex-1"
         >
             {view === "week" && (
                 <CalendarDaySelector date={date} today={today} onSelectDate={onSelectDate} />
             )}
             <div
                 className={cn(
-                    "flex flex-col rounded-xl lg:min-h-0 lg:flex-1 lg:flex-row lg:overflow-hidden",
-                    view === "week" && "border lg:divide-x",
+                    "flex flex-col rounded-xl min-[785px]:min-h-0 min-[785px]:flex-1 min-[785px]:flex-row min-[785px]:overflow-hidden",
+                    view === "week" && "border min-[785px]:divide-x",
                 )}
             >
                 {days.map((day) => {
@@ -256,11 +241,11 @@ function CalendarDays({
                                 month: "long",
                             })}
                             className={cn(
-                                "min-h-0 min-w-0 grow flex-col bg-card transition-[flex-basis,flex-grow,background-color,box-shadow] duration-200 ease-in-out motion-reduce:transition-none lg:shrink-0",
-                                isSelected ? "flex" : "hidden lg:flex",
+                                "min-h-0 min-w-0 grow flex-col bg-card transition-[flex-basis,flex-grow,background-color,box-shadow] duration-200 ease-in-out motion-reduce:transition-none min-[785px]:shrink-0",
+                                isSelected ? "flex" : "hidden min-[785px]:flex",
                                 isExpanded && view === "week"
-                                    ? "bg-accent/60 lg:grow-0 lg:basis-[clamp(300px,24vw,320px)]"
-                                    : "lg:grow lg:basis-0",
+                                    ? "bg-accent/60 min-[785px]:grow-0 min-[785px]:basis-[clamp(300px,24vw,320px)]"
+                                    : "min-[785px]:grow min-[785px]:basis-0",
                             )}
                             data-selected={isExpanded}
                         >
@@ -306,7 +291,7 @@ function CalendarDays({
                             )}
                             <div
                                 className={cn(
-                                    "lg:min-h-0 lg:flex-1 lg:overflow-y-auto",
+                                    "min-[785px]:min-h-0 min-[785px]:flex-1 min-[785px]:overflow-y-auto",
                                     view === "day"
                                         ? "grid auto-rows-max items-start gap-4 bg-muted/30 p-2 xl:grid-cols-2"
                                         : "space-y-3 p-3",
@@ -480,7 +465,7 @@ function CalendarMonth({
                                         }
                                         onClick={() => onToggleClass(event)}
                                         className={cn(
-                                            "h-auto min-h-11 w-full min-w-0 flex-col items-start gap-0 rounded border-0 px-1 py-0.5 text-left text-xs leading-tight whitespace-normal lg:min-h-5 lg:text-[11px] xl:flex-row xl:items-center xl:gap-1",
+                                            "h-auto min-h-11 w-full min-w-0 flex-col items-start gap-0 rounded border-0 px-1 py-0.5 text-left text-xs leading-tight whitespace-normal lg:min-h-5 lg:text-3xs xl:flex-row xl:items-center xl:gap-1",
                                             getEventStyle(event).card,
                                             expandedClassId === event.id &&
                                             "relative z-[1] pr-5 ring-2 ring-primary ring-offset-1 ring-offset-background",
@@ -509,7 +494,11 @@ function CalendarMonth({
 
 export default function InstructorDashboard() {
     const { session } = useAuth();
-    const isDesktop = useMediaQuery("(min-width: 1024px)");
+    // The side panel needs the 4+ day layout; the 3-day layout (785–1199px) uses the bottom sheet.
+    const isDesktop = useMediaQuery("(min-width: 1200px)");
+    const weekSpan = useWeekSpan();
+    // From 785px the toolbar and timeline are used; below it, the phone layout.
+    const wide = useMediaQuery("(min-width: 785px)");
     const [searchParams, setSearchParams] = useSearchParams();
     const [weekOverview, setWeekOverview] = useState(false);
     // Keep the chosen display in the same URL state as class selection. A route
@@ -524,7 +513,7 @@ export default function InstructorDashboard() {
         });
     }, [setSearchParams]);
     const [timelineFocusRequest, setTimelineFocusRequest] = useState(0);
-    const [mobileList, setMobileList] = useState(false);
+    const [mobileList, setMobileList] = useState(() => !window.matchMedia("(min-width: 785px)").matches);
     const classTriggerRef = useRef<HTMLElement | null>(null);
     const lastSelectedSession = useRef<CalendarEvent | null>(null);
     const [now, setNow] = useState(() => singaporeClock());
@@ -538,6 +527,7 @@ export default function InstructorDashboard() {
             ? requestedView
             : "week";
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const { notify, feedbackDialog } = useFeedback();
     const [selectedAvailabilityId, setSelectedAvailabilityId] = useState<string | null>(null);
     const [availabilityDialog, setAvailabilityDialog] = useState<{
         range: AvailabilityRange;
@@ -548,7 +538,8 @@ export default function InstructorDashboard() {
     const [resolvedSelectionDate, setResolvedSelectionDate] = useState<{ id: string; date: Date } | null>(null);
     const selectedDate = requestedDate ??
         (resolvedSelectionDate?.id === requestedId ? resolvedSelectionDate.date : today);
-    const range = calendarRange(selectedDate, view, isDesktop, mobileList);
+    const range = calendarRange(selectedDate, view, wide, mobileList,
+        weeksCovering(visibleWeekDays(selectedDate, today, weekDates(selectedDate), weekSpan, addDays), weekDates));
     const calendar = useInstructorCalendarRange(range);
     const canUseAvailability = calendar.canUseAvailability;
     const availability = calendar.data?.availability ?? [];
@@ -560,7 +551,7 @@ export default function InstructorDashboard() {
     }, [canUseAvailability]);
     const events = calendar.data?.events ?? [];
     const prefetch = useInstructorPrefetch({ selectedDate, today, range, events, ready: calendar.status === 'success',
-        weekView: view === 'week', isDesktop, mobileList });
+        weekView: view === 'week', isDesktop: wide, mobileList });
     const rangeSession = events.find(event => event.id === requestedId);
     const needsSelection = needsCalendarEventLookup(requestedId, Boolean(requestedDate), calendar.status, Boolean(rangeSession));
     const selection = useInstructorSelectedEvent(requestedId, needsSelection);
@@ -643,7 +634,10 @@ export default function InstructorDashboard() {
         selectRange({ date: addDays(date, 1), startTime: "08:00", endTime: "08:30" });
     }
 
-    function availabilitySaved(range: AvailabilityRange, id: string | null) {
+    function availabilitySaved(range: AvailabilityRange, id: string | null, kind: 'saved' | 'deleted') {
+        notify(kind === 'deleted'
+            ? { title: 'Availability deleted', description: `Your availability on ${fullDate(range.date)} has been removed.` }
+            : { title: availabilityDialog?.editingId ? 'Availability updated' : 'Availability added', description: `You are marked available on ${fullDate(range.date)}, ${formatTime(range.startTime)} – ${formatTime(range.endTime)}.` });
         updateSelection(range.date);
         setSelectedAvailabilityId(id);
         setAvailabilityDialog(null);
@@ -658,8 +652,8 @@ export default function InstructorDashboard() {
             );
             return;
         }
-        const nextDate = addDays(selectedDate, direction * 7);
-        const includesToday = weekDates(nextDate).some(
+        const nextDate = stepWeekWindow(selectedDate, direction === 1 ? 1 : -1, today, weekSpan, addDays);
+        const includesToday = visibleWeekDays(nextDate, today, weekDates(nextDate), weekSpan, addDays).some(
             (day) => dateKey(day) === dateKey(today),
         );
         updateSelection(includesToday ? today : nextDate, null, !includesToday);
@@ -673,56 +667,33 @@ export default function InstructorDashboard() {
         setSearchParams(next);
     }, [searchParams, selectedDateKey, setSearchParams]);
 
-    useEffect(() => {
-        function handleCalendarShortcut(event: KeyboardEvent) {
-            if (
-                event.defaultPrevented || event.repeat || event.isComposing ||
-                event.ctrlKey || event.metaKey || event.altKey || availabilityDialog
-            ) return;
-            const target = event.target;
-            if (target instanceof HTMLElement && (
-                target.isContentEditable || target.closest('input, textarea, select, [role="textbox"], [role="combobox"]')
-            )) return;
-            // Hidden overlays such as the closed chatbot stay mounted in the page.
-            const hasOpenOverlay = Array.from(document.querySelectorAll<HTMLElement>(
-                '[role="dialog"], [role="alertdialog"], [role="menu"]',
-            )).some((overlay) => {
-                if (overlay.closest('[hidden], [inert], [aria-hidden="true"], [data-closed]')) return false;
-                const style = window.getComputedStyle(overlay);
-                return overlay.getClientRects().length > 0 && style.visibility === "visible" && style.opacity !== "0";
+    useCalendarShortcuts({
+        disabled: Boolean(availabilityDialog),
+        onEscape: () => {
+            if (!expandedClassId) return false;
+            setSearchParams((params) => {
+                const next = new URLSearchParams(params);
+                next.set("date", selectedDateKey);
+                next.delete("session");
+                next.delete("class");
+                return next;
             });
-            if (hasOpenOverlay) return;
-
-            const key = event.key.toLowerCase();
-            const nextView = key === "w" ? "week" : key === "d" ? "day" : key === "m" ? "month" : null;
-            if (key === "escape" && expandedClassId) {
-                event.preventDefault();
-                setSearchParams((params) => {
-                    const next = new URLSearchParams(params);
-                    next.set("date", selectedDateKey);
-                    next.delete("session");
-                    next.delete("class");
-                    return next;
-                });
-            } else if (nextView) {
-                event.preventDefault();
-                setMobileList(false);
-                changeView(nextView);
-            } else if (key === "t" || key === "l") {
-                event.preventDefault();
-                setMobileList(key === "l");
-                updateDisplayMode(view === "day" ? "day" : "week", key === "t" ? "timeline" : "list");
-                if (view === "month") changeView("week");
-            }
-        }
-
-        window.addEventListener("keydown", handleCalendarShortcut);
-        return () => window.removeEventListener("keydown", handleCalendarShortcut);
-    }, [availabilityDialog, changeView, expandedClassId, selectedDateKey, setSearchParams, updateDisplayMode, view]);
+            return true;
+        },
+        onView: (nextView) => {
+            setMobileList(false);
+            changeView(nextView);
+        },
+        onDisplayMode: (mode) => {
+            setMobileList(mode === "list");
+            updateDisplayMode(view === "day" ? "day" : "week", mode);
+            if (view === "month") changeView("week");
+        },
+    });
 
     const heading =
         view === "week"
-            ? weekLabel(selectedDate)
+            ? windowLabel(visibleWeekDays(selectedDate, today, weekDates(selectedDate), weekSpan, addDays))
             : selectedDate.toLocaleDateString("en-GB", {
                 ...(view === "day"
                     ? { weekday: "long", day: "numeric" }
@@ -780,7 +751,7 @@ export default function InstructorDashboard() {
                 const row = event.target.closest<HTMLElement>('[data-prefetch-class]');
                 if (row && event.currentTarget.contains(row) && row.dataset.prefetchClass) prefetch.touchClass(row.dataset.prefetchClass);
             }}>
-            {!isDesktop ? <MobileInstructorCalendar
+            {!wide ? <MobileInstructorCalendar
                 date={selectedDate} now={now} view={mobileList ? "list" : view === "week" ? "multi-day" : view} slots={availability} focusRequest={timelineFocusRequest}
                 getEvents={getEvents} classCatalogue={calendar.data?.classTypes ?? []} catalogueStatus={catalogueStatus} content={calendarStatus ?? selectionStatus}
                 onSelectDate={selectDay} onSelectClass={calendarProps.onToggleClass} onSelectAvailability={selectAvailability}
@@ -789,148 +760,45 @@ export default function InstructorDashboard() {
                 onChangeView={(mode: MobileCalendarView) => { setMobileList(mode === "list"); if (mode !== "list") changeView(mode === "multi-day" ? "week" : mode); }}
             /> : <>
             <header className="shrink-0">
-                <h1 className="text-2xl font-semibold tracking-tight lg:text-3xl">
+                <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
                     Your calendar
                 </h1>
             </header>
             <section className="flex flex-col gap-4 lg:min-h-0 lg:flex-1">
-                <div className="flex shrink-0 flex-wrap items-center justify-between gap-4">
-                    <div className="flex min-w-0 w-full flex-wrap items-center gap-3 lg:w-auto lg:gap-4">
-                        <div
-                            role="group"
-                            aria-label={`${view[0].toUpperCase()}${view.slice(1)} navigation`}
-                            className="flex items-center gap-2"
-                        >
-                            <Button
-                                variant="outline"
-                                onClick={() => {
-                                    const now = singaporeClock();
-                                    setNow(now);
-                                    setTimelineFocusRequest(request => request + 1);
-                                    updateSelection(
-                                        new Date(
-                                            now.getFullYear(),
-                                            now.getMonth(),
-                                            now.getDate(),
-                                        ),
-                                    );
-                                }}
-                                className="mr-1 h-11 px-4 lg:h-10"
-                            >
-                                Today
-                            </Button>
-                            <Button
-                                variant="ghost"
-                                size="icon-lg"
-                                className="size-11 lg:size-10"
-                                aria-label={`Previous ${view}`}
-                                onClick={() => navigateDate(-1)}
-                            >
-                                <ChevronLeft aria-hidden="true" />
-                            </Button>
-                            <Button
-                                variant="ghost"
-                                size="icon-lg"
-                                className="size-11 lg:size-10"
-                                aria-label={`Next ${view}`}
-                                onClick={() => navigateDate(1)}
-                            >
-                                <ChevronRight aria-hidden="true" />
-                            </Button>
-                        </div>
-                        <h2 className="w-full text-sm font-medium lg:w-auto" aria-live="polite">
-                            {heading}
-                        </h2>
-                    </div>
-                    <div className="grid w-full grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-2 sm:flex sm:flex-wrap sm:gap-3 lg:w-auto">
-                        {canUseAvailability && <Button variant="outline" onClick={addAvailability} className="col-span-full h-11 w-full gap-2 px-4 sm:w-auto lg:h-10">
-                            <Plus aria-hidden="true" />Add Availability
-                        </Button>}
-                        <DropdownMenu>
-                            <DropdownMenuTrigger
-                                render={<Button variant="outline" className="h-11 min-w-0 justify-between gap-1 px-2 sm:min-w-28 sm:gap-3 sm:px-4 lg:h-10" />}
-                                aria-label={`Calendar date range: ${view}`}
-                            >
-                                {view[0].toUpperCase()}{view.slice(1)}
-                                <ChevronDown aria-hidden="true" />
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent className="p-1.5">
-                                <DropdownMenuRadioGroup value={view} onValueChange={changeView} aria-label="Calendar date range">
-                                    <DropdownMenuRadioItem value="day" closeOnClick aria-keyshortcuts="d" className="py-2.5 pr-4 pl-9">
-                                        Day<Kbd className="ml-auto" aria-hidden="true">D</Kbd>
-                                    </DropdownMenuRadioItem>
-                                    <DropdownMenuRadioItem value="week" closeOnClick aria-keyshortcuts="w" className="py-2.5 pr-4 pl-9">
-                                        Week<Kbd className="ml-auto" aria-hidden="true">W</Kbd>
-                                    </DropdownMenuRadioItem>
-                                    <DropdownMenuRadioItem value="month" closeOnClick aria-keyshortcuts="m" className="py-2.5 pr-4 pl-9">
-                                        Month<Kbd className="ml-auto" aria-hidden="true">M</Kbd>
-                                    </DropdownMenuRadioItem>
-                                </DropdownMenuRadioGroup>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                        {view !== "month" && <TooltipProvider>
-                            <DropdownMenu>
-                                <Tooltip>
-                                    <TooltipTrigger render={
-                                        <DropdownMenuTrigger
-                                            render={<Button variant="outline" className="h-11 min-w-0 justify-between gap-1 px-2 sm:min-w-28 sm:gap-3 sm:px-4 lg:h-10" />}
-                                            aria-label={`Calendar display mode: ${activeDisplayMode}`}
-                                        />
-                                    }>
-                                        {activeDisplayMode === "timeline" ? <CalendarDaysIcon aria-hidden="true" /> : <List aria-hidden="true" />}
-                                        {activeDisplayMode === "timeline" ? "Timeline" : "List"}
-                                        <ChevronDown aria-hidden="true" />
-                                    </TooltipTrigger>
-                                    <TooltipContent>Calendar display mode</TooltipContent>
-                                </Tooltip>
-                                <DropdownMenuContent className="p-1.5">
-                                    <DropdownMenuRadioGroup
-                                        aria-label="Calendar display mode"
-                                        value={activeDisplayMode}
-                                        onValueChange={(value) => {
-                                            if (value === "timeline" || value === "list") {
-                                                updateDisplayMode(view === "day" ? "day" : "week", value);
-                                            }
-                                        }}
-                                    >
-                                        <DropdownMenuRadioItem value="timeline" closeOnClick aria-keyshortcuts="t" className="gap-3 py-2.5 pr-4 pl-9">
-                                            <CalendarDaysIcon aria-hidden="true" className="size-4" />Timeline<Kbd className="ml-auto" aria-hidden="true">T</Kbd>
-                                        </DropdownMenuRadioItem>
-                                        <DropdownMenuRadioItem value="list" closeOnClick aria-keyshortcuts="l" className="gap-3 py-2.5 pr-4 pl-9">
-                                            <List aria-hidden="true" className="size-4" />List<Kbd className="ml-auto" aria-hidden="true">L</Kbd>
-                                        </DropdownMenuRadioItem>
-                                    </DropdownMenuRadioGroup>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-                        </TooltipProvider>}
-                        <Popover>
-                            <PopoverTrigger
-                                render={<Button variant="ghost" size="icon-lg" className="size-11 lg:size-10" />}
-                                aria-label="Calendar information"
-                                title="Calendar information"
-                            >
-                                <Info aria-hidden="true" className="size-5" />
-                            </PopoverTrigger>
-                            <PopoverContent className="max-h-[min(36rem,calc(100dvh-3rem))] w-96 overflow-y-auto">
-                                <PopoverTitle>Calendar legend</PopoverTitle>
-                                <p className="-mt-2 text-xs text-muted-foreground">Classes · Singapore time</p>
-                                {catalogueStatus}
-                                {calendar.status === 'success' && !calendar.data.classTypes.length && <p className="text-xs text-muted-foreground">No class types recorded.</p>}
-                                <ul className="space-y-3 text-xs">
-                                    {(calendar.data?.classTypes ?? []).map(type => (
-                                        <li key={type.id} className="grid gap-1 sm:grid-cols-[9.5rem_minmax(0,1fr)] sm:items-center sm:gap-3">
-                                            <span className={cn("w-fit rounded-full border px-2 py-1 text-[10px] uppercase", calendarClassStyle(type.id).badge)}>{type.label}</span>
-                                            <span className="text-muted-foreground">{type.description}</span>
-                                        </li>
-                                    ))}
-                                </ul>
-                                {canUseAvailability && <ul className="flex flex-wrap gap-4 border-t pt-3 text-xs text-muted-foreground">
-                                    <li className="flex items-center gap-2"><span aria-hidden="true" className="size-2 rounded-full bg-emerald-500" />Availability</li>
-                                </ul>}
-                            </PopoverContent>
-                        </Popover>
-                    </div>
-                </div>
+                <CalendarToolbar
+                    view={view}
+                    onViewChange={changeView}
+                    displayMode={activeDisplayMode}
+                    onDisplayModeChange={(mode) => updateDisplayMode(view === "day" ? "day" : "week", mode)}
+                    heading={heading}
+                    onToday={() => {
+                        const now = singaporeClock();
+                        setNow(now);
+                        setTimelineFocusRequest(request => request + 1);
+                        updateSelection(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
+                    }}
+                    onPrevious={() => navigateDate(-1)}
+                    onNext={() => navigateDate(1)}
+                    actions={canUseAvailability && <Button variant="outline" onClick={addAvailability} className="col-span-full h-11 w-full gap-2 px-4 sm:w-auto lg:h-10">
+                        <Plus aria-hidden="true" />Add Availability
+                    </Button>}
+                    legend={<>
+                        <p className="-mt-2 text-xs text-muted-foreground">Classes · Singapore time</p>
+                        {catalogueStatus}
+                        {calendar.status === 'success' && !calendar.data.classTypes.length && <p className="text-xs text-muted-foreground">No class types recorded.</p>}
+                        <ul className="space-y-3 text-xs">
+                            {(calendar.data?.classTypes ?? []).map(type => (
+                                <li key={type.id} className="grid gap-1 sm:grid-cols-[9.5rem_minmax(0,1fr)] sm:items-center sm:gap-3">
+                                    <span className={cn("w-fit rounded-full border px-2 py-1 text-2xs font-medium", calendarClassStyle(type.id).badge)}>{type.label}</span>
+                                    <span className="text-muted-foreground">{type.description}</span>
+                                </li>
+                            ))}
+                        </ul>
+                        {canUseAvailability && <ul className="flex flex-wrap gap-4 border-t pt-3 text-xs text-muted-foreground">
+                            <li className="flex items-center gap-2"><span aria-hidden="true" className="size-2 rounded-full bg-emerald-500" />Availability</li>
+                        </ul>}
+                    </>}
+                />
                 <div className={cn(
                     "flex flex-col lg:min-h-0 lg:flex-1",
                     showSidePanel && "lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:grid-rows-1 lg:gap-3 lg:overflow-hidden",
@@ -951,7 +819,7 @@ export default function InstructorDashboard() {
                             onSelectAvailability={selectAvailability}
                             onSelectRange={canUseAvailability ? selectRange : undefined}
                             onSelectDate={selectDay}
-                            isDesktop={isDesktop}
+                            isDesktop={wide}
                         />
                     ) : (
                         <CalendarDays
@@ -988,17 +856,13 @@ export default function InstructorDashboard() {
                 </div>
             </section>
             </>}
-            {!isDesktop && <Drawer open={Boolean(expandedClassId)} onOpenChange={(open) => { if (!open) updateSelection(selectedDate); }}>
-                <DrawerContent finalFocus={() => classTriggerRef.current?.isConnected ? classTriggerRef.current : document.querySelector<HTMLElement>('[data-mobile-calendar] button')}>
-                    <DrawerHeader>
-                        <div className="min-w-0"><DrawerTitle className="text-[18px] font-semibold">{lastSelectedSession.current?.type === "grading" ? "Grading session details" : "Class details"}</DrawerTitle><DrawerDescription className="text-[13px] text-muted-foreground">{lastSelectedSession.current?.date.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</DrawerDescription></div>
-                        <DrawerClose render={<Button variant="ghost" className="h-11 rounded-full px-3 text-[15px] text-primary" />}>Done</DrawerClose>
-                    </DrawerHeader>
-                    <DrawerBody className="pb-[max(1rem,env(safe-area-inset-bottom))]">
-                        {lastSelectedSession.current && <EventCard key={lastSelectedSession.current.id} event={lastSelectedSession.current} layout="panel" expanded onToggle={() => updateSelection(selectedDate)} />}
-                    </DrawerBody>
-                </DrawerContent>
-            </Drawer>}
+            {!isDesktop && <ClassDetailsOverlay open={Boolean(expandedClassId)} onClose={() => updateSelection(selectedDate)}
+                title={lastSelectedSession.current?.type === "grading" ? "Grading session details" : "Class details"}
+                description={lastSelectedSession.current?.date.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}
+                finalFocus={() => classTriggerRef.current?.isConnected ? classTriggerRef.current : document.querySelector<HTMLElement>('[data-mobile-calendar] button')}>
+                {lastSelectedSession.current && <EventCard key={lastSelectedSession.current.id} event={lastSelectedSession.current} layout="panel" expanded onToggle={() => updateSelection(selectedDate)} />}
+            </ClassDetailsOverlay>}
+            {feedbackDialog}
             {canUseAvailability && availabilityDialog && <InstructorAvailabilityEditor
                 key={`${session?.user.id}-${availabilityDialog.editingId ?? "new"}-${dateKey(availabilityDialog.range.date)}-${availabilityDialog.range.startTime}`}
                 initial={availabilityDialog.range}

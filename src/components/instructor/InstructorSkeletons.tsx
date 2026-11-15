@@ -3,11 +3,11 @@ import { Link } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import GradeBadge from './DatabaseGradeBadge'
+import { DatabaseGradeBadge as GradeBadge } from '@/components/shared/grade/GradeBadge'
 import BackToCalendarLink from './BackToCalendarLink'
 import type { StudentEntry } from '@/lib/instructor/types'
 
-type Variant = 'inline' | 'card' | 'directory' | 'directory-page' | 'roster' | 'history' | 'calendar' | 'calendar-page' | 'assessment' | 'grading' | 'grading-page' | 'student-detail' | 'profile' | 'check-in'
+type Variant = 'inline' | 'card' | 'directory' | 'directory-page' | 'roster' | 'history' | 'calendar' | 'calendar-page' | 'assessment' | 'grading' | 'grading-page' | 'student-detail' | 'profile' | 'check-in' | 'nfc'
 
 function Bar({ className }: { className: string }) {
   return <Skeleton aria-hidden="true" className={`motion-reduce:animate-none ${className}`} />
@@ -108,7 +108,7 @@ export function InstructorSkeleton({ variant = 'card', entry }: { variant?: Vari
   return <div role="status" aria-busy="true" aria-label="Loading instructor data" data-instructor-skeleton={variant}>
     <span className="sr-only">Loading instructor data…</span>
     {variant === 'student-detail' ? <StudentPreview entry={entry} />
-      : variant === 'grading-page' ? <section className="mx-auto w-full max-w-7xl space-y-6"><BackToCalendarLink /><GradingBody /></section>
+      : variant === 'grading-page' ? <section className="w-full space-y-6"><BackToCalendarLink /><GradingBody /></section>
       : variant === 'grading' ? <GradingBody />
       : variant === 'inline' ? <Bar className="h-4 w-40 max-w-full" />
       : variant === 'directory' ? <Rows count={5} />
@@ -118,6 +118,7 @@ export function InstructorSkeleton({ variant = 'card', entry }: { variant?: Vari
       : variant === 'directory-page' ? <div className="space-y-6"><Bar className="h-8 w-36" /><Bar className="h-11 w-full" /><Card className="gap-0 overflow-hidden py-0"><Rows count={5} /></Card></div>
       : variant === 'assessment' ? <div className="space-y-6"><Bar className="h-8 w-48" /><Bar className="h-4 w-64 max-w-full" /><DetailCard /><DetailCard /></div>
       : variant === 'history' ? <div className="space-y-5 lg:space-y-3"><DetailCard /><DetailCard /></div>
+      : variant === 'nfc' ? <div className="space-y-6"><Bar className="h-8 w-44" /><DetailCard /></div>
       : variant === 'profile' || variant === 'check-in' ? <div className="space-y-6"><Bar className="h-8 w-44" /><DetailCard /><DetailCard /></div>
       : <DetailCard />}
   </div>

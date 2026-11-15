@@ -1,3 +1,4 @@
+import { randomUUID } from '../uuid'
 import { QueryObserver } from '@tanstack/react-query'
 import type { QueryClient } from '@tanstack/react-query'
 import { queryGeneration } from '../query-generation'
@@ -183,7 +184,7 @@ class AttendanceCoordinator {
         if (!base) break
         const entries = intent.studentId ? base.entries.filter(entry => entry.record.student_id === intent.studentId) : base.entries
         this.acknowledged = false
-        this.frozen = { requestId: crypto.randomUUID(), expectedUserId: this.userId, eventId: this.eventId,
+        this.frozen = { requestId: randomUUID(), expectedUserId: this.userId, eventId: this.eventId,
           scope: intent.studentId ? 'student' : 'roster', status: intent.status, expected: entries.map(entry => attendanceSnapshot(entry.record)) }
         if (!await this.perform(this.frozen)) return
       }

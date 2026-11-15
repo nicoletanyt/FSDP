@@ -4,15 +4,21 @@ import {
   ChevronDown,
   Clock3,
   MapPin,
+  TriangleAlert,
   UserRound,
   Users,
 } from 'lucide-react'
-import AttendanceClassDetails from '@/components/admin/AttendanceClassDetails'
 import LiveClassDetails from '@/components/admin/LiveClassDetails'
 import { Button } from '@/components/ui/button'
+import { useMediaQuery } from '@/hooks/use-media-query'
+import { useWeekSpan } from '@/hooks/use-week-span'
+import { visibleWeekDays } from '@/lib/calendar-window'
 import { Card } from '@/components/ui/card'
+import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from '@/components/ui/popover'
+import type { CalendarDisplayMode as CalendarDisplay, CalendarRange as CalendarView } from '@/components/shared/calendar/CalendarToolbar'
 import type { AdminCalendarEvent } from '@/lib/admin/attendance-calendar'
 import {
+  addDays,
   dateKey,
   formatTime,
   fullDate,
@@ -27,12 +33,47 @@ import {
 import { getSessionStyle } from '@/lib/admin/session-styles'
 import { cn } from 'cn'
 
-export type CalendarView = 'day' | 'week' | 'month'
-export type CalendarDisplay = 'timeline' | 'list'
-
 type EventLayout = 'day' | 'week' | 'panel'
 
 const coverNeededCardStyle = 'border-red-400 bg-red-100 text-red-950 hover:border-red-400 hover:bg-red-100 hover:text-red-950 dark:border-red-700 dark:bg-red-950 dark:text-red-100 dark:hover:border-red-700 dark:hover:bg-red-950 dark:hover:text-red-100'
+
+// Busy days: show at most `max` classes side by side. Anything beyond that is
+// gathered into one "+N" chip per overlapping group, so blocks stay readable.
+const MAX_LANES = 2
+const CHIP_WIDTH = 26
+
+function capLanes(items: AdminCalendarEvent[], max: number) {
+  const laid = layoutTimelineItems(items)
+  const visible: { item: AdminCalendarEvent; lane: number; lanes: number; reserve: boolean }[] = []
+  const overflow: { start: number; end: number; items: AdminCalendarEvent[] }[] = []
+  let cluster: typeof laid = []
+  let clusterEnd = -1
+  const flush = () => {
+    if (!cluster.length) return
+    const hidden = cluster.filter((entry) => entry.lane >= max)
+    if (hidden.length) {
+      for (const entry of cluster) {
+        if (entry.lane < max) visible.push({ ...entry, lanes: max, reserve: true })
+      }
+      overflow.push({
+        start: Math.min(...cluster.map((entry) => timeMinutes(entry.item.startTime))),
+        end: Math.max(...cluster.map((entry) => timeMinutes(entry.item.endTime))),
+        items: hidden.map((entry) => entry.item),
+      })
+    } else {
+      for (const entry of cluster) visible.push({ ...entry, reserve: false })
+    }
+    cluster = []
+    clusterEnd = -1
+  }
+  for (const entry of laid) {
+    if (timeMinutes(entry.item.startTime) >= clusterEnd) flush()
+    cluster.push(entry)
+    clusterEnd = Math.max(clusterEnd, timeMinutes(entry.item.endTime))
+  }
+  flush()
+  return { visible, overflow }
+}
 
 function needsCover(event: AdminCalendarEvent) {
   return event.liveDetails?.unavailability?.status === 'open'
@@ -62,14 +103,12 @@ export function EventCard({
   onToggle,
   layout = 'week',
   detailsInPanel = false,
-  focusStudentId,
 }: {
   event: AdminCalendarEvent
   expanded: boolean
   onToggle: () => void
   layout?: EventLayout
   detailsInPanel?: boolean
-  focusStudentId?: string
 }) {
   const showSummary = layout !== 'week'
   return (
@@ -78,7 +117,7 @@ export function EventCard({
       className={cn(
         'gap-0 rounded-lg border py-0 text-inherit shadow-none ring-0 transition-[border-color,box-shadow] duration-200 hover:border-foreground/25 has-focus-visible:ring-2 has-focus-visible:ring-ring',
         eventCardStyle(event),
-        layout === 'panel' && 'h-full min-h-0',
+        layout === 'panel' && 'border-0 lg:h-full lg:min-h-0 lg:border',
         expanded &&
           (detailsInPanel
             ? 'relative z-10 border-primary ring-2 ring-primary ring-offset-2 ring-offset-background'
@@ -140,17 +179,15 @@ export function EventCard({
             </span>
           </span>
           <span className="flex items-center gap-1.5 text-2xs font-normal opacity-80">
-            <UserRound aria-hidden="true" className="size-3 shrink-0" />
-            <span className="min-w-0 truncate">{event.instructorName}</span>
-          </span>
-        </div>
-
-        {showSummary && (
-          <span className="flex items-center gap-1.5 text-2xs font-normal opacity-80">
             <MapPin aria-hidden="true" className="size-3 shrink-0" />
             <span className="min-w-0 wrap-break-word">{event.centreName}</span>
           </span>
-        )}
+        </div>
+
+        <span className="flex items-center gap-1.5 text-2xs font-normal opacity-80">
+          <UserRound aria-hidden="true" className="size-3 shrink-0" />
+          <span className="min-w-0 truncate">{event.instructorName}</span>
+        </span>
 
         {needsCover(event) &&
           <span className="w-fit rounded-md border border-destructive/30 bg-destructive/10 px-2 py-1 text-xs font-medium text-destructive">
@@ -166,8 +203,7 @@ export function EventCard({
 
       {!detailsInPanel &&
         (layout === 'panel' ? (
-          event.liveDetails ? <LiveClassDetails event={event} fillHeight /> :
-            <AttendanceClassDetails event={event} focusStudentId={focusStudentId} fillHeight />
+          <LiveClassDetails event={event} fillHeight />
         ) : (
           <div
             id={`attendance-details-${event.id}`}
@@ -181,8 +217,7 @@ export function EventCard({
             )}
           >
             <div className="min-h-0 overflow-hidden">
-              {event.liveDetails ? <LiveClassDetails event={event} /> :
-                <AttendanceClassDetails event={event} focusStudentId={focusStudentId} />}
+              <LiveClassDetails event={event} />
             </div>
           </div>
         ))}
@@ -222,7 +257,8 @@ function CalendarDays({
 }) {
   const selectedDateButton = useRef<HTMLButtonElement>(null)
   const selectedKey = dateKey(date)
-  const days = view === 'day' ? [date] : weekDates(date)
+  const span = useWeekSpan()
+  const days = view === 'day' ? [date] : visibleWeekDays(date, today, weekDates(date), span, addDays)
 
   useEffect(() => {
     selectedDateButton.current?.scrollIntoView({
@@ -242,7 +278,7 @@ function CalendarDays({
         <div
           role="group"
           aria-label="Select agenda day"
-          className="flex shrink-0 gap-2 overflow-x-auto pb-1 lg:hidden"
+          className="flex shrink-0 gap-2 overflow-x-auto pb-1 min-[785px]:hidden"
         >
           {days.map((day) => {
             const isSelected = dateKey(day) === selectedKey
@@ -285,8 +321,8 @@ function CalendarDays({
 
       <div
         className={cn(
-          'flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl lg:flex-row',
-          view === 'week' && 'border lg:divide-x',
+          'flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl min-[785px]:flex-row',
+          view === 'week' && 'border min-[785px]:divide-x',
         )}
       >
         {days.map((day) => {
@@ -303,11 +339,11 @@ function CalendarDays({
                 month: 'long',
               })}
               className={cn(
-                'min-h-0 min-w-0 grow flex-col bg-card transition-[flex-basis,flex-grow,background-color,box-shadow] duration-200 ease-in-out motion-reduce:transition-none lg:shrink-0',
-                isSelected ? 'flex' : 'hidden lg:flex',
+                'min-h-0 min-w-0 grow flex-col bg-card transition-[flex-basis,flex-grow,background-color,box-shadow] duration-200 ease-in-out motion-reduce:transition-none min-[785px]:shrink-0',
+                isSelected ? 'flex' : 'hidden min-[785px]:flex',
                 isExpanded && view === 'week'
-                  ? 'bg-accent/60 lg:grow-0 lg:basis-[clamp(300px,24vw,320px)]'
-                  : 'lg:grow lg:basis-0',
+                  ? 'bg-accent/60 min-[785px]:grow-0 min-[785px]:basis-[clamp(300px,24vw,320px)]'
+                  : 'min-[785px]:grow min-[785px]:basis-0',
               )}
               data-selected={isExpanded}
             >
@@ -491,7 +527,7 @@ function CalendarMonth({
                       aria-pressed={selected}
                       onClick={() => onToggleSession(event)}
                       className={cn(
-                         'h-auto min-h-5 w-full min-w-0 cursor-pointer flex-col items-start gap-0 rounded border-0 px-1 py-0.5 text-left text-[11px] leading-tight xl:flex-row xl:items-center xl:gap-1',
+                         'h-auto min-h-5 w-full min-w-0 cursor-pointer flex-col items-start gap-0 rounded border-0 px-1 py-0.5 text-left text-3xs leading-tight xl:flex-row xl:items-center xl:gap-1',
                          eventCardStyle(event),
                         selected &&
                           'relative z-[1] pr-5 ring-2 ring-primary ring-offset-1 ring-offset-background',
@@ -538,6 +574,9 @@ function CalendarTimeline({
   onToggleSession: (event: AdminCalendarEvent) => void
 }) {
   const isDay = view === 'day'
+  // Week columns are always narrow; a day only is on a phone. Wide days show every overlap.
+  const narrow = !useMediaQuery('(min-width: 1024px)')
+  const maxLanes = !isDay || narrow ? MAX_LANES : Infinity
   const timelineStart = isDay ? 0 : TIMELINE_START
   const timelineEnd = isDay ? 24 * 60 : TIMELINE_END
   const slotHeight = isDay ? 48 : 36
@@ -547,7 +586,8 @@ function CalendarTimeline({
     { length: (timelineEnd - timelineStart) / 30 },
     (_, index) => timelineStart + index * 30,
   )
-  const days = view === 'day' ? [date] : weekDates(date)
+  const span = useWeekSpan()
+  const days = view === 'day' ? [date] : visibleWeekDays(date, now, weekDates(date), span, addDays)
   const scrollRef = useRef<HTMLDivElement>(null)
   const headerRef = useRef<HTMLDivElement>(null)
   const focusDayRef = useRef<HTMLDivElement>(null)
@@ -620,14 +660,14 @@ function CalendarTimeline({
         <div
           className="grid"
           style={{
-            minWidth: view === 'week' ? 910 : undefined,
+            minWidth: view === 'week' && span === 7 ? 910 : undefined,
             gridTemplateColumns: `${isDay ? 56 : 64}px repeat(${days.length}, minmax(0, 1fr))`,
           }}
         >
           {!isDay && (
             <div
               ref={headerRef}
-              className="sticky top-0 left-0 z-40 border-r border-b bg-card p-2 text-[10px] text-muted-foreground"
+              className="sticky top-0 left-0 z-40 border-r border-b bg-card p-2 text-3xs text-muted-foreground"
             />
           )}
           {!isDay && days.map((day) => {
@@ -673,7 +713,7 @@ function CalendarTimeline({
             ).map((minute) => (
               <span
                 key={minute}
-                className="absolute right-2 text-[10px] text-muted-foreground tabular-nums"
+                className="absolute right-2 text-3xs text-muted-foreground tabular-nums"
                 style={{
                   top: (minute - timelineStart) * pixelsPerMinute,
                   transform:
@@ -723,7 +763,36 @@ function CalendarTimeline({
                       }}
                     />
                   ))}
-                  {layoutTimelineItems(items).map(({ item, lane, lanes }) => {
+                  {(() => {
+                    const { overflow } = capLanes(items, maxLanes)
+                    return overflow.map((group) => (
+                      <Popover key={`more-${group.start}`}>
+                        <PopoverTrigger
+                          aria-label={`${group.items.length} more ${group.items.length === 1 ? 'class' : 'classes'} at this time. Show list`}
+                          render={<button type="button" className="absolute z-10 flex items-start justify-center rounded-md border bg-muted pt-1 text-3xs font-semibold text-muted-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring" />}
+                          style={{
+                            top: (Math.max(timelineStart, group.start) - timelineStart) * pixelsPerMinute,
+                            height: (Math.min(timelineEnd, group.end) - Math.max(timelineStart, group.start)) * pixelsPerMinute,
+                            right: 2,
+                            width: CHIP_WIDTH - 4,
+                          }}
+                        >
+                          +{group.items.length}
+                        </PopoverTrigger>
+                        <PopoverContent className="w-72 gap-1 p-2">
+                          <PopoverTitle className="px-2 text-sm">More classes at this time</PopoverTitle>
+                          {group.items.map((item) => (
+                            <Button key={item.id} type="button" variant="ghost" className="h-auto w-full flex-col items-start gap-0.5 py-2 text-left"
+                              onClick={() => onToggleSession(item)}>
+                              <span className="font-medium">{item.name}</span>
+                              <span className="text-xs text-muted-foreground">{formatTime(item.startTime)} – {formatTime(item.endTime)}</span>
+                            </Button>
+                          ))}
+                        </PopoverContent>
+                      </Popover>
+                    ))
+                  })()}
+                  {capLanes(items, maxLanes).visible.map(({ item, lane, lanes, reserve }) => {
                     const start = Math.max(
                       timelineStart,
                       timeMinutes(item.startTime),
@@ -745,13 +814,13 @@ function CalendarTimeline({
                            eventCardStyle(item),
                           selected &&
                             'z-[15] ring-2 ring-primary ring-offset-2 ring-offset-card',
-                          isDay && 'rounded-lg px-2.5 py-[3px] text-[12px] leading-tight',
+                          isDay && 'rounded-lg px-2.5 py-[3px] text-2xs leading-tight',
                         )}
                         style={{
                           top: (start - timelineStart) * pixelsPerMinute,
                           height: (end - start) * pixelsPerMinute,
-                          left: `calc(${(lane * 100) / lanes}% + ${isDay ? 6 : 3}px)`,
-                          width: `calc(${100 / lanes}% - ${isDay ? 12 : 6}px)`,
+                          left: `calc((100% - ${reserve ? CHIP_WIDTH : 0}px) * ${lane / lanes} + ${isDay ? 6 : 3}px)`,
+                          width: `calc((100% - ${reserve ? CHIP_WIDTH : 0}px) / ${lanes} - ${isDay ? 12 : 6}px)`,
                         }}
                       >
                         {selected && (
@@ -763,29 +832,30 @@ function CalendarTimeline({
                             selected && 'pr-5',
                           )}
                         >
+                          {needsCover(item) && <TriangleAlert aria-hidden="true" className="mr-1 inline size-3 align-[-2px]" />}
                           {item.name}
                         </span>
-                        <span className="block text-[10px] leading-tight">
+                        <span className="block text-3xs leading-tight">
                           {formatTime(item.startTime)} –{' '}
                           {formatTime(item.endTime)}
                         </span>
                         {isDay && (
-                          <span className="flex max-w-full items-center gap-1 text-[10px] leading-tight opacity-80">
+                          <span className="flex max-w-full items-center gap-1 text-3xs leading-tight opacity-80">
                             <MapPin aria-hidden="true" className="size-3 shrink-0" />
                             <span className="truncate">{item.centreName}</span>
                           </span>
                         )}
                         {end - start >= 60 && !isDay && (
-                          <span className="mt-1 flex w-full flex-col gap-0.5 text-[10px] leading-tight opacity-80">
-                            <span className="min-w-0 truncate">
-                              {item.instructorName}
-                            </span>
-                            <span className="min-w-0 truncate">
-                              {item.rosterCount ?? item.roster.length}{' '}
-                              {(item.rosterCount ?? item.roster.length) === 1
-                                ? 'student'
-                                : 'students'}
-                            </span>
+                          <span className="mt-1 flex w-full flex-col gap-0.5 text-3xs leading-tight opacity-80">
+                            {item.instructorName !== 'Unassigned' && (
+                              <span className="min-w-0 truncate">{item.instructorName}</span>
+                            )}
+                            {(item.rosterCount ?? item.roster.length) > 0 && (
+                              <span className="min-w-0 truncate">
+                                {item.rosterCount ?? item.roster.length}{' '}
+                                {(item.rosterCount ?? item.roster.length) === 1 ? 'student' : 'students'}
+                              </span>
+                            )}
                           </span>
                         )}
                       </button>

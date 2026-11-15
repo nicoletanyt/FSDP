@@ -5,6 +5,7 @@ import { stripTypeScriptTypes } from 'node:module'
 // or instantiate the shared Supabase client in offline API/database tests.
 const sourceDirectory = new URL('../../src/lib/instructor/', import.meta.url)
 const errorsUrl = new URL('errors.ts', sourceDirectory).href
+const uuidUrl = new URL('../uuid.ts', sourceDirectory).href
 const moduleUrl = source => `data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(source)).toString('base64')}`
 const collectorUrl = moduleUrl((await readFile(new URL('page-collector.ts', sourceDirectory), 'utf8'))
   .replaceAll("'./errors'", JSON.stringify(errorsUrl)))
@@ -16,6 +17,7 @@ const decodersUrl = moduleUrl((await readFile(new URL('decoders.ts', sourceDirec
 // titles.ts only re-exports the shared module, so load the shared source directly.
 const titlesUrl = moduleUrl(await readFile(new URL('../../../supabase/functions/_shared/instructor-titles.ts', sourceDirectory), 'utf8'))
 const profileUrl = moduleUrl((await readFile(new URL('profile.ts', sourceDirectory), 'utf8'))
+  .replaceAll("'../uuid'", JSON.stringify(uuidUrl))
   .replaceAll("'./errors'", JSON.stringify(errorsUrl))
   .replaceAll("'./titles'", JSON.stringify(titlesUrl)))
 const gradingPanelsUrl = moduleUrl((await readFile(new URL('grading-panels.ts', sourceDirectory), 'utf8'))
