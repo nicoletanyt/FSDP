@@ -25,7 +25,16 @@ type Loaded = AttendanceQr & { deadline: number }
  * the database, only works for this student and class, and rotates every minute
  * so a forwarded screenshot quickly stops working.
  */
-export default function AttendanceQrCard() {
+export type AttendanceQrState = AttendanceQr['status'] | 'loading' | 'failed'
+
+export default function AttendanceQrCard({ compact = false, hideUnavailable = false, onStatus }: {
+  /** A single-row button (dashboard card) instead of the large tile. */
+  compact?: boolean
+  /** Show nothing while loading or when there is no class to check in to today. */
+  hideUnavailable?: boolean
+  /** Reports the check-in state so the page can rebalance its own actions. */
+  onStatus?: (status: AttendanceQrState) => void
+} = {}) {
   const [open, setOpen] = useState(false)
   const [qr, setQr] = useState<Loaded | null>(null)
   const [failed, setFailed] = useState(false)
@@ -107,6 +116,9 @@ export default function AttendanceQrCard() {
     navigate({ pathname, search }, { replace: true })
   }, [hash, pathname, search, navigate, load])
 
+  const state: AttendanceQrState = failed ? 'failed' : qr?.status ?? 'loading'
+  useEffect(() => { onStatus?.(state) }, [onStatus, state])
+  const hidden = hideUnavailable && ['loading', 'failed', 'unavailable', 'none'].includes(state)
   const usable = qr?.status === 'ready' || qr?.status === 'checked_in'
   const label = failed
     ? { title: 'QR unavailable', hint: 'Refresh the page to try again' }
@@ -129,20 +141,29 @@ export default function AttendanceQrCard() {
             type="button"
             disabled={!usable}
             className={cn(
-              'grid w-full place-items-center rounded-xl border border-dashed p-5 text-center transition focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed',
-              usable
-                ? 'min-h-40 border-primary/50 bg-primary/5 text-primary hover:bg-primary/10'
-                : 'min-h-24 border-border bg-muted/50 text-muted-foreground',
+              'w-full rounded-xl border transition focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed',
+              compact
+                ? 'flex min-h-14 items-center gap-3 px-3 py-2.5 text-left'
+                : 'grid place-items-center border-dashed p-5 text-center',
+              hidden && 'hidden',
+              compact && qr?.status === 'ready'
+                // The live code is the most urgent action in a compact card.
+                ? 'border-primary bg-primary text-primary-foreground hover:bg-primary/90'
+                : usable
+                ? cn('border-primary/50 bg-primary/5 text-primary hover:bg-primary/10', !compact && 'min-h-40')
+                : cn('border-border bg-muted/50 text-muted-foreground', !compact && 'min-h-24'),
             )}
           />
         }
       >
-        <span className="grid justify-items-center gap-2">
+        <span className={compact ? 'contents' : 'grid justify-items-center gap-2'}>
           {qr?.status === 'checked_in'
-            ? <CircleCheck className="size-8" aria-hidden="true" />
-            : <QrCode className="size-8" aria-hidden="true" />}
-          <span className="font-semibold">{label.title}</span>
-          <span className="text-sm">{label.hint}</span>
+            ? <CircleCheck className={cn('shrink-0', compact ? 'size-6' : 'size-8')} aria-hidden="true" />
+            : <QrCode className={cn('shrink-0', compact ? 'size-6' : 'size-8')} aria-hidden="true" />}
+          <span className={compact ? 'grid min-w-0' : 'contents'}>
+            <span className="font-semibold">{label.title}</span>
+            <span className="text-sm">{label.hint}</span>
+          </span>
         </span>
       </DialogTrigger>
       <DialogContent className="w-[calc(100%-2rem)] max-w-lg p-4 sm:max-w-lg lg:p-6">

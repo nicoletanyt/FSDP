@@ -8,6 +8,12 @@ import PageHeader from '@/components/shared/layout/PageHeader'
 import { buttonVariants } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { StatusBadge } from '@/components/shared/status/StatusBadge'
+import EligibilityChecklist from '@/components/grading/EligibilityChecklist'
+import { DatabaseGradeBadge, gradeFromId } from '@/components/shared/grade/GradeBadge'
+import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
+import { useAuth } from '@/hooks/use-auth'
+import { useGradingReadiness } from '@/hooks/use-grading-readiness'
 import { useStudentDashboard } from '@/hooks/use-student-dashboard'
 import { money } from '@/lib/format'
 import { classPassAudience, resolveMembershipType } from '@/lib/membership'
@@ -87,6 +93,49 @@ function More({ title, hint, children }: { title: string; hint?: string; childre
   )
 }
 
+/** The signed-in student's own checklist for their next grade (same rules instructors see). */
+function YourEligibility() {
+  const { profile } = useAuth()
+  const { rows, loading, error, retry } = useGradingReadiness(profile?.id)
+  if (loading) {
+    return (
+      <Card role="status" aria-label="Checking your grading eligibility" className="mt-6 gap-3 p-4">
+        <Skeleton className="h-5 w-48" />
+        <Skeleton className="h-24" />
+      </Card>
+    )
+  }
+  if (error) {
+    return (
+      <Card className="mt-6 gap-2 p-4">
+        <p className="text-muted-foreground">We couldn't check your grading eligibility.</p>
+        <Button variant="link" className="h-auto w-fit p-0" onClick={retry}>Try again</Button>
+      </Card>
+    )
+  }
+  // Non-members and students at the top of their ladder have no next grade to check.
+  if (!rows.length) return null
+  const met = rows.filter((row) => row.met).length
+  const eligible = met === rows.length
+  return (
+    <Card aria-labelledby="your-eligibility" className="mt-6 gap-3 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <h2 id="your-eligibility" className="flex flex-wrap items-center gap-2 font-semibold">
+          Your eligibility for
+          <DatabaseGradeBadge grade={gradeFromId(rows[0].target_grade_id)} />
+        </h2>
+        <StatusBadge tone={eligible ? 'success' : 'warning'}>
+          {eligible ? 'Eligible' : `${met} of ${rows.length} requirements met`}
+        </StatusBadge>
+      </div>
+      <EligibilityChecklist requirements={rows} compact />
+      <p className="text-sm text-muted-foreground">
+        Time and training sessions count from your last grading, or from joining if you haven't graded yet.
+      </p>
+    </Card>
+  )
+}
+
 export default function GradingRequirements() {
   // Junior members start on the children's ladder; everyone can still switch.
   const [track, setTrack] = useState<Track>(() => classPassAudience(resolveMembershipType()) === 'junior' ? 'children' : 'adult')
@@ -103,6 +152,8 @@ export default function GradingRequirements() {
         title="Grading requirements"
         actions={<Link to="/grading" className={buttonVariants({ variant: 'outline' })}>View grading applications</Link>}
       />
+
+      <YourEligibility />
 
       {/* Key facts */}
       <section aria-label="Key requirements" className="mt-6 grid gap-2 sm:grid-cols-3 sm:gap-3">

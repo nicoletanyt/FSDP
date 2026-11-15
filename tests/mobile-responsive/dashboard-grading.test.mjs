@@ -8,7 +8,7 @@ const chrome = process.env.CHROME_PATH ?? 'C:/Program Files/Google/Chrome/Applic
 const origin = process.env.FSDP_BASE_URL ?? 'http://127.0.0.1:5180'
 const temp = join(process.env.LOCALAPPDATA, 'Temp', 'opencode')
 
-test('dashboard grading stat card renders live-shaped draft, preview, submission, empty and failure states', async () => {
+test('dashboard grading quick action renders live-shaped draft, preview, submission, empty and failure states', async () => {
   for (const [scenario, width, expected] of [
     ['draft', 1440, /1 draft saved — not submitted/],
     ['paid', 1440, /1 payment confirmed — awaiting dojo review/],
@@ -25,11 +25,11 @@ test('dashboard grading stat card renders live-shaped draft, preview, submission
       { encoding: 'utf8', timeout: 30000, maxBuffer: 4 * 1024 * 1024 })
       assert.equal(result.status, 0, result.error?.message ?? result.stderr.slice(-1000))
       const anchors = result.stdout.match(/<a\b[^>]*href="\/grading"[^>]*>[\s\S]*?<\/a>/g) ?? []
-      const tile = anchors.find((anchor) => anchor.includes('Grading applications'))
-      assert.ok(tile, `Grading stat card missing for ${scenario}`)
+      const tile = anchors.find((anchor) => anchor.includes('Apply for grading'))
+      assert.ok(tile, `Grading quick action missing for ${scenario}`)
       assert.match(tile.replace(/<[^>]+>/g, ''), expected)
       if (scenario !== 'empty') assert.doesNotMatch(tile, /No pending actions/)
-      // The card's value is the number of saved or pending applications.
+      // The count pill is the number of saved or pending applications.
       if (['draft', 'paid', 'submitted'].includes(scenario)) assert.match(tile.replace(/<[^>]+>/g, ' '), /(^|\s)1(\s|$)/)
     } finally {
       await rm(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
