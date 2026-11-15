@@ -143,6 +143,8 @@ export async function handleRequest(request: Request): Promise<Response> {
             stripe_session: session.id,
             pass_id: expected.id,
             pass_title: expected.title,
+            // Use the signed payment event time, not a browser clock or retry time.
+            purchased_at: new Date(event.created * 1000).toISOString(),
             credits: expected.credits,
             unlimited: expected.unlimited,
             membership_type: expected.membershipType,

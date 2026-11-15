@@ -1,12 +1,13 @@
 import { Link, useOutletContext } from 'react-router'
-import { Plus, Ticket } from 'lucide-react'
+import { Plus, Ticket, TriangleAlert } from 'lucide-react'
 
 import { buttonVariants } from '@/components/student/button'
 import type { StudentContext } from '@/layouts/StudentLayout'
 
 export default function CreditBalanceCard() {
   const { creditAccount } = useOutletContext<StudentContext>()
-  const { credits, unlimited, loading, error, payment, retry } = creditAccount
+  const { credits, unlimited, loading, error, payment, retry, expiring } = creditAccount
+  const daysLeft = expiring ? Math.ceil((Date.parse(expiring.expiresAt) - Date.now()) / 86_400_000) : 0
   const display = loading ? 'Loading…' : error ? 'Unavailable' : unlimited ? 'Unlimited' : String(credits)
 
   return (
@@ -25,6 +26,9 @@ export default function CreditBalanceCard() {
             {!loading && !error && !unlimited && <span className="text-sm opacity-80">/ classes</span>}
           </div>
           <p className="mt-2 text-xs opacity-80">1 credit = 1 training session</p>
+          <Link to="/student/credits#my-passes" className="mt-2 inline-flex rounded text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-4">
+            View my passes & expiry
+          </Link>
           <div className="mt-2 max-w-md text-sm" role="status">
             {error || (payment === 'pending'
               ? 'Confirming your payment. Your balance will update automatically.'
@@ -49,6 +53,12 @@ export default function CreditBalanceCard() {
           Top Up
         </Link>
       </div>
+      {!loading && !error && expiring && daysLeft > 0 && daysLeft <= 21 && (
+        <p role="status" className="relative z-10 mt-4 flex items-start gap-2 rounded-lg bg-destructive px-3 py-2 text-sm font-medium text-white dark:text-destructive-foreground">
+          <TriangleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+          <span>Alert: {expiring.credits} {expiring.credits === 1 ? 'credit' : 'credits'} expiring in {daysLeft} {daysLeft === 1 ? 'day' : 'days'}!</span>
+        </p>
+      )}
     </div>
   )
 }
