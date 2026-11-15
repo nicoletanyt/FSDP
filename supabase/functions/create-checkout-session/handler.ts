@@ -80,9 +80,10 @@ export async function handleRequest(request: Request): Promise<Response> {
     }
 
     const stripe = getStripe()
-    const price = await stripe.prices.retrieve(requireEnv('STRIPE_MEMBERSHIP_PRICE_ID'))
-    if (!price.active || price.type !== 'one_time' || price.currency !== 'sgd' || !price.unit_amount || price.livemode) {
-      throw new Error('Membership price is not an active SGD test-mode one-time price.')
+    const price = await stripe.prices.retrieve(requireEnv('STRIPE_MEMBERSHIP_FEE_ID'))
+    if (!price.active || price.type !== 'one_time' || price.currency !== 'sgd' ||
+      price.unit_amount !== 6000 || price.livemode) {
+      throw new Error('Membership price must be an active SGD 60.00 test-mode one-time price.')
     }
 
     const db = adminClient()

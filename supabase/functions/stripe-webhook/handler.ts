@@ -106,7 +106,7 @@ export async function handleRequest(request: Request): Promise<Response> {
           if (pendingError) throw pendingError
           const expectedAmount = pending
             ? (pending.student_id === studentId ? pending.amount_cents : null)
-            : (await stripe.prices.retrieve(requireEnv('STRIPE_MEMBERSHIP_PRICE_ID'))).unit_amount
+            : (await stripe.prices.retrieve(requireEnv('STRIPE_MEMBERSHIP_FEE_ID'))).unit_amount
           if (verified.payment_status !== 'paid' || verified.currency !== 'sgd' ||
             !expectedAmount || verified.amount_total !== expectedAmount || !studentId ||
             studentId !== session.metadata.membership_student_id ||

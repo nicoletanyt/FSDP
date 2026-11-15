@@ -6,7 +6,7 @@ import { handleRequest as webhook } from '../stripe-webhook/handler.ts'
 const environment = {
   STRIPE_SECRET_KEY: 'sk_test_unit_test_only',
   STRIPE_WEBHOOK_SECRET: 'whsec_unit_test_only',
-  STRIPE_MEMBERSHIP_PRICE_ID: 'price_membership',
+  STRIPE_MEMBERSHIP_FEE_ID: 'price_membership',
   APP_URL: 'http://localhost:5173',
   SUPABASE_URL: 'https://example.supabase.co',
   SUPABASE_ANON_KEY: 'unit_test_anon',
@@ -40,7 +40,7 @@ function installFakes(state: {
     if (url.origin === 'https://api.stripe.com') {
       if (url.pathname === '/v1/prices/price_membership') {
         return Response.json({ id: 'price_membership', object: 'price', active: true, type: 'one_time',
-          currency: 'sgd', unit_amount: 8000, livemode: false, ...state.price })
+          currency: 'sgd', unit_amount: 6000, livemode: false, ...state.price })
       }
       if (url.pathname === '/v1/checkout/sessions' && request.method === 'POST') {
         return Response.json({ id: 'cs_test_membership', object: 'checkout.session',
@@ -48,7 +48,7 @@ function installFakes(state: {
       }
       if (url.pathname === '/v1/checkout/sessions/cs_test_membership') {
         return Response.json({ id: 'cs_test_membership', object: 'checkout.session', mode: 'payment',
-          payment_status: 'paid', amount_total: 8000, currency: 'sgd', client_reference_id: studentId,
+          payment_status: 'paid', amount_total: 6000, currency: 'sgd', client_reference_id: studentId,
           metadata: { membership_student_id: studentId }, ...state.session })
       }
     }
@@ -62,7 +62,7 @@ function installFakes(state: {
       if (url.pathname === '/rest/v1/rpc/finalize_membership_checkout') return new Response(null, { status: 204 })
       if (url.pathname === '/rest/v1/payments' && request.method === 'POST') return new Response(null, { status: 201 })
       if (url.pathname === '/rest/v1/payments' && request.method === 'GET') {
-        const row = state.pendingPayment === undefined ? { student_id: studentId, amount_cents: 8000 } : state.pendingPayment
+        const row = state.pendingPayment === undefined ? { student_id: studentId, amount_cents: 6000 } : state.pendingPayment
         return Response.json(row ? [row] : [])
       }
       if (url.pathname === '/rest/v1/payments' && request.method === 'DELETE') return new Response(null, { status: 204 })
@@ -152,7 +152,7 @@ Deno.test('membership checkout and activation', async (test) => {
       const pending = fakes.calls.find((c) => c.path === '/rest/v1/payments')!
       assert.deepEqual(JSON.parse(pending.body), {
         student_id: studentId, item: 'Membership', description: 'Membership fee',
-        amount_cents: 8000, currency: 'sgd', stripe_session_id: 'cs_test_membership',
+        amount_cents: 6000, currency: 'sgd', stripe_session_id: 'cs_test_membership',
       })
     })
 
@@ -189,9 +189,13 @@ Deno.test('membership checkout and activation', async (test) => {
       state.status = 'active'
       assert.equal((await checkout(checkoutRequest())).status, 409)
       reset()
-      state.price = { livemode: true }
-      assert.equal((await checkout(checkoutRequest())).status, 500)
-      assert.ok(!fakes.calls.some((c) => c.path === '/v1/checkout/sessions'))
+      for (const price of [{ livemode: true }, { unit_amount: 1000 }, { unit_amount: 8000 }]) {
+        reset()
+        state.price = price
+        assert.equal((await checkout(checkoutRequest())).status, 500)
+        assert.ok(!fakes.calls.some((c) => c.path === '/v1/checkout/sessions'))
+        assert.ok(!fakes.calls.some((c) => c.path.endsWith('submit_membership_application')))
+      }
     })
 
     await test.step('a verified paid membership session activates the student', async () => {
@@ -201,7 +205,7 @@ Deno.test('membership checkout and activation', async (test) => {
       const finalize = fakes.calls.filter((c) => c.path.endsWith('finalize_membership_checkout'))
       assert.equal(finalize.length, 1)
       assert.deepEqual(JSON.parse(finalize[0].body), {
-        student: studentId, stripe_session: 'cs_test_membership', paid_amount: 8000, paid_currency: 'sgd',
+        student: studentId, stripe_session: 'cs_test_membership', paid_amount: 6000, paid_currency: 'sgd',
       })
     })
 
@@ -221,7 +225,7 @@ Deno.test('membership checkout and activation', async (test) => {
 
     await test.step('a price change after checkout started still activates the student who paid', async () => {
       reset()
-      state.price = { unit_amount: 12000 } // the configured price moved on; this checkout was fixed at 8000
+      state.price = { unit_amount: 12000 } // the configured price moved on; this checkout was fixed at 6000
       assert.equal((await webhook(await signedEvent({ membership_student_id: studentId }))).status, 200)
       assert.equal(fakes.calls.filter((c) => c.path.endsWith('finalize_membership_checkout')).length, 1)
       assert.ok(!fakes.calls.some((c) => c.path === '/v1/prices/price_membership'))
@@ -240,7 +244,7 @@ Deno.test('membership checkout and activation', async (test) => {
 
     await test.step("a payment row belonging to someone else never activates this student", async () => {
       reset()
-      state.pendingPayment = { student_id: '00000000-0000-4000-8000-0000000000ff', amount_cents: 8000 }
+      state.pendingPayment = { student_id: '00000000-0000-4000-8000-0000000000ff', amount_cents: 6000 }
       assert.equal((await webhook(await signedEvent({ membership_student_id: studentId }))).status, 400)
       assert.ok(!fakes.calls.some((c) => c.path.endsWith('finalize_membership_checkout')))
     })

@@ -385,7 +385,7 @@ separate from the EmailJS transport template. A missing or invalid saved
 template blocks account creation. Never log or persist the generated password.
 
 Replace `YOUR_PROJECT_REF` with your Supabase project reference. Configure
-`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_MEMBERSHIP_PRICE_ID`,
+`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_MEMBERSHIP_FEE_ID`,
 `STRIPE_GRADING_FEE_ID`, `APP_URL`, `AUTH_ALLOWED_ORIGINS`,
 `EMAILJS_SERVICE_ID`, `EMAILJS_PUBLIC_KEY`, and `EMAILJS_EDITABLE_TEMPLATE_ID` in
 **Edge Functions → Secrets**, using the root `.env` as the source. If EmailJS
