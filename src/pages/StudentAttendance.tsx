@@ -240,13 +240,7 @@ export default function StudentAttendance() {
   }
 
   function rows(items: AttendanceEntry[], detail = false) {
-    if (!items.length) {
-      return (
-        <p className="py-5 text-sm text-muted-foreground">
-          No classes for this selection.
-        </p>
-      )
-    }
+    if (!items.length) return null
 
     return items.map(e => {
       const future =
@@ -510,7 +504,6 @@ export default function StudentAttendance() {
               <CardHeader><CardTitle>{prettyDate(selectedDate)}</CardTitle></CardHeader>
               <CardContent>
                 <div className="space-y-2">
-                  {dayEntries.length === 0 && <p className="text-sm text-muted-foreground">No classes for this selection.</p>}
                   {dayEntries.map(entryButton)}
                 </div>
               </CardContent>

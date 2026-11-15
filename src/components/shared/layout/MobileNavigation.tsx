@@ -180,15 +180,21 @@ export default function MobileNavigation({
                                             {accountLinks.map((link) => (
                                                 <NavLinkItem key={link.to} link={link} onNavigate={() => setOpen(false)} />
                                             ))}
+                                            <div className="flex min-h-12 items-center justify-between px-3">
+                                                <span className="text-[16px]">Appearance</span>
+                                                <ThemeToggle />
+                                            </div>
                                         </nav>
                                     )}
                                 </>
                             )}
                         </div>
-                        <div className="flex shrink-0 items-center justify-between border-t pt-4">
-                            <span className="text-[14px]">Appearance</span>
-                            <ThemeToggle />
-                        </div>
+                        {!accountLinks?.length && (
+                            <div className="flex shrink-0 items-center justify-between border-t pt-4">
+                                <span className="text-[14px]">Appearance</span>
+                                <ThemeToggle />
+                            </div>
+                        )}
                         {onSignOut && (
                             <div className="shrink-0 space-y-2">
                                 <Button

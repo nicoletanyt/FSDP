@@ -165,7 +165,6 @@ function AttendanceTimeline({
   return (
     <section aria-label={view === 'week' ? 'Weekly hourly timeline' : 'Daily hourly timeline'} className="min-w-0 space-y-3">
       <div ref={positionTimeline} className="relative h-[min(65dvh,46rem)] overflow-auto rounded-xl border bg-card lg:h-[clamp(24rem,calc(100dvh-15rem),56rem)]">
-        {!items.length && <p className="pointer-events-none absolute inset-x-0 top-20 z-20 mx-auto w-fit rounded-md border bg-card px-3 py-2 text-sm text-muted-foreground">No classes for this selection.</p>}
         <div className="grid" style={{ gridTemplateColumns: `2.75rem repeat(${days.length}, minmax(0, 1fr))` }}>
           <div className="sticky top-0 z-30 border-b bg-card" aria-hidden="true" />
           {days.map(day => (
