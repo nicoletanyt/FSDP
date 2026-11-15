@@ -59,6 +59,7 @@ Object.defineProperty(supabase, 'from', { value: (table: string) => {
   const query = { select: () => query, eq: () => query, abortSignal: () => query,
     maybeSingle: async () => ({ data: params.has('missingStudent') ? null : {
       current_grade_id: 'blue-6th-kyu', date_of_birth: params.has('child') ? '2020-01-01' : '2000-01-01',
+      membership_status: params.get('membership') ?? 'active',
     }, error: null }) }
   return query
 } })

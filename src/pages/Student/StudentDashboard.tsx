@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router";
-import { CircleCheck, ClipboardCheck, Presentation, UserCheck } from "lucide-react";
+import { CircleCheck, GraduationCap, UserCheck, Users } from "lucide-react";
 
 import AttendanceQrCard from "@/components/student/AttendanceQrCard";
 import PageHeader from "@/components/shared/layout/PageHeader";
@@ -141,7 +141,7 @@ function MemberDashboardView({ firstName, summary }: { firstName: string; summar
       : "Not set";
 
   return (
-    <section className="w-full">
+    <section className="flex w-full flex-col gap-6">
       <PageHeader
         title={`${greetingFor(new Date().getHours())}${firstName ? `, ${firstName}` : ""}`}
         description="Your training progress, upcoming classes and student services."
@@ -150,7 +150,8 @@ function MemberDashboardView({ firstName, summary }: { firstName: string; summar
       />
 
       {/* Key figures, each linking to its page */}
-      <section aria-label="Key figures" className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3">
+      {/* On phones the next class (and its check-in QR) comes first. */}
+      <section aria-label="Key figures" className="order-2 grid grid-cols-2 gap-2 sm:order-none sm:grid-cols-3 sm:gap-3">
         <StatCard
           label="Attendance"
           value={counts.attendanceRate === null ? "—" : `${counts.attendanceRate}%`}
@@ -158,13 +159,13 @@ function MemberDashboardView({ firstName, summary }: { firstName: string; summar
           icon={UserCheck}
           to="/timetable"
         />
-        <StatCard label="Classes booked" value={String(counts.classesBooked)} icon={Presentation} to="/classes" />
+        <StatCard label="Classes booked" value={String(counts.classesBooked)} icon={Users} to="/timetable" />
         <div className="col-span-2 sm:col-span-1">
         <StatCard
           label="Grading applications"
           value={grading.loading ? "—" : String(grading.badge)}
           detail={grading.status}
-          icon={ClipboardCheck}
+          icon={GraduationCap}
           tone={grading.badge ? "warning" : "default"}
           to="/grading"
         />
@@ -172,9 +173,9 @@ function MemberDashboardView({ firstName, summary }: { firstName: string; summar
       </section>
 
       {/* Overview */}
-      <section aria-label="Overview" className="mt-6 grid gap-4 xl:grid-cols-2">
+      <section aria-label="Overview" className="order-1 grid gap-4 sm:order-none xl:grid-cols-2">
         {/* Next class */}
-        <Card className="min-w-0 gap-4 p-5">
+        <Card id="check-in" className="min-w-0 scroll-mt-24 gap-4 p-5">
           <h2 className="text-lg font-semibold">Your next class</h2>
           {nextClass ? (
             <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_11rem] sm:items-end xl:grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_11rem]">
@@ -278,7 +279,7 @@ function MemberDashboardView({ firstName, summary }: { firstName: string; summar
         </Card>
       </section>
 
-      <div className="mt-6">
+      <div className="order-3 sm:order-none">
         <CreditBalanceCard />
       </div>
     </section>

@@ -20,6 +20,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/hooks/use-auth'
 import CreditBatchList from '@/components/student/CreditBatchList'
 import CreditBalanceCard from './CreditBalanceCard'
+import MembershipGate from '@/components/student/MembershipGate'
 
 const UNLIMITED_CREDITS = 9999
 
@@ -136,8 +137,9 @@ export default function StudentCredits() {
   if (checkoutState === 'success') return <Navigate to={`/dashboard?${searchParams}`} replace />
 
   return (
+    <MembershipGate title="Credits" feature="Buying class passes">
     <section className="w-full">
-      <PageHeader title={heading} description={description} />
+      <PageHeader title="Credits" description={description} />
 
       <div className="mt-4 flex flex-wrap items-center gap-2 text-sm">
           <StatusBadge tone="info" dot={false}>
@@ -174,7 +176,7 @@ export default function StudentCredits() {
       <CreditBatchList userId={profile?.id} />
 
       <section className="mt-8 space-y-4" aria-label="Class passes">
-        <h2 className="text-lg font-semibold">Buy a new pass</h2>
+        <h2 className="text-lg font-semibold">Buy {heading.toLowerCase()}</h2>
         <div className="grid gap-4 xl:grid-cols-2">
         {packages.map((pass) => (
           <Card
@@ -233,5 +235,6 @@ export default function StudentCredits() {
         All prices are in SGD. Secure payments handled by Stripe. Pass validity starts when payment is confirmed.
       </p>
     </section>
+    </MembershipGate>
   )
 }

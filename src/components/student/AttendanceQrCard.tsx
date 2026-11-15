@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router'
 import QRCode from 'qrcode'
 import { CircleCheck, QrCode } from 'lucide-react'
 import {
@@ -95,6 +96,16 @@ export default function AttendanceQrCard() {
     // Never show a code that may have rotated while the dialog was closed.
     if (next) void load()
   }
+
+  // "Show check-in QR" in the phone menu links here with #check-in.
+  const { hash, pathname, search } = useLocation()
+  const navigate = useNavigate()
+  useEffect(() => {
+    if (hash !== '#check-in') return
+    setOpen(true)
+    void load()
+    navigate({ pathname, search }, { replace: true })
+  }, [hash, pathname, search, navigate, load])
 
   const usable = qr?.status === 'ready' || qr?.status === 'checked_in'
   const label = failed

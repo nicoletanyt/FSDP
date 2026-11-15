@@ -1,5 +1,5 @@
 import { Link } from "react-router";
-import { Presentation } from "lucide-react";
+import { Users } from "lucide-react";
 
 import PageHeader from "@/components/shared/layout/PageHeader";
 import { StatusBadge, type BadgeTone } from "@/components/shared/status/StatusBadge";
@@ -45,7 +45,7 @@ export default function NonMemberDashboard({ firstName, status }: Props) {
       <section aria-label="Overview" className="mt-6">
         <Card className="min-h-72 items-center justify-center gap-4 p-5 py-12 text-center">
           <span className="grid size-14 place-items-center rounded-2xl bg-muted text-muted-foreground">
-            <Presentation className="size-7" strokeWidth={1.8} aria-hidden="true" />
+            <Users className="size-7" strokeWidth={1.8} aria-hidden="true" />
           </span>
           <p className="max-w-sm text-sm text-muted-foreground">
             {status === "pending"

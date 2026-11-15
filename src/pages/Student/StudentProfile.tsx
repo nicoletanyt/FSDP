@@ -1,23 +1,16 @@
 import { Link } from "react-router";
-import { ArrowRight, Receipt } from "lucide-react";
 
-import EmptyState from "@/components/shared/layout/EmptyState";
 import PageHeader from "@/components/shared/layout/PageHeader";
 import RetryAlert from "@/components/shared/layout/RetryAlert";
-import { CardListSkeleton, DetailSkeleton } from "@/components/shared/skeletons";
+import { DetailSkeleton } from "@/components/shared/skeletons";
 import { buttonVariants } from "@/components/ui/button";
 import ChangePasswordDialog from "@/components/profile/ChangePasswordDialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import PaymentStatusBadge from "@/components/student/PaymentStatusBadge";
-import { useAuth } from "@/hooks/use-auth";
-import { useStudentPayments } from "@/hooks/use-student-payments";
 import { useStudentProfile } from "@/hooks/use-student-profile";
-import { formatDate, money } from "@/lib/format";
+import { formatDate } from "@/lib/format";
 import { beltBackground, type Profile, type Standing } from "@/lib/student-profile";
 
 /* ---------- Helpers ---------- */
-const PREVIEW_COUNT = 5;
-
 const standingCopy: Record<Standing, { chip: string; dot: string; note: string }> = {
   Active: { chip: "Active", dot: "bg-emerald-300", note: "Your membership is active." },
   Pending: {
@@ -179,14 +172,11 @@ function MembershipDetails({ profile }: { profile: Profile }) {
 
 /* ---------- Page ---------- */
 export default function StudentProfile() {
-  const { session } = useAuth();
   const { profile, loading, error, reload } = useStudentProfile();
-  const { payments, loading: paymentsLoading, error: paymentsError, retry: retryPayments } = useStudentPayments(session?.user.id);
-  const recent = [...payments].sort((a, b) => b.date.localeCompare(a.date)).slice(0, PREVIEW_COUNT);
 
   return (
       <section className="w-full">
-        <PageHeader title="Profile" description="Your membership card and recent payments." />
+        <PageHeader title="Profile" description="Your membership card and account settings." />
 
         {loading && <div className="mt-6"><DetailSkeleton label="Loading your membership…" /></div>}
         {!loading && (error || !profile) && (
@@ -205,52 +195,7 @@ export default function StudentProfile() {
               <MembershipDetails profile={profile} />
             </section>
 
-            {/* Latest payments */}
-            <div className="mb-3 mt-8 flex items-center justify-between gap-3">
-              <h2 className="text-lg font-semibold">Recent payments</h2>
-              {payments.length > 0 && (
-                <Link to="/payments" className={buttonVariants({ variant: "outline", size: "sm", className: "gap-1.5" })}>
-                  See all
-                  <ArrowRight className="size-4" aria-hidden="true" />
-                </Link>
-              )}
-            </div>
-
-            {paymentsLoading ? (
-              <CardListSkeleton count={1} label="Loading payments…" />
-            ) : paymentsError ? (
-              <RetryAlert message={paymentsError} onRetry={retryPayments} />
-            ) : recent.length === 0 ? (
-              <EmptyState
-                icon={Receipt}
-                title="No payments yet"
-                description="Membership, grading and class pass payments will show up here once confirmed."
-              />
-            ) : (
-              <Card className="py-0">
-                <ul className="divide-y">
-                  {recent.map((p) => (
-                    <li key={p.id} className="flex items-center justify-between gap-3 px-4 py-3">
-                      <div className="min-w-0">
-                        <p className="truncate font-medium">{p.description}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {p.item} · {formatDate(p.date)} · {p.method}
-                        </p>
-                      </div>
-                      <div className="flex shrink-0 flex-col items-end gap-1">
-                        <span className="font-semibold tabular-nums">{money.format(p.amount)}</span>
-                        <PaymentStatusBadge status={p.status} />
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </Card>
-            )}
-            {payments.length > PREVIEW_COUNT && (
-              <p className="mt-2 text-xs text-muted-foreground">Showing the latest {PREVIEW_COUNT} of {payments.length} payments.</p>
-            )}
-
-            <Card className="mt-8">
+            <Card className="mt-6">
               <CardHeader>
                 <CardTitle>Account</CardTitle>
               </CardHeader>

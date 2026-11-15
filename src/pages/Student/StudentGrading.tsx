@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router'
 import { CheckCircle2, ShieldCheck, Info, Loader2 } from 'lucide-react'
 import { NativeSelect } from '@/components/admin/form-controls'
 import PageHeader from '@/components/shared/layout/PageHeader'
+import MembershipGate from '@/components/student/MembershipGate'
 import RetryAlert from '@/components/shared/layout/RetryAlert'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -21,7 +22,15 @@ import { getGradingQuote, getGradingCheckoutUrl, getGradingTestCheckoutUrl, grad
 type Readiness = ChecklistRequirement & { target_grade_id: string; target_grade_label: string }
 type ApplicationDraft = { id: string; target_grade_id: string; status: string; created_at: string; base_fee_cents: number }
 
-export default function GradingApplication() {
+export default function StudentGrading() {
+  return (
+    <MembershipGate title="Grading application" feature="Applying for grading">
+      <GradingApplication />
+    </MembershipGate>
+  )
+}
+
+function GradingApplication() {
   const { profile } = useAuth()
   const [params] = useSearchParams()
   const [options, setOptions] = useState<GradingCheckoutOption[]>([])

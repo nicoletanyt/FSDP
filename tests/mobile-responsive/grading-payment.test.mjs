@@ -144,10 +144,21 @@ test('children follow the database children ladder, not the adult ladder', async
 })
 
 test('unlinked accounts cannot invent a current rank or pay', async () => {
+  // No student record means no membership: the page explains that instead of showing a rank or a pay button.
   await open(390, '?appRoute=%2Fgrading&missingStudent=1')
-  await until(`document.querySelector('[role="alert"]') !== null`)
-  assert.match(await evaluate(`document.querySelector('[role="alert"]').textContent`), /No student record is linked/)
-  assert.equal(await evaluate(`document.querySelector('#target-grade').textContent`), 'Unavailable')
+  await until(`document.body.textContent.includes('You need a membership first')`)
+  assert.equal(await evaluate(`document.querySelector('#target-grade')`), null)
+  assert.equal(await evaluate(`Array.from(document.querySelectorAll('button')).some(b => b.textContent.includes('Proceed to payment'))`), false)
+  assert.equal(await evaluate(`Array.from(document.querySelectorAll('a')).some(a => a.getAttribute('href') === '/apply-membership')`), true)
+})
+
+test('expired and pending members are told why they cannot apply', async () => {
+  await open(390, '?appRoute=%2Fgrading&membership=expired')
+  await until(`document.body.textContent.includes('Your membership has expired')`)
+  assert.equal(await evaluate(`document.querySelector('#target-grade')`), null)
+  await open(390, '?appRoute=%2Fgrading&membership=pending')
+  await until(`document.body.textContent.includes('isn’t active yet')`)
+  assert.equal(await evaluate(`Array.from(document.querySelectorAll('a')).some(a => a.getAttribute('href') === '/apply-membership')`), false)
 })
 
 test('a checkout option for a skipped grade is not offered', async () => {

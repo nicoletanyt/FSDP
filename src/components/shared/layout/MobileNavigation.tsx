@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import { Check, LogOut, Menu } from "lucide-react";
 import { Link, useLocation } from "react-router";
@@ -25,9 +26,33 @@ export type MobileNavigationLink = {
     active: boolean;
 };
 
+function NavLinkItem({ link, onNavigate }: { link: MobileNavigationLink; onNavigate: () => void }) {
+    const { label, to, icon: Icon, active } = link;
+    return (
+        <Link
+            to={to}
+            onClick={onNavigate}
+            aria-current={active ? "page" : undefined}
+            className={cn(
+                "flex min-h-12 items-center gap-3 rounded-lg border-l-2 border-transparent px-3 py-2 text-[16px] outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring",
+                active &&
+                "border-primary bg-accent font-medium text-accent-foreground",
+            )}
+        >
+            <Icon aria-hidden="true" className="size-5 shrink-0" />
+            <span className="min-w-0 flex-1">{label}</span>
+            {active && (
+                <Check aria-hidden="true" className="size-4 shrink-0" />
+            )}
+        </Link>
+    );
+}
+
 export default function MobileNavigation({
     homeTo = "/",
     links,
+    accountLinks,
+    action,
     onSignOut,
     signingOut,
     error,
@@ -35,6 +60,10 @@ export default function MobileNavigation({
 }: {
     homeTo?: string;
     links: MobileNavigationLink[];
+    /** Shown under an "Account" heading, apart from the main links. */
+    accountLinks?: MobileNavigationLink[];
+    /** A time-sensitive shortcut shown above the links, e.g. today's check-in. */
+    action?: ReactNode;
     onSignOut?: () => Promise<void>;
     signingOut?: boolean;
     error?: string;
@@ -136,27 +165,24 @@ export default function MobileNavigation({
                                     Loading account…
                                 </p>
                             ) : (
-                                <nav aria-label={`${role} navigation`} className="grid gap-2">
-                                    {links.map(({ label, to, icon: Icon, active }) => (
-                                        <Link
-                                            key={to}
-                                            to={to}
-                                            onClick={() => setOpen(false)}
-                                            aria-current={active ? "page" : undefined}
-                                            className={cn(
-                                                "flex min-h-12 items-center gap-3 rounded-lg border-l-2 border-transparent px-3 py-2 text-[16px] outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring",
-                                                active &&
-                                                "border-primary bg-accent font-medium text-accent-foreground",
-                                            )}
-                                        >
-                                            <Icon aria-hidden="true" className="size-5 shrink-0" />
-                                            <span className="min-w-0 flex-1">{label}</span>
-                                            {active && (
-                                                <Check aria-hidden="true" className="size-4 shrink-0" />
-                                            )}
-                                        </Link>
-                                    ))}
-                                </nav>
+                                <>
+                                    {action && <div onClick={() => setOpen(false)}>{action}</div>}
+                                    <nav aria-label={`${role} navigation`} className="grid gap-2">
+                                        {links.map((link) => (
+                                            <NavLinkItem key={link.to} link={link} onNavigate={() => setOpen(false)} />
+                                        ))}
+                                    </nav>
+                                    {accountLinks && accountLinks.length > 0 && (
+                                        <nav aria-labelledby="mobile-account-heading" className="grid gap-2 border-t pt-4">
+                                            <h2 id="mobile-account-heading" className="px-3 text-[13px] font-medium text-muted-foreground">
+                                                Account
+                                            </h2>
+                                            {accountLinks.map((link) => (
+                                                <NavLinkItem key={link.to} link={link} onNavigate={() => setOpen(false)} />
+                                            ))}
+                                        </nav>
+                                    )}
+                                </>
                             )}
                         </div>
                         <div className="flex shrink-0 items-center justify-between border-t pt-4">
