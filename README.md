@@ -54,6 +54,7 @@ server secrets with `VITE_`.
 | `npm run test:functions` | Run Edge Function tests, including NFC authorization |
 | `npm run test:auth-db` | Run offline PostgreSQL role/RLS tests |
 | `npm run test:auth-seed` | Test the administrator seed without cloud access |
+| `npm run test:membership-db` | Run offline PostgreSQL tests for membership sign-up and activation |
 | `npm run seed:admin` | Create the development administrator using root `.env` |
 | `npm run seed:instructor-calendar -- --instructor-email EMAIL` | Add marked calendar test classes and event rosters for an existing instructor, in the current Singapore week |
 | `npm run seed:grading-sessions -- --yes` | **Delete every grading session** and create three upcoming ones (this week and next) with examiner panels |
@@ -299,7 +300,14 @@ node --test tests/mobile-responsive/chatbot.test.mjs
 
 ### NFC attendance (separate from QR check-in)
 
-The NFC URL opens `/instructor/nfc_checkin?tag=...`. This route is separate from
+On a supported Android Chrome device, open `/instructor/nfc_checkin` from the
+instructor navbar. Tap **Start scanning** to grant Web NFC permission the first
+time; subsequent visits auto-start if permission is already granted. Keep the
+page visible and phone unlocked, then tap successive tags without navigating.
+**Stop scanning** stops the foreground reader. Web NFC needs enabled NFC hardware,
+a secure context (HTTPS or localhost), and a supported browser. If Web NFC is
+unavailable or scanning fails, an existing URL chip can still open
+`/instructor/nfc_checkin?tag=...` as before. This route is separate from
 `/instructor/check-in`, the existing QR scanner. Tag URLs contain random bearer
 tokens; `public.student_nfc_tags` stores only SHA-256 hashes under the composite
 `(student_id, tag_id)` key with a unique `tag_id`. Deleting a tag row immediately
@@ -328,7 +336,12 @@ node --env-file=.env scripts/nfc-tags.mjs revoke SK-1006 TAG_TOKEN
 node --env-file=.env scripts/nfc-tags.mjs revoke-all SK-1006
 ```
 
-Write the entire printed URL as an NFC URI record. The URL is a credential; do
+Write the entire printed URL as an NFC URI record. The foreground reader only
+accepts URI records on the current site at `/instructor/nfc_checkin` with one
+valid `tag` parameter. Test on an actual Android phone: some devices may open
+URI chips at the OS level instead of handing them to the active Web NFC reader.
+If so, a future non-URL tag format may be needed for uninterrupted scans; do
+not rewrite existing tags until that behavior is verified. The URL is a credential; do
 not share it or commit it. Issuing another tag does **not** revoke existing tags.
 Use `revoke-all` if the missing tag's token is unknown. For temporary LAN-only
 phone testing, the function also permits exactly `http://192.168.1.13:5173`;
@@ -372,7 +385,7 @@ separate from the EmailJS transport template. A missing or invalid saved
 template blocks account creation. Never log or persist the generated password.
 
 Replace `YOUR_PROJECT_REF` with your Supabase project reference. Configure
-`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID`,
+`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_MEMBERSHIP_PRICE_ID`,
 `STRIPE_GRADING_FEE_ID`, `APP_URL`, `AUTH_ALLOWED_ORIGINS`,
 `EMAILJS_SERVICE_ID`, `EMAILJS_PUBLIC_KEY`, and `EMAILJS_EDITABLE_TEMPLATE_ID` in
 **Edge Functions → Secrets**, using the root `.env` as the source. If EmailJS
@@ -388,6 +401,7 @@ npx supabase@latest functions deploy create-checkout-session --project-ref YOUR_
 npx supabase@latest functions deploy stripe-webhook --project-ref YOUR_PROJECT_REF --use-api
 npx supabase@latest functions deploy send-grading-invitation --project-ref YOUR_PROJECT_REF --use-api
 npx supabase@latest functions deploy create-grading-checkout --project-ref YOUR_PROJECT_REF --use-api
+npx supabase@latest functions deploy create-credit-checkout --project-ref YOUR_PROJECT_REF --use-api
 ```
 
 Set `APP_URL` to the frontend origin for Checkout redirects and CORS. Configure
@@ -395,6 +409,24 @@ Stripe's test-mode webhook destination as
 `https://YOUR_PROJECT_REF.supabase.co/functions/v1/stripe-webhook` for
 `checkout.session.completed` and `checkout.session.async_payment_succeeded`.
 Store its signing secret as `STRIPE_WEBHOOK_SECRET` in Supabase.
+
+Credit purchases use `credit_accounts` (balance) and `credit_purchases` (one
+receipt per Stripe session). The verified webhook calls
+`finalize_credit_checkout` to save the receipt and increment the balance in one
+transaction. Re-delivering the same event cannot add credits twice. The student
+dashboard reads the account from Supabase, and after Checkout it waits for that
+session's receipt before showing payment confirmation. Deploy the frontend as
+well as the functions; older dashboards use a browser-local credit balance.
+
+`stripe-webhook` is shared by credit, membership, and grading payments. Preserve
+all three branches when merging/deploying it: deploying an older branch can
+acknowledge credit payments without topping up their accounts. Check
+`Credit purchase finalized` in function logs and the corresponding receipt row;
+the generic Stripe metadata flag `checkout_payment_verified` alone does not
+prove credits were granted. For a verified paid checkout missing its receipt,
+use Stripe's **Resend** event action after fixing the webhook; do not ask the
+student to purchase again. Run `node --test tests/credit-checkout-db.test.mjs`
+and the function tests before deployment.
 
 Create a **new** EmailJS template (keep the old one unchanged) with To
 `{{to_email}}`, BCC `{{bcc_emails}}`, Subject `{{email_subject}}`, and the body:
@@ -419,6 +451,29 @@ The All selection combines current open grading recipients (maximum 50 BCC
 addresses including the dummy); it refuses, rather than truncates, larger lists.
 Only a signed-in administrator can preview and explicitly confirm a request;
 saving wording or deploying never sends an invitation. An accepted request does
-not establish delivery to any recipient. `STRIPE_GRADING_FEE_ID` must be an active test-mode
-one-time price of SGD 60.00; only the verified Stripe webhook submits grading
-applications. The guest Checkout price remains separate.
+not establish delivery to any recipient. Grading checkout uses the database's
+`grade_requirements.fee_cents`, with the S$22 late fee quoted server-side; only
+the verified Stripe webhook submits formal grading applications. The guest
+Checkout price remains separate.
+
+When `VITE_STRIPE_PUBLISHABLE_KEY` is a test key and the student has no eligible
+session, **Proceed to Payment** offers a clearly labelled Stripe test checkout
+for the next grade's base fee. The server independently resolves the signed-in
+student's next grade and price, rejects live secret keys and verifies return
+sessions against their owner. These preview sessions never create formal
+applications, real-money payment records, membership activation or training records.
+Preview checkout now saves the form to `grading_application_drafts` before
+redirecting. The row contains the authenticated owner, student, current/target
+grades, track, fee, request ID and Stripe session. Verified preview payments
+atomically create a `grading_payment_receipts` record and move the request to
+`pending_review`. The dashboard shows “payment confirmed — awaiting dojo review”,
+not an unpaid draft. These receipts retain `livemode=false`; they are not counted
+as real-money payments or accepted grading-event applications. A paid request
+blocks another checkout for the same target grade. Legacy `preview_paid` flags
+must be reconciled against Stripe before they can claim a saved receipt.
+Saved drafts reload on `/grading`. Owners and administrators can read drafts;
+only server code can write them. Apply
+`20261113135904_grading_application_drafts.sql` and
+`20261113144249_grading_payment_receipts.sql`, deploy both
+`create-grading-checkout` and `stripe-webhook`, and rebuild the frontend with
+the test publishable key. Never enter real card information in test mode.

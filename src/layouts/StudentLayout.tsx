@@ -1,40 +1,24 @@
-import { matchPath, Outlet, useLocation } from 'react-router'
-import { CalendarSkeleton, CardListSkeleton } from '@/components/shared/skeletons'
-import { useState } from 'react'
+import { matchPath, Outlet, useLocation, useSearchParams } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/hooks/use-auth'
 import { useLiveStudentSchedule } from '@/lib/use-live-student-schedule'
-
-const CREDITS_STORAGE_KEY = 'student_credits'
+import { useStudentCredits } from '@/hooks/use-student-credits'
 
 export default function StudentLayout() {
   const { profile } = useAuth()
   const { pathname } = useLocation()
 
-  const [credits, setCredits] = useState(() => {
-    const saved = Number.parseInt(localStorage.getItem(CREDITS_STORAGE_KEY) ?? '0', 10)
-    return Number.isNaN(saved) ? 0 : saved
-  })
-
-  const addCredits = (amount: number) => {
-    setCredits((previous) => {
-      const next = previous + amount
-      localStorage.setItem(CREDITS_STORAGE_KEY, String(next))
-      return next
-    })
+  const [params] = useSearchParams()
+  const sessionId = params.get('checkout') === 'success' ? params.get('session_id') : null
+  const creditAccount = useStudentCredits(profile?.id, sessionId)
+  // Booking RPCs debit/refund batches in the same transaction as the class seat.
+  // Never simulate a separate browser deduction on top of that committed debit.
+  const creditContext = {
+    credits: creditAccount.credits,
+    creditAccount,
+    creditError: Boolean(creditAccount.error),
+    refreshCredits: async () => creditAccount.retry(),
   }
-
-  const deductCredit = () => {
-    if (credits <= 0) return false
-    setCredits((previous) => {
-      const next = Math.max(previous - 1, 0)
-      localStorage.setItem(CREDITS_STORAGE_KEY, String(next))
-      return next
-    })
-    return true
-  }
-
-  const creditContext = { credits, addCredits, deductCredit }
   if (!['/timetable', '/classes', '/classes/choose'].some(path => matchPath(path, pathname))) {
     return <Outlet context={creditContext} />
   }
@@ -43,16 +27,14 @@ export default function StudentLayout() {
 
 type CreditsContext = {
   credits: number
-  addCredits: (amount: number) => void
-  deductCredit: () => boolean
+  creditAccount: ReturnType<typeof useStudentCredits>
+  creditError: boolean
+  refreshCredits: () => Promise<unknown>
 }
 
 function StudentScheduleOutlet(creditContext: CreditsContext) {
-  const schedule = useLiveStudentSchedule()
-  const { pathname } = useLocation()
-  if (schedule.loading) return pathname.startsWith('/timetable')
-    ? <CalendarSkeleton label="Loading your timetable…" />
-    : <CardListSkeleton count={4} label="Loading classes…" />
+  const schedule = useLiveStudentSchedule(creditContext.creditAccount.retry)
+  if (schedule.loading) return <p role="status" className="text-sm text-muted-foreground">Loading class schedule…</p>
   if (schedule.error) return (
     <div role="alert" className="space-y-3">
       <p>{schedule.error}</p>

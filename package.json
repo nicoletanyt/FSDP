@@ -7,13 +7,14 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "check:functions": "deno check --no-lock supabase/functions/create-checkout-session/index.ts supabase/functions/stripe-webhook/index.ts supabase/functions/create-instructor/index.ts supabase/functions/send-grading-invitation/index.ts supabase/functions/create-grading-checkout/index.ts supabase/functions/nfc-check-in/index.ts supabase/functions/report-class-unavailability/index.ts supabase/functions/send-class-cover-test-invitation/index.ts supabase/functions/instructor-chat/index.ts",
-    "test:functions": "deno test --no-lock --allow-env supabase/functions/tests/",
+    "check:functions": "deno check --no-lock --node-modules-dir=none supabase/functions/create-checkout-session/index.ts supabase/functions/stripe-webhook/index.ts supabase/functions/create-instructor/index.ts supabase/functions/send-grading-invitation/index.ts supabase/functions/create-grading-checkout/index.ts supabase/functions/create-credit-checkout/index.ts supabase/functions/nfc-check-in/index.ts supabase/functions/report-class-unavailability/index.ts supabase/functions/send-class-cover-test-invitation/index.ts supabase/functions/instructor-chat/index.ts supabase/functions/send-membership-email/index.ts",
+    "test:functions": "deno test --no-lock --node-modules-dir=none --allow-env supabase/functions/tests/",
     "seed:admin": "node --env-file=.env scripts/seed-admin.mjs",
     "seed:instructor-calendar": "node --env-file=.env scripts/seed-instructor-calendar.mjs",
     "seed:grading-sessions": "node --env-file=.env scripts/seed-grading-sessions.mjs",
     "test:auth-db": "node --test tests/auth-db.test.mjs",
-    "test:auth-seed": "node --test tests/seed-admin.test.mjs"
+    "test:auth-seed": "node --test tests/seed-admin.test.mjs",
+    "test:membership-db": "node --test tests/membership-checkout.test.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
@@ -24,6 +25,7 @@
     "cn": "^0.5.0",
     "jsqr": "^1.4.0",
     "lucide-react": "^1.61.0",
+    "qrcode": "^1.5.4",
     "react": "^19.3.1",
     "react-day-picker": "^10.0.2",
     "react-dom": "^19.3.1",
@@ -39,6 +41,7 @@
     "@electric-sql/pglite": "^0.5.11",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^26.6.5",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",

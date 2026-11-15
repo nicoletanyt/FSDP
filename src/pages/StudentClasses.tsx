@@ -11,6 +11,7 @@ import { Link, useLocation, useOutletContext, useSearchParams } from 'react-rout
 import {
   ArrowLeft,
   CalendarDays,
+  Coins,
 } from 'lucide-react'
 import { Button, buttonVariants } from '@/components/student/button'
 import { Calendar } from '@/components/ui/calendar'
@@ -240,6 +241,18 @@ function SessionFilters({
   )
 }
 
+function isRecommendedForGrade(type: string, grade: string | null | undefined) {
+  if (!grade) return false
+  if (type === 'Mixed/Family') return true
+
+  const kyu = grade.match(/\b(\d+)(?:st|nd|rd|th)?\s+kyu\b/i)
+  const isDan = /\b(?:\d+(?:st|nd|rd|th)?|junior)\s+dan\b/i.test(grade)
+  const minimumKyu = type === 'Advanced' ? 1 : type === 'Intermediate' ? 4 : undefined
+
+  // Age-restricted classes cannot be recommended from grade alone.
+  return minimumKyu !== undefined && (isDan || (kyu !== null && Number(kyu[1]) <= minimumKyu))
+}
+
 export default function StudentClasses() {
   const { classes, schedule } = useOutletContext<StudentContext>()
 
@@ -286,8 +299,11 @@ export default function StudentClasses() {
       grouped.set(type, sessions)
     }
 
-    return [...grouped].sort(([left], [right]) => left.localeCompare(right))
-  }, [matching])
+    const recommended = (type: string) => Number(isRecommendedForGrade(type, schedule.grade))
+    return [...grouped].sort(([left], [right]) =>
+      recommended(right) - recommended(left) || left.localeCompare(right)
+    )
+  }, [matching, schedule.grade])
 
 
   return (
@@ -331,7 +347,14 @@ export default function StudentClasses() {
             return (
               <Card key={type} className="gap-5 py-6 sm:py-7">
                 <CardHeader>
-                  <CardTitle className="text-lg">{type}</CardTitle>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <CardTitle className="text-lg">{type}</CardTitle>
+                    {isRecommendedForGrade(type, schedule.grade) && (
+                      <span className="rounded-full bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
+                        Recommended for your grade
+                      </span>
+                    )}
+                  </div>
                   {sessions[0]?.level && <p className="text-sm text-muted-foreground">{sessions[0].level}</p>}
                 </CardHeader>
                 <CardContent>
@@ -400,7 +423,7 @@ export function StudentClassBooking() {
 
 function ClassBooking({ type, initialParams }: { type: string; initialParams: URLSearchParams }) {
   const { classes, schedule } = useOutletContext<StudentContext>()
-  const { credits, deductCredit } = useOutletContext<StudentContext>()
+  const { credits, creditAccount, creditError, refreshCredits } = useOutletContext<StudentContext>()
   const [params, setParams] = useState(initialParams)
   const [day, setDay] = useState('')
   const [pendingChange, setPendingChange] = useState<{ date: Date } | { params: URLSearchParams } | null>(null)
@@ -421,6 +444,8 @@ function ClassBooking({ type, initialParams }: { type: string; initialParams: UR
     ?? sessions[0]
 
   const busy = submitting || schedule.saving
+  const enrolmentCount = action?.kind === 'enroll' ? action.sessions.length : 0
+  const insufficientCredits = Boolean(!creditAccount.loading && !creditError && !creditAccount.unlimited && creditAccount.credits < enrolmentCount)
   const bookings = classes.filter(session => session.scheduled && schedule.isBooked(session.id))
   const conflictingIds = new Set(sessions
     .filter(session => bookings.some(booking => booking.id !== session.id && conflict(session, booking)))
@@ -498,7 +523,7 @@ function ClassBooking({ type, initialParams }: { type: string; initialParams: UR
     setActionError('')
     try {
       if (action.kind === 'enroll') {
-        if (credits < action.sessions.length) {
+        if (!creditAccount.loading && !creditError && !creditAccount.unlimited && credits < action.sessions.length) {
           setActionError('Top up your credits before enrolling in these classes.')
           return
         }
@@ -511,10 +536,11 @@ function ClassBooking({ type, initialParams }: { type: string; initialParams: UR
             failed.push(session)
             errors.push(`${sessionTime(session)} at ${session.centre}: ${error}`)
           } else {
-            deductCredit()
+            // The booking RPC already charged the earliest-expiring batch.
             completed.push(session.id)
           }
         }
+        await refreshCredits()
         setSelectedIds(ids => ids.filter(id => !completed.includes(id)))
         if (completed.length) {
           const count = completed.length
@@ -587,7 +613,7 @@ function ClassBooking({ type, initialParams }: { type: string; initialParams: UR
             </p>
           )}
           <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
-            <Link to="/student/credits" className="text-sm text-primary underline">{credits} credits available</Link>
+            <Link to="/student/credits" className="text-sm text-primary underline">{creditError ? 'Credit balance unavailable' : creditAccount.loading ? 'Loading credits…' : creditAccount.unlimited ? 'Unlimited pass' : creditAccount.credits + ' credits available'}</Link>
             <p role="status" className="text-sm text-muted-foreground">
               {selected.length} {selected.length === 1 ? 'class' : 'classes'} selected
             </p>
@@ -626,12 +652,25 @@ function ClassBooking({ type, initialParams }: { type: string; initialParams: UR
               </AlertDialogTitle>
               {action.kind === 'enroll' ? (
                 <>
-                  <AlertDialogDescription>{prettyDate(action.sessions[0].date)}</AlertDialogDescription>
+                  <AlertDialogDescription>{type} · {prettyDate(action.sessions[0].date)}</AlertDialogDescription>
                   <ul className="max-h-48 space-y-1 overflow-y-auto text-left text-sm">
                     {action.sessions.map(session => (
                       <li key={session.id}>{sessionTime(session)} · {session.centre}</li>
                     ))}
                   </ul>
+                  <div className="flex items-center justify-between gap-3 rounded-lg bg-muted px-3 py-2.5 text-sm">
+                    <span>Enrolment fee</span>
+                    <span className="inline-flex items-center gap-1.5 font-semibold text-primary">
+                      <Coins aria-hidden="true" className="size-4" />
+                      {creditAccount.unlimited ? 'Included in your pass' : enrolmentCount + (enrolmentCount === 1 ? ' credit' : ' credits')}
+                    </span>
+                  </div>
+                  {insufficientCredits && (
+                    <p className="text-sm text-destructive">
+                      {creditAccount.credits} credits available.{' '}
+                      <Link to="/student/credits" className="font-medium underline">Top up credits</Link>
+                    </p>
+                  )}
                 </>
               ) : (
                 <AlertDialogDescription>
@@ -645,7 +684,7 @@ function ClassBooking({ type, initialParams }: { type: string; initialParams: UR
             {actionError && <p role="alert" className="whitespace-pre-line rounded-md bg-destructive/10 p-3 text-sm text-destructive">{actionError}</p>}
             <AlertDialogFooter>
               <AlertDialogCancel disabled={busy} onClick={closeAction}>Back</AlertDialogCancel>
-              <AlertDialogAction onClick={confirm} disabled={busy}>
+              <AlertDialogAction onClick={confirm} disabled={busy || (action.kind === 'enroll' && insufficientCredits)}>
                 {busy ? 'Saving…' : action.kind === 'enroll'
                   ? 'Yes, enrol'
                   : action.kind === 'waitlist'

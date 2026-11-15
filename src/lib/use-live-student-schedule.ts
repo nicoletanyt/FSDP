@@ -28,7 +28,7 @@ const dayFormat = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Singapore',
 const timeFormat = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Singapore', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
 const statuses = { present: 'attended', absent: 'missed', late: 'late', excused: 'excused' } as const
 
-export function useLiveStudentSchedule() {
+export function useLiveStudentSchedule(onCreditChange?: () => void) {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
@@ -117,6 +117,9 @@ export function useLiveStudentSchedule() {
     } catch {
       return 'Could not update your booking. Try again.'
     } finally {
+      // Also refresh after ambiguous network errors: the server may have
+      // committed the debit/refund even if its response did not arrive.
+      onCreditChange?.()
       savingRef.current = false
       setSaving(false)
     }

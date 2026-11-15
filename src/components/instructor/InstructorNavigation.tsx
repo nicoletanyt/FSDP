@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router";
-import { CalendarDays, Nfc, ScanLine, ShieldCheck, UserCircle, Users } from "lucide-react";
+import { CalendarDays, ScanLine, ShieldCheck, UserCircle, Users } from "lucide-react";
 import logo from "@/assets/logo.png";
 import ThemeToggle from "@/components/theme-toggle";
 import InstructorAccountMenu from "@/components/instructor/InstructorAccountMenu";
@@ -13,8 +13,7 @@ import { useMyGradingPanels } from "@/hooks/use-my-grading-panels";
 const baseNavigation = [
     { label: "Calendar", to: "/instructor/calendar", icon: CalendarDays },
     { label: "Students", to: "/instructor/students", icon: Users },
-    { label: "QR Check-in", to: "/instructor/check-in", icon: ScanLine },
-    { label: "NFC Check-in", to: "/instructor/nfc_checkin", icon: Nfc },
+    { label: "Check-in", to: "/instructor/check-in", icon: ScanLine },
 ];
 // Shown only to instructors who sit on at least one grading panel.
 const gradingsLink = { label: "Gradings", to: "/instructor/gradings", icon: ShieldCheck };
@@ -38,7 +37,7 @@ export default function InstructorNavigation({ calendarTo }: { calendarTo: strin
         <>
         <MobileNavigation homeTo={calendarTo} links={[
             ...navigation.map(({ label, to, icon }) => ({ label, to: label === "Calendar" ? calendarTo : to, icon,
-                active: pathname === to || pathname.startsWith(`${to}/`) || (label === "Calendar" && isCalendarRelated) })),
+                active: pathname === to || pathname.startsWith(`${to}/`) || (label === "Check-in" && pathname === "/instructor/nfc_checkin") || (label === "Calendar" && isCalendarRelated) })),
             { label: "Profile", to: "/instructor/profile", icon: UserCircle, active: pathname === "/instructor/profile" },
         ]} onSignOut={handleSignOut} signingOut={signingOut} error={error} />
         <header className="hidden shrink-0 border-b bg-background lg:block">
@@ -75,6 +74,7 @@ export default function InstructorNavigation({ calendarTo }: { calendarTo: strin
                         active:
                             pathname === to ||
                             pathname.startsWith(`${to}/`) ||
+                            (label === "Check-in" && pathname === "/instructor/nfc_checkin") ||
                             (label === "Calendar" && isCalendarRelated),
                     }))}
                 />

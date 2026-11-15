@@ -1,6 +1,7 @@
 import { lazy } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from 'react-router'
 import { GuestRoute, InstructorIndexRedirect, ProtectedRoute } from '@/components/auth/AuthGate'
+import FaqChatbot from '@/components/FaqChatbot'
 import NfcTagCapture from '@/components/instructor/NfcTagCapture'
 import AuthLayout from './layouts/AuthLayout'
 import RootLayout from './layouts/RootLayout'
@@ -49,12 +50,12 @@ const StudentPayments = lazy(() => import('./pages/Student/StudentPayments'))
 const StudentCredits = lazy(() => import('./pages/Student/StudentCredits'))
 const StudentGrading = lazy(() => import('./pages/Student/StudentGrading'))
 const GradingPayment = lazy(() => import('./pages/Student/GradingPayment'))
+const GradingRequirements = lazy(() => import('./pages/Student/GradingRequirements'))
 
 const InstructorDashboard = lazy(() => import('./pages/Instructor/InstructorDashboard'))
 const InstructorStudents = lazy(() => import('./pages/Instructor/InstructorStudents'))
 const InstructorProfile = lazy(() => import('./pages/Instructor/InstructorProfile'))
 const InstructorCheckIn = lazy(() => import('./pages/Instructor/InstructorCheckIn'))
-const NfcCheckIn = lazy(() => import('./pages/Instructor/NfcCheckIn'))
 const InstructorStudentDetails = lazy(() => import('./pages/Instructor/InstructorStudentDetails'))
 const InstructorGradingSession = lazy(() => import('./pages/Instructor/InstructorGradingSession'))
 const InstructorGradings = lazy(() => import('./pages/Instructor/InstructorGradings'))
@@ -99,9 +100,10 @@ export default function App() {
               <Route path="profile" element={<StudentProfile />} />
               <Route path="payments" element={<StudentPayments />} />
               <Route path="student/credits" element={<StudentCredits />} />
-              <Route path="grading" element={<GradingPayment />} />
+              <Route path="grading" element={<StudentGrading />} />
               <Route path="grading/applications" element={<StudentGrading />} />
               <Route path="grading/payment" element={<GradingPayment />} />
+              <Route path="grading/requirements" element={<GradingRequirements />} />
             </Route>
           </Route>
           <Route path="instructor" element={<NfcTagCapture />}>
@@ -118,7 +120,7 @@ export default function App() {
                 <Route path="students" element={<InstructorStudents />} />
                 <Route path="check-in" element={<InstructorCheckIn />} />
                 <Route path="cover/:invitationId" element={<LegacyCoverInvitationRedirect />} />
-                <Route path="nfc_checkin" element={<NfcCheckIn />} />
+                <Route path="nfc_checkin" element={<InstructorCheckIn />} />
                 <Route path="students/:studentId" element={<InstructorStudentDetails />} />
                 <Route path="reports/:eventId" element={<Navigate to="/instructor/calendar" replace />} />
                 <Route path="gradings" element={<InstructorGradings />} />
@@ -174,6 +176,7 @@ export default function App() {
           <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>
+      <FaqChatbot />
     </BrowserRouter>
   )
 }

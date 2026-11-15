@@ -141,8 +141,8 @@ test('instructors on no panel see an explanation instead of sessions', async () 
 
 test('the Gradings navigation link appears only for panel members', () => {
   const labels = onPanel => instructorNavigation(onPanel).map(item => item.label)
-  assert.deepEqual(labels(false), ['Calendar', 'Students', 'QR Check-in', 'NFC Check-in'])
-  assert.deepEqual(labels(true), ['Calendar', 'Students', 'Gradings', 'QR Check-in', 'NFC Check-in'])
+  assert.deepEqual(labels(false), ['Calendar', 'Students', 'Check-in'])
+  assert.deepEqual(labels(true), ['Calendar', 'Students', 'Gradings', 'Check-in'])
   assert.equal(instructorNavigation(true)[2].to, '/instructor/gradings')
 })
 
