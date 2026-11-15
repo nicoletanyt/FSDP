@@ -1,7 +1,8 @@
+import { randomUUID } from './uuid'
 import { supabase } from './supabase'
 
 // Reuse the same key when retrying the same checkout attempt.
-export async function startCheckout(idempotencyKey: string = crypto.randomUUID()) {
+export async function startCheckout(idempotencyKey: string = randomUUID()) {
   const { data, error } = await supabase.functions.invoke<{ url: string }>(
     'create-checkout-session',
     {

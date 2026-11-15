@@ -1,3 +1,4 @@
+import { randomUUID } from "@/lib/uuid";
 import { useEffect, useId, useRef, useState } from "react";
 import { Link } from "react-router";
 import {
@@ -58,7 +59,7 @@ function createMessage(
     role: ChatMessage["role"],
     content: string,
 ): ChatMessage {
-    return { id: crypto.randomUUID(), role, content, timestamp: new Date() };
+    return { id: randomUUID(), role, content, timestamp: new Date() };
 }
 
 function AssistantAvatar({ className }: { className?: string }) {

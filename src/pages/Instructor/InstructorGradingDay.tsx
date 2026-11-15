@@ -1,7 +1,7 @@
 import { useParams } from "react-router";
 import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
 import GradingDayView from "@/components/grading/GradingDayView";
-import ScheduleNotice from "@/components/grading/ScheduleNotice";
+import { ScheduleStatusPills } from "@/components/grading/ScheduleNotice";
 import { GradingBackLink, GradingNote } from "@/components/grading/GradingParts";
 import { useGradingDayLayout } from "@/hooks/use-grading-day-layout";
 import { useGradingDay } from "@/hooks/use-grading-day";
@@ -44,7 +44,7 @@ export default function InstructorGradingDay() {
                 <GradingDayView day={day.data} list={view.list} onListChange={view.setList} viewerIsChief={day.data.isChief} photos={photos}
                     studentHref={(studentId) => `/instructor/students/${studentId}`}
                     emptySessions={<UnsortedNote day={day.data} />}
-                    notice={day.data.isChief ? <ScheduleNotice day={day.data} viewer="chief" /> : undefined}
+                    statusPills={day.data.isChief ? <ScheduleStatusPills day={day.data} viewer="chief" /> : undefined}
                     // One page per session: mark your own checklist (once the session starts);
                     // the chief can also read the other examiners' submitted ones there.
                     actionFor={(session) => day.data.publishedAt ? ({

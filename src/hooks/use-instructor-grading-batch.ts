@@ -1,3 +1,4 @@
+import { randomUUID } from '@/lib/uuid'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useInstructorApi } from '@/lib/instructor/data-context'
@@ -70,7 +71,7 @@ export function useInstructorGradingBatch({ session, entries, identity, sessionI
     if (!intent.current) {
       if (submit && (!signature || unmarked)) return false
       intent.current = {
-        requestId: crypto.randomUUID(), expectedUserId: identity.userId, eventId: session.event.id,
+        requestId: randomUUID(), expectedUserId: identity.userId, eventId: session.event.id,
         sessionId, expectedVersion: saved?.version ?? 0, submit, signature,
         cells: students.flatMap(student => items.filter(item => item.grade_id === student.target_grade_id).map(item => ({
           student_id: student.student_id, syllabus_item_id: item.syllabus_item_id,

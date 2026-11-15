@@ -40,13 +40,13 @@ export default function ScheduleNotice({ day, viewer }: { day: GradingDay; viewe
 
 // The same two facts as the notice, as header pills: draft/published, and a
 // "things to check" pill that opens the list.
-export function ScheduleStatusPills({ day }: { day: GradingDay }) {
+export function ScheduleStatusPills({ day, viewer = 'admin' }: { day: GradingDay; viewer?: 'admin' | 'chief' }) {
   if (!day.sessions.length) return null
   const published = day.publishedAt !== null
   const count = day.warnings.length
   return (
     <>
-      <Badge className={published ? 'gap-1 bg-success text-success-foreground' : 'gap-1'} variant={published ? 'default' : 'outline'} title={published ? `Published ${gradingStamp(day.publishedAt!)}` : 'Only you and the chief examiner can see these sessions'}>
+      <Badge className={published ? 'gap-1 bg-success text-success-foreground' : 'gap-1'} variant={published ? 'default' : 'outline'} title={published ? `Published ${gradingStamp(day.publishedAt!)}` : viewer === 'admin' ? 'Only you and the chief examiner can see these sessions' : 'The administrator may still change these sessions'}>
         {published ? <CircleCheck aria-hidden="true" /> : <FilePen aria-hidden="true" />}
         {published ? 'Schedule published' : 'Draft schedule'}
       </Badge>

@@ -1,3 +1,4 @@
+import { randomUUID } from '../uuid'
 import { createContext, useCallback, useContext, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { initialAdminData } from './mock-data'
@@ -17,7 +18,7 @@ interface AdminDataContextValue extends AdminData {
 const AdminDataContext = createContext<AdminDataContextValue | undefined>(undefined)
 
 function newId(prefix: string): string {
-  return `${prefix}-${crypto.randomUUID()}`
+  return `${prefix}-${randomUUID()}`
 }
 
 export function AdminDataProvider({ children }: { children: ReactNode }) {
