@@ -6,11 +6,14 @@ import { handleRequest as webhook } from '../stripe-webhook/handler.ts'
 const environment = {
   STRIPE_SECRET_KEY: 'sk_test_unit_test_only',
   STRIPE_WEBHOOK_SECRET: 'whsec_unit_test_only',
-  STRIPE_MEMBERSHIP_PRICE_ID: 'price_membership',
+  STRIPE_MEMBERSHIP_FEE_ID: 'price_membership',
   APP_URL: 'http://localhost:5173',
   SUPABASE_URL: 'https://example.supabase.co',
   SUPABASE_ANON_KEY: 'unit_test_anon',
   SUPABASE_SERVICE_ROLE_KEY: 'unit_test_service_role',
+  EMAILJS_SERVICE_ID: 'service_test',
+  EMAILJS_EDITABLE_TEMPLATE_ID: 'template_test',
+  EMAILJS_PUBLIC_KEY: 'public_test',
 }
 const userId = '00000000-0000-4000-8000-0000000000a1'
 const studentId = '00000000-0000-4000-8000-0000000000b1'
@@ -29,6 +32,7 @@ function installFakes(state: {
   pendingPayment?: { student_id: string; amount_cents: number } | null
 }) {
   const calls: Call[] = []
+  const reserved = new Set<string>()
   const originalFetch = globalThis.fetch
   globalThis.fetch = async (input, init) => {
     const request = new Request(input, init)
@@ -40,7 +44,7 @@ function installFakes(state: {
     if (url.origin === 'https://api.stripe.com') {
       if (url.pathname === '/v1/prices/price_membership') {
         return Response.json({ id: 'price_membership', object: 'price', active: true, type: 'one_time',
-          currency: 'sgd', unit_amount: 8000, livemode: false, ...state.price })
+          currency: 'sgd', unit_amount: 6000, livemode: false, ...state.price })
       }
       if (url.pathname === '/v1/checkout/sessions' && request.method === 'POST') {
         return Response.json({ id: 'cs_test_membership', object: 'checkout.session',
@@ -48,10 +52,11 @@ function installFakes(state: {
       }
       if (url.pathname === '/v1/checkout/sessions/cs_test_membership') {
         return Response.json({ id: 'cs_test_membership', object: 'checkout.session', mode: 'payment',
-          payment_status: 'paid', amount_total: 8000, currency: 'sgd', client_reference_id: studentId,
+          payment_status: 'paid', amount_total: 6000, currency: 'sgd', client_reference_id: studentId,
           metadata: { membership_student_id: studentId }, ...state.session })
       }
     }
+    if (url.hostname === 'api.emailjs.com') return new Response('OK')
     if (url.origin === environment.SUPABASE_URL) {
       if (url.pathname === '/auth/v1/user') return Response.json({ id: userId, aud: 'authenticated' })
       if (url.pathname === '/rest/v1/users') return Response.json({ role: state.role ?? 'student' })
@@ -62,14 +67,24 @@ function installFakes(state: {
       if (url.pathname === '/rest/v1/rpc/finalize_membership_checkout') return new Response(null, { status: 204 })
       if (url.pathname === '/rest/v1/payments' && request.method === 'POST') return new Response(null, { status: 201 })
       if (url.pathname === '/rest/v1/payments' && request.method === 'GET') {
-        const row = state.pendingPayment === undefined ? { student_id: studentId, amount_cents: 8000 } : state.pendingPayment
+        const row = state.pendingPayment === undefined ? { student_id: studentId, amount_cents: 6000 } : state.pendingPayment
         return Response.json(row ? [row] : [])
       }
       if (url.pathname === '/rest/v1/payments' && request.method === 'DELETE') return new Response(null, { status: 204 })
+      if (url.pathname === '/rest/v1/students') return Response.json([{
+        id: studentId, email: 'student@example.test', first_name: 'Jess', last_name: 'Tan', member_no: 'ASJ123',
+      }])
+      if (url.pathname === '/rest/v1/student_email_sends' && request.method === 'POST') {
+        const key = JSON.parse(calls.at(-1)!.body).send_key
+        if (reserved.has(key)) return Response.json([])
+        reserved.add(key)
+        return Response.json([{ send_key: key }])
+      }
+      if (url.pathname === '/rest/v1/student_email_sends' && request.method === 'PATCH') return new Response(null, { status: 204 })
     }
     throw new Error(`Unexpected external request: ${request.method} ${request.url}`)
   }
-  return { calls, restore: () => { globalThis.fetch = originalFetch } }
+  return { calls, reserved, restore: () => { globalThis.fetch = originalFetch } }
 }
 
 const application = {
@@ -107,6 +122,7 @@ Deno.test('membership checkout and activation', async (test) => {
   const fakes = installFakes(state)
   const reset = () => {
     fakes.calls.length = 0
+    fakes.reserved.clear()
     for (const key of Object.keys(state) as (keyof typeof state)[]) delete state[key]
   }
 
@@ -152,19 +168,19 @@ Deno.test('membership checkout and activation', async (test) => {
       const pending = fakes.calls.find((c) => c.path === '/rest/v1/payments')!
       assert.deepEqual(JSON.parse(pending.body), {
         student_id: studentId, item: 'Membership', description: 'Membership fee',
-        amount_cents: 8000, currency: 'sgd', stripe_session_id: 'cs_test_membership',
+        amount_cents: 6000, currency: 'sgd', stripe_session_id: 'cs_test_membership',
       })
     })
 
-    await test.step('Stripe returns the student to the allow-listed site they started from', async () => {
+    await test.step('Stripe returns to APP_URL even when checkout starts from allowed localhost', async () => {
       reset()
       Deno.env.set('APP_URL', 'https://fsdp.example.app')
       Deno.env.set('AUTH_ALLOWED_ORIGINS', 'http://localhost:5173')
       try {
         assert.equal((await checkout(checkoutRequest())).status, 200)
         const body = new URLSearchParams(fakes.calls.find((c) => c.path === '/v1/checkout/sessions')!.body)
-        assert.equal(body.get('success_url'), 'http://localhost:5173/dashboard?checkout=success')
-        assert.equal(body.get('cancel_url'), 'http://localhost:5173/apply-membership?checkout=cancel')
+        assert.equal(body.get('success_url'), 'https://fsdp.example.app/dashboard?checkout=success')
+        assert.equal(body.get('cancel_url'), 'https://fsdp.example.app/apply-membership?checkout=cancel')
       } finally {
         Deno.env.set('APP_URL', environment.APP_URL)
         Deno.env.delete('AUTH_ALLOWED_ORIGINS')
@@ -189,9 +205,13 @@ Deno.test('membership checkout and activation', async (test) => {
       state.status = 'active'
       assert.equal((await checkout(checkoutRequest())).status, 409)
       reset()
-      state.price = { livemode: true }
-      assert.equal((await checkout(checkoutRequest())).status, 500)
-      assert.ok(!fakes.calls.some((c) => c.path === '/v1/checkout/sessions'))
+      for (const price of [{ livemode: true }, { unit_amount: 1000 }, { unit_amount: 8000 }]) {
+        reset()
+        state.price = price
+        assert.equal((await checkout(checkoutRequest())).status, 500)
+        assert.ok(!fakes.calls.some((c) => c.path === '/v1/checkout/sessions'))
+        assert.ok(!fakes.calls.some((c) => c.path.endsWith('submit_membership_application')))
+      }
     })
 
     await test.step('a verified paid membership session activates the student', async () => {
@@ -201,8 +221,14 @@ Deno.test('membership checkout and activation', async (test) => {
       const finalize = fakes.calls.filter((c) => c.path.endsWith('finalize_membership_checkout'))
       assert.equal(finalize.length, 1)
       assert.deepEqual(JSON.parse(finalize[0].body), {
-        student: studentId, stripe_session: 'cs_test_membership', paid_amount: 8000, paid_currency: 'sgd',
+        student: studentId, stripe_session: 'cs_test_membership', paid_amount: 6000, paid_currency: 'sgd',
       })
+      const sends = fakes.calls.filter(call => call.path === '/api/v1.0/email/send')
+      assert.equal(sends.length, 1)
+      assert.deepEqual(JSON.parse(sends[0].body).template_params.to_email, 'suroul29@gmail.com')
+      assert.deepEqual(JSON.parse(sends[0].body).template_params.bcc_emails, 'student@example.test')
+      assert.equal((await webhook(await signedEvent({ membership_student_id: studentId }))).status, 200)
+      assert.equal(fakes.calls.filter(call => call.path === '/api/v1.0/email/send').length, 1)
     })
 
     await test.step('wrong amount, unpaid, or mismatched student never activates', async () => {
@@ -221,7 +247,7 @@ Deno.test('membership checkout and activation', async (test) => {
 
     await test.step('a price change after checkout started still activates the student who paid', async () => {
       reset()
-      state.price = { unit_amount: 12000 } // the configured price moved on; this checkout was fixed at 8000
+      state.price = { unit_amount: 12000 } // the configured price moved on; this checkout was fixed at 6000
       assert.equal((await webhook(await signedEvent({ membership_student_id: studentId }))).status, 200)
       assert.equal(fakes.calls.filter((c) => c.path.endsWith('finalize_membership_checkout')).length, 1)
       assert.ok(!fakes.calls.some((c) => c.path === '/v1/prices/price_membership'))
@@ -240,7 +266,7 @@ Deno.test('membership checkout and activation', async (test) => {
 
     await test.step("a payment row belonging to someone else never activates this student", async () => {
       reset()
-      state.pendingPayment = { student_id: '00000000-0000-4000-8000-0000000000ff', amount_cents: 8000 }
+      state.pendingPayment = { student_id: '00000000-0000-4000-8000-0000000000ff', amount_cents: 6000 }
       assert.equal((await webhook(await signedEvent({ membership_student_id: studentId }))).status, 400)
       assert.ok(!fakes.calls.some((c) => c.path.endsWith('finalize_membership_checkout')))
     })
