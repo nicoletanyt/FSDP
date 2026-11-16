@@ -4,6 +4,7 @@ import { LayoutDashboard, LogIn, UserPlus } from 'lucide-react'
 import { PageSkeleton } from '@/components/shared/skeletons'
 import MobileNavigation from '@/components/shared/layout/MobileNavigation'
 import StudentNavigation from '@/components/student/StudentNavigation'
+import { StudentRouteSkeleton } from '@/components/student/StudentSkeletons'
 import ThemeToggle from '@/components/theme-toggle'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/hooks/use-auth'
@@ -181,11 +182,8 @@ export default function RootLayout() {
         <main
           className={cn('p-6', pageWidth, isStudent ? 'lg:py-8' : 'lg:py-12')}
         >
-          <Suspense
-            fallback={
-              <PageSkeleton />
-            }
-          >
+          {/* Student routes get their page's own shape; others the generic one. */}
+          <Suspense fallback={<StudentRouteSkeleton />}>
             <Outlet />
           </Suspense>
         </main>

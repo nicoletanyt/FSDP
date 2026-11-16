@@ -24,7 +24,7 @@ import PaymentStatusBadge from "@/components/student/PaymentStatusBadge";
 import { DatabaseGradeBadge, gradeFromId } from "@/components/shared/grade/GradeBadge";
 import PageHeader from "@/components/shared/layout/PageHeader";
 import RetryAlert from "@/components/shared/layout/RetryAlert";
-import { PageSkeleton } from "@/components/shared/skeletons";
+import { StudentSkeleton } from "@/components/student/StudentSkeletons";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -74,7 +74,7 @@ export default function StudentDashboard() {
         return () => clearTimeout(timer);
     }, [returnedFromCheckout, status, confirmChecks, reload, setSearchParams]);
 
-    if (loading) return <PageSkeleton label="Loading your dashboard…" />;
+    if (loading) return <StudentSkeleton variant="dashboard" label="Loading your dashboard…" />;
     if (error || !status) {
         return (
             <RetryAlert message="We couldn't load your dashboard." onRetry={reload} />
@@ -102,7 +102,7 @@ export default function StudentDashboard() {
 function MemberDashboard({ firstName }: { firstName: string }) {
     const { summary, loading, error, reload } = useStudentDashboard();
 
-    if (loading) return <PageSkeleton label="Loading your dashboard…" />;
+    if (loading) return <StudentSkeleton variant="dashboard" label="Loading your dashboard…" />;
     if (error || !summary) {
         return (
             <RetryAlert

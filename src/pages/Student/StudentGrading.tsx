@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router";
 import { ChevronDown, Info, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -28,28 +29,17 @@ import { supabase } from "@/lib/supabase";
 import { money } from "@/lib/format";
 import { gradingDate } from "@/lib/grading/format";
 import EligibilityChecklist from "@/components/grading/EligibilityChecklist";
+import { useStudentQuery } from "@/hooks/use-student-query";
+import { loadStudentGradingData } from "@/lib/student/grading-data";
 import type { ChecklistRequirement } from "@/components/grading/EligibilityChecklist";
-import { gradingProgression } from "@/lib/grading-progression";
+import { studentQueryKeys as keys, studentQueryTimes as times } from "@/lib/student/query-keys";
 import {
     getGradingQuote,
     getGradingCheckoutUrl,
     getGradingTestCheckoutUrl,
     gradingCheckoutRequest,
-    type GradingCheckoutOption,
 } from "@/lib/grading-checkout";
 import { randomUUID } from "@/lib/uuid";
-
-type Readiness = ChecklistRequirement & {
-    target_grade_id: string;
-    target_grade_label: string;
-};
-type ApplicationDraft = {
-    id: string;
-    target_grade_id: string;
-    status: string;
-    created_at: string;
-    base_fee_cents: number;
-};
 
 export default function StudentGrading() {
     return (
@@ -62,16 +52,32 @@ export default function StudentGrading() {
 function GradingApplication() {
     const { profile } = useAuth();
     const [params] = useSearchParams();
-    const [options, setOptions] = useState<GradingCheckoutOption[]>([]);
-    const [readiness, setReadiness] = useState<Readiness[]>([]);
-    const [drafts, setDrafts] = useState<ApplicationDraft[]>([]);
-    const [progression, setProgression] = useState<ReturnType<
-        typeof gradingProgression
-    > | null>(null);
+    const client = useQueryClient();
+    const grading = useStudentQuery(
+        keys.grading,
+        (userId, signal) => loadStudentGradingData(supabase, userId, signal),
+        times.account,
+    );
+    const options = grading.data?.options ?? [];
+    const readiness = grading.data?.readiness ?? [];
+    const drafts = grading.data?.drafts ?? [];
+    const progression = grading.data?.progression ?? null;
     const [eventId, setEventId] = useState("");
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState("");
-    const [revision, setRevision] = useState(0);
+    const loading =
+        grading.data === undefined && (grading.isPending || grading.isFetching);
+    // Submission errors are page-local; load errors come from the query.
+    const [actionError, setError] = useState("");
+    const loadError =
+        grading.data === undefined && !loading && grading.isError
+            ? grading.error instanceof Error
+                ? grading.error.message
+                : "Unable to load your grading opportunities. Please try again."
+            : "";
+    const error = actionError || loadError;
+    const refreshGrading = () => {
+        if (profile?.id)
+            void client.invalidateQueries({ queryKey: keys.grading(profile.id) });
+    };
     const [payment, setPayment] = useState("");
     const [processing, setProcessing] = useState(false);
     const submitting = useRef(false);
@@ -125,102 +131,8 @@ function GradingApplication() {
             ? params.get("session_id")
             : null;
 
-    useEffect(() => {
-        if (!profile?.id) return;
-        const controller = new AbortController();
-        setLoading(true);
-        setError("");
-        setOptions([]);
-        setReadiness([]);
-        setDrafts([]);
-        setProgression(null);
-        setEventId("");
-        void Promise.all([
-            supabase
-                .rpc("my_grading_checkout_options")
-                .abortSignal(controller.signal),
-            supabase.rpc("my_grading_readiness").abortSignal(controller.signal),
-            supabase
-                .from("students")
-                .select("current_grade_id,date_of_birth")
-                .eq("user_id", profile.id)
-                .abortSignal(controller.signal)
-                .maybeSingle(),
-            supabase
-                .from("grades")
-                .select("id,label,sort_order")
-                .abortSignal(controller.signal),
-            supabase
-                .from("grade_tracks")
-                .select("grade_id,track")
-                .abortSignal(controller.signal),
-            supabase
-                .from("grade_requirements")
-                .select("grade_id,track,fee_cents")
-                .abortSignal(controller.signal),
-            supabase
-                .from("grading_application_drafts")
-                .select("id,target_grade_id,status,created_at,base_fee_cents")
-                .eq("user_id", profile.id)
-                .order("created_at", { ascending: false })
-                .abortSignal(controller.signal),
-        ])
-            .then(
-                ([
-                    events,
-                    ready,
-                    student,
-                    grades,
-                    tracks,
-                    requirements,
-                    savedDrafts,
-                ]) => {
-                    if (controller.signal.aborted) return;
-                    if (
-                        [
-                            events,
-                            ready,
-                            student,
-                            grades,
-                            tracks,
-                            requirements,
-                            savedDrafts,
-                        ].some((result) => result.error)
-                    ) {
-                        throw new Error(
-                            "Unable to load your grading records. Please try again.",
-                        );
-                    }
-                    if (!student.data)
-                        throw new Error(
-                            "No student record is linked to your account. Please contact your dojo to record your current rank.",
-                        );
-                    setProgression(
-                        gradingProgression(
-                            student.data,
-                            grades.data ?? [],
-                            tracks.data ?? [],
-                            requirements.data ?? [],
-                        ),
-                    );
-                    setOptions(events.data ?? []);
-                    setReadiness(ready.data ?? []);
-                    setDrafts(savedDrafts.data ?? []);
-                },
-            )
-            .catch((failure) => {
-                if (!controller.signal.aborted)
-                    setError(
-                        failure instanceof Error
-                            ? failure.message
-                            : "Unable to load your grading opportunities. Please try again.",
-                    );
-            })
-            .finally(() => {
-                if (!controller.signal.aborted) setLoading(false);
-            });
-        return () => controller.abort();
-    }, [profile?.id, revision]);
+    // A different account starts with no grading session selected.
+    useEffect(() => setEventId(""), [profile?.id]);
 
     useEffect(() => {
         if (!sessionId) return;
@@ -272,7 +184,10 @@ function GradingApplication() {
                                 : "Your checkout completed, but the payment record could not be verified. Contact your dojo; do not pay again."
                             : "Payment confirmed. Your grading application has been submitted.",
                     );
-                    setRevision((previous) => previous + 1);
+                    if (profile?.id) {
+                        void client.invalidateQueries({ queryKey: keys.grading(profile.id) });
+                        void client.invalidateQueries({ queryKey: keys.dashboardGrading(profile.id) });
+                    }
                 } else if (++attempts < 30)
                     timer = setTimeout(() => void check(), 2000);
                 else
@@ -291,7 +206,7 @@ function GradingApplication() {
             active = false;
             clearTimeout(timer);
         };
-    }, [sessionId, profile?.id, testReturn, targetBelt, totalFee]);
+    }, [sessionId, profile?.id, testReturn, targetBelt, totalFee, client]);
 
     const handleProceedToPayment = async () => {
         if (
@@ -392,7 +307,10 @@ function GradingApplication() {
                         {error && (
                             <RetryAlert
                                 message={error}
-                                onRetry={() => setRevision((previous) => previous + 1)}
+                                onRetry={() => {
+                                    setError("");
+                                    refreshGrading();
+                                }}
                             />
                         )}
                         {payment && (

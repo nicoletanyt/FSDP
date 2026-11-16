@@ -10,7 +10,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
     Link,
     useLocation,
@@ -39,6 +39,8 @@ import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { StudentContext } from "@/layouts/StudentLayout";
 import { supabase } from "@/lib/supabase";
+import { useStudentQuery } from "@/hooks/use-student-query";
+import { studentQueryKeys as keys, studentQueryTimes as times } from "@/lib/student/query-keys";
 import { classTypes, dateKey } from "@/lib/instructor-calendar";
 import { cn } from "@/lib/utils";
 import {
@@ -618,28 +620,22 @@ export default function StudentClasses() {
 
     const { pathname } = useLocation();
     const [params, setParams] = useSearchParams();
-    const [catalog, setCatalog] = useState<ClassType[] | null>(null);
-    const [catalogError, setCatalogError] = useState(false);
-    const [catalogRevision, setCatalogRevision] = useState(0);
-
-    useEffect(() => {
-        const controller = new AbortController();
-        async function loadCatalog() {
-            try {
-                const { data, error } = await supabase
-                    .from("class_types")
-                    .select("id, label, description")
-                    .order("label")
-                    .abortSignal(controller.signal);
-                if (error) throw error;
-                if (!controller.signal.aborted) setCatalog(data);
-            } catch {
-                if (!controller.signal.aborted) setCatalogError(true);
-            }
-        }
-        void loadCatalog();
-        return () => controller.abort();
-    }, [catalogRevision]);
+    const catalogQuery = useStudentQuery(
+        keys.classTypes,
+        async (_userId, signal) => {
+            const { data, error } = await supabase
+                .from("class_types")
+                .select("id, label, description")
+                .order("label")
+                .abortSignal(signal);
+            if (error) throw error;
+            return data as ClassType[];
+        },
+        times.reference,
+    );
+    const catalog = catalogQuery.data ?? null;
+    const catalogError =
+        !catalog && catalogQuery.isError && !catalogQuery.isFetching;
 
     const upcoming = useMemo(() => {
         const now = new Date();
@@ -768,8 +764,7 @@ export default function StudentClasses() {
                 <RetryAlert
                     message="Could not load the full class list."
                     onRetry={() => {
-                        setCatalogError(false);
-                        setCatalogRevision((revision) => revision + 1);
+                        void catalogQuery.refetch();
                     }}
                 />
             ) : !catalog ? (

@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { useStudentQuery } from '@/hooks/use-student-query'
+import { studentQueryKeys as keys, studentQueryTimes as times } from '@/lib/student/query-keys'
 import type { ReactNode } from 'react'
 import { useSearchParams } from 'react-router'
 import { Check, ChevronDown, ChevronUp, Info, UploadCloud } from 'lucide-react'
@@ -143,10 +146,17 @@ export default function ApplyMembership() {
   const [errors, setErrors] = useState<Errors>({})
   const [isDeclared, setIsDeclared] = useState(false)
   const [waiverSigned, setWaiverSigned] = useState(false)
-  const [dojos, setDojos] = useState<{ id: string; name: string }[]>([])
-  const [dojosLoading, setDojosLoading] = useState(true)
-  const [dojosError, setDojosError] = useState('')
-  const [dojoRevision, setDojoRevision] = useState(0)
+  const queryClient = useQueryClient()
+  const dojoQuery = useStudentQuery(keys.centres, async (_userId, signal) => {
+    const { data, error } = await supabase.from('centres')
+      .select('id, name').eq('status', 'active').order('name').abortSignal(signal)
+    if (error) throw error
+    return data ?? []
+  }, times.reference)
+  const dojos = dojoQuery.data ?? []
+  const dojosLoading = dojoQuery.data === undefined && (dojoQuery.isPending || dojoQuery.isFetching)
+  const dojosError = dojoQuery.data === undefined && !dojosLoading && dojoQuery.isError
+    ? 'Unable to load dojos. Please try again.' : ''
   // Same key for retries of an unchanged submission; Stripe then returns the same session.
   const retryKey = useRef(randomUUID())
   const [photoFile, setPhotoFile] = useState<File | null>(null)
@@ -182,25 +192,6 @@ export default function ApplyMembership() {
     }
     fetchUserEmail()
   }, [])
-
-  useEffect(() => {
-    const controller = new AbortController()
-    setDojosLoading(true)
-    setDojosError('')
-    void (async () => {
-      try {
-        const { data, error } = await supabase.from('centres')
-          .select('id, name').eq('status', 'active').order('name').abortSignal(controller.signal)
-        if (error) throw error
-        if (!controller.signal.aborted) setDojos(data ?? [])
-      } catch {
-        if (!controller.signal.aborted) setDojosError('Unable to load dojos. Please try again.')
-      } finally {
-        if (!controller.signal.aborted) setDojosLoading(false)
-      }
-    })()
-    return () => controller.abort()
-  }, [dojoRevision])
 
   useEffect(() => {
     if (!photoFile) {
@@ -346,6 +337,10 @@ export default function ApplyMembership() {
         })
         if (error) throw error
         if (!data?.membershipId || !data?.startDate) throw new Error('The server did not return a membership record.')
+        // A students row now exists, so cached membership/profile reads are out of date.
+        for (const key of [keys.membership(user.id), keys.profileAll(user.id), keys.dashboard(user.id)]) {
+          void queryClient.invalidateQueries({ queryKey: key })
+        }
 
         // The application now has a student record, so the photo can become their
         // profile photo. Best-effort: a failure here must never block the payment.
@@ -537,7 +532,7 @@ export default function ApplyMembership() {
                   <option value="" disabled>{dojosLoading ? 'Loading dojos…' : 'Select dojo'}</option>
                   {dojos.map((dojo) => <option key={dojo.id} value={dojo.id}>{dojo.name}</option>)}
                 </NativeSelect>
-                {dojosError && <p role="alert" className="text-sm text-destructive">{dojosError} <button type="button" className="rounded-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-ring" onClick={() => setDojoRevision(value => value + 1)}>Try again</button></p>}
+                {dojosError && <p role="alert" className="text-sm text-destructive">{dojosError} <button type="button" className="rounded-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-ring" onClick={() => void dojoQuery.refetch()}>Try again</button></p>}
                 {!dojosLoading && !dojosError && dojos.length === 0 && <p role="status" className="text-sm text-destructive">No active dojos are available. Please contact the dojo.</p>}
               </FormField>
               <FormField name="membershipType" label="Membership type" error={errors.membershipType}

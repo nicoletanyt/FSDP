@@ -76,8 +76,9 @@ export function parseDashboardSummary(value: unknown): DashboardSummary | null {
   };
 }
 
-export async function fetchDashboardSummary() {
-  const { data, error } = await supabase.rpc("student_dashboard_summary");
+export async function fetchDashboardSummary(signal?: AbortSignal) {
+  const request = supabase.rpc("student_dashboard_summary");
+  const { data, error } = await (signal ? request.abortSignal(signal) : request);
   if (error) throw error;
   return parseDashboardSummary(data);
 }

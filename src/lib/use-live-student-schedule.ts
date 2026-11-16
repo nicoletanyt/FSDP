@@ -1,32 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { useStudentUserId } from "@/hooks/use-student-query";
+import { queryGeneration } from "@/lib/query-generation";
+import { studentQueryKeys as keys } from "@/lib/student/query-keys";
+import { scheduleQueryOptions } from "@/lib/student/schedule-query";
+import type { StudentScheduleSnapshot as Snapshot } from "@/lib/student/schedule-query";
 import type { ClassOffering, Enrollment } from "@/lib/student-schedule";
 
-type Session = {
-    id: string;
-    name: string;
-    starts_at: string;
-    ends_at: string;
-    status: string;
-    class_type_id: string;
-    class_type: string;
-    description: string | null;
-    centre: string;
-    instructor: string | null;
-    capacity: number | null;
-    occupied: number;
-    booked: boolean;
-    waitlisted: boolean;
-    attendance_status: "present" | "absent" | "late" | "excused" | null;
-    moved_from_event_id: string | null;
-};
-
-type Snapshot = {
-    grade: string | null;
-    linked: boolean;
-    active: boolean;
-    sessions: Session[];
-};
 type Action = "enrol" | "cancel" | "join" | "leave";
 
 const dayFormat = new Intl.DateTimeFormat("sv-SE", {
@@ -47,33 +28,21 @@ const statuses = {
 } as const;
 
 export function useLiveStudentSchedule(onCreditChange?: () => void) {
-    const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
-    const [error, setError] = useState("");
-    const [loading, setLoading] = useState(true);
-    const [revision, setRevision] = useState(0);
+    const client = useQueryClient();
+    const userId = useStudentUserId();
+    const query = useQuery({
+        ...scheduleQueryOptions(userId ?? ""),
+        enabled: Boolean(userId),
+    });
+    const snapshot = query.data ?? null;
     const [saving, setSaving] = useState(false);
     const savingRef = useRef(false);
-
-    useEffect(() => {
-        const controller = new AbortController();
-        async function load() {
-            try {
-                const { data, error } = await supabase
-                    .rpc("student_class_schedule")
-                    .abortSignal(controller.signal);
-                if (controller.signal.aborted) return;
-                if (error) throw error;
-                setSnapshot(data as Snapshot);
-            } catch {
-                if (!controller.signal.aborted)
-                    setError("Could not load your class schedule. Try again.");
-            } finally {
-                if (!controller.signal.aborted) setLoading(false);
-            }
-        }
-        void load();
-        return () => controller.abort();
-    }, [revision]);
+    // Cached data stays visible while a refresh fails or runs (as in the instructor calendar).
+    const loading = !snapshot && (!userId || query.isPending || query.isFetching);
+    const error =
+        !snapshot && !loading && query.isError
+            ? "Could not load your class schedule. Try again."
+            : "";
 
     const { classes, enrollments, waitlist } = useMemo(() => {
         const classes: ClassOffering[] = [];
@@ -137,8 +106,12 @@ export function useLiveStudentSchedule(onCreditChange?: () => void) {
         targetId: string,
     ): Promise<string | null> {
         if (savingRef.current) return "A booking change is already in progress.";
+        if (!userId) return "Could not update your booking. Try again.";
         savingRef.current = true;
         setSaving(true);
+        // Never write a late response into a later login's cache.
+        const generation = queryGeneration(client);
+        const current = () => queryGeneration(client) === generation;
         try {
             const { data, error } = await supabase.rpc(
                 "change_student_class_booking",
@@ -152,17 +125,24 @@ export function useLiveStudentSchedule(onCreditChange?: () => void) {
             if (error) {
                 if (error.code !== "P0001")
                     return "Could not update your booking. Try again.";
-                const latest = await supabase.rpc("student_class_schedule");
-                if (!latest.error && latest.data) setSnapshot(latest.data as Snapshot);
+                if (current())
+                    await client.invalidateQueries({ queryKey: keys.schedule(userId) });
                 return error.message;
             }
-            setSnapshot(data as Snapshot);
+            if (current()) {
+                await client.cancelQueries({ queryKey: keys.schedule(userId) });
+                client.setQueryData(keys.schedule(userId), data as Snapshot);
+            }
             return null;
         } catch {
             return "Could not update your booking. Try again.";
         } finally {
             // Also refresh after ambiguous network errors: the server may have
             // committed the debit/refund even if its response did not arrive.
+            if (current()) {
+                void client.invalidateQueries({ queryKey: keys.creditsAll(userId) });
+                void client.invalidateQueries({ queryKey: keys.creditBatches(userId) });
+            }
             onCreditChange?.();
             savingRef.current = false;
             setSaving(false);
@@ -179,10 +159,9 @@ export function useLiveStudentSchedule(onCreditChange?: () => void) {
         grade: snapshot?.grade,
         linked: snapshot?.linked ?? false,
         active: snapshot?.active ?? false,
+        isFetching: query.isFetching,
         retry: () => {
-            setLoading(true);
-            setError("");
-            setRevision((previous) => previous + 1);
+            void query.refetch();
         },
         isBooked,
         isWaitlisted,
