@@ -448,7 +448,7 @@ test('recorded attendance survives resize with editable controls and the drawer 
         const lateBadge = drawer.querySelector('[aria-label$=": Late"]');
         const late = { text: lateBadge?.textContent, colour: w.getComputedStyle(lateBadge).backgroundColor };
         const session = w.location.search;
-        const note = drawer.querySelector('button[aria-label^="View student details and techniques for"]')?.getAttribute('aria-haspopup');
+        const note = drawer.querySelector('button[aria-label^="View student details and progress checklist for"]')?.getAttribute('aria-haspopup');
         f.style.width = '1280px'; await wait(500);
         const desktop = { drawer: !!d.querySelector('[data-slot="drawer-content"]'), session: w.location.search, marked: [...d.querySelectorAll('button[aria-label]')].find(e => e.getAttribute('aria-label')?.startsWith(student + ' present'))?.getAttribute('aria-pressed') };
         f.style.width = '320px'; await wait(500);
@@ -484,7 +484,7 @@ test('past classes remain read-only and retain student-details modal triggers', 
         const ids = [...d.querySelectorAll('[id]')].map(e => e.id);
         return { editable: drawer.querySelectorAll('button[aria-label^="Mark "]').length,
             bulk: [...drawer.querySelectorAll('button')].some(e => e.textContent.includes('Mark All')),
-            notes: [...drawer.querySelectorAll('button[aria-label^="View student details and techniques for"]')].map(e => e.getAttribute('aria-haspopup')),
+            notes: [...drawer.querySelectorAll('button[aria-label^="View student details and progress checklist for"]')].map(e => e.getAttribute('aria-haspopup')),
             duplicateIds: ids.filter((id, i) => ids.indexOf(id) !== i),
             nameCount: drawer.querySelectorAll('[aria-label="Student roster"] li').length };
     });

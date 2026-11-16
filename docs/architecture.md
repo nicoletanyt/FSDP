@@ -72,19 +72,18 @@
 ## Domain notes
 
 - A dojo is a centre; grading is a rank assessment, not automatically a promotion. Children/adult are grade tracks; the directory uses adult in the calendar year the student turns 13 (`src/lib/instructor/directory.ts`). Grade order, colours and track membership come from reference data, not hard-coded badge names (`src/lib/instructor/grading.ts`).
-- Readiness means ready to start assessment: active membership, at least three months' membership, applicable age/time/session minimums and no outstanding fees. Technique completion is separate; a missing prerequisite can be unverified (`src/lib/instructor/grading.ts`).
+- Readiness means ready to start assessment: active membership, at least three months' membership, applicable age/time/session minimums and no outstanding fees. Technique progress (the progress checklist) is never a requirement; techniques are assessed on the A/B/C grading checklist during grading. A missing prerequisite can be unverified (`src/lib/instructor/grading.ts`).
 - Cycle attendance counts present/late from last grading or joining; rate excludes excused/unmarked. Summary includes ended, non-cancelled classes across dojos (`docs/instructor-data.md`). See [database schema](database-schema.md) for tables and constraints.
 
 ## Known quirks and gotchas
 
 - Auth user ID and instructor-domain ID are distinct. Instructors can read all students even without a linked instructor row; personal calendar/roster and writes have narrower ownership rules (`docs/instructor-data.md`).
 - Instructor time projections use Singapore time; date-only gradings have no invented start/end (`src/lib/instructor/calendar-view.ts`).
-- Attendance, reports and assessments save through RPCs with snapshots/retry receipts. Availability create/edit/delete persist for linked part-time instructors; edits and confirmed deletions use opening snapshots and exact-request retries, and conflict reload keeps the draft. Technique sign-off writes are not wired (`docs/instructor-data.md`). QR check-in uses fixture sessions and local state (`src/pages/Instructor/InstructorCheckIn.tsx`); profile photos are browser-local (`src/pages/Instructor/InstructorProfile.tsx`).
+- Attendance, reports and assessments save through RPCs with snapshots/retry receipts. Availability create/edit/delete persist for linked part-time instructors; edits and confirmed deletions use opening snapshots and exact-request retries, and conflict reload keeps the draft. Progress checklist changes auto-save through `set_technique_progress` from both the student page and the calendar student dialog (`src/hooks/use-technique-progress.ts`), with a trigger-written audit trail. QR check-in uses fixture sessions and local state (`src/pages/Instructor/InstructorCheckIn.tsx`); profile photos are browser-local (`src/pages/Instructor/InstructorProfile.tsx`).
 - Admin is mostly in-memory mock data, but account creation, grading invitations and notification reads are live (`src/pages/admin/Instructors.tsx`, `src/pages/admin/GradingEligibility.tsx`, `src/pages/admin/Notifications.tsx`).
 - Instructor directory navbar overflow at 1024px with enlarged text is recorded in `docs/instructor-data.md`; responsive tests need Firefox and geckodriver (`tests/mobile-responsive/README.md`).
 - Only `VITE_` env variables reach the browser; keep secrets server-side. Vercel deploys frontend separately from Supabase migrations/functions (`README.md`, `.vercelignore`).
 
 ## Open questions
 
-- Should technique sign-offs persist across assessment attempts, or be scoped per attempt? The current table has no assessment-event reference (`docs/instructor-data.md`).
 - Which remaining instructor mutation checkpoints are approved for implementation? The roadmap in `docs/instructor-data.md` calls for separate approval.

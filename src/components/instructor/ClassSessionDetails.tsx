@@ -524,7 +524,7 @@ export default function ClassSessionDetails({
                                                                         <Button
                                                                             variant="ghost"
                                                                             size="icon-sm"
-                                                                            aria-label={`View student details and techniques for ${student.name}`}
+                                                                            aria-label={`View student details and progress checklist for ${student.name}`}
                                                                             className="size-11 rounded-md text-foreground/70 hover:text-foreground lg:size-7"
                                                                         />
                                                                     }
@@ -537,7 +537,7 @@ export default function ClassSessionDetails({
                                                     <TooltipContent>
                                                         {isGrading
                                                             ? "Student overview"
-                                                            : "Student details and techniques"}
+                                                            : "Student details and progress checklist"}
                                                     </TooltipContent>
                                                 </Tooltip>
                                             </div>

@@ -1,13 +1,10 @@
 import { useEffect, useState } from "react";
-import { Accordion as AccordionPrimitive } from "@base-ui/react/accordion";
-import { Checkbox as CheckboxPrimitive } from "@base-ui/react/checkbox";
 import {
     BadgeCheck,
-    Check,
     CheckCircle2,
-    ChevronDown,
     ChevronRight,
     Info,
+    Pencil,
     XCircle,
 } from "lucide-react";
 import { cn } from "cn";
@@ -24,12 +21,15 @@ import { singaporeToday } from "@/lib/instructor/directory";
 import {
     readinessRequirementText,
     studentGrading,
+    TECHNIQUE_STATUSES,
+    techniqueStatusLabels,
 } from "@/lib/instructor/grading";
 import type { StudentGradingReads } from "@/lib/instructor/grading";
 import { historyDate, instructorName } from "@/lib/instructor/student-detail";
 import type {
     StudentDetail,
     StudentHistoryEntry,
+    TechniqueStatus,
 } from "@/lib/instructor/types";
 import type { QueryState } from "@/hooks/use-instructor-data";
 import { useFeedback } from "@/hooks/use-feedback";
@@ -40,10 +40,18 @@ type Section =
     | "Next grading"
     | "Grading eligibility"
     | "Grading history"
-    | "Technique checklist";
+    | "Progress checklist";
 const success = "text-emerald-700 dark:text-emerald-400";
 
-function GradeTransition({ view }: { view: GradingView }) {
+/** Small colour dot for each progress status, shared with the editor. */
+export const statusDot: Record<TechniqueStatus, string> = {
+    not_assessed: "bg-muted-foreground/40",
+    introduced: "bg-sky-500",
+    developing: "bg-amber-500",
+    consistent: "bg-emerald-600",
+};
+
+export function GradeTransition({ view }: { view: GradingView }) {
     return (
         <div className="flex min-w-0 flex-wrap items-center gap-2">
             <span className="sr-only">Current grade:</span>
@@ -162,7 +170,7 @@ function Endorsement({ detail, view }: { detail: StudentDetail; view: GradingVie
     );
 }
 
-function MissingGradingData({ view }: { view: GradingView }) {
+export function MissingGradingData({ view }: { view: GradingView }) {
     const message = !view.current
         ? "Current grade not recorded."
         : !view.track
@@ -230,150 +238,59 @@ function RequirementRows({ view }: { view: GradingView }) {
     );
 }
 
-function TechniqueChecklist({ view }: { view: GradingView }) {
-    const categories = [...new Set(view.syllabus.map((item) => item.category))];
-    const signed = new Map(
-        view.signOffs.map((item) => [item.signOff.syllabus_item_id, item]),
-    );
-    const firstIncomplete = categories.find((category) =>
-        view.syllabus.some(
-            (item) => item.category === category && !signed.has(item.id),
-        ),
-    );
+function ProgressSummary({ view, onEdit }: { view: GradingView; onEdit?: () => void }) {
+    const { total, counts, latest } = view.progressSummary;
+    const breakdown = TECHNIQUE_STATUSES.slice()
+        .reverse()
+        .filter((status) => counts[status] > 0);
     return (
         <>
-            <div className="space-y-2">
-                <p
-                    role="status"
-                    className="detail-meta flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground"
-                >
-                    <span>
-                        {signed.size} of {view.syllabus.length} techniques completed
-                    </span>
-                    <span className="font-medium">
-                        {view.syllabus.length
-                            ? Math.round((signed.size / view.syllabus.length) * 100)
-                            : 0}
-                        %
-                    </span>
-                </p>
-                <progress
-                    aria-label="Target-grade technique completion"
-                    value={signed.size}
-                    max={view.syllabus.length || 1}
-                    className="block h-1.5 w-full overflow-hidden rounded-full [&::-webkit-progress-bar]:rounded-full [&::-webkit-progress-bar]:bg-muted [&::-webkit-progress-value]:rounded-full [&::-webkit-progress-value]:bg-primary [&::-moz-progress-bar]:bg-primary"
-                />
+            <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+                <GradeTransition view={view} />
+                {onEdit && total > 0 && (
+                    <Button variant="outline" size="touch" onClick={onEdit} data-edit-progress>
+                        <Pencil aria-hidden="true" />
+                        Edit
+                    </Button>
+                )}
             </div>
-            <p className="detail-body text-sm text-muted-foreground">
-                Techniques are assessed during assessment and do not determine
-                readiness. Recorded sign-offs are read-only.
-            </p>
-            {categories.length ? (
-                <AccordionPrimitive.Root
-                    multiple
-                    defaultValue={[firstIncomplete ?? categories[0]]}
-                    aria-label="Technique categories"
-                    className="flex w-full flex-col"
-                >
-                    {categories.map((category) => {
-                        const items = view.syllabus.filter(
-                            (item) => item.category === category,
-                        );
-                        const count = items.filter((item) => signed.has(item.id)).length;
-                        return (
-                            <AccordionPrimitive.Item
-                                key={category}
-                                value={category}
-                                className="border-border/60 not-first:mt-4 not-first:border-t not-first:pt-4"
-                            >
-                                <AccordionPrimitive.Header className="mb-2 flex">
-                                    <AccordionPrimitive.Trigger
-                                        data-slot="accordion-trigger"
-                                        className="grading-category-heading group/accordion-trigger flex min-h-11 min-w-0 flex-1 items-center justify-between gap-3 rounded-md py-2 text-left text-base font-semibold outline-none hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50"
-                                    >
-                                        <span className="min-w-0 flex-1 break-words">
-                                            {category}
-                                        </span>
-                                        <span
-                                            className={cn(
-                                                "detail-meta shrink-0 text-sm font-normal tabular-nums",
-                                                count === items.length
-                                                    ? success
-                                                    : "text-muted-foreground",
-                                            )}
-                                        >
-                                            {count}/{items.length}
-                                        </span>
-                                        <ChevronDown
-                                            aria-hidden="true"
-                                            className="size-4 shrink-0 text-muted-foreground transition-transform group-aria-expanded/accordion-trigger:rotate-180 motion-reduce:transition-none"
-                                        />
-                                    </AccordionPrimitive.Trigger>
-                                </AccordionPrimitive.Header>
-                                <AccordionPrimitive.Panel className="h-(--accordion-panel-height) overflow-hidden text-sm transition-[height] duration-200 ease-out data-ending-style:h-0 data-starting-style:h-0 motion-reduce:transition-none">
-                                    <ul className="space-y-1">
-                                        {items.map((item) => {
-                                            const entry = signed.get(item.id);
-                                            return (
-                                                <li
-                                                    key={item.id}
-                                                    data-syllabus-id={item.id}
-                                                    className={cn(
-                                                        "rounded-lg px-3 py-3",
-                                                        entry && "bg-emerald-50/60 dark:bg-emerald-950/25",
-                                                    )}
-                                                >
-                                                    <div className="flex items-start gap-3">
-                                                        <CheckboxPrimitive.Root
-                                                            checked={Boolean(entry)}
-                                                            disabled
-                                                            aria-label={`${category}: ${item.label}`}
-                                                            className={cn(
-                                                                "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded border border-input",
-                                                                entry &&
-                                                                "border-emerald-600 bg-emerald-600 text-white",
-                                                            )}
-                                                        >
-                                                            <CheckboxPrimitive.Indicator>
-                                                                <Check
-                                                                    aria-hidden="true"
-                                                                    className="size-3.5"
-                                                                />
-                                                            </CheckboxPrimitive.Indicator>
-                                                        </CheckboxPrimitive.Root>
-                                                        <div className="detail-body min-w-0 flex-1 break-words text-sm">
-                                                            <p>{item.label}</p>
-                                                            {item.note && (
-                                                                <p className="mt-1 text-muted-foreground">
-                                                                    {item.note}
-                                                                </p>
-                                                            )}
-                                                            <p
-                                                                className={cn(
-                                                                    "detail-meta mt-2 text-sm",
-                                                                    entry ? success : "text-muted-foreground",
-                                                                )}
-                                                            >
-                                                                {entry
-                                                                    ? `Signed off ${historyDate(entry.signOff.signed_off_at)} · ${instructorName(entry.instructor)}`
-                                                                    : "Not signed off"}
-                                                            </p>
-                                                            {entry?.signOff.note && (
-                                                                <p className="mt-1 text-muted-foreground">
-                                                                    {entry.signOff.note}
-                                                                </p>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </li>
-                                            );
-                                        })}
-                                    </ul>
-                                </AccordionPrimitive.Panel>
-                            </AccordionPrimitive.Item>
-                        );
-                    })}
-                </AccordionPrimitive.Root>
+            <MissingGradingData view={view} />
+            {total > 0 ? (
+                <>
+                    <div className="space-y-2">
+                        <p
+                            role="status"
+                            className="detail-meta flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground"
+                        >
+                            <span>
+                                {counts.consistent} of {total} techniques consistent
+                            </span>
+                            <span className="font-medium tabular-nums">
+                                {Math.round((counts.consistent / total) * 100)}%
+                            </span>
+                        </p>
+                        <progress
+                            aria-label="Techniques consistent"
+                            value={counts.consistent}
+                            max={total}
+                            className="block h-1.5 w-full overflow-hidden rounded-full [&::-webkit-progress-bar]:rounded-full [&::-webkit-progress-bar]:bg-muted [&::-webkit-progress-value]:rounded-full [&::-webkit-progress-value]:bg-primary [&::-moz-progress-bar]:bg-primary"
+                        />
+                    </div>
+                    <ul aria-label="Progress by status" className="detail-meta flex flex-wrap gap-x-4 gap-y-1 text-sm">
+                        {breakdown.map((status) => (
+                            <li key={status} data-status={status} className="flex items-center gap-1.5">
+                                <span aria-hidden="true" className={cn("size-2 rounded-full", statusDot[status])} />
+                                <span className="font-medium tabular-nums">{counts[status]}</span>
+                                <span className="text-muted-foreground">{techniqueStatusLabels[status]}</span>
+                            </li>
+                        ))}
+                    </ul>
+                    <p className="detail-meta text-sm text-muted-foreground">
+                        {latest
+                            ? `Last updated ${historyDate(latest.progress.updated_at)} · ${instructorName(latest.instructor)}`
+                            : "No progress recorded yet. Updating is optional."}
+                    </p>
+                </>
             ) : (
                 <p className="detail-body text-sm text-muted-foreground">
                     No syllabus items recorded for this grade and track.
@@ -465,12 +382,14 @@ export default function StudentGradingRead({
     reads,
     onRetry,
     onViewGrading,
+    onEdit,
 }: {
     title: Section;
     detail: StudentDetail;
     reads: QueryState<StudentGradingReads>;
     onRetry: () => void;
     onViewGrading?: () => void;
+    onEdit?: () => void;
 }) {
     const [today, setToday] = useState(singaporeToday);
     useEffect(() => {
@@ -503,12 +422,10 @@ export default function StudentGradingRead({
                     error={reads.error}
                     onRetry={onRetry}
                 />
-            ) : title === "Technique checklist" ? (
+            ) : title === "Progress checklist" ? (
                 <Card size="sm" className="detail-card">
                     <CardContent className="space-y-4">
-                        <GradeTransition view={view} />
-                        <MissingGradingData view={view} />
-                        <TechniqueChecklist view={view} />
+                        <ProgressSummary view={view} onEdit={onEdit} />
                     </CardContent>
                 </Card>
             ) : title === "Grading history" ? (
@@ -527,8 +444,8 @@ export default function StudentGradingRead({
                             <>
                                 <RequirementRows view={view} />
                                 <p className="detail-meta text-sm text-muted-foreground">
-                                    Techniques are assessed during assessment and do not determine
-                                    readiness.
+                                    Techniques are assessed on the grading checklist during
+                                    grading and do not determine readiness.
                                 </p>
                             </>
                         ) : (

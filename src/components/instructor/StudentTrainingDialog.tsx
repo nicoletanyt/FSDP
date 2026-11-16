@@ -10,7 +10,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import InstructorDataStatus from "./InstructorDataStatus";
-import StudentGradingRead from "./StudentGradingRead";
+import ProgressChecklistEditor from "./ProgressChecklistEditor";
 import {
     StudentInformationActions,
     StudentInformationCards,
@@ -94,16 +94,20 @@ function StudentTrainingContent({ student }: { student: StudentEntry }) {
                         </section>
                         <div
                             role="region"
-                            aria-label="Technique checklist scroll area"
+                            aria-label="Progress checklist scroll area"
                             tabIndex={0}
                             className="min-h-0 min-w-0 overflow-y-auto overscroll-contain rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
                         >
-                            <StudentGradingRead
-                                title="Technique checklist"
-                                detail={detail.data}
-                                reads={grading}
-                                onRetry={grading.retry}
-                            />
+                            <section className="detail-section" aria-label="Progress checklist">
+                                <div className="detail-section-header">
+                                    <h2>Progress checklist</h2>
+                                </div>
+                                <ProgressChecklistEditor
+                                    detail={detail.data}
+                                    reads={grading}
+                                    onRetry={grading.retry}
+                                />
+                            </section>
                         </div>
                     </div>
                 )}

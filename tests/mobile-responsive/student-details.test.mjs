@@ -263,62 +263,64 @@ test('changing student/account hides the previous profile immediately and ignore
   assert.doesNotMatch(account.after, /Recent feedback|STU-0001/)
 })
 
-test('overview shows a responsive read-only technique checklist below Next grading, not in Sessions', async t => {
+test('overview shows a read-only progress summary below Next grading whose Edit dialog auto-saves, not in Sessions', async t => {
   for (const width of [320, 390, 768, 1440]) await t.test(`${width}px`, async () => {
     const result = await inDetail(width, async (w, wait) => {
       const d = w.document
       const nextGrading = d.querySelector('[aria-label="Next grading"]')
-      const checklist = d.querySelector('[aria-label="Technique checklist"]')
-      const boxes = [...checklist.querySelectorAll('[role="checkbox"]')]
+      const checklist = d.querySelector('[aria-label="Progress checklist"]')
       const before = checklist.textContent
-      const category = checklist.querySelector('[data-slot="accordion-trigger"]')
-      category.click(); await wait()
-      const collapsed = category.getAttribute('aria-expanded')
-      category.click(); await wait()
-      const progress = checklist.querySelector('progress')
+      const summaryControls = checklist.querySelectorAll('[role="combobox"], [role="checkbox"], textarea').length
+      const progressBar = checklist.querySelector('progress')
+      const progress = [progressBar.value, progressBar.max]
       const below = Boolean(nextGrading.compareDocumentPosition(checklist) & w.Node.DOCUMENT_POSITION_FOLLOWING)
+      checklist.querySelector('[data-edit-progress]').click(); await wait()
+      const dialog = d.querySelector('[data-progress-checklist-dialog]')
+      const dialogText = dialog.textContent
+      dialog.querySelector('[role="combobox"]').click(); await wait()
+      ;[...d.querySelectorAll('[role="option"]')].find(e => e.textContent.includes('Consistent')).click(); await wait()
+      await wait()
+      const saved = dialog.textContent
+      const dialogFits = dialog.scrollWidth <= dialog.clientWidth
+      dialog.querySelector('[data-slot="dialog-header"] button').click(); await wait()
+      const after = d.querySelector('[aria-label="Progress checklist"]').textContent
       const overviewActive = [...d.querySelectorAll('[role="tab"]')].find(e => e.textContent === 'Overview').getAttribute('aria-selected')
       ;[...d.querySelectorAll('[role="tab"]')].find(e => e.textContent === 'Sessions').click(); await wait()
-      const sessions = { hasChecklist: Boolean(d.querySelector('[aria-label="Technique checklist"]')), hasHistory: Boolean(d.querySelector('[aria-label="Session history"]')) }
-      ;[...d.querySelectorAll('[role="tab"]')].find(e => e.textContent === 'Overview').click(); await wait()
-      return { before, below, overviewActive, sessions, returned: Boolean(d.querySelector('[aria-label="Technique checklist"]')),
-        boxes: boxes.length, readOnly: boxes.every(e => e.hasAttribute('disabled') || e.getAttribute('aria-disabled') === 'true'),
-        collapsed, expanded: category.getAttribute('aria-expanded'), progress: [progress.value, progress.max],
-        reportControls: d.querySelectorAll('[data-report-editor], main textarea, main form').length,
-        writes: w.sessionWriteRequestsFixture.length,
+      const sessions = { hasChecklist: Boolean(d.querySelector('[aria-label="Progress checklist"]')), hasHistory: Boolean(d.querySelector('[aria-label="Session history"]')) }
+      return { before, below, overviewActive, sessions, summaryControls, dialogText, saved, after, dialogFits, progress,
         fits: d.documentElement.scrollWidth <= d.documentElement.clientWidth }
     }, { query: '?fixtureData=grading-ready' })
     assert.match(result.before, /Stored next grade/)
-    assert.match(result.before, /0 of 1 techniques completed/)
-    assert.match(result.before, /Stored assessment technique.*Not signed off/)
+    assert.match(result.before, /0 of 1 techniques consistent/)
+    assert.match(result.before, /1\s*Not assessed/)
+    assert.match(result.before, /No progress recorded yet/)
+    assert.equal(result.summaryControls, 0, 'the overview stays read-only')
+    assert.deepEqual(result.progress, [0, 1])
     assert.equal(result.below, true)
+    assert.match(result.dialogText, /Stored assessment technique.*Not assessed/)
+    assert.match(result.dialogText, /don’t affect grading eligibility/)
+    assert.match(result.saved, /Saved/)
+    assert.equal(result.dialogFits, true)
+    assert.match(result.after, /1 of 1 techniques consistent/)
     assert.equal(result.overviewActive, 'true')
     assert.deepEqual(result.sessions, { hasChecklist: false, hasHistory: true })
-    assert.equal(result.returned, true)
-    assert.equal(result.boxes, 1)
-    assert.equal(result.readOnly, true)
-    assert.deepEqual(result.progress, [0, 1])
-    assert.equal(result.collapsed, 'false')
-    assert.equal(result.expanded, 'true')
-    assert.equal(result.reportControls, 0)
-    assert.equal(result.writes, 0)
     assert.equal(result.fits, true)
   })
 })
 
-test('overview checklist retains sign-off details and handles missing, loading and failed reads independently of attendance', async () => {
-  const signed = await inDetail(390, w => w.document.querySelector('[aria-label="Technique checklist"]').textContent)
-  assert.match(signed, /1 of 1 techniques completed/)
-  assert.match(signed, /Stored syllabus note/)
-  assert.match(signed, /Signed off.*Instructor not recorded.*Stored sign-off note/)
-  const terminal = await inDetail(390, w => w.document.querySelector('[aria-label="Technique checklist"]').textContent, { query: '?fixtureData=grading-terminal' })
+test('overview progress summary shows the latest update and handles missing, loading and failed reads independently of attendance', async () => {
+  const signed = await inDetail(390, w => w.document.querySelector('[aria-label="Progress checklist"]').textContent)
+  assert.match(signed, /1 of 1 techniques consistent/)
+  assert.match(signed, /1\s*Consistent/)
+  assert.match(signed, /Last updated.*Instructor not recorded/)
+  const terminal = await inDetail(390, w => w.document.querySelector('[aria-label="Progress checklist"]').textContent, { query: '?fixtureData=grading-terminal' })
   assert.match(terminal, /No further grade/)
   assert.match(terminal, /No syllabus items recorded/)
-  const loading = await inDetail(390, w => w.document.querySelector('[aria-label="Technique checklist"] [data-instructor-skeleton]')?.textContent,
+  const loading = await inDetail(390, w => w.document.querySelector('[aria-label="Progress checklist"] [data-instructor-skeleton]')?.textContent,
     { query: '?fixtureData=grading-loading', delay: 200 })
   assert.match(loading, /Loading/)
   const failed = await inDetail(390, async (w, wait) => {
-    const root = w.document.querySelector('[aria-label="Technique checklist"]')
+    const root = w.document.querySelector('[aria-label="Progress checklist"]')
     const before = root.textContent
     const attendance = w.document.querySelector('[aria-label="Attendance summary"]').textContent
     ;[...root.querySelectorAll('button')].find(e => e.textContent === 'Try again').click(); await wait()
@@ -326,7 +328,7 @@ test('overview checklist retains sign-off details and handles missing, loading a
   }, { query: '?fixtureData=grading-signoffs-error' })
   assert.match(failed.before, /Grading signoffs could not be loaded/)
   assert.match(failed.attendance, /10\/15 sessions/)
-  assert.match(failed.after, /1 of 1 techniques completed/)
+  assert.match(failed.after, /1 of 1 techniques consistent/)
 })
 
 test('grading preserves readiness and history without a Review grading action or modal', async t => {
@@ -350,7 +352,7 @@ test('grading preserves readiness and history without a Review grading action or
         reviewActions: [...content.querySelectorAll('button')].filter(e => e.textContent.includes('Review grading')).length,
         dialogs: [...d.querySelectorAll('[role="dialog"]')].filter(e => e.textContent.includes('Grading review')).length,
         checkboxes: content.querySelectorAll('[role="checkbox"]').length,
-        checklist: Boolean(content.querySelector('[aria-label="Technique checklist"]')),
+        checklist: Boolean(content.querySelector('[aria-label="Progress checklist"]')),
         fits: d.documentElement.scrollWidth <= d.documentElement.clientWidth,
       }
     }, { query: '?fixtureData=grading-ready' })
@@ -376,17 +378,16 @@ test('grading preserves readiness and history without a Review grading action or
   })
 })
 
-test('grading history follows all pages while overview sign-offs retain notes and unknown signers', async () => {
+test('grading history follows all pages while the overview progress summary keeps unknown updaters', async () => {
   const result = await inDetail(1280, async (w, wait) => {
-    const checklist = w.document.querySelector('[aria-label="Technique checklist"]').textContent
+    const checklist = w.document.querySelector('[aria-label="Progress checklist"]').textContent
     ;[...w.document.querySelectorAll('[role="tab"]')].find(e => e.textContent === 'Grading').click(); await wait()
     const root = [...w.document.querySelectorAll('[role="tabpanel"]')].find(e => e.getBoundingClientRect().height > 0)
     return root.textContent + checklist
   }, { query: '?fixtureData=grading-history-large' })
   assert.match(result, /Stored grading 205/)
   assert.match(result, /Stored assessment notes 205/)
-  assert.match(result, /Stored syllabus note/)
-  assert.match(result, /Instructor not recorded.*Stored sign-off note/)
+  assert.match(result, /Last updated.*Instructor not recorded/)
 })
 
 test('grading missing rules, terminal grades and empty recorded assessment history remain explicit', async () => {

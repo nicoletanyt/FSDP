@@ -41,14 +41,14 @@ async function inCalendar(width, inspect, mode = '', height = 800) {
 function dialogUI(w) {
   const d = w.document
   return {
-    triggers: () => [...d.querySelectorAll('button[aria-label^="View student details and techniques for"]')].filter(e => e.getBoundingClientRect().height > 0),
+    triggers: () => [...d.querySelectorAll('button[aria-label^="View student details and progress checklist for"]')].filter(e => e.getBoundingClientRect().height > 0),
     root: () => d.querySelector('[data-student-training-dialog]'),
     close() { [...this.root().querySelectorAll('button')].find(e => e.textContent.trim() === 'Close student details').click() },
     button(text, root = this.root()) { return [...root.querySelectorAll('button')].find(e => e.textContent.trim() === text) },
   }
 }
 
-test('training speech bubbles open shared student information and the read-only checklist without leaving the calendar', async t => {
+test('training speech bubbles open shared student information and the editable progress checklist without leaving the calendar', async t => {
   for (const width of [320, 390, 768, 1280]) await t.test(`${width}px`, async () => {
     const result = await inCalendar(width, async (w, wait, ui) => {
       const d = w.document
@@ -60,12 +60,12 @@ test('training speech bubbles open shared student information and the read-only 
       trigger.focus(); trigger.click(); await wait()
       const root = ui.root()
       const sidebar = root.querySelector('[aria-label="Student details"]')
-      const checklist = root.querySelector('[aria-label="Technique checklist"]')
-      const boxes = [...checklist.querySelectorAll('[role="checkbox"]')]
+      const checklist = root.querySelector('[aria-label="Progress checklist"]')
+      const statusControls = [...checklist.querySelectorAll('[role="combobox"]')]
       const bounds = root.getBoundingClientRect()
       const sidebarBounds = sidebar.getBoundingClientRect(), checklistBounds = checklist.getBoundingClientRect()
       const before = { text: root.textContent, readsBefore, readsAfter: w.studentDetailReadsFixture.length,
-        readOnly: boxes.length > 0 && boxes.every(e => e.hasAttribute('disabled') || e.getAttribute('aria-disabled') === 'true'),
+        editable: statusControls.length > 0 && statusControls.every(e => !e.hasAttribute('disabled')),
         fits: root.scrollWidth <= root.clientWidth && d.documentElement.scrollWidth <= d.documentElement.clientWidth,
         bounded: bounds.top >= 0 && bounds.bottom <= w.innerHeight + 1 && bounds.left >= 0 && bounds.right <= w.innerWidth + 1,
         heightCapped: bounds.height <= w.innerHeight * 0.8 + 1,
@@ -92,12 +92,12 @@ test('training speech bubbles open shared student information and the read-only 
     })
     assert.match(result.text, /STU-0001/)
     assert.match(result.text, /Principal Dojo.*Central Dojo.*Membership status.*active/)
-    assert.match(result.text, /Technique checklist.*1 of 1 techniques completed.*Stored assessment technique/)
+    assert.match(result.text, /Progress checklist.*Stored assessment technique.*Consistent.*Stored progress note/)
     assert.match(result.contactText, /Primary Guardian.*Secondary Guardian/)
     assert.match(result.medicalText, /Stored medical alert/)
     assert.equal(result.readsBefore, 0)
     assert.equal(result.readsAfter, 1)
-    for (const key of ['readOnly', 'fits', 'bounded', 'heightCapped', 'centered', 'focusInside', 'contactClosed', 'closed', 'focusReturned', 'routeUnchanged', 'sameRoster']) assert.equal(result[key], true, key)
+    for (const key of ['editable', 'fits', 'bounded', 'heightCapped', 'centered', 'focusInside', 'contactClosed', 'closed', 'focusReturned', 'routeUnchanged', 'sameRoster']) assert.equal(result[key], true, key)
     assert.equal(width >= 768 ? result.sideBySide : result.stacked, true)
     assert.equal(result.drawerRemains, width < 1024)
     assert.equal(result.writes, 0)
@@ -117,7 +117,7 @@ test('modal reopening and the full profile reuse the same student query cache', 
   })
   assert.equal(result.reopened, 1)
   assert.equal(result.profileReads, 1)
-  assert.match(result.text, /STU-0001.*Technique checklist/)
+  assert.match(result.text, /STU-0001.*Progress checklist/)
 })
 
 test('only the checklist scrolls inside a centered 80%-height modal while student details and Close stay fixed', async () => {
@@ -125,7 +125,7 @@ test('only the checklist scrolls inside a centered 80%-height modal while studen
     const result = await inCalendar(width, async (w, wait, ui) => {
       ui.triggers()[0].click(); await wait()
       const root = ui.root()
-      const body = root.querySelector('[aria-label="Technique checklist scroll area"]')
+      const body = root.querySelector('[aria-label="Progress checklist scroll area"]')
       const sidebar = root.querySelector('[aria-label="Student details"]')
       const sidebarBefore = sidebar.getBoundingClientRect()
       const list = body.querySelector('[data-syllabus-id]').parentElement
@@ -161,14 +161,14 @@ test('modal detail and checklist errors have independent retry paths and missing
     }, mode)
     assert.match(result.before, /could not be loaded/)
     if (mode === 'grading-signoffs-error') assert.match(result.before, /Membership status/)
-    assert.match(result.after, /Technique checklist.*Stored assessment technique/)
+    assert.match(result.after, /Progress checklist.*Stored assessment technique/)
   }
   const missing = await inCalendar(390, async (w, wait, ui) => {
     ui.triggers()[0].click(); await wait()
     return ui.root().textContent
   }, 'detail-missing')
   assert.match(missing, /Student not found/)
-  assert.doesNotMatch(missing, /Technique checklist|No emergency contacts/)
+  assert.doesNotMatch(missing, /Progress checklist|No emergency contacts/)
 })
 
 test('closing a loading modal and choosing another student cannot display the previous response', async () => {

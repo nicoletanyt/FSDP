@@ -394,9 +394,6 @@
         font-weight: 600;
     }
 
-    [data-student-training-dialog] [aria-label="Technique checklist"] > .detail-card {
-        box-shadow: none;
-    }
 }
 
 @media (min-width: 48rem) {
@@ -493,7 +490,8 @@
 }
 
 @media (max-width: 47.999rem), (max-height: 40rem) {
-    [data-student-training-dialog] [data-slot="dialog-header"] {
+    [data-student-training-dialog] [data-slot="dialog-header"],
+    [data-progress-checklist-dialog] [data-slot="dialog-header"] {
         gap: 0.25rem;
         padding: 0.5rem 1rem;
     }
