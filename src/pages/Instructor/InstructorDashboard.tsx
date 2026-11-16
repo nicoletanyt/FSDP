@@ -81,10 +81,11 @@ function EventCard({
 }) {
     const showSummary = layout !== "week";
     // Time, dojo and roster size are what the instructor opened the sheet for.
+    // From 768px (iPad) the sheet uses the desktop panel's facts styling; phones keep the larger stacked facts.
     const fact = sheet
-        ? "flex items-start gap-2 text-sm font-normal text-current"
+        ? "flex items-start gap-2 text-sm font-normal text-current md:items-center md:gap-1.5 md:text-2xs md:opacity-80"
         : "flex items-center gap-1.5 text-2xs font-normal text-current opacity-80";
-    const factIcon = sheet ? "mt-0.5 size-4 shrink-0 opacity-75" : "size-3 shrink-0";
+    const factIcon = sheet ? "mt-0.5 size-4 shrink-0 opacity-75 md:mt-0 md:size-3 md:opacity-100" : "size-3 shrink-0";
     const style = getEventStyle(event);
     return (
         <Card
@@ -137,13 +138,13 @@ function EventCard({
                     className={cn(
                         "flex gap-2",
                         // The sheet stacks one fact per line, so nothing wraps mid-row on a phone.
-                        sheet ? "flex-col items-start gap-1.5"
+                        sheet ? "flex-col items-start gap-1.5 md:flex-row md:flex-wrap md:items-center md:justify-between md:gap-2"
                             : expanded || showSummary
                                 ? "flex-row flex-wrap items-center justify-between"
                                 : "flex-col items-start",
                     )}
                 >
-                    <span className={cn(fact, sheet && "font-medium tabular-nums")}>
+                    <span className={cn(fact, sheet && "font-medium tabular-nums md:font-normal")}>
                         <Clock3
                             aria-hidden="true"
                             className={cn(factIcon, !sheet && "mt-0.5")}
@@ -162,7 +163,8 @@ function EventCard({
                         </span>
                     </span>
                     {sheet && (
-                        <span className={fact}>
+                        // The desktop panel puts the roster size on its own line; iPad matches it.
+                        <span className={cn(fact, "md:basis-full")}>
                             <Users aria-hidden="true" className={factIcon} />
                             {rosterSizeLabel(event)}
                         </span>

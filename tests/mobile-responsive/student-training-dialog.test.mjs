@@ -41,15 +41,16 @@ async function inCalendar(width, inspect, mode = '', height = 800) {
 function dialogUI(w) {
   const d = w.document
   return {
-    triggers: () => [...d.querySelectorAll('button[aria-label^="View student details and progress checklist for"]')].filter(e => e.getBoundingClientRect().height > 0),
+    triggers: () => [...d.querySelectorAll('button[aria-label^="Open progress checklist for"]')].filter(e => e.getBoundingClientRect().height > 0),
     root: () => d.querySelector('[data-student-training-dialog]'),
-    close() { [...this.root().querySelectorAll('button')].find(e => e.textContent.trim() === 'Close student details').click() },
+    close() { [...this.root().querySelectorAll('button')].find(e => e.textContent.trim() === 'Close progress checklist').click() },
     button(text, root = this.root()) { return [...root.querySelectorAll('button')].find(e => e.textContent.trim() === text) },
   }
 }
 
-test('training speech bubbles open shared student information and the editable progress checklist without leaving the calendar', async t => {
-  for (const width of [320, 390, 768, 1280]) await t.test(`${width}px`, async () => {
+test('checklist buttons open the progress checklist with a student card and no sidebar, without leaving the calendar', async t => {
+  // From 375px; a 320px roster has no room for the checklist button (see calendar.test.mjs).
+  for (const width of [375, 390, 768, 1280]) await t.test(`${width}px`, async () => {
     const result = await inCalendar(width, async (w, wait, ui) => {
       const d = w.document
       const route = w.location.pathname + w.location.search
@@ -59,46 +60,37 @@ test('training speech bubbles open shared student information and the editable p
       const trigger = ui.triggers()[0]
       trigger.focus(); trigger.click(); await wait()
       const root = ui.root()
-      const sidebar = root.querySelector('[aria-label="Student details"]')
       const checklist = root.querySelector('[aria-label="Progress checklist"]')
+      const card = root.querySelector('[data-progress-student]')
       const statusControls = [...checklist.querySelectorAll('[role="combobox"]')]
       const bounds = root.getBoundingClientRect()
-      const sidebarBounds = sidebar.getBoundingClientRect(), checklistBounds = checklist.getBoundingClientRect()
       const before = { text: root.textContent, readsBefore, readsAfter: w.studentDetailReadsFixture.length,
+        title: root.querySelector('[data-slot="dialog-title"]').textContent.trim(),
+        cardText: card?.textContent,
+        cardFirst: card.getBoundingClientRect().bottom <= root.querySelector('[data-syllabus-id]').getBoundingClientRect().top,
+        sidebar: Boolean(root.querySelector('[aria-label="Student details"], [aria-label="Student information"]')),
         editable: statusControls.length > 0 && statusControls.every(e => !e.hasAttribute('disabled')),
         fits: root.scrollWidth <= root.clientWidth && d.documentElement.scrollWidth <= d.documentElement.clientWidth,
         bounded: bounds.top >= 0 && bounds.bottom <= w.innerHeight + 1 && bounds.left >= 0 && bounds.right <= w.innerWidth + 1,
-        heightCapped: bounds.height <= w.innerHeight * 0.8 + 1,
+        heightCapped: bounds.height <= w.innerHeight * 0.85 + 1,
         centered: Math.abs(bounds.top + bounds.height / 2 - w.innerHeight / 2) < 2,
-        sideBySide: checklistBounds.left >= sidebarBounds.right,
-        stacked: checklistBounds.top >= sidebarBounds.bottom,
         focusInside: root.contains(d.activeElement),
       }
-      ui.button('Contact').click(); await wait()
-      const contact = [...d.querySelectorAll('[role="dialog"]')].find(e => e.querySelector('[data-slot="dialog-title"]')?.textContent === 'Contact details')
-      const contactText = contact.textContent
-      contact.querySelector('[data-slot="dialog-close"]').click(); await wait()
-      const contactClosed = Boolean(ui.root())
-      ui.button('Medical alerts1').click(); await wait()
-      const medical = [...d.querySelectorAll('[role="dialog"]')].find(e => e.querySelector('[data-slot="dialog-title"]')?.textContent === 'Medical alerts')
-      const medicalText = medical.textContent
-      medical.querySelector('[data-slot="dialog-close"]').click(); await wait()
       ui.close(); await wait()
-      return { ...before, contactText, medicalText, contactClosed, closed: !ui.root(), focusReturned: d.activeElement === trigger,
+      return { ...before, closed: !ui.root(), focusReturned: d.activeElement === trigger,
         routeUnchanged: route === w.location.pathname + w.location.search,
         sameRoster: d.querySelector('[aria-label="Student roster"]') === roster && roster.textContent === rosterText,
         writes: w.attendanceRequestsFixture.length + w.sessionWriteRequestsFixture.length,
         drawerRemains: Boolean(d.querySelector('[data-slot="drawer-content"]')) }
     })
+    assert.equal(result.title, 'Progress checklist')
+    assert.match(result.cardText, /Emma Wilson.*10th Kyu.*Stored next grade.*1 of 1 techniques consistent/)
     assert.match(result.text, /STU-0001/)
-    assert.match(result.text, /Principal Dojo.*Central Dojo.*Membership status.*active/)
-    assert.match(result.text, /Progress checklist.*Stored assessment technique.*Consistent.*Stored progress note/)
-    assert.match(result.contactText, /Primary Guardian.*Secondary Guardian/)
-    assert.match(result.medicalText, /Stored medical alert/)
+    assert.match(result.text, /Stored assessment technique.*Consistent.*Stored progress note/)
+    assert.equal(result.sidebar, false)
     assert.equal(result.readsBefore, 0)
     assert.equal(result.readsAfter, 1)
-    for (const key of ['editable', 'fits', 'bounded', 'heightCapped', 'centered', 'focusInside', 'contactClosed', 'closed', 'focusReturned', 'routeUnchanged', 'sameRoster']) assert.equal(result[key], true, key)
-    assert.equal(width >= 768 ? result.sideBySide : result.stacked, true)
+    for (const key of ['cardFirst', 'editable', 'fits', 'bounded', 'heightCapped', 'centered', 'focusInside', 'closed', 'focusReturned', 'routeUnchanged', 'sameRoster']) assert.equal(result[key], true, key)
     assert.equal(result.drawerRemains, width < 1024)
     assert.equal(result.writes, 0)
   })
@@ -120,33 +112,33 @@ test('modal reopening and the full profile reuse the same student query cache', 
   assert.match(result.text, /STU-0001.*Progress checklist/)
 })
 
-test('only the checklist scrolls inside a centered 80%-height modal while student details and Close stay fixed', async () => {
-  for (const [width, height] of [[320, 568], [568, 320], [844, 390], [1280, 800]]) {
+test('only the checklist scrolls inside a centered modal while the title and Close stay fixed', async () => {
+  for (const [width, height] of [[375, 667], [568, 320], [844, 390], [1280, 800]]) {
     const result = await inCalendar(width, async (w, wait, ui) => {
       ui.triggers()[0].click(); await wait()
       const root = ui.root()
       const body = root.querySelector('[aria-label="Progress checklist scroll area"]')
-      const sidebar = root.querySelector('[aria-label="Student details"]')
-      const sidebarBefore = sidebar.getBoundingClientRect()
+      const header = root.querySelector('[data-slot="dialog-header"]')
       const list = body.querySelector('[data-syllabus-id]').parentElement
       for (let index = 0; index < 30; index++) list.append(list.firstElementChild.cloneNode(true))
       await wait()
+      // The dialog fits its content, so measure once the long list is in place.
+      const headerBefore = header.getBoundingClientRect()
       body.scrollTop = body.scrollHeight
-      const close = [...root.querySelectorAll('button')].find(e => e.textContent.trim() === 'Close student details')
+      const close = [...root.querySelectorAll('button')].find(e => e.textContent.trim() === 'Close progress checklist')
       const bounds = root.getBoundingClientRect(), closeBounds = close.getBoundingClientRect()
-      const sidebarAfter = sidebar.getBoundingClientRect()
+      const headerAfter = header.getBoundingClientRect()
       const scrollers = [...root.querySelectorAll('*')].filter(e => ['auto', 'scroll'].includes(w.getComputedStyle(e).overflowY) && e.scrollHeight > e.clientHeight)
       return { bounded: bounds.top >= 0 && bounds.bottom <= w.innerHeight + 1 && bounds.left >= 0 && bounds.right <= w.innerWidth + 1,
-        heightCapped: bounds.height <= w.innerHeight * 0.8 + 1,
+        heightCapped: bounds.height <= w.innerHeight * 0.85 + 1,
         centered: Math.abs(bounds.top + bounds.height / 2 - w.innerHeight / 2) < 2,
         scrolled: body.scrollTop > 0, closeVisible: closeBounds.top >= bounds.top && closeBounds.bottom <= bounds.bottom,
         onlyChecklistScrolls: scrollers.length === 1 && scrollers[0] === body,
-        detailsFixed: sidebarBefore.top === sidebarAfter.top && sidebarBefore.bottom === sidebarAfter.bottom,
-        detailsVisible: sidebarAfter.top >= bounds.top && sidebarAfter.bottom <= bounds.bottom,
+        headerFixed: headerBefore.top === headerAfter.top && headerBefore.bottom === headerAfter.bottom,
         fits: root.scrollWidth <= root.clientWidth }
     }, '', height)
     assert.deepEqual(result, { bounded: true, heightCapped: true, centered: true, scrolled: true, closeVisible: true,
-      onlyChecklistScrolls: true, detailsFixed: true, detailsVisible: true, fits: true }, `${width}×${height}`)
+      onlyChecklistScrolls: true, headerFixed: true, fits: true }, `${width}×${height}`)
   }
 })
 
@@ -160,7 +152,6 @@ test('modal detail and checklist errors have independent retry paths and missing
       return { before, after: root.textContent }
     }, mode)
     assert.match(result.before, /could not be loaded/)
-    if (mode === 'grading-signoffs-error') assert.match(result.before, /Membership status/)
     assert.match(result.after, /Progress checklist.*Stored assessment technique/)
   }
   const missing = await inCalendar(390, async (w, wait, ui) => {
@@ -168,7 +159,7 @@ test('modal detail and checklist errors have independent retry paths and missing
     return ui.root().textContent
   }, 'detail-missing')
   assert.match(missing, /Student not found/)
-  assert.doesNotMatch(missing, /Progress checklist|No emergency contacts/)
+  assert.doesNotMatch(missing, /Stored assessment technique|No emergency contacts/)
 })
 
 test('closing a loading modal and choosing another student cannot display the previous response', async () => {
@@ -176,7 +167,7 @@ test('closing a loading modal and choosing another student cannot display the pr
     const triggers = ui.triggers()
     triggers[0].click(); await wait(100)
     const loading = ui.root().textContent
-    const privateContent = Boolean(ui.root().querySelector('[aria-label="Student information"]'))
+    const privateContent = Boolean(ui.root().querySelector('[data-progress-student], [data-syllabus-id]'))
     ui.close(); await wait()
     triggers[1].click(); await wait(2300)
     return { loading, privateContent, text: ui.root().textContent }

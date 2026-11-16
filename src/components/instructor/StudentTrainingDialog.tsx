@@ -1,4 +1,5 @@
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
+import type { RefObject } from "react";
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -11,10 +12,6 @@ import {
 } from "@/components/ui/dialog";
 import InstructorDataStatus from "./InstructorDataStatus";
 import ProgressChecklistEditor from "./ProgressChecklistEditor";
-import {
-    StudentInformationActions,
-    StudentInformationCards,
-} from "./StudentInformation";
 import { useInstructorQuery } from "@/hooks/use-instructor-data";
 import { useInstructorApi } from "@/lib/instructor/data-context";
 import { directoryStudent, singaporeToday } from "@/lib/instructor/directory";
@@ -25,7 +22,15 @@ import {
 } from "@/lib/instructor/query-keys";
 import type { StudentEntry } from "@/lib/instructor/types";
 
-function StudentTrainingContent({ student }: { student: StudentEntry }) {
+// The calendar's quick progress checklist: the same layout as the student
+// page's editor dialog, so both entry points look and behave alike.
+function StudentTrainingContent({
+    student,
+    body,
+}: {
+    student: StudentEntry;
+    body: RefObject<HTMLDivElement | null>;
+}) {
     const api = useInstructorApi();
     const studentId = student.student.id;
     const loadDetail = useCallback(
@@ -52,8 +57,8 @@ function StudentTrainingContent({ student }: { student: StudentEntry }) {
         <>
             <DialogHeader className="shrink-0 gap-2 border-b p-4 lg:p-6">
                 <div className="flex items-start justify-between gap-4">
-                    <DialogTitle className="min-w-0 break-words">
-                        {profile.name}
+                    <DialogTitle className="min-w-0 break-words text-[1.125rem] leading-7 font-semibold">
+                        Progress checklist
                     </DialogTitle>
                     <DialogClose
                         render={
@@ -65,14 +70,20 @@ function StudentTrainingContent({ student }: { student: StudentEntry }) {
                         }
                     >
                         <X aria-hidden="true" />
-                        <span className="sr-only">Close student details</span>
+                        <span className="sr-only">Close progress checklist</span>
                     </DialogClose>
                 </div>
-                <DialogDescription className="detail-meta text-sm">
-                    {profile.memberNo}
+                <DialogDescription className="sr-only">
+                    Technique progress for {profile.name}, {profile.memberNo}
                 </DialogDescription>
             </DialogHeader>
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-4 lg:p-6">
+            <div
+                ref={body}
+                role="region"
+                aria-label="Progress checklist scroll area"
+                tabIndex={-1}
+                className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 outline-none lg:p-6"
+            >
                 {detail.status !== "success" ? (
                     <InstructorDataStatus
                         loading={detail.status === "loading"}
@@ -84,32 +95,13 @@ function StudentTrainingContent({ student }: { student: StudentEntry }) {
                         Student not found.
                     </p>
                 ) : (
-                    <div className="student-training-layout grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-4 md:grid-cols-[15rem_minmax(0,1fr)] md:grid-rows-[minmax(0,1fr)]">
-                        <section
-                            aria-label="Student details"
-                            className="student-training-information flex min-w-0 flex-col gap-4 md:h-full"
-                        >
-                            <StudentInformationCards detail={detail.data} />
-                            <StudentInformationActions detail={detail.data} />
-                        </section>
-                        <div
-                            role="region"
-                            aria-label="Progress checklist scroll area"
-                            tabIndex={0}
-                            className="min-h-0 min-w-0 overflow-y-auto overscroll-contain rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                        >
-                            <section className="detail-section" aria-label="Progress checklist">
-                                <div className="detail-section-header">
-                                    <h2>Progress checklist</h2>
-                                </div>
-                                <ProgressChecklistEditor
-                                    detail={detail.data}
-                                    reads={grading}
-                                    onRetry={grading.retry}
-                                />
-                            </section>
-                        </div>
-                    </div>
+                    <section aria-label="Progress checklist">
+                        <ProgressChecklistEditor
+                            detail={detail.data}
+                            reads={grading}
+                            onRetry={grading.retry}
+                        />
+                    </section>
                 )}
             </div>
         </>
@@ -118,21 +110,26 @@ function StudentTrainingContent({ student }: { student: StudentEntry }) {
 
 export default function StudentTrainingDialog({
     handle,
+    onOpenChange,
 }: {
     handle: DialogPrimitive.Handle<StudentEntry>;
+    onOpenChange?: (open: boolean) => void;
 }) {
+    const body = useRef<HTMLDivElement>(null);
     return (
-        <DialogPrimitive.Root handle={handle}>
+        <DialogPrimitive.Root handle={handle} onOpenChange={(open) => onOpenChange?.(open)}>
             {({ payload }) => (
                 <DialogContent
                     showCloseButton={false}
+                    initialFocus={body}
                     data-student-training-dialog=""
-                    className="student-detail-view flex flex-col gap-0 overflow-hidden p-0"
+                    className="student-detail-view flex h-auto max-h-[85dvh] w-[calc(100vw-2rem)] max-w-[40rem] flex-col gap-0 overflow-hidden p-0 lg:gap-0 lg:p-0"
                 >
                     {payload && (
                         <StudentTrainingContent
                             key={payload.student.id}
                             student={payload}
+                            body={body}
                         />
                     )}
                 </DialogContent>

@@ -11,6 +11,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent } from "@/components/ui/card";
 import {
     Dialog,
     DialogClose,
@@ -28,7 +29,7 @@ import {
     techniqueStatusLabels,
 } from "@/lib/instructor/grading";
 import type { StudentGradingReads } from "@/lib/instructor/grading";
-import { singaporeToday } from "@/lib/instructor/directory";
+import { directoryStudent, singaporeToday } from "@/lib/instructor/directory";
 import { historyDate, instructorName } from "@/lib/instructor/student-detail";
 import type {
     StudentDetail,
@@ -75,9 +76,9 @@ function StatusSelect({
                     )}
                 </SelectValue>
             </SelectTrigger>
-            <SelectContent alignItemWithTrigger={false}>
+            <SelectContent alignItemWithTrigger={false} className="p-1">
                 {TECHNIQUE_STATUSES.map((status) => (
-                    <SelectItem key={status} value={status} className="min-h-11 text-[1rem] leading-6 lg:min-h-8">
+                    <SelectItem key={status} value={status} className="min-h-11 py-2.5 pr-10 pl-3 text-[1rem] leading-6 lg:min-h-8 lg:py-1.5 lg:pr-8 lg:pl-2.5">
                         <span className="flex items-center gap-2">
                             <span
                                 aria-hidden="true"
@@ -205,7 +206,9 @@ export default function ProgressChecklistEditor({
                 onRetry={onRetry}
             />
         );
-    const view = studentGrading(detail, reads.data, singaporeToday());
+    const today = singaporeToday();
+    const view = studentGrading(detail, reads.data, today);
+    const { total, counts } = view.progressSummary;
     const progress = new Map(view.progress.map((entry) => [entry.progress.syllabus_item_id, entry]));
     const categories = [...new Set(view.syllabus.map((item) => item.category))];
     const firstOpen = categories.find((category) =>
@@ -215,13 +218,27 @@ export default function ProgressChecklistEditor({
     );
     return (
         <section aria-label="Progress checklist editor" className="space-y-4">
-            <div className="space-y-2">
-                <GradeTransition view={view} />
-                <MissingGradingData view={view} />
-                <p className="detail-body text-sm text-muted-foreground">
-                    Optional. Changes save automatically and don’t affect grading eligibility.
-                </p>
-            </div>
+            <Card size="sm" className="detail-card" data-progress-student>
+                <CardContent className="space-y-2">
+                    <p className="font-semibold break-words">{directoryStudent(detail, today).name}</p>
+                    <GradeTransition view={view} />
+                    <MissingGradingData view={view} />
+                    {total > 0 && (
+                        <div className="space-y-1.5 pt-1">
+                            <p className="detail-meta flex items-center justify-between gap-3 text-sm text-muted-foreground tabular-nums">
+                                <span>{counts.consistent} of {total} techniques consistent</span>
+                                <span className="font-medium">{Math.round((counts.consistent / total) * 100)}%</span>
+                            </p>
+                            <progress
+                                aria-label="Techniques consistent"
+                                value={counts.consistent}
+                                max={total}
+                                className="block h-1.5 w-full overflow-hidden rounded-full [&::-webkit-progress-bar]:rounded-full [&::-webkit-progress-bar]:bg-muted [&::-webkit-progress-value]:rounded-full [&::-webkit-progress-value]:bg-primary [&::-moz-progress-bar]:bg-primary"
+                            />
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
             {categories.length ? (
                 <AccordionPrimitive.Root
                     multiple
@@ -305,9 +322,6 @@ export function ProgressChecklistDialog({
     onRetry: () => void;
 }) {
     const body = useRef<HTMLDivElement>(null);
-    const summary = reads.status === "success"
-        ? studentGrading(detail, reads.data, singaporeToday()).progressSummary
-        : null;
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent
@@ -326,10 +340,7 @@ export function ProgressChecklistDialog({
                             <span className="sr-only">Close progress checklist</span>
                         </DialogClose>
                     </div>
-                    <DialogDescription className="detail-meta text-sm">
-                        {studentName}
-                        {summary && summary.total > 0 && ` · ${summary.counts.consistent} of ${summary.total} consistent`}
-                    </DialogDescription>
+                    <DialogDescription className="sr-only">Technique progress for {studentName}</DialogDescription>
                 </DialogHeader>
                 <div ref={body} tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 outline-none lg:p-6">
                     <ProgressChecklistEditor detail={detail} reads={reads} onRetry={onRetry} />
