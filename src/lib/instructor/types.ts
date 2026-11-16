@@ -297,14 +297,18 @@ export interface GradingApplicationRow {
   notes: string | null
 }
 
-// The current schema scopes these to student/item, not an assessment attempt.
-export interface TechniqueSignOffRow {
+// Progress checklist status. No row, or a null status, is "not_assessed".
+export type TechniqueStatus = 'not_assessed' | 'introduced' | 'developing' | 'consistent'
+
+// One student's progress on one syllabus item. Separate from grading eligibility.
+export interface TechniqueProgressRow {
   id: string
   student_id: StudentId
   syllabus_item_id: string
-  signed_off_at: Timestamp
-  signed_off_by: InstructorId | null
+  status: Exclude<TechniqueStatus, 'not_assessed'> | null
   note: string | null
+  updated_at: Timestamp
+  updated_by: InstructorId | null
 }
 
 export interface InstructorAvailabilityRow {
@@ -502,8 +506,8 @@ export interface StudentAttendanceSummary {
   lastAttended: { event: EventRow; centre: CentreRow | null } | null
 }
 
-export interface TechniqueSignOffEntry {
-  signOff: TechniqueSignOffRow
+export interface TechniqueProgressEntry {
+  progress: TechniqueProgressRow
   instructor: InstructorRow | null
 }
 

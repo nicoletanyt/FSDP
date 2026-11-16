@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/label";
 import ThemeToggle from "@/components/theme-toggle";
 import logo from "@/assets/logo.png";
 import { useEmptyAuthForm } from "@/hooks/use-empty-auth-form";
-import { supabase } from "@/lib/supabase";
+import { createTransientAuthClient, supabase } from "@/lib/supabase";
+import { signInToStaffPortal, signInToStudentPortal } from "@/lib/portal-sign-in";
 import { Mail, Lock, ArrowRight, Eye, EyeOff } from "lucide-react";
 
 export default function Login({ staff = false }: { staff?: boolean }) {
@@ -24,11 +25,9 @@ export default function Login({ staff = false }: { staff?: boolean }) {
         setPending(true);
         setError("");
         try {
-            const { error: authError } = await supabase.auth.signInWithPassword({
-                email: email.trim(),
-                password,
-            });
-            if (authError) throw authError;
+            await (staff ? signInToStaffPortal : signInToStudentPortal)(
+                createTransientAuthClient(), supabase, email.trim(), password,
+            );
         } catch (failure) {
             setError(
                 failure instanceof Error

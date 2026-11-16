@@ -4,7 +4,7 @@ import {
   assertAssessment, dateOnly, decodeApplication, decodeAvailability, decodeCalendarEntry, nullable, object,
   decodeCentre, decodeClassType, decodeDirectory, decodeGrade, decodeGradeRequirement, decodeGradeTrack,
   decodeHistoryEntry, decodePage, decodeRosterEntry, decodeStudentDetail,
-  decodeSummary, decodeSyllabusItem, decodeTechniqueSignOff, array, decodeAttendanceSave, decodeAttendanceSnapshot,
+  decodeSummary, decodeSyllabusItem, decodeTechniqueProgress, array, decodeAttendanceSave, decodeAttendanceSnapshot,
   decodeSessionSave, decodeAssessmentSnapshot,
   decodeGradingBatch, decodeGradingSignature, decodeAvailabilitySave, decodeAvailabilitySnapshot,
   decodeEndorsementStatus, decodeEventEndorsements, decodeStudentApplication,
@@ -17,7 +17,7 @@ import { collectCalendarPages } from './page-collector'
 import type {
   AssessmentDetail, AssessmentKey, AttendanceSaveInput, AvailabilityInput, CalendarOptions, DirectoryOptions, EventId, HistoryOptions,
   InstructorIdentity, InstructorReferenceData, Page, PageOptions, StudentId, AssessmentSaveInput, SessionSaveInput,
-  GradingBatchKey, GradingBatchSaveInput, AvailabilitySaveInput,
+  GradingBatchKey, GradingBatchSaveInput, AvailabilitySaveInput, TechniqueStatus,
 } from './types'
 
 // Inject the existing shared Supabase client at the provider boundary. This does
@@ -569,13 +569,32 @@ export function createInstructorApi(client: InstructorClient) {
       return decodeSummary(await rpc('instructor_student_summary', { target_student: studentId }, signal))
     },
 
-    async getTechniqueSignOffs(id: StudentId, signal?: AbortSignal) {
+    async getTechniqueProgress(id: StudentId, signal?: AbortSignal) {
       const studentId = parseEntityId(id, 'student')
       await getInstructorAccount(signal)
-      const rows = await allRows('technique_sign_offs', ['signed_off_at', 'id'], decodeTechniqueSignOff, signal,
+      const rows = await allRows('technique_progress', ['updated_at', 'id'], decodeTechniqueProgress, signal,
         '*, instructor:instructors(*)', { student_id: studentId })
-      if (rows.some(item => item.signOff.student_id !== studentId)) throw new InstructorDataError('invalid_data', 'The technique sign-offs do not match the student.')
+      if (rows.some(item => item.progress.student_id !== studentId)) throw new InstructorDataError('invalid_data', 'The technique progress does not match the student.')
       return rows
+    },
+
+    // Saves one technique's status and optional note. Returns null when the
+    // record was cleared back to Not assessed.
+    async setTechniqueProgress(id: StudentId, syllabusItemId: string, status: TechniqueStatus, note: string | null) {
+      const studentId = parseEntityId(id, 'student')
+      if (!syllabusItemId) throw new InstructorDataError('invalid_request', 'Choose a technique to update.')
+      const data = await requestInstructorData(
+        () => client.rpc('set_technique_progress', {
+          target_student: studentId, item: syllabusItemId,
+          new_status: status === 'not_assessed' ? null : status, new_note: note?.trim() || null,
+        }).returns<unknown>(),
+        'Unable to save technique progress. Please try again.',
+      )
+      if (data === null) return null
+      const entry = decodeTechniqueProgress(data)
+      if (entry.progress.student_id !== studentId || entry.progress.syllabus_item_id !== syllabusItemId)
+        throw new InstructorDataError('invalid_data', 'The saved technique progress does not match the request.')
+      return entry
     },
 
     async getAssessment(key: AssessmentKey, signal?: AbortSignal): Promise<AssessmentDetail | null> {

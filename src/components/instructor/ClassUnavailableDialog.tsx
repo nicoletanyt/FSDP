@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { CircleAlert } from "lucide-react";
+import { cn } from "cn";
 import { Button } from "@/components/ui/button";
 import {
     AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -13,7 +14,11 @@ import { supabase } from "@/lib/supabase";
 
 type RequestStatus = { id: string };
 
-export default function ClassUnavailableDialog({ eventId }: { eventId: string }) {
+// `className` lets a parent place the button in its own action row (e.g. `contents`);
+// the status and error lines then take a full row via `basis-full`.
+export default function ClassUnavailableDialog({ eventId, className, triggerClassName }: {
+    eventId: string; className?: string; triggerClassName?: string;
+}) {
     const { session } = useAuth();
     const [open, setOpen] = useState(false);
     const { notify, feedbackDialog } = useFeedback();
@@ -58,9 +63,9 @@ export default function ClassUnavailableDialog({ eventId }: { eventId: string })
         }
     }
 
-    return <div className="space-y-2">
-        {existing ? <p role="status" className="text-sm text-muted-foreground">Unavailability reported for this class.</p> : <AlertDialog open={open} onOpenChange={value => { if (!pending) { setOpen(value); setError(''); } }}>
-            <AlertDialogTrigger render={<Button variant="destructive" className="min-h-11 w-full" disabled={status.isPending || status.isError} />}>
+    return <div className={cn("space-y-2", className)}>
+        {existing ? <p role="status" className="basis-full text-sm text-muted-foreground">Unavailability reported for this class.</p> : <AlertDialog open={open} onOpenChange={value => { if (!pending) { setOpen(value); setError(''); } }}>
+            <AlertDialogTrigger render={<Button variant="destructive" className={cn("min-h-11 w-full", triggerClassName)} disabled={status.isPending || status.isError} />}>
                 I’m unavailable
             </AlertDialogTrigger>
             <AlertDialogContent size="compact">
@@ -77,7 +82,7 @@ export default function ClassUnavailableDialog({ eventId }: { eventId: string })
                 </AlertDialogFooter>
             </AlertDialogContent>
         </AlertDialog>}
-        {status.isError && <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-destructive">
+        {status.isError && <div role="alert" className="flex basis-full flex-wrap items-center gap-2 text-sm text-destructive">
             Unable to check this class’s request status. <Button size="sm" variant="outline" onClick={() => void status.refetch()}>Retry</Button>
         </div>}
         {feedbackDialog}

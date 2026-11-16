@@ -1,6 +1,7 @@
 import { cryptoProvider, getStripe, requireEnv } from '../_shared/stripe.ts'
 import { adminClient } from '../_shared/grading.ts'
 import { resolveCreditPass } from '../_shared/credit-passes.ts'
+import { resolveMembershipFee } from '../_shared/membership-fees.ts'
 import { sendMembershipPaidEmail } from '../send-membership-email/handler.ts'
 import { confirmGradingPreview } from '../_shared/grading-drafts.ts'
 import { sendCreditReceipt } from '../_shared/credit-receipt.ts'
@@ -51,7 +52,7 @@ export async function handleRequest(request: Request): Promise<Response> {
       event.type === 'checkout.session.async_payment_failed'
     ) {
       const session = event.data.object
-      if (session.metadata?.membership_student_id) {
+      if (session.metadata?.membership_student_id || session.metadata?.membership_fee === 'true') {
         const { error } = await adminClient().from('payments').delete()
           .eq('stripe_session_id', session.id).eq('status', 'pending')
         if (error) throw error
@@ -135,6 +136,42 @@ export async function handleRequest(request: Request): Promise<Response> {
           } catch {
             console.error('Membership payment email could not be sent.')
           }
+          return Response.json({ received: true })
+        }
+
+        if (session.metadata?.membership_fee === 'true') {
+          // Re-read the session from Stripe rather than trusting the event body.
+          const verified = await stripe.checkout.sessions.retrieve(session.id)
+          const metadata = verified.metadata ?? {}
+          const fee = resolveMembershipFee(metadata.membership_fee_id)
+          const studentId = metadata.membership_fee_student_id
+          const months = Number(metadata.membership_fee_months)
+
+          if (
+            verified.payment_status !== 'paid' ||
+            verified.livemode !== false ||
+            verified.currency !== 'sgd' ||
+            !fee ||
+            !studentId ||
+            metadata.membership_fee !== 'true' ||
+            months !== fee.months ||
+            verified.amount_total !== fee.priceCents ||
+            verified.client_reference_id !== studentId
+          ) {
+            return new Response('Membership fee payment mismatch.', { status: 400 })
+          }
+
+          // Extends the membership by the months the fee covers; never adds credits.
+          const { error } = await adminClient().rpc('finalize_membership_fee', {
+            student: studentId,
+            stripe_session: session.id,
+            fee_title: fee.title,
+            months: fee.months,
+            paid_amount: verified.amount_total,
+            paid_currency: verified.currency,
+          })
+          if (error) throw error
+          console.log(`Membership fee finalized (${session.id})`)
           return Response.json({ received: true })
         }
 

@@ -332,7 +332,7 @@ export async function runTool(name: string, input: unknown, context: ToolContext
   if (!identity) return { unavailable: 'No instructor record is linked to this account. Student tools are still available.' }
   const { from, to } = range(args)
   if (name === 'get_my_schedule') {
-    const result = page(await rpc('instructor_calendar', {
+    const result = page(await rpc('instructor_chat_schedule', {
       range_from: `${from}T00:00:00+08:00`, range_to: `${to}T00:00:00+08:00`,
       page_size: PAGE_SIZE, page_offset: offset(args.offset),
     }), value => {

@@ -23,6 +23,7 @@ import InstructorLoadingBoundary from "@/components/instructor/InstructorLoading
 import { InstructorSkeleton } from "@/components/instructor/InstructorSkeletons";
 import StudentSessionHistory from "@/components/instructor/StudentSessionHistory";
 import StudentGradingRead from "@/components/instructor/StudentGradingRead";
+import { ProgressChecklistDialog } from "@/components/instructor/ProgressChecklistEditor";
 import StudentApplications from "@/components/instructor/StudentApplications";
 import { useAuth } from "@/hooks/use-auth";
 import { useInstructorQuery } from "@/hooks/use-instructor-data";
@@ -181,6 +182,7 @@ function StudentDetailContent({ detail }: { detail: StudentDetail }) {
     );
     const grading = useInstructorQuery(userId => queryKeys.studentGrading(userId, detail.student.id), loadGrading,
         queryTimes.studentGrading);
+    const [progressOpen, setProgressOpen] = useState(false);
     const sidebarRef = useRef<HTMLElement>(null);
     const [sidebarFits, setSidebarFits] = useState(false);
     useEffect(() => {
@@ -372,7 +374,15 @@ function StudentDetailContent({ detail }: { detail: StudentDetail }) {
                         <AttendanceSummary studentId={detail.student.id} />
                         <StudentGradingRead title="Next grading" detail={detail} reads={grading} onRetry={grading.retry} onViewGrading={() => selectTab("grading")} />
                         <StudentApplications studentId={detail.student.id} today={singaporeToday()} />
-                        <StudentGradingRead title="Technique checklist" detail={detail} reads={grading} onRetry={grading.retry} />
+                        <StudentGradingRead title="Progress checklist" detail={detail} reads={grading} onRetry={grading.retry} onEdit={() => setProgressOpen(true)} />
+                        <ProgressChecklistDialog
+                            open={progressOpen}
+                            onOpenChange={setProgressOpen}
+                            studentName={profile.name}
+                            detail={detail}
+                            reads={grading}
+                            onRetry={grading.retry}
+                        />
                     </TabsContent>
                     <TabsContent value="sessions">
                         <StudentSessionHistory
