@@ -49,7 +49,7 @@ function Layout() {
     isBooked: (id: string) => booked.has(id),
     isWaitlisted: (id: string) => waitlist.includes(id),
     isFull: (s: ClassOffering) => s.occupied >= s.capacity,
-    enroll: async () => null, cancel: async () => null, reschedule: async () => null,
+    enroll: async () => null, cancel: async () => null,
     joinWaitlist: async (s: ClassOffering) => { setWaitlist(w => [...w, s.id]); return null },
     leaveWaitlist: async (id: string) => { setWaitlist(w => w.filter(x => x !== id)); return null },
   }

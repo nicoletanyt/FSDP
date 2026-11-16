@@ -27,7 +27,7 @@ type Snapshot = {
     active: boolean;
     sessions: Session[];
 };
-type Action = "enrol" | "cancel" | "reschedule" | "join" | "leave";
+type Action = "enrol" | "cancel" | "join" | "leave";
 
 const dayFormat = new Intl.DateTimeFormat("sv-SE", {
     timeZone: "Asia/Singapore",
@@ -135,7 +135,6 @@ export function useLiveStudentSchedule(onCreditChange?: () => void) {
     async function change(
         action: Action,
         targetId: string,
-        originalId?: string,
     ): Promise<string | null> {
         if (savingRef.current) return "A booking change is already in progress.";
         savingRef.current = true;
@@ -146,7 +145,8 @@ export function useLiveStudentSchedule(onCreditChange?: () => void) {
                 {
                     action,
                     target_id: targetId,
-                    original_id: originalId ?? null,
+                    // Only rescheduling used this; students can't reschedule any more.
+                    original_id: null,
                 },
             );
             if (error) {
@@ -189,8 +189,6 @@ export function useLiveStudentSchedule(onCreditChange?: () => void) {
         isFull,
         enroll: (session: ClassOffering) => change("enrol", session.id),
         cancel: (id: string) => change("cancel", id),
-        reschedule: (id: string, replacement: ClassOffering) =>
-            change("reschedule", replacement.id, id),
         joinWaitlist: (session: ClassOffering) => change("join", session.id),
         leaveWaitlist: (id: string) => change("leave", id),
     };

@@ -79,7 +79,9 @@ export default function RootLayout() {
     <div
       className={cn(
         'flex flex-col text-foreground',
-        isAdminCalendar ? 'h-dvh overflow-hidden' : 'min-h-screen',
+        // Desktop admin calendar: locked to the screen, the calendar scrolls inside.
+        // Below lg the calendar has no inner scroll area, so the page must scroll.
+        isAdminCalendar ? 'min-h-screen lg:h-dvh lg:overflow-hidden' : 'min-h-screen',
         isAdmin || isStudent ? 'bg-muted/30' : 'bg-background',
       )}
     >

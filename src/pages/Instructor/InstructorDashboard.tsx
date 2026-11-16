@@ -752,12 +752,12 @@ export default function InstructorDashboard() {
                 if (row && event.currentTarget.contains(row) && row.dataset.prefetchClass) prefetch.touchClass(row.dataset.prefetchClass);
             }}>
             {!wide ? <MobileInstructorCalendar
-                date={selectedDate} now={now} view={mobileList ? "list" : view === "week" ? "multi-day" : view} slots={availability} focusRequest={timelineFocusRequest}
+                date={selectedDate} now={now} view={mobileList || view === "week" ? "list" : view} slots={availability} focusRequest={timelineFocusRequest}
                 getEvents={getEvents} classCatalogue={calendar.data?.classTypes ?? []} catalogueStatus={catalogueStatus} content={calendarStatus ?? selectionStatus}
                 onSelectDate={selectDay} onSelectClass={calendarProps.onToggleClass} onSelectAvailability={selectAvailability}
                 onAddAvailability={canUseAvailability ? addAvailability : undefined} onSelectRange={canUseAvailability ? selectRange : undefined}
                 onToday={() => { const current = singaporeClock(); setNow(current); updateSelection(new Date(current.getFullYear(), current.getMonth(), current.getDate())); setTimelineFocusRequest(value => value + 1); }}
-                onChangeView={(mode: MobileCalendarView) => { setMobileList(mode === "list"); if (mode !== "list") changeView(mode === "multi-day" ? "week" : mode); }}
+                onChangeView={(mode: MobileCalendarView) => { setMobileList(mode === "list"); if (mode !== "list") changeView(mode); }}
             /> : <>
             <header className="shrink-0">
                 <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">

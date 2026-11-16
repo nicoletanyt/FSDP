@@ -4,6 +4,7 @@ import AttendanceCalendar from '@/components/admin/AttendanceCalendar'
 import MobileCalendarHeader from '@/components/shared/calendar/MobileCalendarHeader'
 import type { MobileViewOption } from '@/components/shared/calendar/MobileCalendarHeader'
 import WeekStrip from '@/components/shared/calendar/WeekStrip'
+import BackToTopButton from '@/components/shared/calendar/BackToTopButton'
 import { CalendarSkeleton } from '@/components/shared/skeletons'
 import { useSwipeDay } from '@/hooks/use-swipe-day'
 import { addDays, addMonths, dateKey, formatTime, fullDate, monthDates, weekDates } from '@/lib/admin/attendance-calendar'
@@ -77,7 +78,8 @@ function MonthDots({ date, today, events, onSelectDate }: {
   onSelectDate: (date: Date) => void
 }) {
   return (
-    <div role="grid" aria-label="Month" className="grid grid-cols-7 gap-y-1 py-2">
+    // A full-width divider under the month (as on the instructor calendar), then the day's classes.
+    <div role="grid" aria-label="Month" className="-mx-4 mb-3 grid grid-cols-7 gap-y-1 border-b border-border/60 px-4 pt-2 pb-4">
       {weekDates(date).map(day => (
         <span key={day.getDay()} role="columnheader" className="py-1 text-center text-[11px] font-medium max-md:text-cal text-muted-foreground">
           {day.toLocaleDateString('en-GB', { weekday: 'short' }).slice(0, 2)}
@@ -138,15 +140,18 @@ export default function MobileAdminCalendar({
   const swipe = useSwipeDay(direction => onSelectDate(addDays(date, direction)))
   const step = (direction: 1 | -1) => onSelectDate(mode === 'month' ? addMonths(date, direction) : addDays(date, direction))
   return (
-    <section aria-label="Class calendar" data-mobile-calendar className="min-w-0">
+    // A card: the header (pulled to the card's edges) is its tinted top strip. overflow-clip,
+    // not overflow-hidden, rounds the corners without breaking the sticky day headings.
+    <section aria-label="Class calendar" data-mobile-calendar className="min-w-0 overflow-clip rounded-xl border bg-card p-4">
       <MobileCalendarHeader date={date} view={mode} views={views} onViewChange={onChangeMode}
-        stepUnit={mode === 'month' ? 'month' : 'day'} onToday={onToday}
+        stepUnit={mode === 'month' ? 'month' : 'day'} onToday={onToday} todayLabel="Go to today"
         onPrevious={() => step(-1)} onNext={() => step(1)} extras={filter} legend={legend} />
       {mode === 'month'
         ? <MonthDots date={date} today={today} events={events} onSelectDate={onSelectDate} />
         : <WeekStrip date={date} today={today} onSelectDate={onSelectDate} />}
       {mode === 'month' && (
-        <h2 aria-live="polite" className="py-3 text-[15px] font-semibold max-md:text-[1rem]">
+        // Screen readers still hear the chosen date; the grid already shows it on screen.
+        <h2 aria-live="polite" className="sr-only">
           {date.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}
         </h2>
       )}
@@ -159,11 +164,12 @@ export default function MobileAdminCalendar({
           <Agenda events={events} day={date} selectedSessionId={selectedSessionId} onToggleSession={onToggleSession} />
         ) : (
           <div aria-label="Classes this week" className="space-y-4 pt-2">
-            {weekDates(date).map(day => {
+            {/* Starts at the selected day (today on load), not Monday; only this week's classes are loaded. */}
+            {weekDates(date).filter(day => day.getTime() >= new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()).map(day => {
               const count = eventsOn(events, day).length
               return (
                 <section key={dateKey(day)}>
-                  <h3 className={cn('sticky top-[var(--mobile-site-nav-height)] z-10 flex items-baseline justify-between border-b border-border/50 bg-background py-2 text-[14px] font-semibold max-md:text-[1rem]',
+                  <h3 className={cn('sticky top-[var(--mobile-site-nav-height)] z-10 flex items-baseline justify-between border-b border-border/50 bg-card py-2 text-[14px] font-semibold max-md:text-[1rem]',
                     dateKey(day) === dateKey(today) && 'text-brand-red-ink')}>
                     <span>{day.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'long' })}</span>
                     <span className="text-xs font-normal text-muted-foreground">{count === 1 ? '1 class' : `${count} classes`}</span>
@@ -175,6 +181,8 @@ export default function MobileAdminCalendar({
           </div>
         )}
       </div>
+      <BackToTopButton enabled={mode === 'day'} />
     </section>
   )
 }
+

@@ -206,46 +206,6 @@ export function useStudentEnrollments(
     }))
   }
 
-  const reschedule = (
-    originalId: string,
-    replacement: ClassOffering
-  ): string | null => {
-    if (!isBooked(originalId)) {
-      return 'The original booking no longer exists.'
-    }
-
-    if (originalId === replacement.id) {
-      return 'Select a different session.'
-    }
-
-    const error = check(replacement, originalId)
-    if (error) return error
-
-    if (
-      record.enrollments.some(
-        e => e.id === replacement.id
-      )
-    ) {
-      return 'This session already exists in your history.'
-    }
-
-    save(prev => ({
-      ...prev,
-      enrollments: [
-        ...prev.enrollments.filter(
-          e => e.id !== originalId
-        ),
-        {
-          id: replacement.id,
-          status: 'make-up',
-          movedFrom: originalId
-        }
-      ]
-    }))
-
-    return null
-  }
-
   return {
     ...record,
     active,
@@ -257,7 +217,6 @@ export function useStudentEnrollments(
     check,
     enroll,
     cancel,
-    reschedule,
     joinWaitlist,
     leaveWaitlist
   }

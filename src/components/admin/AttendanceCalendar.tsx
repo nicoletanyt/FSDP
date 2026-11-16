@@ -637,6 +637,12 @@ function CalendarTimeline({
         left: Math.max(0, left),
         behavior: 'instant',
       })
+      // Phones and tablets: the timeline is as tall as its content and the page
+      // scrolls instead, so bring the current time a third of the way down the screen.
+      if (viewport.scrollHeight - viewport.clientHeight < 2) {
+        const timelineTop = viewport.getBoundingClientRect().top + window.scrollY + headerHeight
+        window.scrollTo({ top: Math.max(0, timelineTop + position - window.innerHeight / 3), behavior: 'instant' })
+      }
       return true
     }
 
