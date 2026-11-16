@@ -177,7 +177,7 @@ export default function MobileStudentCalendar({
     // A card, like the admin and instructor calendars: the header (pulled to the card's edges)
     // is its tinted top strip; overflow-clip keeps the sticky day headings sticking.
     // Phones: reach 17px into the page's 24px inset so the 7-column grids keep their width.
-    <section aria-label="Class calendar" data-mobile-calendar className="min-w-0 overflow-clip rounded-xl border bg-card p-4 max-sm:-mx-[17px]">
+    <section aria-label="Class calendar" data-mobile-calendar className="min-w-0 overflow-clip rounded-xl border bg-card p-4 shadow-xs max-sm:-mx-[17px]">
       <MobileCalendarHeader date={date} view={mode} views={views} onViewChange={onChangeMode}
         stepUnit={mode === 'month' ? 'month' : 'day'} onToday={onToday} todayLabel="Go to today"
         onPrevious={() => step(-1)} onNext={() => step(1)} extras={filter} legendTitle="Class colours" legend={legend} />

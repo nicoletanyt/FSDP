@@ -452,7 +452,7 @@ function CalendarMonth({
     >
       <div
         aria-label="Month dates"
-        className="flex min-h-0 min-w-0 flex-col overflow-y-auto overscroll-contain rounded-xl border bg-card"
+        className="flex min-h-0 min-w-0 flex-col overflow-y-auto overscroll-contain rounded-xl border bg-card min-[785px]:shadow-xs"
       >
         <div className="sticky top-0 z-10 grid shrink-0 grid-cols-7 border-b bg-card">
           {days.slice(0, 7).map((day) => (
@@ -661,7 +661,7 @@ function CalendarTimeline({
     >
       <div
         ref={scrollRef}
-        className="min-h-0 flex-1 overflow-auto overscroll-contain rounded-xl border bg-card"
+        className="min-h-0 flex-1 overflow-auto overscroll-contain rounded-xl border bg-card min-[785px]:shadow-xs"
       >
         <div
           className="grid"

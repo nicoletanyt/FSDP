@@ -142,7 +142,7 @@ export default function MobileAdminCalendar({
   return (
     // A card: the header (pulled to the card's edges) is its tinted top strip. overflow-clip,
     // not overflow-hidden, rounds the corners without breaking the sticky day headings.
-    <section aria-label="Class calendar" data-mobile-calendar className="min-w-0 overflow-clip rounded-xl border bg-card p-4">
+    <section aria-label="Class calendar" data-mobile-calendar className="min-w-0 overflow-clip rounded-xl border bg-card p-4 shadow-xs">
       <MobileCalendarHeader date={date} view={mode} views={views} onViewChange={onChangeMode}
         stepUnit={mode === 'month' ? 'month' : 'day'} onToday={onToday} todayLabel="Go to today"
         onPrevious={() => step(-1)} onNext={() => step(1)} extras={filter} legend={legend} />

@@ -360,8 +360,8 @@ function CalendarMonth({
         }));
         const hasEntries = entries.some(group => group.events.length || group.slots.length);
         return <section aria-label="Monthly class agenda" className="space-y-4">
-            {!hasEntries && <p className="rounded-xl border bg-card p-4 text-sm text-muted-foreground">No classes or availability this month. Select a date to view that day.</p>}
-            {entries.map(({ day, events, slots }) => <section key={dateKey(day)} className="space-y-2 rounded-xl border bg-card p-3">
+            {!hasEntries && <p className="rounded-xl border bg-card shadow-xs p-4 text-sm text-muted-foreground">No classes or availability this month. Select a date to view that day.</p>}
+            {entries.map(({ day, events, slots }) => <section key={dateKey(day)} className="space-y-2 rounded-xl border bg-card shadow-xs p-3">
                 <Button variant="ghost" onClick={() => onSelectDate(day)} aria-current={dateKey(day) === dateKey(today) ? "date" : undefined} className="min-h-11 w-full justify-start whitespace-normal text-left">
                     {day.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}
                 </Button>
@@ -382,7 +382,7 @@ function CalendarMonth({
                 <p role="status" className="py-3 text-sm text-muted-foreground">No classes or availability this month.</p>}
             <div
                 aria-label="Month dates"
-                className="flex min-w-0 flex-col rounded-xl border bg-card lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain"
+                className="flex min-w-0 flex-col rounded-xl border bg-card shadow-xs lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain"
             >
                 <div className="sticky top-0 z-10 grid shrink-0 grid-cols-7 border-b bg-card">
                     {days.slice(0, 7).map((day) => (

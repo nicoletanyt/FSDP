@@ -259,7 +259,7 @@ function ClassSessionPicker({
     return (
         <>
             {/* Phones: a container, so the days size to the 70% column rather than the screen. */}
-            <div className="min-w-0 self-start rounded-lg border bg-card p-2 max-md:@container md:col-start-1 md:row-start-1 md:justify-self-start md:p-3">
+            <div className="min-w-0 self-start rounded-lg border bg-card p-2 shadow-xs max-md:@container md:col-start-1 md:row-start-1 md:justify-self-start md:p-3">
                 <Calendar
                     aria-label="Class dates"
                     mode="single"
@@ -874,7 +874,7 @@ function BalanceCard({
     return (
         <Link
             to="/student/credits"
-            className="flex items-center gap-2.5 rounded-lg border bg-card px-3 py-2 transition-colors hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-ring md:w-fit md:min-w-56"
+            className="flex items-center gap-2.5 rounded-lg border bg-card px-3 py-2 shadow-xs transition-colors hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-ring md:w-fit md:min-w-56"
         >
             <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
                 <Coins aria-hidden="true" className="size-4" />
@@ -914,7 +914,7 @@ function BookingSummary({
     return (
         <section
             aria-labelledby="booking-summary-title"
-            className="flex flex-col gap-4 rounded-xl border bg-card p-4 md:sticky md:top-4 md:col-start-2 md:row-span-2 md:row-start-1 md:self-start xl:col-start-3 xl:row-span-1"
+            className="flex flex-col gap-4 rounded-xl border bg-card p-4 shadow-xs md:sticky md:top-4 md:col-start-2 md:row-span-2 md:row-start-1 md:self-start xl:col-start-3 xl:row-span-1"
         >
             <div className="space-y-1">
                 <div className="flex items-center justify-between gap-3">

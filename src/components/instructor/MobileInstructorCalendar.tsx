@@ -264,7 +264,7 @@ export default function MobileInstructorCalendar({
         <section
             aria-label="Instructor calendar"
             data-mobile-calendar
-            className="min-w-0 overflow-clip rounded-xl border bg-card p-4 max-sm:-mx-[17px]"
+            className="min-w-0 overflow-clip rounded-xl border bg-card p-4 shadow-xs max-sm:-mx-[17px]"
         >
             <MobileCalendarHeader
                 date={date}

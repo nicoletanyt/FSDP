@@ -317,7 +317,8 @@ function AttendanceTimeline({
   return (
     <section aria-label={view === 'week' ? 'Weekly hourly timeline' : 'Daily hourly timeline'} className={cn('min-w-0', fill && 'h-full min-h-0')}>
       <div ref={scrollRef} className={cn('relative rounded-xl border bg-card',
-        pageScroll ? '' : 'overflow-auto overscroll-contain',
+        // Phone day view sits inside the calendar card, so it stays flat there.
+        pageScroll ? '' : 'overflow-auto overscroll-contain shadow-xs',
         pageScroll ? '' : fill ? 'h-full' : 'h-[min(65dvh,46rem)] lg:h-[clamp(24rem,calc(100dvh-15rem),56rem)]')}>
         <div className="grid" style={{ gridTemplateColumns: `${isDay ? 56 : 64}px repeat(${days.length}, minmax(0, 1fr))` }}>
           {/* A single day needs no date row: the week strip or toolbar already shows it. */}

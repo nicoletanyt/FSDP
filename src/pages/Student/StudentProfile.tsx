@@ -10,7 +10,7 @@ import RetryAlert from "@/components/shared/layout/RetryAlert";
 import { DetailSkeleton } from "@/components/shared/skeletons";
 import { buttonVariants } from "@/components/ui/button";
 import ChangePasswordDialog from "@/components/profile/ChangePasswordDialog";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { useStudentProfile } from "@/hooks/use-student-profile";
 import { formatDate } from "@/lib/format";
 import { isStudentMembership, membershipLabel, resolveMembershipType } from "@/lib/membership";
@@ -55,6 +55,17 @@ function MembershipTypePill() {
       {isStudentMembership(type) ? <GraduationCap aria-hidden="true" /> : <User aria-hidden="true" />}
       {membershipLabel(type)}
     </StatusBadge>
+  );
+}
+
+// One heading style for every card on this page: a semibold h2, with anything that
+// belongs to it (a status pill) on the right.
+function ProfileCardHeader({ title, children }: { title: string; children?: ReactNode }) {
+  return (
+    <CardHeader className="flex flex-wrap items-center justify-between gap-2">
+      <h2 className="text-base leading-snug font-semibold">{title}</h2>
+      {children}
+    </CardHeader>
   );
 }
 
@@ -162,14 +173,13 @@ function MembershipDetails({ profile }: { profile: Profile }) {
   const copy = standingCopy[standing];
 
   return (
-    <Card className="gap-4 p-5">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="font-semibold">Membership details</h2>
+    <Card>
+      <ProfileCardHeader title="Membership details">
         <StatusBadge tone={standingTone[standing]}>{copy.chip}</StatusBadge>
-      </div>
-      <p className={`text-sm ${standing === "Active" ? "text-muted-foreground" : "text-brand-red-ink"}`}>
-        {copy.note}
-      </p>
+      </ProfileCardHeader>
+      <CardContent className="space-y-4">
+      {/* Active needs no note: the pill says it. Other states say what happens next. */}
+      {standing !== "Active" && <p className="text-sm text-brand-red-ink">{copy.note}</p>}
       {standing !== "None" && (
         <dl className="grid grid-cols-2 gap-x-4 gap-y-4">
           <Detail icon={IdCard} term="Member ID">
@@ -193,6 +203,7 @@ function MembershipDetails({ profile }: { profile: Profile }) {
           {standing === "Expired" ? "Renew membership" : "Apply for membership"}
         </Link>
       )}
+      </CardContent>
     </Card>
   );
 }
@@ -225,9 +236,7 @@ export default function StudentProfile() {
             </section>
 
             <Card className="mt-6">
-              <CardHeader>
-                <CardTitle>Account</CardTitle>
-              </CardHeader>
+              <ProfileCardHeader title="Account" />
               <CardContent className="space-y-5">
                 <dl>
                   <Detail icon={Mail} term="Email">{account?.email ?? "—"}</Detail>
