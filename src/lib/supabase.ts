@@ -9,11 +9,28 @@ if (!supabaseUrl || !supabasePublishableKey) {
   )
 }
 
+const connection = {
+  origin: new URL(supabaseUrl).origin,
+  publishableKey: supabasePublishableKey,
+}
+
 // Auth, REST, and Functions each append their own path to the project origin.
-export const supabase = createClient(new URL(supabaseUrl).origin, supabasePublishableKey, {
+export const supabase = createClient(connection.origin, connection.publishableKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
   },
 })
+
+// Verify student-portal credentials without publishing a session to AuthProvider.
+// Only a verified student session is transferred to the persistent client.
+export function createTransientAuthClient() {
+  return createClient(connection.origin, connection.publishableKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  })
+}
