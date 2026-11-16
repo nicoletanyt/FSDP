@@ -3,6 +3,7 @@ import { adminClient } from '../_shared/grading.ts'
 import { resolveCreditPass } from '../_shared/credit-passes.ts'
 import { sendMembershipPaidEmail } from '../send-membership-email/handler.ts'
 import { confirmGradingPreview } from '../_shared/grading-drafts.ts'
+import { sendCreditReceipt } from '../_shared/credit-receipt.ts'
 
 export async function handleRequest(request: Request): Promise<Response> {
   if (request.method !== 'POST') {
@@ -112,7 +113,7 @@ export async function handleRequest(request: Request): Promise<Response> {
           if (pendingError) throw pendingError
           const expectedAmount = pending
             ? (pending.student_id === studentId ? pending.amount_cents : null)
-            : (await stripe.prices.retrieve(requireEnv('STRIPE_MEMBERSHIP_PRICE_ID'))).unit_amount
+            : (await stripe.prices.retrieve(requireEnv('STRIPE_MEMBERSHIP_FEE_ID'))).unit_amount
           if (verified.payment_status !== 'paid' || verified.currency !== 'sgd' ||
             !expectedAmount || verified.amount_total !== expectedAmount || !studentId ||
             studentId !== session.metadata.membership_student_id ||
@@ -171,6 +172,12 @@ export async function handleRequest(request: Request): Promise<Response> {
           })
           if (error) throw error
           console.log(`Credit purchase finalized (${session.id})`)
+          // An email outage must not undo a completed purchase or trigger a payment retry.
+          try {
+            await sendCreditReceipt(session.id)
+          } catch {
+            console.error('Credit purchase receipt could not be sent.')
+          }
           return Response.json({ received: true })
         }
 

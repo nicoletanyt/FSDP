@@ -80,9 +80,10 @@ export async function handleRequest(request: Request): Promise<Response> {
     }
 
     const stripe = getStripe()
-    const price = await stripe.prices.retrieve(requireEnv('STRIPE_MEMBERSHIP_PRICE_ID'))
-    if (!price.active || price.type !== 'one_time' || price.currency !== 'sgd' || !price.unit_amount || price.livemode) {
-      throw new Error('Membership price is not an active SGD test-mode one-time price.')
+    const price = await stripe.prices.retrieve(requireEnv('STRIPE_MEMBERSHIP_FEE_ID'))
+    if (!price.active || price.type !== 'one_time' || price.currency !== 'sgd' ||
+      price.unit_amount !== 6000 || price.livemode) {
+      throw new Error('Membership price must be an active SGD 60.00 test-mode one-time price.')
     }
 
     const db = adminClient()
@@ -102,13 +103,15 @@ export async function handleRequest(request: Request): Promise<Response> {
       return Response.json({ error: 'Your membership is already active.' }, { status: 409, headers })
     }
 
+    // Checkout returns to the configured site even when localhost is allowed for testing.
+    const appOrigin = new URL(requireEnv('APP_URL')).origin
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       line_items: [{ price: price.id, quantity: 1 }],
       client_reference_id: studentId,
       metadata: { membership_student_id: studentId },
-      success_url: `${config.appOrigin}/dashboard?checkout=success`,
-      cancel_url: `${config.appOrigin}/apply-membership?checkout=cancel`,
+      success_url: `${appOrigin}/dashboard?checkout=success`,
+      cancel_url: `${appOrigin}/apply-membership?checkout=cancel`,
     }, {
       idempotencyKey: `membership-${studentId}-${idempotencyKey}`,
     })

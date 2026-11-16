@@ -133,6 +133,20 @@ export function useLiveStudentSchedule(onCreditChange?: () => void) {
                 await client.cancelQueries({ queryKey: keys.schedule(userId) });
                 client.setQueryData(keys.schedule(userId), data as Snapshot);
             }
+            if (action === "enrol" && current()) {
+                try {
+                    // The booking and credit change have committed; email delivery is separate.
+                    // A mail failure must never turn a successful booking into an error.
+                    const { error: mailError } = await supabase.functions.invoke(
+                        "send-class-enrolment-email",
+                        { body: { event_id: targetId } },
+                    );
+                    if (mailError)
+                        console.error("Class enrolment confirmation email could not be sent.");
+                } catch {
+                    console.error("Class enrolment confirmation email could not be sent.");
+                }
+            }
             return null;
         } catch {
             return "Could not update your booking. Try again.";
