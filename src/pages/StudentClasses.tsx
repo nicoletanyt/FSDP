@@ -58,7 +58,11 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useMembershipStatus } from "@/hooks/use-membership-status";
 
 type Action =
-    | { kind: "enroll"; sessions: ClassOffering[] }
+    | {
+        kind: "enroll";
+        sessions: ClassOffering[];
+        repeat?: { month: string; skippedSessions: string[] };
+    }
     | { kind: "waitlist" | "leave"; session: ClassOffering };
 
 type ClassType = { id: string; label: string; description: string };
@@ -893,8 +897,10 @@ function BookingSummary({
     creditError,
     busy,
     canEnrol,
+    canRepeat,
     onRemove,
     onEnrol,
+    onRepeat,
 }: {
     days: ClassOffering[][];
     count: number;
@@ -902,8 +908,10 @@ function BookingSummary({
     creditError: boolean;
     busy: boolean;
     canEnrol: boolean;
+    canRepeat: boolean;
     onRemove: (id: string) => void;
     onEnrol: () => void;
+    onRepeat: () => void;
 }) {
     const cost = cartCost(count, creditAccount, creditError);
     return (
@@ -986,6 +994,20 @@ function BookingSummary({
                             {cost.label}
                         </span>
                     </p>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full"
+                        disabled={!canEnrol || !canRepeat || busy}
+                        onClick={onRepeat}
+                    >
+                        Repeat weekly this month
+                    </Button>
+                    {!canRepeat && (
+                        <p className="text-sm text-muted-foreground">
+                            Select classes from one month to repeat weekly.
+                        </p>
+                    )}
                     <Button
                         size="lg"
                         className="hidden w-full lg:inline-flex"
@@ -1079,6 +1101,69 @@ function ClassBooking({
         .sort((a, b) => dateTime(a).getTime() - dateTime(b).getTime());
     const cartDays = groupByDay(selected);
     const cost = cartCost(selected.length, creditAccount, creditError);
+    const canRepeat = selected.every(
+        (session) => session.dateId.slice(0, 7) === selected[0]?.dateId.slice(0, 7),
+    );
+
+    function reviewWeeklyBookings() {
+        const anchor = selected[0];
+        if (!anchor || !canRepeat) return;
+
+        const month = anchor.dateId.slice(0, 7);
+        const recurring = [...selected];
+        const skippedSessions: string[] = [];
+
+        for (const slot of selected) {
+            const matchesByDate = new Map<string, ClassOffering[]>();
+            for (const session of classSessions) {
+                if (
+                    session.dateId <= slot.dateId ||
+                    session.dateId.slice(0, 7) !== month ||
+                    session.date.getDay() !== slot.date.getDay() ||
+                    session.centre !== slot.centre ||
+                    session.startTime !== slot.startTime ||
+                    session.endTime !== slot.endTime
+                ) continue;
+
+                const matches = matchesByDate.get(session.dateId) ?? [];
+                matches.push(session);
+                matchesByDate.set(session.dateId, matches);
+            }
+
+            for (const matches of matchesByDate.values()) {
+                if (matches.some((session) => recurring.some((item) => item.id === session.id))) {
+                    continue;
+                }
+
+                const eligible = matches.find((session) =>
+                    session.bookable &&
+                    !schedule.isFull(session) &&
+                    !schedule.isBooked(session.id) &&
+                    !bookings.some((booking) => conflict(session, booking)) &&
+                    !recurring.some((booking) => conflict(session, booking))
+                );
+
+                if (eligible) {
+                    recurring.push(eligible);
+                } else {
+                    const session = matches[0];
+                    skippedSessions.push(
+                        prettyDate(session.date) + " · " + sessionTime(session) + " · " + session.centre,
+                    );
+                }
+            }
+        }
+
+        recurring.sort((left, right) => dateTime(left).getTime() - dateTime(right).getTime());
+        setAction({
+            kind: "enroll",
+            sessions: recurring,
+            repeat: {
+                month: anchor.date.toLocaleDateString("en-SG", { month: "long", year: "numeric" }),
+                skippedSessions,
+            },
+        });
+    }
 
     function changeDay(date: Date) {
         setDay(dateKey(date));
@@ -1147,7 +1232,7 @@ function ClassBooking({
                     if (error) {
                         failed.push(session);
                         errors.push(
-                            `${sessionTime(session)} at ${session.centre}: ${error}`,
+                            `${prettyDate(session.date)} · ${sessionTime(session)} at ${session.centre}: ${error}`,
                         );
                     } else {
                         // The booking RPC already charged the earliest-expiring batch.
@@ -1161,11 +1246,13 @@ function ClassBooking({
                     const oneDay = groupByDay(action.sessions).length === 1;
                     notify({
                         title: "Enrolment confirmed",
-                        description: `Enrolled in ${plural(count, "class", "classes")}${oneDay ? ` on ${prettyDate(action.sessions[0].date)}` : ""}.`,
+                        description: action.repeat
+                            ? `Enrolled in ${plural(count, "class", "classes")} in ${action.repeat.month}.`
+                            : `Enrolled in ${plural(count, "class", "classes")}${oneDay ? ` on ${prettyDate(action.sessions[0].date)}` : ""}.`,
                     });
                 }
                 if (failed.length) {
-                    setAction({ kind: "enroll", sessions: failed });
+                    setAction({ ...action, sessions: failed });
                     setActionError(
                         [
                             ...(completed.length
@@ -1296,8 +1383,10 @@ function ClassBooking({
                         creditError={creditError}
                         busy={busy}
                         canEnrol={schedule.active}
+                        canRepeat={canRepeat}
                         onRemove={removeFromCart}
                         onEnrol={() => setAction({ kind: "enroll", sessions: selected })}
+                        onRepeat={reviewWeeklyBookings}
                     />
                 </div>
             ) : (
@@ -1343,7 +1432,7 @@ function ClassBooking({
                         <AlertDialogHeader>
                             <AlertDialogTitle>
                                 {action.kind === "enroll"
-                                    ? "Confirm enrolment?"
+                                    ? action.repeat ? "Confirm weekly bookings?" : "Confirm enrolment?"
                                     : action.kind === "waitlist"
                                         ? "Join the waitlist?"
                                         : "Leave the waitlist?"}
@@ -1367,6 +1456,11 @@ function ClassBooking({
                         </AlertDialogHeader>
                         {action.kind === "enroll" && (
                             <div className="flex flex-col gap-4 text-left">
+                                {action.repeat && (
+                                    <p className="text-sm text-muted-foreground">
+                                        Weekly bookings in {action.repeat.month}
+                                    </p>
+                                )}
                                 {/* One card per class, grouped under its date. */}
                                 <ul className="-mx-1 flex max-h-72 flex-col gap-4 overflow-y-auto px-1 text-sm">
                                     {groupByDay(action.sessions).map((group) => (
@@ -1403,6 +1497,11 @@ function ClassBooking({
                                             : plural(enrolmentCount, "credit")}
                                     </span>
                                 </div>
+                                {action.repeat && action.repeat.skippedSessions.length > 0 && (
+                                    <p className="text-sm text-muted-foreground">
+                                        Skipped because the session is unavailable, already booked, or clashes with a booking: {action.repeat.skippedSessions.join("; ")}.
+                                    </p>
+                                )}
                                 {insufficientCredits && (
                                     <p className="text-sm text-destructive">
                                         {plural(creditAccount.credits, "credit")} available.{" "}
