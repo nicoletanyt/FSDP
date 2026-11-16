@@ -58,18 +58,25 @@ Deno.test('verified paid grading session finalizes once per webhook delivery; un
   const fee = 9500 // per-grade SOP fee fixed on the attempt (e.g. 1st Kyu, adults)
   let amount = fee
   let expectedAmount = fee
+  let verifiedDate = '2026-12-13'
+  let verifiedReference: string
+  let verifiedSession = 'cs_test_grading'
+  let databaseFailure = false
   const attempt = '00000000-0000-4000-8000-000000000001'
+  verifiedReference = attempt
   globalThis.fetch = async (input, init) => {
     const request = new Request(input, init)
     if (request.url.startsWith('https://api.stripe.com/v1/checkout/sessions/')) {
-      return Response.json({ id: 'cs_test_grading', object: 'checkout.session', mode: 'payment',
-        payment_status: 'paid', amount_total: amount, currency: 'sgd', metadata: { grading_attempt_id: attempt } })
+      return Response.json({ id: verifiedSession, object: 'checkout.session', mode: 'payment',
+        payment_status: 'paid', amount_total: amount, currency: 'sgd', livemode: false,
+        client_reference_id: verifiedReference, metadata: { grading_attempt_id: attempt, grading_date: verifiedDate } })
     }
     if (request.url.includes('/rest/v1/grading_checkout_attempts')) {
       assert.ok(request.url.includes(`id=eq.${attempt}`))
-      return Response.json({ amount_cents: expectedAmount })
+      return Response.json({ amount_cents: expectedAmount, stripe_session_id: 'cs_test_grading', grading_date: '2026-12-13' })
     }
     if (request.url.includes('/rest/v1/rpc/finalize_grading_checkout')) {
+      if (databaseFailure) return Response.json({ message: 'Transaction failed', code: 'P0001' }, { status: 400 })
       finalized++
       const payload = await request.json()
       assert.equal(payload.attempt, attempt)
@@ -104,6 +111,21 @@ Deno.test('verified paid grading session finalizes once per webhook delivery; un
     amount = expectedAmount = 4500
     assert.equal((await webhook(await signed(true))).status, 200)
     assert.equal(finalized, 4) // Preserve both late-fee and per-grade fee coverage.
+    for (const mismatch of ['date', 'owner', 'session']) {
+      verifiedDate = mismatch === 'date' ? '2026-09-14' : '2026-12-13'
+      verifiedReference = mismatch === 'owner' ? 'another_attempt' : attempt
+      verifiedSession = mismatch === 'session' ? 'cs_test_other' : 'cs_test_grading'
+      assert.equal((await webhook(await signed(true))).status, 400)
+      assert.equal(finalized, 4)
+    }
+    verifiedDate = '2026-12-13'
+    verifiedReference = attempt
+    verifiedSession = 'cs_test_grading'
+    databaseFailure = true
+    assert.equal((await webhook(await signed(true))).status, 500)
+    databaseFailure = false
+    assert.equal((await webhook(await signed(true))).status, 200)
+    assert.equal(finalized, 5)
   } finally {
     globalThis.fetch = originalFetch
     names.forEach((name, index) => previous[index] === undefined ? Deno.env.delete(name) : Deno.env.set(name, previous[index]!))

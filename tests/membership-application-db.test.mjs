@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 import { PGlite } from '@electric-sql/pglite'
 
-test('membership submission is atomic, owner-scoped and never resets paid credits or awards ranks', async () => {
+test('membership submission preserves credits and confirmed ranks; initial grade is persisted after repair', async () => {
   const db = new PGlite()
   const user = '00000000-0000-4000-8000-000000000001'
   const other = '00000000-0000-4000-8000-000000000002'
@@ -170,6 +170,54 @@ test('membership submission is atomic, owner-scoped and never resets paid credit
       create trigger reject_contact before insert on public.emergency_contacts for each row execute function reject_contact();`)
     await assert.rejects(submit(other, { ...form, fullName: 'Should Rollback' }), /contact unavailable/)
     assert.equal((await db.query('select first_name from public.students where user_id = $1', [other])).rows[0].first_name, 'Other')
+    await db.exec('drop trigger reject_contact on public.emergency_contacts')
+
+    // Reproduce the old bug before applying the repair: the saved Membership
+    // says Green, but the student is left at the default even after payment.
+    await db.exec(`insert into public.grades values
+      ('green-8th-kyu','Green (8th Kyu)'),('yellow-10th-kyu','Yellow (10th Kyu)'),
+      ('black-2nd-kyu','Black (2nd Kyu)')`)
+    await submit(other, { ...form, fullName: 'Other', currentBelt: 'green' })
+    await db.query("update public.students set membership_status='active' where user_id=$1", [other])
+    const rank = async account => (await db.query('select current_grade_id from public.students where user_id=$1', [account])).rows[0]?.current_grade_id
+    assert.equal(await rank(other), 'unranked')
+    await db.exec(await readFile(new URL('../supabase/migrations/20261116063221_membership_current_grade.sql', import.meta.url), 'utf8'))
+    assert.equal(await rank(other), 'green-8th-kyu')
+    assert.equal(await rank(user), '1st-dan') // never overwrite a ranked existing member
+
+    const newcomer = '00000000-0000-4000-8000-000000000005'
+    const explicitOnly = '00000000-0000-4000-8000-000000000006'
+    await db.query("insert into public.users values($1,'new@example.com','student'),($2,'explicit@example.com','student')", [newcomer, explicitOnly])
+    await assert.rejects(submit(newcomer, { ...form, currentBelt: 'made-up-belt' }), /Invalid or ambiguous/)
+    await assert.rejects(submit(newcomer, { ...form, currentBelt: 'green', current_grade_id: '1st-dan' }), /same grade/)
+    await assert.rejects(submit(newcomer, { ...form, current_grade_id: 'not-a-grade' }), /Invalid current grade/)
+    await assert.rejects(submit(newcomer, form), /exact Kyu or Dan/) // black alone is ambiguous
+    assert.equal(await rank(newcomer), undefined)
+
+    const green = await submit(newcomer, { ...form, currentBelt: 'green' })
+    assert.equal(green.current_grade_id, 'green-8th-kyu')
+    assert.equal(await rank(newcomer), 'green-8th-kyu')
+    assert.equal(green.verifiedRank, 'Green (8th Kyu)')
+    const specific = await submit(newcomer, { ...form, currentBelt: 'yellow-10th-kyu', current_grade_id: 'yellow-10th-kyu' })
+    assert.equal(specific.current_grade_id, 'yellow-10th-kyu')
+    assert.equal(specific.beltRank, 'Yellow (10th Kyu)')
+    assert.equal(await rank(newcomer), 'yellow-10th-kyu')
+
+    const { currentBelt: _legacyBelt, ...idOnly } = form
+    const direct = await submit(explicitOnly, { ...idOnly, current_grade_id: 'green-8th-kyu' })
+    assert.equal(direct.current_grade_id, 'green-8th-kyu')
+    assert.equal(direct.declaredBelt, 'green-8th-kyu')
+    assert.equal((await confirmation(explicitOnly)).beltRank, 'Green (8th Kyu)')
+    const savedGrade = (await db.query('select form_data from membership_private.application_details where user_id=$1', [explicitOnly])).rows[0].form_data
+    assert.equal(savedGrade.current_grade_id, 'green-8th-kyu')
+
+    await db.query("update public.students set membership_status='active' where user_id=$1", [newcomer])
+    await submit(newcomer, { ...form, currentBelt: '1st-dan', current_grade_id: '1st-dan' })
+    assert.equal(await rank(newcomer), 'yellow-10th-kyu')
+    await assert.rejects(submit(instructor, { ...form, currentBelt: 'green' }), /Only student/)
+    await db.exec('begin; set local role authenticated')
+    await assert.rejects(db.query("select membership_private.resolve_current_grade('{\"currentBelt\":\"green\"}')"), /permission denied/)
+    await db.exec('rollback')
   } finally {
     await db.close()
   }
