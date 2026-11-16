@@ -48,10 +48,11 @@ export async function getGradingQuote(eventId: string, gradeId: string) {
   return quote
 }
 
-export async function getGradingCheckoutUrl(quote: GradingQuote) {
+export async function getGradingCheckoutUrl(quote: GradingQuote, gradingDate?: string) {
   const { url } = await gradingCheckoutRequest<{ url: string }>({
     action: 'checkout', event_id: quote.eventId,
     target_grade_id: quote.targetGradeId, expected_amount: quote.totalCents,
+    ...(gradingDate ? { grading_date: gradingDate } : {}),
   })
   if (typeof url !== 'string' || new URL(url).origin !== 'https://checkout.stripe.com') {
     throw new Error('Stripe did not return a valid Checkout URL.')

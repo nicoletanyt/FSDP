@@ -76,12 +76,18 @@ export async function handleRequest(request: Request): Promise<Response> {
         if (session.metadata?.grading_attempt_id) {
           const verified = await stripe.checkout.sessions.retrieve(session.id)
           const db = adminClient()
-          // The live grading flow fixes a per-grade fee on the checkout attempt, when checkout started.
+          // Reconcile the signed event with Stripe and the server-owned attempt.
+          // The RPC atomically snapshots its date, records payment and moves the
+          // formal application to under_review (pending dojo review).
           const { data: attemptRow, error: attemptError } = await db.from('grading_checkout_attempts')
-            .select('amount_cents').eq('id', session.metadata.grading_attempt_id).maybeSingle()
+            .select('amount_cents,stripe_session_id,grading_date').eq('id', session.metadata.grading_attempt_id).maybeSingle()
           if (attemptError) throw attemptError
-          if (verified.payment_status !== 'paid' || verified.currency !== 'sgd' || !attemptRow?.amount_cents ||
+          if (verified.mode !== 'payment' || verified.livemode !== false ||
+            verified.payment_status !== 'paid' || verified.currency !== 'sgd' || !attemptRow?.amount_cents ||
             verified.amount_total !== attemptRow.amount_cents ||
+            attemptRow.stripe_session_id !== verified.id || verified.id !== session.id ||
+            verified.client_reference_id !== session.metadata.grading_attempt_id ||
+            (verified.metadata?.grading_date && verified.metadata.grading_date !== attemptRow.grading_date) ||
             verified.metadata?.grading_attempt_id !== session.metadata.grading_attempt_id) {
             return new Response('Grading payment mismatch.', { status: 400 })
           }

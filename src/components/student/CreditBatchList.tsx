@@ -35,7 +35,7 @@ export default function CreditBatchList({ userId }: { userId: string | undefined
           <h2 id="my-passes-title" className="text-lg font-semibold">My passes</h2>
           <p className="mt-1 text-sm text-muted-foreground">Each pass is listed separately, earliest expiry first. All times are Singapore time (SGT).</p>
         </div>
-        <Button type="button" variant="outline" size="sm" disabled={loading || !userId} onClick={retry}>
+        <Button type="button" variant="outline" size="touch" disabled={loading || !userId} onClick={retry}>
           <RefreshCw aria-hidden="true" className="size-4" /> Refresh passes
         </Button>
       </div>

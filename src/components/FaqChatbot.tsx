@@ -17,6 +17,7 @@ import {
     type FaqTopic,
 } from "@/lib/chatbot-faq";
 import { cn } from "@/lib/utils";
+import { randomUUID } from "@/lib/uuid";
 
 type ChatMessage = {
     id: string;
@@ -40,7 +41,7 @@ function createMessage(
     content: string,
     extra: Pick<ChatMessage, "links" | "followUps"> = {},
 ): ChatMessage {
-    return { id: crypto.randomUUID(), role, content, timestamp: new Date(), ...extra };
+    return { id: randomUUID(), role, content, timestamp: new Date(), ...extra };
 }
 
 /** Short replies that don't need an FAQ lookup. */

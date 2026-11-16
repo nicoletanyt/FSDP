@@ -1,6 +1,11 @@
 import { Link } from "react-router";
+import { CalendarDays, GraduationCap, IdCard, Mail, MapPin } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import type { ReactNode } from "react";
 
 import PageHeader from "@/components/shared/layout/PageHeader";
+import { StatusBadge, type BadgeTone } from "@/components/shared/status/StatusBadge";
+import { useAuth } from "@/hooks/use-auth";
 import RetryAlert from "@/components/shared/layout/RetryAlert";
 import { DetailSkeleton } from "@/components/shared/skeletons";
 import { buttonVariants } from "@/components/ui/button";
@@ -21,6 +26,26 @@ const standingCopy: Record<Standing, { chip: string; dot: string; note: string }
   Expired: { chip: "Expired", dot: "bg-white", note: "Your membership has expired. Renew it to keep training." },
   None: { chip: "Not a member", dot: "bg-white/60", note: "You haven't applied for a membership yet." },
 };
+
+const standingTone: Record<Standing, BadgeTone> = {
+  Active: "success",
+  Pending: "warning",
+  Expired: "danger",
+  None: "neutral",
+};
+
+// One labelled fact: icon and label above, value below.
+function Detail({ icon: Icon, term, children }: { icon: LucideIcon; term: string; children: ReactNode }) {
+  return (
+    <div className="min-w-0 space-y-1">
+      <dt className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <Icon aria-hidden="true" className="size-3.5 shrink-0" />
+        {term}
+      </dt>
+      <dd className="font-semibold [overflow-wrap:anywhere]">{children}</dd>
+    </div>
+  );
+}
 
 function initials(name: string) {
   return name
@@ -126,41 +151,28 @@ function MembershipDetails({ profile }: { profile: Profile }) {
   const copy = standingCopy[standing];
 
   return (
-    <Card className="gap-3 p-4">
-      <h2 className="font-semibold">Membership details</h2>
+    <Card className="gap-4 p-5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="font-semibold">Membership details</h2>
+        <StatusBadge tone={standingTone[standing]}>{copy.chip}</StatusBadge>
+      </div>
       <p className={`text-sm ${standing === "Active" ? "text-muted-foreground" : "text-brand-red-ink"}`}>
         {copy.note}
       </p>
-      <dl className="grid gap-3">
-        <div>
-          <dt className="text-xs text-muted-foreground">Status</dt>
-          <dd className="font-semibold">{copy.chip}</dd>
-        </div>
-        {standing !== "None" && (
-          <>
-            <div>
-              <dt className="text-xs text-muted-foreground">Member ID</dt>
-              <dd className={standing === "Active" ? "break-all font-mono text-sm font-semibold" : "font-semibold"}>
-                {standing === "Active" ? profile.memberId : "Issued once active"}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-xs text-muted-foreground">Current grade</dt>
-              <dd className="font-semibold">{profile.belt.name}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-muted-foreground">Home dojo</dt>
-              <dd className="font-semibold">{profile.homeDojo ?? "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-muted-foreground">
-                {standing === "Active" ? "Member since" : "Applied on"}
-              </dt>
-              <dd className="font-semibold">{profile.memberSince ? formatDate(profile.memberSince) : "—"}</dd>
-            </div>
-          </>
-        )}
-      </dl>
+      {standing !== "None" && (
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-4">
+          <Detail icon={IdCard} term="Member ID">
+            {standing === "Active"
+              ? <span className="break-all font-mono text-sm">{profile.memberId}</span>
+              : "Issued once active"}
+          </Detail>
+          <Detail icon={GraduationCap} term="Current grade">{profile.belt.name}</Detail>
+          <Detail icon={MapPin} term="Home dojo">{profile.homeDojo ?? "—"}</Detail>
+          <Detail icon={CalendarDays} term={standing === "Active" ? "Member since" : "Applied on"}>
+            {profile.memberSince ? formatDate(profile.memberSince) : "—"}
+          </Detail>
+        </dl>
+      )}
       {(standing === "None" || standing === "Expired") && (
         <Link to="/apply-membership" className={buttonVariants({ className: "mt-1 w-fit" })}>
           {standing === "Expired" ? "Renew membership" : "Apply for membership"}
@@ -173,10 +185,12 @@ function MembershipDetails({ profile }: { profile: Profile }) {
 /* ---------- Page ---------- */
 export default function StudentProfile() {
   const { profile, loading, error, reload } = useStudentProfile();
+  // Sign-in details, moved here from the phone menu.
+  const { profile: account } = useAuth();
 
   return (
       <section className="w-full">
-        <PageHeader title="Profile" description="Your membership card and account settings." />
+        <PageHeader title="Profile" />
 
         {loading && <div className="mt-6"><DetailSkeleton label="Loading your membership…" /></div>}
         {!loading && (error || !profile) && (
@@ -189,7 +203,7 @@ export default function StudentProfile() {
             {/* Fixed card column: an `auto` column shrank the card to its content and crushed it. */}
             <section
               aria-label="Membership"
-              className="mt-6 grid items-start gap-4 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)]"
+              className="mt-6 grid items-start gap-4 md:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)]"
             >
               <MembershipCard profile={profile} />
               <MembershipDetails profile={profile} />
@@ -199,7 +213,10 @@ export default function StudentProfile() {
               <CardHeader>
                 <CardTitle>Account</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-5">
+                <dl>
+                  <Detail icon={Mail} term="Email">{account?.email ?? "—"}</Detail>
+                </dl>
                 <ChangePasswordDialog accountType="student" />
               </CardContent>
             </Card>

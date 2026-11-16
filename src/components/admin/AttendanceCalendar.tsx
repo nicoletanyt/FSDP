@@ -713,7 +713,7 @@ function CalendarTimeline({
             ).map((minute) => (
               <span
                 key={minute}
-                className="absolute right-2 text-3xs text-muted-foreground tabular-nums"
+                className="absolute right-2 text-3xs text-muted-foreground tabular-nums max-md:text-cal"
                 style={{
                   top: (minute - timelineStart) * pixelsPerMinute,
                   transform:
@@ -769,7 +769,7 @@ function CalendarTimeline({
                       <Popover key={`more-${group.start}`}>
                         <PopoverTrigger
                           aria-label={`${group.items.length} more ${group.items.length === 1 ? 'class' : 'classes'} at this time. Show list`}
-                          render={<button type="button" className="absolute z-10 flex items-start justify-center rounded-md border bg-muted pt-1 text-3xs font-semibold text-muted-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring" />}
+                          render={<button type="button" className="absolute z-10 flex items-start justify-center rounded-md border bg-muted pt-1 text-3xs font-semibold text-muted-foreground outline-none max-md:text-cal hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring" />}
                           style={{
                             top: (Math.max(timelineStart, group.start) - timelineStart) * pixelsPerMinute,
                             height: (Math.min(timelineEnd, group.end) - Math.max(timelineStart, group.start)) * pixelsPerMinute,
@@ -814,7 +814,7 @@ function CalendarTimeline({
                            eventCardStyle(item),
                           selected &&
                             'z-[15] ring-2 ring-primary ring-offset-2 ring-offset-card',
-                          isDay && 'rounded-lg px-2.5 py-[3px] text-2xs leading-tight',
+                          isDay && 'rounded-lg px-2.5 py-[3px] text-2xs leading-tight max-md:text-cal-lg',
                         )}
                         style={{
                           top: (start - timelineStart) * pixelsPerMinute,
@@ -835,12 +835,12 @@ function CalendarTimeline({
                           {needsCover(item) && <TriangleAlert aria-hidden="true" className="mr-1 inline size-3 align-[-2px]" />}
                           {item.name}
                         </span>
-                        <span className="block text-3xs leading-tight">
+                        <span className="block text-3xs leading-tight max-md:text-cal">
                           {formatTime(item.startTime)} –{' '}
                           {formatTime(item.endTime)}
                         </span>
                         {isDay && (
-                          <span className="flex max-w-full items-center gap-1 text-3xs leading-tight opacity-80">
+                          <span className="flex max-w-full items-center gap-1 text-3xs leading-tight opacity-80 max-md:text-cal">
                             <MapPin aria-hidden="true" className="size-3 shrink-0" />
                             <span className="truncate">{item.centreName}</span>
                           </span>

@@ -22,6 +22,8 @@ import {
   membershipLabel,
 } from '@/lib/membership'
 import { cn } from '@/lib/utils'
+import { randomUUID } from '@/lib/uuid'
+import { gradingTrackForDob, gradingTrackLabel, membershipBeltOptions } from '@/lib/grading-tracks'
 
 const STEPS = [
   { id: 1, title: 'Personal information' },
@@ -41,15 +43,6 @@ const NATIONALITIES = [
 const GENDERS = [
   { value: 'male', label: 'Male' },
   { value: 'female', label: 'Female' },
-]
-const BELTS = [
-  { value: 'white', label: 'White belt (Mukyu)' },
-  { value: 'yellow', label: 'Yellow belt' },
-  { value: 'orange', label: 'Orange belt' },
-  { value: 'green', label: 'Green belt' },
-  { value: 'blue', label: 'Blue belt' },
-  { value: 'brown', label: 'Brown belt' },
-  { value: 'black', label: 'Black belt' },
 ]
 const EMERGENCY_RELATIONSHIPS = [
   { value: 'parent', label: 'Parent' },
@@ -146,8 +139,12 @@ export default function ApplyMembership() {
   const [dojosLoading, setDojosLoading] = useState(true)
   const [dojosError, setDojosError] = useState('')
   const [dojoRevision, setDojoRevision] = useState(0)
+  const [gradeCatalogue, setGradeCatalogue] = useState<{ id: string; label: string }[]>([])
+  const [beltsLoading, setBeltsLoading] = useState(true)
+  const [beltsError, setBeltsError] = useState('')
+  const [beltRevision, setBeltRevision] = useState(0)
   // Same key for retries of an unchanged submission; Stripe then returns the same session.
-  const retryKey = useRef(crypto.randomUUID())
+  const retryKey = useRef(randomUUID())
   const [photoFile, setPhotoFile] = useState<File | null>(null)
   const [photoPreview, setPhotoPreview] = useState('')
   // Reuse an upload when the student retries with the same photo.
@@ -202,6 +199,28 @@ export default function ApplyMembership() {
   }, [dojoRevision])
 
   useEffect(() => {
+    const controller = new AbortController()
+    setBeltsLoading(true)
+    setBeltsError('')
+    void (async () => {
+      try {
+        const { data, error } = await supabase.from('grades')
+          .select('id,label').order('sort_order').abortSignal(controller.signal)
+        if (error) throw error
+        if (!controller.signal.aborted) {
+          setGradeCatalogue(data ?? [])
+          if (!data?.length) setBeltsError('No grades are configured. Please contact your dojo.')
+        }
+      } catch {
+        if (!controller.signal.aborted) setBeltsError('Unable to load belt grades. Please try again.')
+      } finally {
+        if (!controller.signal.aborted) setBeltsLoading(false)
+      }
+    })()
+    return () => controller.abort()
+  }, [beltRevision])
+
+  useEffect(() => {
     if (!photoFile) {
       setPhotoPreview('')
       return
@@ -225,6 +244,21 @@ export default function ApplyMembership() {
 
   const age = calculateAge(formData.dob)
   const isMinor = age !== null && age < 18
+  const gradingTrack = gradingTrackForDob(formData.dob)
+  let belts: { value: string; label: string }[] = []
+  let beltCatalogueError = ''
+  if (gradeCatalogue.length && gradingTrack) {
+    try { belts = membershipBeltOptions(gradeCatalogue, gradingTrack) }
+    catch (failure) { beltCatalogueError = failure instanceof Error ? failure.message : 'Unable to match your belt grades.' }
+  }
+
+  useEffect(() => {
+    // DOB changes must not carry a children's-only belt into an adult form (or
+    // vice versa). Shared grades remain selected when valid on both tracks.
+    if (beltsLoading || beltsError || beltCatalogueError) return
+    setFormData(previous => previous.currentBelt && !belts.some(belt => belt.value === previous.currentBelt)
+      ? { ...previous, currentBelt: '' } : previous)
+  }, [formData.dob, gradeCatalogue, beltsLoading, beltsError, beltCatalogueError])
 
   useEffect(() => {
     if (isMinor) setShowGuardian(true)
@@ -273,7 +307,7 @@ export default function ApplyMembership() {
     if (step === 2) {
       if (!formData.principalDojo) found.principalDojo = 'Select your principal dojo.'
       if (!formData.membershipType) found.membershipType = 'Select a membership type.'
-      if (!formData.currentBelt) found.currentBelt = 'Select your current belt.'
+      if (!belts.some(belt => belt.value === formData.currentBelt)) found.currentBelt = 'Select your current belt from the grade catalogue.'
     }
     if (step === 3) {
       if (!formData.emergencyName) found.emergencyName = 'Enter your emergency contact’s name.'
@@ -341,7 +375,7 @@ export default function ApplyMembership() {
         // One authenticated transaction writes students, private application
         // details and contacts. Ownership, member ID and grade are server-owned.
         const { data, error } = await supabase.rpc('submit_my_membership_application', {
-          application: { ...formData, parqAnswers, waiverSigned, isDeclared },
+          application: { ...formData, current_grade_id: formData.currentBelt, parqAnswers, waiverSigned, isDeclared },
         })
         if (error) throw error
         if (!data?.membershipId || !data?.startDate) throw new Error('The server did not return a membership record.')
@@ -413,7 +447,6 @@ export default function ApplyMembership() {
     <section className="w-full max-w-3xl space-y-6">
       <PageHeader
         title="Apply for membership"
-        description={`Four short steps, then a ${money.format(MEMBERSHIP_FEE)} membership fee paid securely on Stripe.`}
       />
 
       <Card>
@@ -550,11 +583,14 @@ export default function ApplyMembership() {
                   ))}
                 </NativeSelect>
               </FormField>
-              <FormField name="currentBelt" label="Current belt" error={errors.currentBelt}>
-                <NativeSelect {...control('currentBelt')} className={selectClass} value={formData.currentBelt} onChange={(e) => setField('currentBelt', e.target.value)}>
-                  <option value="" disabled>Select belt</option>
-                  {BELTS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              <FormField name="currentBelt" label="Current Belt Rank" error={errors.currentBelt}
+                hint={gradingTrack ? `${gradingTrackLabel(gradingTrack)} · Based on the age reached this calendar year (ASK grading rules).` : 'Enter a valid date of birth first.'}>
+                <NativeSelect {...control('currentBelt')} className={selectClass} disabled={beltsLoading || !gradingTrack || Boolean(beltsError || beltCatalogueError)} value={formData.currentBelt} onChange={(e) => setField('currentBelt', e.target.value)}>
+                  <option value="" disabled>{beltsLoading ? 'Loading belt grades…' : !gradingTrack ? 'Enter your date of birth first' : 'Select belt'}</option>
+                  {belts.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                 </NativeSelect>
+                {beltsError && <p role="alert" className="text-sm text-destructive">{beltsError} <button type="button" className="rounded-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-ring" onClick={() => setBeltRevision(value => value + 1)}>Try again</button></p>}
+                {beltCatalogueError && <p role="alert" className="text-sm text-destructive">{beltCatalogueError}</p>}
               </FormField>
               <fieldset className="space-y-2">
                 <legend className="text-sm font-medium">Have you trained in aikido before?</legend>
@@ -707,7 +743,7 @@ export default function ApplyMembership() {
                 <dl className="grid gap-3 text-sm sm:grid-cols-2">
                   <ReviewItem term="Principal dojo">{centreName}</ReviewItem>
                   <ReviewItem term="Membership type">{formData.membershipType ? membershipLabel(formData.membershipType) : ''}</ReviewItem>
-                  <ReviewItem term="Current belt">{labelOf(BELTS, formData.currentBelt)}</ReviewItem>
+                  <ReviewItem term="Current belt">{labelOf(belts, formData.currentBelt)}</ReviewItem>
                 </dl>
               </div>
 

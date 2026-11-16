@@ -65,6 +65,21 @@ test('grading eligibility follows the published sheets (offline PostgreSQL)', as
     await db.exec(await readFile(migration('20261112160000_grading_eligibility_sheet'), 'utf8'))
     await db.exec(await readFile(migration('20261112170000_grading_adult_crossover'), 'utf8'))
     await db.exec(await readFile(migration('20261112180000_grading_intermediate_direct_entry'), 'utf8'))
+    await db.exec(`
+      insert into public.grades(id,label,colour,is_ranked,sort_order) values
+        ('red-gold-11th-kyu','Red Gold (11th Kyu)','Red',true,2),
+        ('yellow-10th-kyu','Yellow (10th Kyu)','Yellow',true,3),
+        ('orange-9th-kyu','Orange (9th Kyu)','Orange',true,4),
+        ('green-8th-kyu','Green (8th Kyu)','Green',true,5),
+        ('purple-7th-kyu','Purple (7th Kyu)','Purple',true,6),
+        ('blue-6th-kyu','Blue (6th Kyu)','Blue',true,7),
+        ('blue-silver-6th-kyu','Blue Silver (6th Kyu)','Blue',true,8),
+        ('blue-gold-5th-kyu','Blue Gold (5th Kyu)','Blue',true,9),
+        ('brown-4th-kyu','Brown (4th Kyu)','Brown',true,10),
+        ('brown-silver-4th-kyu','Brown Silver (4th Kyu)','Brown',true,11);
+    `)
+    await db.exec(await readFile(migration('20261106062729_grading_fees'), 'utf8'))
+    await db.exec(await readFile(migration('20261116064918_grading_track_requirements_and_fees'), 'utf8'))
     await db.exec(await readFile(migration('20261113100000_grading_endorsements'), 'utf8'))
     await db.exec(await readFile(migration('20261113110000_grading_endorsements_surrogate_key'), 'utf8'))
     await sql("insert into public.instructors(id,user_id,first_name,last_name,email) values($1,$2,'Ada','Sensei','ada@example.test')", [instructor, instructorUser])
@@ -73,6 +88,41 @@ test('grading eligibility follows the published sheets (offline PostgreSQL)', as
       const { rows } = await sql("select grade_id, min_age_years, max_age_years from public.grade_requirements where track='adult' and grade_id in ('black-2nd-kyu','junior-dan') order by grade_id")
       assert.deepEqual(rows, [{ grade_id: 'black-2nd-kyu', min_age_years: null, max_age_years: null },
         { grade_id: 'junior-dan', min_age_years: null, max_age_years: 14 }])
+    })
+
+    await suite.test('adult and child Blue use different minimums, but the same S$50 fee', async () => {
+      const rows = (await sql(`select track,min_months,min_sessions,fee_cents from public.grade_requirements
+        where grade_id='blue-6th-kyu' order by track::text`)).rows
+      assert.deepEqual(rows, [
+        { track: 'adult', min_months: 3, min_sessions: 20, fee_cents: 5000 },
+        { track: 'children', min_months: 6, min_sessions: null, fee_cents: 5000 },
+      ])
+      assert.deepEqual((await sql(`select track,min_months,min_sessions,fee_cents from public.grade_requirements
+        where grade_id='blue-gold-5th-kyu' order by track::text`)).rows, [
+        { track: 'adult', min_months: 0, min_sessions: 24, fee_cents: 5500 },
+        { track: 'children', min_months: 6, min_sessions: null, fee_cents: 5500 },
+      ])
+      assert.equal((await sql("select min_sessions from public.grade_requirements where grade_id='brown-4th-kyu' and track='adult'")).rows[0].min_sessions, 32)
+    })
+
+    await suite.test('the readiness RPC actually applies the age-specific Blue requirements', async () => {
+      const adultBlue = uuid(201), childBlue = uuid(202)
+      await sql(`insert into public.students(id,member_no,first_name,last_name,email,home_centre_id,date_of_birth,joined_at,current_grade_id,last_graded_at)
+        values($1,'BLUE-ADULT','Adult','Blue','blue-adult@example.test',$3,'1990-01-01',current_date-100,'unranked',null),
+        ($2,'BLUE-CHILD','Child','Blue','blue-child@example.test',$3,make_date($4,1,1),current_date-400,'purple-7th-kyu',current_date-100)`,
+        [adultBlue,childBlue,centre,year-10])
+      const adultRows = await readiness(adultBlue), childRows = await readiness(childBlue)
+      assert.equal(adultRows[0].target_grade_id, 'blue-6th-kyu')
+      assert.equal(childRows[0].target_grade_id, 'blue-6th-kyu')
+      assert.equal(adultRows.find(row => row.key === 'time').required, '3 months')
+      assert.equal(adultRows.find(row => row.key === 'time').met, true)
+      assert.equal(adultRows.find(row => row.key === 'sessions').required, '20')
+      assert.equal(adultRows.find(row => row.key === 'sessions').met, false)
+      assert.equal(childRows.find(row => row.key === 'time').required, '6 months')
+      assert.equal(childRows.find(row => row.key === 'time').met, false)
+      assert.equal(childRows.some(row => row.key === 'sessions'), false)
+      await sql('update public.students set last_graded_at=current_date-200 where id=$1',[childBlue])
+      assert.equal((await readiness(childBlue)).find(row => row.key === 'time').met, true)
     })
 
     await suite.test('Junior Dan is for 14 and below; older 1st Kyu holders target 1st Dan', async () => {

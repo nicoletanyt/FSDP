@@ -29,7 +29,7 @@ function InstructorAvatar({ profile, showName = true, interactive = true, classN
   const content = <>
     <Avatar className={cn("size-6", avatarClassName)}>
       {photo && <AvatarImage src={photo} alt="" />}
-      <AvatarFallback className={cn("text-[10px]", fallbackClassName)}>{initials}</AvatarFallback>
+      <AvatarFallback className={cn("text-[10px] max-md:text-[1rem]", fallbackClassName)}>{initials}</AvatarFallback>
     </Avatar>
     {showName && <span className={cn("min-w-0 truncate text-sm font-medium", interactive && "underline-offset-4 group-hover/instructor:underline")}>{profile.name}</span>}
   </>

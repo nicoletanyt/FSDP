@@ -33,11 +33,6 @@ export default function NonMemberDashboard({ firstName, status }: Props) {
     <section className="w-full">
       <PageHeader
         title={`${greetingFor(new Date().getHours())}${firstName ? `, ${firstName}` : ""}`}
-        description={status === "expired"
-          ? "Your membership has expired. Renew it to continue training."
-          : status === "pending"
-            ? "We've received your membership application."
-            : "Apply for a membership to start training with us."}
         actions={<StatusBadge tone={statusTone[status]}>Membership {label.toLowerCase()}</StatusBadge>}
       />
 

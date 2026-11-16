@@ -21,7 +21,10 @@ function getInitialTheme(): Theme {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
 }
 
-export default function ThemeToggle() {
+export default function ThemeToggle({ large = false }: {
+  /** A bigger floating button, used on the sign-in pages. */
+  large?: boolean
+} = {}) {
   const [theme, setTheme] = useState<Theme>(getInitialTheme)
   const isDark = theme === 'dark'
 
@@ -78,12 +81,12 @@ export default function ThemeToggle() {
     <Button
       variant="ghost"
       size="icon"
-      className="size-11 shrink-0 lg:size-10"
+      className={large ? "size-14 shrink-0 rounded-full" : "size-11 shrink-0 lg:size-10"}
       onClick={toggleTheme}
       aria-label={`Switch to ${isDark ? 'light' : 'dark'} mode`}
       title={`Switch to ${isDark ? 'light' : 'dark'} mode`}
     >
-      {isDark ? <Sun /> : <Moon />}
+      {isDark ? <Sun className={large ? 'size-6' : undefined} /> : <Moon className={large ? 'size-6' : undefined} />}
     </Button>
   )
 }

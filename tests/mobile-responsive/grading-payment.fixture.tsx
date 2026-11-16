@@ -5,6 +5,7 @@ import { MemoryRouter, Route, Routes } from 'react-router'
 import type { Session } from '@supabase/supabase-js'
 import GradingPayment from '../../src/pages/Student/GradingPayment'
 import StudentGrading from '../../src/pages/Student/StudentGrading'
+import ApplyMembership from '../../src/pages/Student/ApplyMembership'
 import { AuthContext, type AuthContextValue } from '../../src/lib/auth-context'
 import { supabase } from '../../src/lib/supabase'
 import '../../src/index.css'
@@ -15,23 +16,41 @@ const gradeId = params.get('grade') ?? 'blue-gold-5th-kyu'
 const late = !params.has('onTime')
 const deadline = late ? '2020-01-01' : '2099-01-01'
 const price = late ? 7700 : 5500
+const membershipGrades = ['unranked','red-12th-kyu','red-gold-11th-kyu','yellow-10th-kyu','orange-9th-kyu','green-8th-kyu','purple-7th-kyu',
+  'blue-6th-kyu','blue-silver-6th-kyu','blue-gold-5th-kyu','brown-4th-kyu','brown-silver-4th-kyu','brown-gold-3rd-kyu','black-2nd-kyu',
+  'black-silver-2nd-kyu','black-gold-1st-kyu','1st-dan'].map((id, sort_order) => ({ id, label: id, sort_order }))
+if (params.has('membershipForm')) Object.defineProperty(supabase.auth, 'getUser', { value: async () => ({ data: { user: { id: '00000000-0000-4000-8000-000000000001', email: 'alex@example.test' } }, error: null }) })
 let confirmed = false
+const officialDate = params.has('child') ? '2026-12-06' : '2026-12-13'
+const memberDetails = {
+  full_name: 'Alex Tan', phone: '91234567', emergency_name: 'Jamie Tan',
+  emergency_relationship: 'Parent', emergency_phone: '93333333', medical_details: 'Previous knee injury',
+  recorded_medical_details: ['Dojo-recorded allergy'],
+}
 let statusCalls = 0
 declare global { interface Window { gradingCheckoutCalls: Record<string, unknown>[] } }
 window.gradingCheckoutCalls = []
 
-Object.defineProperty(supabase, 'rpc', { value: (name: string) => ({
-  abortSignal: async () => {
+Object.defineProperty(supabase, 'rpc', { value: (name: string) => {
+  const response = async () => {
+    if (name === 'my_official_grading_dates') return { data: params.has('empty') ? [] : [{ id: eventId, name: 'Official grading', grading_date: officialDate }], error: null }
+    if (name === 'my_grading_applications') return { data: confirmed || params.has('paidApplication') ? [{
+      id: eventId, grading_event_id: eventId, target_grade_id: gradeId, grading_date: officialDate,
+      status: 'under_review', amount_paid_cents: price, payment_confirmed_at: '2026-11-16T00:00:00Z', base_fee_cents: 5500, late_fee_cents: late ? 2200 : 0,
+    }] : [], error: null }
+    if (name === 'my_grading_profile') return { data: params.has('missingProfileDetails')
+      ? { ...memberDetails, emergency_name: '', emergency_relationship: '', emergency_phone: '' } : memberDetails, error: null }
     if (name === 'my_grading_checkout_options') return { data: params.has('empty') ? [] : [{
-      id: eventId, name: 'Adult grading', grading_date: '2026-12-15', application_deadline: deadline,
+      id: eventId, name: 'Adult grading', grading_date: officialDate, application_deadline: deadline,
       centre_name: 'ASK Dojo', venue_address: 'Singapore', target_grade: gradeId, grade_label: 'Blue-Gold (5th Kyu)',
       applied: confirmed, base_amount: 5500, late_amount: late ? 2200 : 0, total_amount: price,
     }], error: null }
-    if (name === 'my_grading_readiness') return { data: [{ target_grade_id: gradeId,
-      key: 'sessions', label: 'Training sessions', actual: '26', required: '24', met: true }], error: null }
+    if (name === 'my_grading_readiness') return { data: [{ target_grade_id: params.has('child') ? 'blue-silver-6th-kyu' : 'blue-gold-5th-kyu', track: params.has('child') ? 'children' : 'adult',
+      key: 'sessions', label: 'Training sessions', actual: '26', required: '24', met: !params.has('ineligible') }], error: null }
     throw new Error(`Unexpected fixture RPC ${name}`)
-  },
-}) })
+  }
+  return { abortSignal: response, then: (resolve: (value: unknown) => unknown, reject: (reason: unknown) => unknown) => response().then(resolve, reject) }
+} })
 Object.defineProperty(supabase, 'from', { value: (table: string) => {
   const grades = [
     { id: 'blue-6th-kyu', label: 'Blue (6th Kyu)', sort_order: 7 },
@@ -44,7 +63,8 @@ Object.defineProperty(supabase, 'from', { value: (table: string) => {
     ...(grade.id.includes('silver') ? [] : [{ grade_id: grade.id, track: 'adult' }]),
   ])
   const reference: Record<string, unknown[]> = {
-    grades, grade_tracks: trackRows,
+    grades: params.has('membershipForm') ? membershipGrades : grades, grade_tracks: trackRows,
+    centres: [{ id: eventId, name: 'ASK Dojo', status: 'active' }],
     grade_requirements: trackRows.map((row) => ({ ...row, fee_cents: row.grade_id === 'blue-gold-5th-kyu' ? 5500 : 5000 })),
     grading_application_drafts: params.has('savedDraft') || params.get('appRoute')?.includes('test-success') ? [{
       id: '33333333-3333-4333-8333-333333333333', target_grade_id: 'blue-gold-5th-kyu',
@@ -98,6 +118,7 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/grading" element={<StudentGrading />} />
         <Route path="/grading/applications" element={<StudentGrading />} />
         <Route path="/grading/payment" element={<GradingPayment />} />
+        <Route path="/apply-membership" element={<ApplyMembership />} />
       </Routes>
     </MemoryRouter>
   </AuthContext.Provider>,

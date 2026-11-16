@@ -87,7 +87,7 @@ function Agenda({
                             aria-label={`${entry.event?.name ?? "Available"}, ${fullDate(date)}, ${entry.event ? calendarTimeLabel(entry.event, " to ") : `${formatTime(entry.startTime)} to ${formatTime(entry.endTime)}`}. View details`}
                             className="flex min-h-18 w-full items-stretch gap-3 rounded-md py-4 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
-                            <span className="w-18 shrink-0 text-[13px] leading-5 tabular-nums text-muted-foreground">
+                            <span className="w-18 shrink-0 whitespace-nowrap text-[13px] leading-5 tabular-nums max-md:w-20 max-md:text-[1rem] max-md:leading-6 text-muted-foreground">
                                 <span className="block">{formatTime(entry.startTime)}</span>
                                 <span className="block opacity-70">
                                     {formatTime(entry.endTime)}
@@ -105,7 +105,7 @@ function Agenda({
                                 <span className="block text-[16px] leading-snug font-medium [overflow-wrap:anywhere]">
                                     {entry.event?.name ?? "Available"}
                                 </span>
-                                <span className="block text-[13px] leading-5 text-muted-foreground [overflow-wrap:anywhere]">
+                                <span className="block text-[13px] leading-5 text-muted-foreground max-md:text-[1rem] max-md:leading-6 [overflow-wrap:anywhere]">
                                     {entry.event
                                         ? `${entry.event.dojo} · ${entry.event.rosterCount} students`
                                         : "Instructor availability"}
@@ -119,7 +119,7 @@ function Agenda({
                     </li>
                 ))
             ) : (
-                <li className="py-6 text-[15px] text-muted-foreground">
+                <li className="py-6 text-[15px] text-muted-foreground max-md:text-[1rem]">
                     No classes or availability. A little room in your day.
                 </li>
             )}
@@ -148,7 +148,7 @@ function MonthGrid({
             {weekDates(date).map((day) => (
                 <span
                     key={day.getDay()}
-                    className="py-2 text-center text-[11px] font-medium text-muted-foreground"
+                    className="py-2 text-center text-[11px] font-medium text-muted-foreground max-md:text-cal"
                 >
                     {day
                         .toLocaleDateString("en-GB", { weekday: "short" })
@@ -269,7 +269,7 @@ export default function MobileInstructorCalendar({
                 extras={onAddAvailability && <Button
                     variant="ghost"
                     onClick={onAddAvailability}
-                    className="h-11 gap-1.5 rounded-full px-3 text-[14px] font-medium text-primary"
+                    className="h-11 gap-1.5 rounded-full px-3 text-[14px] font-medium text-primary max-md:text-[1rem]"
                 >
                     <Plus aria-hidden="true" className="size-4" />
                     Add Availability
@@ -280,14 +280,14 @@ export default function MobileInstructorCalendar({
                     <ul className="space-y-2">
                         {classCatalogue.map(type => (
                             <li key={type.id} className="space-y-0.5">
-                                <span className={cn("inline-block rounded-md border px-2 py-1 text-[13px]", calendarClassStyle(type.id).badge)}>
+                                <span className={cn("inline-block rounded-md border px-2 py-1 text-[13px] max-md:text-[1rem]", calendarClassStyle(type.id).badge)}>
                                     {type.label}
                                 </span>
-                                <p className="text-[12px] text-muted-foreground">{type.description}</p>
+                                <p className="text-[12px] text-muted-foreground max-md:text-[1rem]">{type.description}</p>
                             </li>
                         ))}
                         <li>
-                            <span className={cn("inline-block rounded-md px-2 py-1 text-[13px]", eventStyles.grading.badge)}>Grading</span>
+                            <span className={cn("inline-block rounded-md px-2 py-1 text-[13px] max-md:text-[1rem]", eventStyles.grading.badge)}>Grading</span>
                         </li>
                     </ul>
                     {onAddAvailability && <p>
@@ -314,7 +314,7 @@ export default function MobileInstructorCalendar({
                 <h2
                     aria-live="polite"
                     aria-atomic="true"
-                    className="py-3 text-[15px] font-semibold"
+                    className="py-3 text-[15px] font-semibold max-md:text-[1rem]"
                 >
                     {selectedDayLabel}
                 </h2>
@@ -347,7 +347,7 @@ export default function MobileInstructorCalendar({
                                 addDays(date, index),
                             ).map((day) => (
                                 <section key={dateKey(day)}>
-                                    <h3 className="sticky top-[var(--mobile-site-nav-height)] z-10 border-b border-border/50 bg-background py-2 text-[14px] font-semibold">
+                                    <h3 className="sticky top-[var(--mobile-site-nav-height)] z-10 border-b border-border/50 bg-background py-2 text-[14px] font-semibold max-md:text-[1rem]">
                                         {day.toLocaleDateString("en-GB", {
                                             weekday: "short",
                                             day: "numeric",

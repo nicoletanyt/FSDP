@@ -22,7 +22,7 @@ const components: Components = {
   h5: ({ children }) => <p className="font-semibold">{children}</p>,
   h6: ({ children }) => <p className="font-semibold">{children}</p>,
   blockquote: ({ children }) => <blockquote className="space-y-2 border-l border-border pl-3 text-muted-foreground">{children}</blockquote>,
-  code: ({ children }) => <code className="rounded bg-muted px-1 py-0.5 font-mono text-[0.9em]">{children}</code>,
+  code: ({ children }) => <code className="rounded bg-muted px-1 py-0.5 font-mono text-[0.9em] max-md:text-[1em]">{children}</code>,
   pre: ({ children }) => <pre className="max-w-full overflow-x-auto whitespace-pre-wrap rounded-md bg-muted p-2 [&_code]:bg-transparent [&_code]:p-0">{children}</pre>,
   hr: () => <hr className="border-border" />,
   table: ({ children }) => <div role="region" aria-label="Table in assistant reply" tabIndex={0} className="max-w-full overflow-x-auto rounded-md border outline-none focus-visible:ring-2 focus-visible:ring-ring">

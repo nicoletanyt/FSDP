@@ -4,15 +4,12 @@ import { CalendarClock, CalendarDays, CalendarRange, CircleCheck, Clock, Clock3,
 import MobileCalendarHeader from '@/components/shared/calendar/MobileCalendarHeader'
 import type { MobileViewOption } from '@/components/shared/calendar/MobileCalendarHeader'
 import WeekStrip from '@/components/shared/calendar/WeekStrip'
-import { NativeSelect } from '@/components/admin/form-controls'
 import CalendarToolbar from '@/components/shared/calendar/CalendarToolbar'
 import type { CalendarDisplayMode } from '@/components/shared/calendar/CalendarToolbar'
 import StatCard from '@/components/shared/layout/StatCard'
-import { Label } from '@/components/ui/label'
 import { useCalendarShortcuts } from '@/hooks/use-calendar-shortcuts'
 import AttendanceCalendar, { attendanceClassStyle } from '@/components/student/AttendanceCalendar'
 import type { AttendanceEntry, AttendanceView } from '@/components/student/AttendanceCalendar'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import ClassDetailsOverlay from '@/components/shared/calendar/ClassDetailsOverlay'
 import { useMediaQuery } from '@/hooks/use-media-query'
 import { useFeedback } from '@/hooks/use-feedback'
@@ -34,17 +31,11 @@ import {
   formatTime,
   prettyDate
 } from '@/lib/student-schedule'
-import type { ClassOffering } from '@/lib/student-schedule'
 import FilterPopover, { FilterField } from '@/components/shared/filters/FilterPopover'
 
 type Pending =
   | { kind: 'cancel'; id: string }
   | { kind: 'leave'; id: string }
-  | {
-      kind: 'reschedule'
-      id: string
-      replacement: ClassOffering
-    }
 
 const statusText = (e: AttendanceEntry) => {
   if (e.status === 'attended') return 'Attended'
@@ -84,10 +75,6 @@ export default function StudentAttendance() {
   const [filters, setFilters] = useState(emptyFilters)
   const desktop = useMediaQuery('(min-width: 1024px)')
   const [pending, setPending] = useState<Pending | null>(null)
-  const [rescheduleId, setRescheduleId] = useState<string | null>(
-    null
-  )
-  const [replacementId, setReplacementId] = useState('')
   const { notify, feedbackDialog } = useFeedback()
   function report(error: string | null | undefined, title: string, description: string) {
     notify(error ? { variant: 'error', title: 'Something went wrong', description: error } : { title, description })
@@ -152,20 +139,6 @@ export default function StudentAttendance() {
   const dayEntries = calendarEntries.get(dateKey(selectedDate)) ?? []
   const selectedEntry = entries.find(entry => entry.id === selectedId)
 
-  const alternatives = classes
-    .filter(
-      c =>
-        c.id !== rescheduleId &&
-        dateTime(c).getTime() > Date.now() &&
-        c.bookable && !schedule.isBooked(c.id) && !schedule.isFull(c)
-    )
-    .slice(0, 50)
-  const alternativeDays = [...alternatives.reduce((days, session) => {
-    const key = dateKey(session.date)
-    days.set(key, [...(days.get(key) ?? []), session])
-    return days
-  }, new Map<string, ClassOffering[]>())]
-
   const heading = view === 'month'
     ? selectedDate.toLocaleDateString('en-SG', { month: 'long', year: 'numeric' })
     : view === 'week' && desktop ? weekLabel(selectedDate) : prettyDate(selectedDate)
@@ -184,7 +157,7 @@ export default function StudentAttendance() {
   }
 
   useCalendarShortcuts({
-    disabled: Boolean(pending || rescheduleId),
+    disabled: Boolean(pending),
     onEscape: () => {
       if (!selectedId) return false
       setSelectedId(null)
@@ -221,19 +194,6 @@ export default function StudentAttendance() {
     } else if (pending.kind === 'leave') {
       const error = await schedule.leaveWaitlist(pending.id)
       report(error, 'Left waitlist', 'You have been removed from the waitlist.')
-    } else if (pending.kind === 'reschedule') {
-      const error = await schedule.reschedule(
-        pending.id,
-        pending.replacement
-      )
-
-      report(error, 'Class rescheduled', `Your class has been moved to ${prettyDate(pending.replacement.date)}.`)
-
-      if (!error) {
-        selectDate(pending.replacement.date)
-        setRescheduleId(null)
-        setReplacementId('')
-      }
     }
 
     setPending(null)
@@ -301,18 +261,6 @@ export default function StudentAttendance() {
 
           {future && (
             <div className={cn('flex flex-wrap gap-2', detail ? 'mt-auto border-t p-3' : 'mt-3')}>
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={!schedule.active}
-                onClick={() => {
-                  setRescheduleId(e.id)
-                  setReplacementId('')
-                }}
-              >
-                Reschedule
-              </Button>
-
               <Button
                 size="sm"
                 variant="outline"
@@ -583,86 +531,23 @@ export default function StudentAttendance() {
       )}
 
       {!desktop && (
-        <ClassDetailsOverlay open={Boolean(selectedEntry) && !pending && !rescheduleId} onClose={() => setSelectedId(null)}
+        <ClassDetailsOverlay open={Boolean(selectedEntry) && !pending} onClose={() => setSelectedId(null)}
           title="Class details" description={selectedEntry && prettyDate(selectedEntry.session.date)}>
           {selectedEntry && rows([selectedEntry])}
         </ClassDetailsOverlay>
       )}
 
-      <Dialog open={Boolean(rescheduleId) && !pending} onOpenChange={open => {
-        if (!open) setRescheduleId(null)
-      }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Choose a replacement class</DialogTitle>
-            <DialogDescription>Your current booking stays until you confirm the replacement.</DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="replacement-class">Available sessions</Label>
-            <NativeSelect
-              id="replacement-class"
-              value={replacementId}
-              onChange={e => setReplacementId(e.target.value)}
-              className="h-11 lg:h-10"
-            >
-              <option value="">Select a class</option>
-              {alternativeDays.map(([day, sessions]) => (
-                <optgroup key={day} label={prettyDate(sessions[0].date)}>
-                  {sessions.map(c => (
-                    <option key={c.id} value={c.id}>
-                      {formatTime(c.startTime)} · {c.title} · {c.centre} · {c.instructor}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </NativeSelect>
-            {alternatives.length === 0 && <p className="text-sm text-muted-foreground">No other sessions are open for booking right now.</p>}
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" className="min-h-11" onClick={() => setRescheduleId(null)}>
-              Cancel
-            </Button>
-            <Button
-              className="min-h-11"
-              disabled={!replacementId}
-              onClick={() => {
-                const replacement = classes.find(c => c.id === replacementId)
-                if (rescheduleId && replacement) {
-                  setPending({ kind: 'reschedule', id: rescheduleId, replacement })
-                }
-              }}
-            >
-              Continue
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       <ConfirmDialog
         open={Boolean(pending)}
         onOpenChange={open => { if (!open) setPending(null) }}
         pending={schedule.saving}
-        destructive={pending?.kind !== 'reschedule'}
-        title={pending?.kind === 'cancel'
-          ? 'Cancel this booking?'
-          : pending?.kind === 'leave'
-            ? 'Leave this waitlist?'
-            : 'Reschedule this class?'}
-        description={pending?.kind === 'cancel'
-          ? 'Your place in this class will be released.'
-          : pending?.kind === 'leave'
-            ? 'Your name will be removed from the waitlist.'
-            : pending?.kind === 'reschedule'
-              ? `Your original class will be replaced with ${pending.replacement.title} on ${prettyDate(pending.replacement.date)}.`
-              : ''}
-        cancelLabel={pending?.kind === 'cancel' ? 'Keep booking' : pending?.kind === 'leave' ? 'Stay on waitlist' : 'Cancel'}
-        confirmLabel={pending?.kind === 'cancel'
-          ? 'Cancel booking'
-          : pending?.kind === 'leave'
-            ? 'Leave waitlist'
-            : 'Reschedule'}
+        destructive
+        title={pending?.kind === 'leave' ? 'Leave this waitlist?' : 'Cancel this booking?'}
+        description={pending?.kind === 'leave'
+          ? 'Your name will be removed from the waitlist.'
+          : 'Your place in this class will be released.'}
+        cancelLabel={pending?.kind === 'leave' ? 'Stay on waitlist' : 'Keep booking'}
+        confirmLabel={pending?.kind === 'leave' ? 'Leave waitlist' : 'Cancel booking'}
         onConfirm={confirm}
       />
       {feedbackDialog}

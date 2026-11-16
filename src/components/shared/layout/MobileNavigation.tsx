@@ -11,7 +11,6 @@ import { Button } from "@/components/ui/button";
 import {
     Sheet,
     SheetContent,
-    SheetHeader,
     SheetTitle,
     SheetTrigger,
 } from "@/components/ui/sheet";
@@ -57,6 +56,8 @@ export default function MobileNavigation({
     signingOut,
     error,
     loading,
+    accountDetail,
+    hideAccountMeta = false,
 }: {
     homeTo?: string;
     links: MobileNavigationLink[];
@@ -68,6 +69,10 @@ export default function MobileNavigation({
     signingOut?: boolean;
     error?: string;
     loading?: boolean;
+    /** Extra line under the name, email and role, e.g. the student's credit balance. */
+    accountDetail?: ReactNode;
+    /** Leave out the email and role under the name (students see them on their profile page). */
+    hideAccountMeta?: boolean;
 }) {
     const { profile } = useAuth();
     const { pathname, search } = useLocation();
@@ -112,7 +117,7 @@ export default function MobileNavigation({
                         className="size-8 shrink-0 object-contain"
                     />
                     <span className="min-w-0 leading-tight">
-                        <span className="block text-[14px] font-semibold">
+                        <span className="block text-[14px] font-semibold max-md:text-[1rem]">
                             <span className="text-primary">Aikido</span>{" "}
                             <span className="whitespace-nowrap text-brand-red-ink">
                                 Shinju-Kai
@@ -131,18 +136,18 @@ export default function MobileNavigation({
                         render={
                             <Button
                                 variant="outline"
-                                className="h-11 gap-2 px-3 text-[14px]"
+                                className="h-11 gap-2 px-3 text-[14px] max-md:text-[1rem]"
                             />
                         }
                     >
                         <Menu aria-hidden="true" className="size-4" />
                     </SheetTrigger>
                     <SheetContent side="left" className="w-[calc(100%-2rem)] max-w-sm">
-                        <SheetHeader>
-                            <SheetTitle>Menu</SheetTitle>
-                        </SheetHeader>
+                        {/* The sheet still needs a name for screen readers; no visible "Menu" heading. */}
+                        <SheetTitle className="sr-only">Menu</SheetTitle>
                         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain">
-                            <div className="flex min-w-0 items-center gap-3 border-b pb-4">
+                            {/* pr-12 keeps the account details clear of the sheet's close button. */}
+                            <div className="flex min-w-0 items-center gap-3 border-b pr-12 pb-4">
                                 {profile?.role === "instructor" ? (
                                     <InstructorAccountMenu avatarClassName="size-10" />
                                 ) : (
@@ -152,12 +157,15 @@ export default function MobileNavigation({
                                 )}
                                 <div className="min-w-0 space-y-1 [overflow-wrap:anywhere]">
                                     <p className="text-[16px] font-semibold">{name}</p>
-                                    {profile?.email && (
-                                        <p className="text-[13px] text-muted-foreground">
+                                    {!hideAccountMeta && profile?.email && (
+                                        <p className="text-[13px] text-muted-foreground max-md:text-[1rem]">
                                             {profile.email}
                                         </p>
                                     )}
-                                    <p className="text-[13px] text-muted-foreground">{role}</p>
+                                    {!hideAccountMeta && (
+                                        <p className="text-[13px] text-muted-foreground max-md:text-[1rem]">{role}</p>
+                                    )}
+                                    {accountDetail}
                                 </div>
                             </div>
                             {loading ? (
@@ -174,27 +182,22 @@ export default function MobileNavigation({
                                     </nav>
                                     {accountLinks && accountLinks.length > 0 && (
                                         <nav aria-labelledby="mobile-account-heading" className="grid gap-2 border-t pt-4">
-                                            <h2 id="mobile-account-heading" className="px-3 text-[13px] font-medium text-muted-foreground">
+                                            <h2 id="mobile-account-heading" className="px-3 text-[13px] font-medium text-muted-foreground max-md:text-[1rem]">
                                                 Account
                                             </h2>
                                             {accountLinks.map((link) => (
                                                 <NavLinkItem key={link.to} link={link} onNavigate={() => setOpen(false)} />
                                             ))}
-                                            <div className="flex min-h-12 items-center justify-between px-3">
-                                                <span className="text-[16px]">Appearance</span>
-                                                <ThemeToggle />
-                                            </div>
                                         </nav>
                                     )}
                                 </>
                             )}
                         </div>
-                        {!accountLinks?.length && (
-                            <div className="flex shrink-0 items-center justify-between border-t pt-4">
-                                <span className="text-[14px]">Appearance</span>
-                                <ThemeToggle />
-                            </div>
-                        )}
+                        {/* Pinned above Sign out in every portal, outside the scrolling links. */}
+                        <div className="flex min-h-12 shrink-0 items-center justify-between border-t px-3 pt-4">
+                            <span className="text-[16px]">Appearance</span>
+                            <ThemeToggle />
+                        </div>
                         {onSignOut && (
                             <div className="shrink-0 space-y-2">
                                 <Button
