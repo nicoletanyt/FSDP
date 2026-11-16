@@ -188,7 +188,7 @@ export function gradeTrackForAge(age: number): GradeTrack {
   return age < 13 ? 'children' : 'adult'
 }
 
-export type MembershipStatus = 'active' | 'expired' | 'pending'
+export type MembershipStatus = 'active' | 'expired' | 'pending' | 'non_member'
 export type AttendanceStatus = 'present' | 'late' | 'absent' | 'excused'
 export type RiskLevel = 'healthy' | 'at_risk'
 export type FollowUpStatus = 'none' | 'flagged' | 'contacted' | 'resolved'

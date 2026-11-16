@@ -17,7 +17,7 @@ export type Timestamp = string
 export type GradeId = string
 
 export type GradeTrack = 'children' | 'adult'
-export type MembershipStatus = 'active' | 'expired' | 'pending'
+export type MembershipStatus = 'active' | 'expired' | 'pending' | 'non_member'
 export type FollowUpStatus = 'none' | 'flagged' | 'contacted' | 'resolved'
 export type CentreStatus = 'active' | 'closed' | 'under_renovation'
 export type EventType = 'class' | 'seminar' | 'workshop' | 'grading'

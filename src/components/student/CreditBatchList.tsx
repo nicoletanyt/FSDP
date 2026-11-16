@@ -73,9 +73,9 @@ export default function CreditBatchList({ userId }: { userId: string | undefined
                         <span>{status === 'expired' ? 'Expired on' : 'Expires on'} <time dateTime={batch.expiresAt}>{expiryFormat.format(new Date(batch.expiresAt))}</time>
                           {status !== 'expired' && days !== null && <span className="block text-muted-foreground">{days === 1 ? 'Expires within 1 day' : `${days} days remaining`}</span>}
                         </span>
-                      ) : <span>No expiry recorded</span>}
+                      ) : <span>{batch.legacy ? 'No expiry recorded' : 'Never expires'}</span>}
                     </p>
-                    {batch.expiresAt === null && <p className="mt-1 text-xs text-muted-foreground">{batch.legacy ? 'Carried-over balance. The original purchase dates and expiry dates are unavailable.' : 'No expiry date is recorded for this pass.'}</p>}
+                    {batch.expiresAt === null && batch.legacy && <p className="mt-1 text-xs text-muted-foreground">Carried-over balance. The original purchase dates and expiry dates are unavailable.</p>}
                     {timeLeft !== null && timeLeft > 0 && timeLeft < 21 * 86_400_000 && (
                       <p className="mt-2 flex items-start gap-1.5 text-sm font-medium text-warning-foreground dark:text-warning">
                         <TriangleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />

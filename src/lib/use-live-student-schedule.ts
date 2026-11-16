@@ -24,6 +24,7 @@ type Session = {
 type Snapshot = {
   grade: string | null;
   linked: boolean;
+  needs_profile?: boolean;
   active: boolean;
   sessions: Session[];
 };
@@ -53,6 +54,7 @@ export function useLiveStudentSchedule(onCreditChange?: () => void) {
   const [revision, setRevision] = useState(0);
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
+  const needsProfileRef = useRef(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -63,6 +65,7 @@ export function useLiveStudentSchedule(onCreditChange?: () => void) {
           .abortSignal(controller.signal);
         if (controller.signal.aborted) return;
         if (error) throw error;
+        needsProfileRef.current = Boolean((data as Snapshot).needs_profile);
         setSnapshot(data as Snapshot);
       } catch {
         if (!controller.signal.aborted)
@@ -119,21 +122,27 @@ export function useLiveStudentSchedule(onCreditChange?: () => void) {
   const isWaitlisted = (id: string) => waitlist.includes(id)
   const isFull = (session: ClassOffering) => session.occupied >= session.capacity
 
-  async function change(action: Action, targetId: string, originalId?: string): Promise<string | null> {
+  async function change(action: Action, targetId: string, originalId?: string, birthDate?: string): Promise<string | null> {
     if (savingRef.current) return 'A booking change is already in progress.'
     savingRef.current = true
     setSaving(true)
     try {
-      const { data, error } = await supabase.rpc('change_student_class_booking', {
-        action, target_id: targetId, original_id: originalId ?? null
-      })
+      const { data, error } = action === 'enrol' && needsProfileRef.current
+        ? await supabase.rpc('enrol_nonmember_class', { target_id: targetId, birth_date: birthDate ?? null })
+        : await supabase.rpc('change_student_class_booking', { action, target_id: targetId, original_id: originalId ?? null })
       if (error) {
         if (error.code !== 'P0001') return 'Could not update your booking. Try again.'
         const latest = await supabase.rpc('student_class_schedule')
-        if (!latest.error && latest.data) setSnapshot(latest.data as Snapshot)
+        if (!latest.error && latest.data) {
+          needsProfileRef.current = Boolean((latest.data as Snapshot).needs_profile)
+          setSnapshot(latest.data as Snapshot)
+        }
         return error.message
       }
+      const createdProfile = action === 'enrol' && needsProfileRef.current && !(data as Snapshot).needs_profile
+      needsProfileRef.current = Boolean((data as Snapshot).needs_profile)
       setSnapshot(data as Snapshot)
+      if (createdProfile) window.dispatchEvent(new Event('student-membership-changed'))
       if (action === 'enrol') {
         try {
           // A successful RPC committed the seat and credit before we request email.
@@ -162,10 +171,11 @@ export function useLiveStudentSchedule(onCreditChange?: () => void) {
     classes, enrollments, waitlist, loading, error, saving,
     grade: snapshot?.grade,
     linked: snapshot?.linked ?? false,
+    needsProfile: snapshot?.needs_profile ?? false,
     active: snapshot?.active ?? false,
     retry: () => { setLoading(true); setError(''); setRevision(previous => previous + 1) },
     isBooked, isWaitlisted, isFull,
-    enroll: (session: ClassOffering) => change('enrol', session.id),
+    enroll: (session: ClassOffering, birthDate?: string) => change('enrol', session.id, undefined, birthDate),
     cancel: (id: string) => change('cancel', id),
     reschedule: (id: string, replacement: ClassOffering) => change('reschedule', replacement.id, id),
     joinWaitlist: (session: ClassOffering) => change('join', session.id),

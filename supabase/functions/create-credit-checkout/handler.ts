@@ -1,6 +1,7 @@
 import { resolveCreditPass } from '../_shared/credit-passes.ts'
 import { adminClient, authenticate, gradingHeaders } from '../_shared/grading.ts'
 import { getStripe } from '../_shared/stripe.ts'
+import { requireEnv } from '../_shared/stripe.ts'
 
 const UUID_PATTERN = /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i
 
@@ -44,17 +45,25 @@ export async function handleRequest(request: Request): Promise<Response> {
       return Response.json({ error: 'Select a class pass.' }, { status: 400, headers })
     }
 
-    // Prefer the membership type stored on the student's credit account. The
-    // browser value is only a fallback for accounts without a credit row yet.
-    let membershipType = body.membershipType
+    // A browser-provided membership type cannot unlock a discounted or non-member pass.
+    const { data: students, error: studentError } = await adminClient()
+      .from('students').select('membership_status').eq('user_id', user).limit(1)
+    if (studentError) throw studentError
+    const status = students?.[0]?.membership_status
+    if (status && status !== 'active' && status !== 'non_member') {
+      return Response.json({ error: 'Class passes require an active membership.' }, { status: 403, headers })
+    }
+    const membershipType = !status || status === 'non_member' ? 'non_member' : 'adult'
     const { data: accounts } = await adminClient()
       .from('credit_accounts')
       .select('membership_type')
       .eq('user_id', user)
       .limit(1)
-    if (accounts?.[0]?.membership_type) membershipType = accounts[0].membership_type
+    const storedType = accounts?.[0]?.membership_type
+    const resolvedType = membershipType === 'non_member' ? membershipType
+      : storedType && storedType !== 'non_member' ? storedType : membershipType
 
-    const pass = resolveCreditPass(body.passId, membershipType)
+    const pass = resolveCreditPass(body.passId, resolvedType)
     if (!pass) {
       return Response.json(
         { error: 'That class pass is not available for your membership.' },
@@ -63,9 +72,17 @@ export async function handleRequest(request: Request): Promise<Response> {
     }
 
     const stripe = getStripe()
+    let nonmemberPriceId: string | undefined
+    if (pass.membershipType === 'non_member') {
+      nonmemberPriceId = requireEnv('STRIPE_NON_MEMBERSHIP_CREDITS_FEE_ID')
+      const price = await stripe.prices.retrieve(nonmemberPriceId)
+      if (!price.active || price.currency !== 'sgd' || price.unit_amount !== 4000 || price.type !== 'one_time') {
+        return Response.json({ error: 'The non-member credit price is not configured for SGD $40.' }, { status: 503, headers })
+      }
+    }
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
-      line_items: [{
+      line_items: nonmemberPriceId ? [{ price: nonmemberPriceId, quantity: 1 }] : [{
         quantity: 1,
         price_data: {
           currency: 'sgd',

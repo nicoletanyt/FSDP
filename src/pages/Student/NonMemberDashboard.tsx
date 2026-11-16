@@ -10,12 +10,14 @@ import { greetingFor } from "@/lib/format";
 
 const statusLabel: Record<Exclude<MembershipStatus, "active">, string> = {
   none: "Inactive",
+  non_member: "Not applied",
   pending: "Pending",
   expired: "Expired",
 };
 
 const statusTone: Record<Exclude<MembershipStatus, "active">, BadgeTone> = {
   none: "neutral",
+  non_member: "neutral",
   pending: "warning",
   expired: "danger",
 };
@@ -33,7 +35,7 @@ export default function NonMemberDashboard({ firstName, status }: Props) {
     <section className="w-full">
       <PageHeader
         title={`${greetingFor(new Date().getHours())}${firstName ? `, ${firstName}` : ""}`}
-        actions={<StatusBadge tone={statusTone[status]}>Membership {label.toLowerCase()}</StatusBadge>}
+        actions={<StatusBadge tone={statusTone[status]}>{status === 'none' || status === 'non_member' ? 'No membership' : `Membership ${label.toLowerCase()}`}</StatusBadge>}
       />
 
       {/* Empty state, in place of the member page's key figures, next class and belt progress */}
@@ -47,7 +49,7 @@ export default function NonMemberDashboard({ firstName, status }: Props) {
               ? "Your membership activates once payment is confirmed. In the meantime, you can look through our classes."
               : status === "expired"
                 ? "Renew your membership to book classes again. You can still look through the class list."
-                : "Booking classes needs an active membership. Apply to get started, or look through our classes first."}
+                : "You can book classes without a membership by purchasing a $40 credit per class. Credits never expire."}
           </p>
           <div className="flex flex-wrap justify-center gap-3">
             {status !== "pending" && (
@@ -58,6 +60,9 @@ export default function NonMemberDashboard({ firstName, status }: Props) {
             <Link to="/classes" className={buttonVariants({ variant: "outline" })}>
               Browse classes
             </Link>
+            {(status === "none" || status === "non_member") && (
+              <Link to="/student/credits" className={buttonVariants({ variant: "outline" })}>Buy class credits</Link>
+            )}
           </div>
         </Card>
       </section>

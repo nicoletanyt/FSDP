@@ -24,7 +24,7 @@ const standingCopy: Record<Standing, { chip: string; dot: string; note: string }
     note: "We've received your application. Your membership activates once payment is confirmed.",
   },
   Expired: { chip: "Expired", dot: "bg-white", note: "Your membership has expired. Renew it to keep training." },
-  None: { chip: "Not a member", dot: "bg-white/60", note: "You haven't applied for a membership yet." },
+  None: { chip: "Not a member", dot: "bg-white/60", note: "You can book classes with credits without a membership." },
 };
 
 const standingTone: Record<Standing, BadgeTone> = {
@@ -85,7 +85,7 @@ function MembershipCard({ profile }: { profile: Profile }) {
           />
           <div className="leading-tight">
             <p className="text-sm font-bold">Aikido Shinju-Kai</p>
-            <p className="text-xs text-white/70">{active ? "Member" : "Membership card"}</p>
+            <p className="text-xs text-white/70">{standing === 'None' ? 'Student card' : active ? "Member" : "Membership card"}</p>
           </div>
         </div>
         <span
@@ -121,9 +121,9 @@ function MembershipCard({ profile }: { profile: Profile }) {
 
         <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-1 border-t border-white/15 pt-4 text-sm">
           <div className="min-w-0">
-            <dt className="text-xs text-white/70">Member ID</dt>
+            <dt className="text-xs text-white/70">{standing === 'None' ? 'Student ID' : 'Member ID'}</dt>
             <dd className="truncate font-mono text-xs font-semibold" title={profile.memberId ?? undefined}>
-              {active ? profile.memberId : standing === "None" ? "—" : "Issued once active"}
+              {active || standing === 'None' ? profile.memberId ?? '—' : "Issued once active"}
             </dd>
           </div>
           <div>
@@ -172,6 +172,9 @@ function MembershipDetails({ profile }: { profile: Profile }) {
             {profile.memberSince ? formatDate(profile.memberSince) : "—"}
           </Detail>
         </dl>
+      )}
+      {standing === 'None' && profile.homeDojo && (
+        <dl><Detail icon={MapPin} term="Home dojo">{profile.homeDojo}</Detail></dl>
       )}
       {(standing === "None" || standing === "Expired") && (
         <Link to="/apply-membership" className={buttonVariants({ className: "mt-1 w-fit" })}>

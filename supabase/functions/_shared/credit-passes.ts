@@ -1,4 +1,4 @@
-export type CreditMembershipType = 'adult' | 'junior' | 'student' | 'senior'
+export type CreditMembershipType = 'adult' | 'junior' | 'student' | 'senior' | 'non_member'
 
 export type CreditPass = {
   id: string
@@ -29,15 +29,18 @@ export const CREDIT_PASSES: CreditPass[] = [
   { id: 'junior-1m', title: '1 Month Pass', priceCents: 15000, credits: 4, unlimited: false, audience: 'junior' },
   { id: 'junior-6m-24', title: '6 Months Pass (24 Sessions)', priceCents: 83400, credits: 24, unlimited: false, audience: 'junior' },
   { id: 'junior-6m-50', title: '6 Months Pass (50 Sessions)', priceCents: 120000, credits: 50, unlimited: false, audience: 'junior' },
+  { id: 'nonmember-1', title: 'Single Class Credit', priceCents: 4000, credits: 1, unlimited: false, audience: 'adult' },
 ]
 
 export function isCreditMembershipType(value: unknown): value is CreditMembershipType {
-  return value === 'adult' || value === 'junior' || value === 'student' || value === 'senior'
+  return value === 'adult' || value === 'junior' || value === 'student' || value === 'senior' || value === 'non_member'
 }
 
 export function resolveCreditPass(passId: unknown, membershipType: unknown): ResolvedCreditPass | null {
   if (typeof passId !== 'string') return null
   const type: CreditMembershipType = isCreditMembershipType(membershipType) ? membershipType : 'adult'
+  if (type === 'non_member' && passId !== 'nonmember-1') return null
+  if (type !== 'non_member' && passId === 'nonmember-1') return null
   const audience = type === 'junior' ? 'junior' : 'adult'
   const pass = CREDIT_PASSES.find((item) => item.id === passId && item.audience === audience)
   if (!pass) return null

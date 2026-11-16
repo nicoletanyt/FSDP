@@ -63,6 +63,7 @@ const membershipLabels: Record<MembershipStatus, { label: string; tone: BadgeTon
   active: { label: 'Active', tone: 'success' },
   expired: { label: 'Expired', tone: 'danger' },
   pending: { label: 'Pending', tone: 'warning' },
+  non_member: { label: 'Non-member', tone: 'neutral' },
 }
 
 export function MembershipBadge({ status }: { status: MembershipStatus }) {

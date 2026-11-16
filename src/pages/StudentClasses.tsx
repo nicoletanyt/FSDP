@@ -53,6 +53,8 @@ import FilterPopover, {
 } from "@/components/shared/filters/FilterPopover";
 import SearchInput from "@/components/shared/filters/SearchInput";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useMembershipStatus } from "@/hooks/use-membership-status";
 
 type Action =
@@ -177,7 +179,7 @@ function ClassSessionPicker({
                         booked ||
                         overlapsBooking ||
                         !session.bookable ||
-                        (!schedule.active && !canLeave);
+                        (!schedule.active && !canLeave) || (full && schedule.needsProfile);
                     return (
                         <Button
                             key={session.id}
@@ -1035,6 +1037,10 @@ function ClassBooking({
     const { notify, feedbackDialog } = useFeedback();
     const [selectionError, setSelectionError] = useState("");
     const [actionError, setActionError] = useState("");
+    const [birthDate, setBirthDate] = useState("");
+    const todayInSingapore = new Intl.DateTimeFormat('sv-SE', {
+        timeZone: 'Asia/Singapore', year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(new Date());
 
     const now = new Date();
     const classSessions = classes.filter(
@@ -1133,6 +1139,10 @@ function ClassBooking({
         setActionError("");
         try {
             if (action.kind === "enroll") {
+                if (schedule.needsProfile && (!birthDate || birthDate > todayInSingapore)) {
+                    setActionError("Enter your date of birth before your first booking.");
+                    return;
+                }
                 if (
                     !creditAccount.loading &&
                     !creditError &&
@@ -1148,7 +1158,7 @@ function ClassBooking({
                 const failed: ClassOffering[] = [];
                 const errors: string[] = [];
                 for (const session of action.sessions) {
-                    const error = await schedule.enroll(session);
+                    const error = await schedule.enroll(session, birthDate);
                     if (error) {
                         failed.push(session);
                         errors.push(
@@ -1371,6 +1381,15 @@ function ClassBooking({
                         </AlertDialogHeader>
                         {action.kind === "enroll" && (
                             <div className="flex flex-col gap-4 text-left">
+                                {schedule.needsProfile && (
+                                    <div className="space-y-2">
+                                        <Label htmlFor="booking-birth-date">Date of birth</Label>
+                                        <Input id="booking-birth-date" type="date" value={birthDate}
+                                            max={todayInSingapore}
+                                            onChange={(event) => setBirthDate(event.target.value)} required />
+                                        <p className="text-xs text-muted-foreground">Your first booked class’s dojo will become your home dojo. You only need to enter this once.</p>
+                                    </div>
+                                )}
                                 {/* One card per class, grouped under its date. */}
                                 <ul className="-mx-1 flex max-h-72 flex-col gap-4 overflow-y-auto px-1 text-sm">
                                     {groupByDay(action.sessions).map((group) => (

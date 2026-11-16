@@ -30,7 +30,7 @@ const renew = { label: 'Renew membership', to: '/apply-membership', icon: IdCard
  * most students are members and the pages themselves still check.
  */
 export function studentRoutes(status: MembershipStatus | null) {
-  if (status === 'none') return [dashboard, classes, apply]
+  if (status === 'none' || status === 'non_member') return [dashboard, classes, schedule, credits, apply]
   if (status === 'pending') return [dashboard, classes]
   // Expired members keep their booking and attendance history.
   if (status === 'expired') return [dashboard, classes, schedule, renew]
@@ -83,7 +83,7 @@ export default function StudentNavigation() {
   const { pathname } = useLocation()
   const { handleSignOut, signingOut, error } = useSignOut()
   const { status } = useMembershipStatus()
-  const checkIn = useTodayCheckIn(status === 'active')
+  const checkIn = useTodayCheckIn(status === 'active' || status === 'non_member')
   const { profile } = useAuth()
   const creditAccount = useStudentCredits(profile?.id, null)
   const balance = creditAccount.unlimited

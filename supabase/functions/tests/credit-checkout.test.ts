@@ -13,6 +13,9 @@ Deno.test('credit pass catalogue resolves prices and applies the student discoun
   assert.equal(resolveCreditPass('adult-1y', 'adult')?.unlimited, true)
   assert.equal(resolveCreditPass('junior-1m', 'junior')?.amountCents, 15000)
   assert.equal(resolveCreditPass('junior-1m', 'adult'), null)
+  assert.equal(resolveCreditPass('nonmember-1', 'non_member')?.amountCents, 4000)
+  assert.equal(resolveCreditPass('nonmember-1', 'adult'), null)
+  assert.equal(resolveCreditPass('adult-10', 'non_member'), null)
   assert.equal(resolveCreditPass('unknown-pass', 'adult'), null)
   assert.equal(resolveCreditPass({} as unknown, 'adult'), null)
 })
@@ -75,6 +78,7 @@ Deno.test('credit checkout uses the server price, ignores client amounts and set
     if (url.pathname === '/rest/v1/credit_accounts') {
       return Response.json([{ membership_type: 'student' }])
     }
+    if (url.pathname === '/rest/v1/students') return Response.json([{ membership_status: 'active' }])
 
     if (url.hostname === 'api.stripe.com' && url.pathname === '/v1/checkout/sessions') {
       stripeCalls.push({
@@ -139,6 +143,60 @@ Deno.test('credit checkout uses the server price, ignores client amounts and set
       if (value === undefined) Deno.env.delete(name)
       else Deno.env.set(name, value)
     }
+  }
+})
+
+Deno.test('never-applied students can only buy a verified SGD $40 non-member credit', async () => {
+  const environment: Record<string, string> = {
+    APP_URL: 'https://example.app', STRIPE_SECRET_KEY: 'sk_test_unit_test_only',
+    STRIPE_NON_MEMBERSHIP_CREDITS_FEE_ID: 'price_nonmember_40',
+    SUPABASE_URL: 'https://example.supabase.co', SUPABASE_ANON_KEY: 'test_anon',
+    SUPABASE_SERVICE_ROLE_KEY: 'test_service',
+  }
+  const previous = new Map(Object.keys(environment).map(key => [key, Deno.env.get(key)]))
+  const originalFetch = globalThis.fetch
+  let membershipStatus: string | null = null
+  let priceAmount = 4000
+  const sessions: URLSearchParams[] = []
+  for (const [key, value] of Object.entries(environment)) Deno.env.set(key, value)
+  globalThis.fetch = async (input, init) => {
+    const req = new Request(input, init)
+    const url = new URL(req.url)
+    if (url.pathname === '/auth/v1/user') return Response.json({ id: userId, aud: 'authenticated', role: 'authenticated',
+      email: 'student@example.test', app_metadata: {}, user_metadata: {}, created_at: new Date().toISOString() })
+    if (url.pathname === '/rest/v1/users') return Response.json({ role: 'student' })
+    if (url.pathname === '/rest/v1/students') return Response.json(membershipStatus ? [{ membership_status: membershipStatus }] : [])
+    if (url.pathname === '/rest/v1/credit_accounts') return Response.json([])
+    if (url.pathname === '/v1/prices/price_nonmember_40') return Response.json({
+      id: 'price_nonmember_40', active: true, currency: 'sgd', type: 'one_time', unit_amount: priceAmount,
+    })
+    if (url.pathname === '/v1/checkout/sessions') {
+      sessions.push(new URLSearchParams(await req.text()))
+      return Response.json({ id: 'cs_test_nonmember', object: 'checkout.session', url: 'https://checkout.stripe.com/test' })
+    }
+    throw new Error(`Unexpected request ${req.url}`)
+  }
+  const request = (passId: string, membershipType = 'student') => checkout(new Request('https://example.app/checkout', {
+    method: 'POST', headers: { origin: 'https://example.app', authorization: 'Bearer test',
+      'idempotency-key': crypto.randomUUID() }, body: JSON.stringify({ passId, membershipType }),
+  }))
+  try {
+    assert.equal((await request('adult-10')).status, 400) // No forged member discount.
+    assert.equal((await request('nonmember-1')).status, 200)
+    assert.equal(sessions.length, 1)
+    assert.equal(sessions[0].get('line_items[0][price]'), 'price_nonmember_40')
+    assert.equal(sessions[0].get('metadata[credit_membership_type]'), 'non_member')
+    assert.equal(sessions[0].get('metadata[credit_pass_credits]'), '1')
+    priceAmount = 1
+    assert.equal((await request('nonmember-1')).status, 503)
+    assert.equal(sessions.length, 1)
+    membershipStatus = 'pending'
+    assert.equal((await request('nonmember-1')).status, 403)
+    membershipStatus = 'active'
+    assert.equal((await request('nonmember-1')).status, 400)
+  } finally {
+    globalThis.fetch = originalFetch
+    for (const [key, value] of previous) value === undefined ? Deno.env.delete(key) : Deno.env.set(key, value)
   }
 })
 

@@ -166,7 +166,7 @@ export default function LiveStudentsTab() {
             options={[{ value: 'all', label: 'All eligibility' }, { value: 'eligible', label: 'Eligible' }, { value: 'not_eligible', label: 'Not eligible' }, { value: 'no_open_gradings', label: 'No open gradings' }]}
             renderOption={option => option.value === 'all' ? option.label : <GradingStatus status={option.value as DirectoryStudent['grading_status']} />} />
           <FilterField label="Membership" value={membership} onChange={value => updateParam('membership', value)} ariaLabel="Filter by membership"
-            options={[{ value: 'all', label: 'All memberships' }, { value: 'active', label: 'Active' }, { value: 'expired', label: 'Expired' }, { value: 'pending', label: 'Pending' }]}
+            options={[{ value: 'all', label: 'All memberships' }, { value: 'active', label: 'Active' }, { value: 'expired', label: 'Expired' }, { value: 'pending', label: 'Pending' }, { value: 'non_member', label: 'Non-member' }]}
             renderOption={option => option.value === 'all' ? option.label : <MembershipBadge status={option.value as MembershipStatus} />} />
         </FilterPopover>
       </div>

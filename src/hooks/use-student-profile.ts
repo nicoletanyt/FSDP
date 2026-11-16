@@ -6,7 +6,7 @@ import type { Payment, Profile, Standing } from '@/lib/student-profile'
 
 const LEGACY_GRADING_FEE = 60 // SGD; attempts paid before per-grade fees were all $60
 
-const standings: Record<string, Standing> = { active: 'Active', pending: 'Pending', expired: 'Expired' }
+const standings: Record<string, Standing> = { active: 'Active', pending: 'Pending', expired: 'Expired', non_member: 'None' }
 const paymentStatuses: Record<string, Payment['status']> = { paid: 'Paid', pending: 'Pending', refunded: 'Refunded' }
 
 type One<T> = T | T[] | null

@@ -3,9 +3,9 @@ import { useAuth } from '@/hooks/use-auth'
 import { supabase } from '@/lib/supabase'
 
 /** "none" means the account has no students row yet (never applied or paid). */
-export type MembershipStatus = 'active' | 'pending' | 'expired' | 'none'
+export type MembershipStatus = 'active' | 'pending' | 'expired' | 'none' | 'non_member'
 
-const knownStatuses: MembershipStatus[] = ['active', 'pending', 'expired']
+const knownStatuses: MembershipStatus[] = ['active', 'pending', 'expired', 'non_member']
 
 /**
  * Reads the signed-in student's public.students.membership_status.
@@ -21,6 +21,12 @@ export function useMembershipStatus() {
     status: MembershipStatus | null
     error: boolean
   } | null>(null)
+
+  useEffect(() => {
+    const refresh = () => setVersion((v) => v + 1)
+    window.addEventListener('student-membership-changed', refresh)
+    return () => window.removeEventListener('student-membership-changed', refresh)
+  }, [])
 
   useEffect(() => {
     if (!userId) return

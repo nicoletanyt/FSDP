@@ -22,6 +22,7 @@ import CreditBatchList from '@/components/student/CreditBatchList'
 import CreditBalanceCard from './CreditBalanceCard'
 import MembershipGate from '@/components/student/MembershipGate'
 import { randomUUID } from '@/lib/uuid'
+import { useMembershipStatus } from '@/hooks/use-membership-status'
 
 const UNLIMITED_CREDITS = 9999
 
@@ -86,17 +87,22 @@ export default function StudentCredits() {
   const [membershipType] = useState<MembershipType>(() => resolveMembershipType())
   const [loadingPassId, setLoadingPassId] = useState<string | null>(null)
   const [error, setError] = useState('')
+  const { status, loading: membershipLoading } = useMembershipStatus()
   const checkoutState = searchParams.get('checkout')
 
   const audience = classPassAudience(membershipType)
   const isStudent = isStudentMembership(membershipType)
 
   const packages = useMemo(() => {
+    if (status === 'none' || status === 'non_member') {
+      return [{ id: 'nonmember-1', title: 'Single Class Credit', price: 40, credits: 1,
+        unitPrice: '$40.00 / Session', validity: 'Never expires' }]
+    }
     const base = audience === 'junior' ? JUNIOR_PASSES : ADULT_PASSES
     return isStudent ? applyStudentDiscount(base) : base
-  }, [audience, isStudent])
+  }, [audience, isStudent, status])
 
-  const heading = audience === 'junior' ? 'Junior class passes' : 'Adult class passes'
+  const heading = status === 'none' || status === 'non_member' ? 'Class credits' : audience === 'junior' ? 'Junior class passes' : 'Adult class passes'
 
   // 👇 核心逻辑：直接跳转真实 Stripe Checkout
   const handlePurchase = async (pass: PassPackage) => {
@@ -130,12 +136,15 @@ export default function StudentCredits() {
   // Also support already-created Stripe sessions with the old return URL.
   if (checkoutState === 'success') return <Navigate to={`/dashboard?${searchParams}`} replace />
 
-  return (
-    <MembershipGate title="Credits" feature="Buying class passes">
+  if (membershipLoading) return <div role="status" className="p-6">Checking your account…</div>
+
+  const nonMember = status === 'none' || status === 'non_member'
+  const content = (
     <section className="w-full">
+
       <PageHeader title="Credits" />
 
-      <div className="mt-4 flex flex-wrap items-center gap-2 text-sm">
+      {!nonMember && <div className="mt-4 flex flex-wrap items-center gap-2 text-sm">
           <StatusBadge tone="info" dot={false}>
             {isStudent ? <GraduationCap aria-hidden="true" /> : <User aria-hidden="true" />}
             {membershipLabel(membershipType)}
@@ -149,7 +158,9 @@ export default function StudentCredits() {
           <Link to="/apply-membership" className="inline-flex min-h-11 items-center rounded-sm text-muted-foreground underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring lg:min-h-0">
             Change membership type
           </Link>
-      </div>
+      </div>}
+
+      {nonMember && <p className="mt-4 text-sm text-muted-foreground">No membership required. Each credit books one class and never expires.</p>}
 
       {checkoutState === 'cancel' && (
         <Alert role="status" className="mt-6">
@@ -190,7 +201,7 @@ export default function StudentCredits() {
                 )}
               </div>
               <p className="mt-1 text-sm text-muted-foreground">
-                {pass.credits === UNLIMITED_CREDITS ? 'Unlimited classes' : `${pass.credits} credits`} · {pass.validity}
+                {pass.credits === UNLIMITED_CREDITS ? 'Unlimited classes' : `${pass.credits} ${pass.credits === 1 ? 'credit' : 'credits'}`} · {pass.validity}
               </p>
               <div className="mt-2 flex flex-wrap items-baseline gap-2">
                 <span className="text-2xl font-semibold tabular-nums">{money.format(pass.price)}</span>
@@ -229,6 +240,6 @@ export default function StudentCredits() {
         All prices are in SGD. Secure payments handled by Stripe. Pass validity starts when payment is confirmed.
       </p>
     </section>
-    </MembershipGate>
   )
+  return nonMember ? content : <MembershipGate title="Credits" feature="Buying class passes">{content}</MembershipGate>
 }

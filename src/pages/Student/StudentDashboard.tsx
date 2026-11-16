@@ -55,6 +55,7 @@ export default function StudentDashboard() {
     const { profile } = useAuth();
     const { status, loading, error, reload } = useMembershipStatus();
     const [searchParams, setSearchParams] = useSearchParams();
+    const { creditAccount } = useOutletContext<Pick<StudentContext, 'creditAccount'>>();
     const [confirmChecks, setConfirmChecks] = useState(0);
     const firstName = profile?.first_name ?? "";
     const returnedFromCheckout = searchParams.get("checkout") === "success";
@@ -62,7 +63,7 @@ export default function StudentDashboard() {
     // The webhook can land a few seconds after Stripe redirects back, so re-check briefly.
     useEffect(() => {
         if (!returnedFromCheckout || !status) return;
-        if (status === "active") {
+        if (status === "active" || creditAccount.payment === 'confirmed') {
             setSearchParams({}, { replace: true });
             return;
         }
@@ -72,7 +73,7 @@ export default function StudentDashboard() {
             reload();
         }, CONFIRM_INTERVAL_MS);
         return () => clearTimeout(timer);
-    }, [returnedFromCheckout, status, confirmChecks, reload, setSearchParams]);
+    }, [returnedFromCheckout, status, confirmChecks, reload, setSearchParams, creditAccount.payment]);
 
     if (loading) return <PageSkeleton label="Loading your dashboard…" />;
     if (error || !status) {
