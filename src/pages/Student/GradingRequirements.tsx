@@ -160,7 +160,7 @@ export default function GradingRequirements() {
             {/* Key facts */}
             <section
                 aria-label="Key requirements"
-                className="mt-6 grid gap-2 sm:grid-cols-3 sm:gap-3"
+                className="grid gap-2 sm:grid-cols-3 sm:gap-3"
             >
                 {keyFacts.map((fact) => (
                     // Phones: one slim row per fact; wider screens: three cards.

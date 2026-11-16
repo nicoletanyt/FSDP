@@ -550,6 +550,8 @@ function MemberDashboardView({
     return (
         <section className="flex w-full flex-col gap-6">
             <PageHeader
+                // The parent's 24px gap adds to the header's margin; net 16px / 24px like every page.
+                className="-mb-2 md:mb-0"
                 title={`${greetingFor(new Date().getHours())}${firstName ? `, ${firstName}` : ""}`}
             />
 

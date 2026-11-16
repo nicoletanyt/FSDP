@@ -91,9 +91,7 @@ export default function GradingPayment() {
     return (
         <section className="w-full max-w-3xl">
             <BackNav to="/grading/applications" label="Back to grading applications">
-                <div className="mb-6">
-                    <PageHeader title="Complete your grading payment" />
-                </div>
+                <PageHeader title="Complete your grading payment" />
             </BackNav>
 
             {!eventId || !gradeId ? (

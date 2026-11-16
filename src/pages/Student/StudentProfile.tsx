@@ -218,9 +218,9 @@ export default function StudentProfile() {
       <section className="w-full">
         <PageHeader title="Profile" />
 
-        {loading && <div className="mt-6"><DetailSkeleton label="Loading your membership…" /></div>}
+        {loading && <DetailSkeleton label="Loading your membership…" />}
         {!loading && (error || !profile) && (
-          <div className="mt-6"><RetryAlert message="We couldn't load your membership." onRetry={reload} /></div>
+          <RetryAlert message="We couldn't load your membership." onRetry={reload} />
         )}
 
         {profile && (
@@ -229,7 +229,7 @@ export default function StudentProfile() {
             {/* Fixed card column: an `auto` column shrank the card to its content and crushed it. */}
             <section
               aria-label="Membership"
-              className="mt-6 grid items-start gap-4 md:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)]"
+              className="grid items-start gap-4 md:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)]"
             >
               <MembershipCard profile={profile} />
               <MembershipDetails profile={profile} />

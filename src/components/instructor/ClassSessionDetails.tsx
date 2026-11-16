@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { Link, useLocation } from "react-router";
 import {
@@ -17,6 +18,7 @@ import {
     PopoverTrigger,
 } from "@/components/ui/popover";
 import AttendanceStateBadge from "@/components/shared/status/AttendanceStateBadge";
+import { useSheetFooter } from "@/components/shared/calendar/ClassDetailsOverlay";
 import { DatabaseGradeBadge as GradeBadge } from "@/components/shared/grade/GradeBadge";
 import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
 import StudentTrainingDialog from "./StudentTrainingDialog";
@@ -143,6 +145,7 @@ export default function ClassSessionDetails({
     showAttendanceToggle = true,
     fillHeight = false,
     onToggle,
+    sheet = false,
 }: {
     event: CalendarEvent;
     summary?: boolean;
@@ -150,6 +153,12 @@ export default function ClassSessionDetails({
     showAttendanceToggle?: boolean;
     fillHeight?: boolean;
     onToggle?: () => void;
+    /**
+     * In the phone/tablet bottom sheet: attendance first (count, roster, bulk
+     * marking), the rare "I'm unavailable" last, one 16px inset and 12px rows
+     * like the other sheets, and "View Grading" as the sheet's bottom bar.
+     */
+    sheet?: boolean;
 }) {
     const { session, profile } = useAuth();
     const dialogContext = JSON.stringify([
@@ -265,6 +274,11 @@ export default function ClassSessionDetails({
     };
     // The grading page offers "Back to calendar" to this exact view (date and selection).
     const location = useLocation();
+    const inset = sheet ? "px-4" : "px-3";
+    const sheetFooter = useSheetFooter();
+    const showGrading = query.status === "success" && isGrading && Boolean(attendance.data);
+    // In the sheet, "View Grading" leaves the scroll and sits flush on the sheet's bottom edge.
+    const gradingInFooter = sheet && Boolean(sheetFooter);
     // The same checklist page as the grading day's "View checklist";
     // without a scheduled session, the grading day itself.
     const gradingHref = gradeSession
@@ -307,6 +321,8 @@ export default function ClassSessionDetails({
                     fillHeight &&
                     (!summary || expanded) &&
                     "lg:flex lg:min-h-0 lg:flex-1 lg:flex-col",
+                    // A column, so the rare "I'm unavailable" can sit last without moving the dialog.
+                    sheet && "flex flex-col",
                 )}
             >
                 {expanded &&
@@ -316,12 +332,22 @@ export default function ClassSessionDetails({
                     storedEvent.status === "scheduled" &&
                     storedEvent.starts_at &&
                     new Date(storedEvent.starts_at).getTime() > now.getTime() && (
-                        <div className="shrink-0 px-3 pt-3 pb-2">
+                        <div className={cn(
+                            "shrink-0",
+                            // Sheet: last, below the attendance actions. Reporting unavailability is
+                            // rare and consequential, so it must not outrank taking attendance.
+                            sheet ? "order-last border-t border-border/50 p-4" : "px-3 pt-3 pb-2",
+                        )}>
+                            {sheet && (
+                                <p className="mb-3 text-sm text-muted-foreground">
+                                    Can’t teach this class? Let the admin team know so they can find cover.
+                                </p>
+                            )}
                             <ClassUnavailableDialog key={dialogContext} eventId={event.id} />
                         </div>
                     )}
-                {!summary && (
-                    <div className="shrink-0 space-y-2 px-3 py-2.5">
+                {(!summary || sheet) && (
+                    <div className={cn("shrink-0 space-y-2", sheet ? "px-4 py-3" : "px-3 py-2.5")}>
                         <div className="flex items-center justify-between gap-2 text-xs">
                             <h4 className="text-sm font-medium">Attendance</h4>
                             <span aria-live="polite" className="text-muted-foreground">
@@ -342,7 +368,7 @@ export default function ClassSessionDetails({
                 ) : (
                     <>
                         {attendance.error && (
-                            <div className="space-y-2 px-3 py-2">
+                            <div className={cn("space-y-2 py-2", inset)}>
                                 <p role="alert" className="text-sm text-destructive">
                                     {attendance.error}
                                 </p>
@@ -359,7 +385,7 @@ export default function ClassSessionDetails({
                         {attendance.message && (
                             <p
                                 role="status"
-                                className="px-3 py-2 text-xs text-muted-foreground"
+                                className={cn("py-2 text-xs text-muted-foreground", inset)}
                             >
                                 {attendance.message}
                             </p>
@@ -373,8 +399,11 @@ export default function ClassSessionDetails({
                             <ul
                                 aria-label="Student roster"
                                 className={cn(
-                                    "my-2 divide-y divide-border/50 bg-muted/25 lg:overflow-y-auto lg:overscroll-contain",
-                                    fillHeight ? "lg:min-h-0 lg:flex-1" : "lg:max-h-80",
+                                    "divide-y divide-border/50 bg-muted/25",
+                                    sheet ? "border-y border-border/50" : "my-2",
+                                    // The sheet scrolls as a whole; an inner scroll area would trap the thumb.
+                                    !sheet && "lg:overflow-y-auto lg:overscroll-contain",
+                                    !sheet && (fillHeight ? "lg:min-h-0 lg:flex-1" : "lg:max-h-80"),
                                 )}
                             >
                                 {roster.map((student) => {
@@ -382,13 +411,22 @@ export default function ClassSessionDetails({
                                     return (
                                         <li
                                             key={student.id}
-                                            className="grid grid-cols-[minmax(0,1fr)_auto_132px] items-center gap-x-2 py-2 lg:min-h-14 lg:grid-cols-[minmax(0,1fr)_92px] lg:grid-rows-[28px_16px] lg:gap-y-0.5 lg:px-3 lg:py-1"
+                                            className={cn(
+                                                "grid items-center gap-x-2",
+                                                sheet
+                                                    // Name over grade, controls on the right: the name gets the row's width.
+                                                    ? "grid-cols-[minmax(0,1fr)_132px] gap-y-0.5 px-4 py-2.5"
+                                                    : "grid-cols-[minmax(0,1fr)_auto_132px] py-2 lg:min-h-14 lg:grid-cols-[minmax(0,1fr)_92px] lg:grid-rows-[28px_16px] lg:gap-y-0.5 lg:px-3 lg:py-1",
+                                            )}
                                         >
                                             <div className="min-w-0">
                                                 <Popover>
                                                     <PopoverTrigger
                                                         aria-label={`Student details: ${student.name}`}
-                                                        className="flex min-h-11 w-full min-w-0 items-center rounded-md text-left text-2xs font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring lg:hidden"
+                                                        className={cn(
+                                                            "flex w-full min-w-0 items-center rounded-md text-left font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                                                            sheet ? "min-h-9 text-sm" : "min-h-11 text-2xs lg:hidden",
+                                                        )}
                                                     >
                                                         <span className="truncate">{student.name}</span>
                                                     </PopoverTrigger>
@@ -422,12 +460,16 @@ export default function ClassSessionDetails({
                                                 </Popover>
                                                 <span
                                                     title={student.name}
-                                                    className="hidden min-w-0 truncate text-2xs font-medium lg:block"
+                                                    className={cn("hidden min-w-0 truncate text-2xs font-medium", !sheet && "lg:block")}
                                                 >
                                                     {student.name}
                                                 </span>
                                             </div>
-                                            <div className="col-start-3 row-start-1 flex w-[132px] items-center justify-end lg:col-start-2 lg:row-span-2 lg:grid lg:w-[92px] lg:grid-cols-[60px_28px] lg:gap-1 lg:self-center">
+                                            <div className={cn(
+                                                "flex w-[132px] items-center justify-end",
+                                                sheet ? "col-start-2 row-span-2 row-start-1"
+                                                    : "col-start-3 row-start-1 lg:col-start-2 lg:row-span-2 lg:grid lg:w-[92px] lg:grid-cols-[60px_28px] lg:gap-1 lg:self-center",
+                                            )}>
                                                 <AttendanceControls
                                                     student={student}
                                                     value={value.attendance}
@@ -499,10 +541,13 @@ export default function ClassSessionDetails({
                                                     </TooltipContent>
                                                 </Tooltip>
                                             </div>
-                                            <div className="col-start-2 row-start-1 flex min-w-0 items-center gap-1 lg:col-start-1 lg:row-start-2">
+                                            <div className={cn(
+                                                "flex min-w-0 items-center gap-1",
+                                                sheet ? "col-start-1 row-start-2" : "col-start-2 row-start-1 lg:col-start-1 lg:row-start-2",
+                                            )}>
                                                 <GradeBadge
                                                     grade={student.grade}
-                                                    className="h-auto max-w-16 flex-nowrap rounded-none border-0 bg-transparent p-0 text-3xs text-muted-foreground lg:h-4 lg:max-w-full lg:leading-4 [&>span:first-child]:min-w-0 [&>span:first-child]:truncate [&>span:first-child]:font-normal [&>[aria-hidden]]:h-1.5 [&>[aria-hidden]]:w-2 lg:[&>[aria-hidden]]:w-3"
+                                                    className={cn("h-auto max-w-16 flex-nowrap rounded-none border-0 bg-transparent p-0 text-3xs text-muted-foreground lg:h-4 lg:max-w-full lg:leading-4 [&>span:first-child]:min-w-0 [&>span:first-child]:truncate [&>span:first-child]:font-normal [&>[aria-hidden]]:h-1.5 [&>[aria-hidden]]:w-2 lg:[&>[aria-hidden]]:w-3", sheet && "max-w-full text-2xs [&>[aria-hidden]]:w-3")}
                                                 />
                                                 {student.targetGrade && (
                                                     <>
@@ -513,7 +558,7 @@ export default function ClassSessionDetails({
                                                         <span className="sr-only">grading for</span>
                                                         <GradeBadge
                                                             grade={student.targetGrade}
-                                                            className="h-auto max-w-16 flex-nowrap rounded-none border-0 bg-transparent p-0 text-3xs text-muted-foreground lg:h-4 lg:max-w-full lg:leading-4 [&>span:first-child]:min-w-0 [&>span:first-child]:truncate [&>span:first-child]:font-normal [&>[aria-hidden]]:h-1.5 [&>[aria-hidden]]:w-2 lg:[&>[aria-hidden]]:w-3"
+                                                            className={cn("h-auto max-w-16 flex-nowrap rounded-none border-0 bg-transparent p-0 text-3xs text-muted-foreground lg:h-4 lg:max-w-full lg:leading-4 [&>span:first-child]:min-w-0 [&>span:first-child]:truncate [&>span:first-child]:font-normal [&>[aria-hidden]]:h-1.5 [&>[aria-hidden]]:w-2 lg:[&>[aria-hidden]]:w-3", sheet && "max-w-full text-2xs [&>[aria-hidden]]:w-3")}
                                                         />
                                                     </>
                                                 )}
@@ -550,8 +595,12 @@ export default function ClassSessionDetails({
                         </TooltipProvider>
                     </>
                 )}
-                {(canEdit || (query.status === "success" && isGrading && attendance.data)) && (
-                    <div className="shrink-0 space-y-2 border-t border-border/50 p-3">
+                {(canEdit || (showGrading && !gradingInFooter)) && (
+                    <div className={cn(
+                        "shrink-0 space-y-2",
+                        // The roster's own bottom border separates it in the sheet.
+                        sheet ? "p-4" : "border-t border-border/50 p-3",
+                    )}>
                         {canEdit && (
                             <Button
                                 variant="outline"
@@ -564,7 +613,10 @@ export default function ClassSessionDetails({
                                 }
                                 onClick={() => markAll(allPresent ? "absent" : "present")}
                                 title="Applies to editable entries; recorded late and excused attendance is preserved."
-                                className="h-auto min-h-11 w-full px-3 py-1.5 text-xs whitespace-normal lg:min-h-8"
+                                className={cn(
+                                    "h-auto min-h-11 w-full px-3 py-1.5 whitespace-normal",
+                                    sheet ? "text-sm" : "text-xs lg:min-h-8",
+                                )}
                             >
                                 {allPresent ? (
                                     <CircleX aria-hidden="true" />
@@ -574,7 +626,7 @@ export default function ClassSessionDetails({
                                 {allPresent ? "Mark All Absent" : "Mark All Present"}
                             </Button>
                         )}
-                        {query.status === "success" && isGrading && attendance.data && (
+                        {showGrading && !gradingInFooter && (
                             <Button
                                 size="sm"
                                 className="min-h-11 w-full"
@@ -585,6 +637,21 @@ export default function ClassSessionDetails({
                             </Button>
                         )}
                     </div>
+                )}
+                {showGrading && gradingInFooter && sheetFooter && createPortal(
+                    // The same bottom bar as the student "Enrol" action on class selection:
+                    // a bordered strip pinned to the sheet's bottom, with a regular touch button.
+                    <div className="flex items-center gap-3 border-t bg-background/95 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur">
+                        <Button
+                            size="touch"
+                            className="flex-1"
+                            nativeButton={false}
+                            render={<Link to={gradingHref} state={{ from: `${location.pathname}${location.search}` }} />}
+                        >
+                            View Grading
+                        </Button>
+                    </div>,
+                    sheetFooter,
                 )}
             </div>
             {!isGrading && expanded && profile?.role === "instructor" && (

@@ -1241,7 +1241,8 @@ function ClassBooking({
 
     return (
         <section className="space-y-4" aria-labelledby="booking-class-title">
-            <div id="booking-class-title">
+            {/* Same gap below as every PageHeader (16px, 24px from md), for the phone header too. */}
+            <div id="booking-class-title" className="mb-4 md:mb-6">
                 {phone ? (
                     <header className="space-y-3">
                         <div className="flex items-start justify-between gap-3">

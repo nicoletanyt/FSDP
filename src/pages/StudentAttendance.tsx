@@ -236,7 +236,13 @@ export default function StudentAttendance() {
     const future = dateTime(e.session).getTime() > Date.now()
     const booked = future && (e.status === 'enrolled' || e.status === 'make-up')
     const waitlisted = future && e.status === 'waitlisted'
-    const fact = 'flex items-center gap-1.5 text-xs opacity-85'
+    // The phone sheet has no close button here (its header has Done) and already shows the date.
+    const sheet = !onClose
+    // Facts at body size and full contrast: they're what the student opened this for.
+    const fact = 'flex items-start gap-2 text-sm'
+    const factIcon = 'mt-0.5 size-4 shrink-0 opacity-75'
+    // One inset (16px) for every row, so the title, facts, labels and button line up.
+    const row = 'shrink-0 border-t border-foreground/10 px-4'
     return (
       <Card size="sm" className={cn(
         'h-full min-h-0 gap-0 rounded-lg border py-0 shadow-none ring-0',
@@ -252,41 +258,36 @@ export default function StudentAttendance() {
               </Button>
             )}
           </div>
-          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-            <span className={fact}><CalendarDays aria-hidden="true" className="size-3.5 shrink-0" />{prettyDate(e.session.date)}</span>
-            <span className={fact}><Clock3 aria-hidden="true" className="size-3.5 shrink-0" />{formatTime(e.session.startTime)} – {formatTime(e.session.endTime)}</span>
-          </div>
-          <span className={fact}><MapPin aria-hidden="true" className="size-3.5 shrink-0" /><span className="min-w-0 wrap-break-word">{e.session.centre}</span></span>
-          <span className={fact}><UserRound aria-hidden="true" className="size-3.5 shrink-0" /><span className="min-w-0 truncate">{e.session.instructor}</span></span>
+          {/* When, then where, then who: one fact per line, so nothing wraps mid-row on a phone. */}
+          <ul className="grid gap-1.5">
+            {!sheet && (
+              <li className={fact}><CalendarDays aria-hidden="true" className={factIcon} />{prettyDate(e.session.date)}</li>
+            )}
+            <li className={cn(fact, 'font-medium tabular-nums')}>
+              <Clock3 aria-hidden="true" className={factIcon} />{formatTime(e.session.startTime)} – {formatTime(e.session.endTime)}
+            </li>
+            <li className={fact}><MapPin aria-hidden="true" className={factIcon} /><span className="min-w-0 wrap-break-word">{e.session.centre}</span></li>
+            <li className={fact}><UserRound aria-hidden="true" className={factIcon} /><span className="min-w-0 wrap-break-word">{e.session.instructor}</span></li>
+          </ul>
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-background text-foreground">
-          <section className="flex shrink-0 items-center justify-between gap-2 border-t border-foreground/10 px-3 py-2.5">
-            <h3 className="text-sm font-medium">{e.status === 'waitlisted' ? 'Booking' : 'Attendance'}</h3>
-            <StatusPill entry={e} className="ring-foreground/15" />
+          <section className={cn(row, 'space-y-1.5 py-3')}>
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-sm font-medium">{e.status === 'waitlisted' ? 'Booking' : 'Attendance'}</h3>
+              <StatusPill entry={e} className="ring-foreground/15" />
+            </div>
+            {/* The caveat belongs to the waitlist status, not a row of its own. */}
+            {waitlisted && <p className="text-xs text-muted-foreground">Being waitlisted does not guarantee a spot.</p>}
           </section>
-          {e.session.level && (
-            <section className="shrink-0 space-y-1 border-t border-foreground/10 px-3 py-2.5">
-              <h3 className="text-sm font-medium">Class level</h3>
-              <p className="text-sm text-muted-foreground">{e.session.level}</p>
-            </section>
-          )}
-          {waitlisted && (
-            <p className="shrink-0 border-t border-foreground/10 px-3 py-2.5 text-xs text-muted-foreground">
-              Being waitlisted does not guarantee a spot.
-            </p>
-          )}
           {(booked || waitlisted) && (
-            <div className="mt-auto flex shrink-0 flex-wrap gap-2 border-t border-foreground/10 px-3 py-3">
-              {booked ? (
-                <Button size="sm" variant="outline" onClick={() => setPending({ kind: 'cancel', id: e.id })}>
-                  Cancel booking
-                </Button>
-              ) : (
-                <Button size="sm" variant="outline" onClick={() => setPending({ kind: 'leave', id: e.id })}>
-                  Leave waitlist
-                </Button>
-              )}
+            // The only action, and it undoes a booking: full-width, 44px tall, red but not filled.
+            // The confirm dialog that follows is where it becomes final.
+            <div className={cn(row, 'mt-auto py-4')}>
+              <Button size="touch" variant="destructive" className="w-full"
+                onClick={() => setPending({ kind: booked ? 'cancel' : 'leave', id: e.id })}>
+                {booked ? 'Cancel booking' : 'Leave waitlist'}
+              </Button>
             </div>
           )}
         </div>

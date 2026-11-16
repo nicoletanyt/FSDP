@@ -321,7 +321,7 @@ export default function StudentCredits() {
                 <PageHeader title="Credits" />
 
                 {isStudent && (
-                    <div className="mt-4">
+                    <div>
                         <StatusBadge tone="success" dot={false}>
                             <BadgeCheck aria-hidden="true" />
                             50% student discount applied
