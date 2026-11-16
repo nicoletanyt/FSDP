@@ -98,10 +98,10 @@ async function setValue(id, value) {
 test('5th Kyu stays $77 through application, review and Stripe redirect at 320–1440px', async () => {
   for (const width of [320, 390, 768, 1440]) {
     await open(width, '?appRoute=%2Fgrading')
-    await until(`document.querySelector('#target-grade')?.textContent.includes('Blue-Gold (5th Kyu)')`)
+    await until(`document.querySelector('#target-grade [data-grade-id="blue-gold-5th-kyu"]') !== null`)
     assert.equal(await evaluate(`document.querySelector('select#target-grade')`), null)
-    assert.match(await evaluate(`document.querySelector('#target-grade').textContent`), /55\.00/)
-    assert.match(await evaluate(`document.body.textContent`), /Current grade: Blue \(6th Kyu\)/)
+    assert.match(await evaluate(`document.querySelector('#base-fee').textContent`), /55\.00/)
+    assert.equal(await evaluate(`document.querySelector('#current-grade [data-grade-id="blue-6th-kyu"]') !== null`), true)
     assert.equal(await evaluate(`document.documentElement.scrollWidth <= innerWidth`), true, `${width}px application`)
     if (width === 320 || width === 1440) {
       const screenshot = await send('Page.captureScreenshot', { format: 'png' })
@@ -131,14 +131,14 @@ test('5th Kyu stays $77 through application, review and Stripe redirect at 320�
 
 test('rank and next-grade fee stay visible without an eligible session', async () => {
   await open(390, '?appRoute=%2Fgrading&empty=1')
-  await until(`document.querySelector('#target-grade')?.textContent.includes('Blue-Gold (5th Kyu)')`)
-  assert.match(await evaluate(`document.querySelector('#target-grade').textContent`), /55\.00/)
+  await until(`document.querySelector('#target-grade [data-grade-id="blue-gold-5th-kyu"]') !== null`)
+  assert.match(await evaluate(`document.querySelector('#base-fee').textContent`), /55\.00/)
   assert.equal(await evaluate(`document.querySelector('#grading-event')`), null)
 })
 
 test('children follow the database children ladder, not the adult ladder', async () => {
   await open(390, '?appRoute=%2Fgrading&child=1')
-  await until(`document.querySelector('#target-grade')?.textContent.includes('Blue-Silver (6th Kyu)')`)
+  await until(`document.querySelector('#target-grade [data-grade-id="blue-silver-6th-kyu"]') !== null`)
   assert.equal(await evaluate(`document.querySelector('#grading-event')`), null)
   assert.match(await evaluate(`document.querySelector('#payment-preview-note').textContent`), /Payment preview only/)
 })
@@ -163,7 +163,7 @@ test('expired and pending members are told why they cannot apply', async () => {
 
 test('a checkout option for a skipped grade is not offered', async () => {
   await open(390, '?appRoute=%2Fgrading&grade=brown-4th-kyu')
-  await until(`document.querySelector('#target-grade')?.textContent.includes('Blue-Gold (5th Kyu)')`)
+  await until(`document.querySelector('#target-grade [data-grade-id="blue-gold-5th-kyu"]') !== null`)
   assert.equal(await evaluate(`document.querySelector('#grading-event')`), null)
   assert.match(await evaluate(`document.querySelector('#payment-preview-note').textContent`), /No charge or formal grading application/)
 })
@@ -190,7 +190,7 @@ test('Stripe success waits for the verified application record, not just the URL
   await open(390, '?appRoute=' + encodeURIComponent('/grading/applications?checkout=success&session_id=cs_test_fixture'))
   await until(`document.body.textContent.includes('Confirming your Stripe payment')`)
   await until(`document.body.textContent.includes('Payment confirmed.')`)
-  await until(`document.body.textContent.includes('Application submitted:')`)
+  await until(`document.body.textContent.includes('Application submitted')`)
   assert.equal(await evaluate(`window.gradingCheckoutCalls.filter(c => c.action === 'checkout').length`), 0)
 })
 
@@ -206,7 +206,7 @@ test('Proceed to payment opens Stripe test checkout without an eligible formal s
     await until(`document.querySelector('#payment-preview-note') !== null`)
     assert.match(await evaluate(`document.body.textContent`), /Payment preview only/)
     assert.equal(await evaluate(`document.body.textContent.includes('Stripe test mode')`), false)
-    assert.equal(await evaluate(`document.querySelector('h2').textContent`), 'Grading details')
+    assert.equal(await evaluate(`Array.from(document.querySelectorAll('h2')).some(h => h.textContent === 'Order summary')`), true)
     assert.equal(await evaluate(`Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Proceed to payment')).disabled`), false)
     assert.equal(await evaluate(`document.documentElement.scrollWidth <= innerWidth`), true)
     const screenshot = await send('Page.captureScreenshot', { format: 'png' })
@@ -225,15 +225,15 @@ test('test success is verified without claiming a formal application was submitt
   await open(390, '?empty=1&appRoute=' + encodeURIComponent('/grading?checkout=test-success&session_id=cs_test_preview'))
   await until(`document.body.textContent.includes('Payment confirmed and recorded.')`)
   assert.match(await evaluate(`document.body.textContent`), /awaiting dojo eligibility review/)
-  assert.equal(await evaluate(`document.body.textContent.includes('Application submitted:')`), false)
-  await until(`document.body.textContent.includes('Payment confirmed:')`)
+  assert.equal(await evaluate(`document.body.textContent.includes('Application submitted')`), false)
+  await until(`document.body.textContent.includes('Payment confirmed')`)
   assert.equal(await evaluate(`Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Payment confirmed')).disabled`), true)
 })
 
 test('previously recorded payments reload as paid and prevent repeat payment', async () => {
   await open(390, '?empty=1&savedDraft=1&appRoute=%2Fgrading')
-  await until(`document.body.textContent.includes('Payment confirmed:')`)
-  assert.match(await evaluate(`document.body.textContent`), /Blue-Gold \(5th Kyu\).*awaiting dojo eligibility review/)
+  await until(`document.body.textContent.includes('Payment confirmed')`)
+  assert.match(await evaluate(`document.body.textContent`), /5th Kyu · Blue-Gold.*awaiting dojo eligibility review/s)
   assert.equal(await evaluate(`Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Payment confirmed')).disabled`), true)
 })
 

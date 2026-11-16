@@ -300,7 +300,7 @@ function TrainingCard({ belt, nextBelt }: Pick<DashboardSummary, "belt" | "nextB
         <SlideCard
             icon={GraduationCap}
             eyebrow="Your training progress"
-            footer={<Link to="/grading/requirements" className={ctaClass()}>View grading requirements</Link>}
+            footer={<Link to="/grading/requirements" className={ctaClass()}>View more grading information</Link>}
         >
             <div className="flex flex-wrap items-center gap-2">
                 <span className="sr-only">Current grade:</span>
