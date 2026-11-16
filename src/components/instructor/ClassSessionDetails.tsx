@@ -8,6 +8,7 @@ import {
     ChevronDown,
     CircleCheck,
     CircleX,
+    ClipboardCheck,
     UserRound,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -18,7 +19,7 @@ import {
     PopoverTrigger,
 } from "@/components/ui/popover";
 import AttendanceStateBadge from "@/components/shared/status/AttendanceStateBadge";
-import { useSheetFooter } from "@/components/shared/calendar/ClassDetailsOverlay";
+import { useSheetFooter, useSheetSuspend } from "@/components/shared/calendar/ClassDetailsOverlay";
 import { DatabaseGradeBadge as GradeBadge } from "@/components/shared/grade/GradeBadge";
 import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
 import StudentTrainingDialog from "./StudentTrainingDialog";
@@ -276,7 +277,19 @@ export default function ClassSessionDetails({
     const location = useLocation();
     const inset = sheet ? "px-4" : "px-3";
     const sheetFooter = useSheetFooter();
+    // In the sheet, the progress checklist replaces it while open and the sheet returns on close.
+    const suspendSheet = useSheetSuspend();
     const showGrading = query.status === "success" && isGrading && Boolean(attendance.data);
+    // Reporting unavailability is for upcoming classes only.
+    const showUnavailable = Boolean(
+        expanded &&
+        profile?.role === "instructor" &&
+        query.status === "success" &&
+        storedEvent?.event_type === "class" &&
+        storedEvent.status === "scheduled" &&
+        storedEvent.starts_at &&
+        new Date(storedEvent.starts_at).getTime() > now.getTime(),
+    );
     // In the sheet, "View Grading" leaves the scroll and sits flush on the sheet's bottom edge.
     const gradingInFooter = sheet && Boolean(sheetFooter);
     // The same checklist page as the grading day's "View checklist";
@@ -325,29 +338,9 @@ export default function ClassSessionDetails({
                     sheet && "flex flex-col",
                 )}
             >
-                {expanded &&
-                    profile?.role === "instructor" &&
-                    query.status === "success" &&
-                    storedEvent?.event_type === "class" &&
-                    storedEvent.status === "scheduled" &&
-                    storedEvent.starts_at &&
-                    new Date(storedEvent.starts_at).getTime() > now.getTime() && (
-                        <div className={cn(
-                            "shrink-0",
-                            // Sheet: last, below the attendance actions. Reporting unavailability is
-                            // rare and consequential, so it must not outrank taking attendance.
-                            sheet ? "order-last border-t border-border/50 p-4" : "px-3 pt-3 pb-2",
-                        )}>
-                            {sheet && (
-                                <p className="mb-3 text-sm text-muted-foreground">
-                                    Can’t teach this class? Let the admin team know so they can find cover.
-                                </p>
-                            )}
-                            <ClassUnavailableDialog key={dialogContext} eventId={event.id} />
-                        </div>
-                    )}
                 {(!summary || sheet) && (
-                    <div className={cn("shrink-0 space-y-2", sheet ? "px-4 py-3" : "px-3 py-2.5")}>
+                    // The desktop panel has no attendance header; iPad matches it.
+                    <div className={cn("shrink-0 space-y-2", sheet ? "px-4 py-3 md:hidden" : "px-3 py-2.5")}>
                         <div className="flex items-center justify-between gap-2 text-xs">
                             <h4 className="text-sm font-medium">Attendance</h4>
                             <span aria-live="polite" className="text-muted-foreground">
@@ -399,8 +392,9 @@ export default function ClassSessionDetails({
                             <ul
                                 aria-label="Student roster"
                                 className={cn(
-                                    "divide-y divide-border/50 bg-muted/25",
-                                    sheet ? "border-y border-border/50" : "my-2",
+                                    // The roster's own width decides whether the checklist button fits.
+                                    "@container/roster divide-y divide-border/50 bg-muted/25",
+                                    sheet ? "border-y border-border/50 md:my-2 md:border-y-0" : "my-2",
                                     // The sheet scrolls as a whole; an inner scroll area would trap the thumb.
                                     !sheet && "lg:overflow-y-auto lg:overscroll-contain",
                                     !sheet && (fillHeight ? "lg:min-h-0 lg:flex-1" : "lg:max-h-80"),
@@ -415,8 +409,8 @@ export default function ClassSessionDetails({
                                                 "grid items-center gap-x-2",
                                                 sheet
                                                     // Name over grade, controls on the right: the name gets the row's width.
-                                                    ? "grid-cols-[minmax(0,1fr)_132px] gap-y-0.5 px-4 py-2.5"
-                                                    : "grid-cols-[minmax(0,1fr)_auto_132px] py-2 lg:min-h-14 lg:grid-cols-[minmax(0,1fr)_92px] lg:grid-rows-[28px_16px] lg:gap-y-0.5 lg:px-3 lg:py-1",
+                                                    ? "grid-cols-[minmax(0,1fr)_auto] gap-y-0.5 px-4 py-2.5"
+                                                    : "grid-cols-[minmax(0,1fr)_auto_auto] py-2 lg:min-h-14 lg:grid-cols-[minmax(0,1fr)_auto] lg:grid-rows-[auto_auto] lg:gap-y-1 lg:px-3 lg:py-2",
                                             )}
                                         >
                                             <div className="min-w-0">
@@ -425,7 +419,7 @@ export default function ClassSessionDetails({
                                                         aria-label={`Student details: ${student.name}`}
                                                         className={cn(
                                                             "flex w-full min-w-0 items-center rounded-md text-left font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                                                            sheet ? "min-h-9 text-sm" : "min-h-11 text-2xs lg:hidden",
+                                                            sheet ? "min-h-9 text-sm" : "min-h-11 text-sm lg:hidden",
                                                         )}
                                                     >
                                                         <span className="truncate">{student.name}</span>
@@ -460,15 +454,21 @@ export default function ClassSessionDetails({
                                                 </Popover>
                                                 <span
                                                     title={student.name}
-                                                    className={cn("hidden min-w-0 truncate text-2xs font-medium", !sheet && "lg:block")}
+                                                    className={cn("hidden min-w-0 truncate text-sm font-medium", !sheet && "lg:block lg:text-xs")}
                                                 >
                                                     {student.name}
                                                 </span>
                                             </div>
                                             <div className={cn(
-                                                "flex w-[132px] items-center justify-end",
+                                                // Two groups: attendance (present/absent), then the student links,
+                                                // set apart so a mis-tap between them is unlikely.
+                                                // A narrow roster keeps a smaller gap so names keep their room.
+                                                "flex w-[140px] items-center justify-end gap-2 @min-[18rem]/roster:gap-4",
+                                                // Room for the checklist button when the roster is at least 18rem wide.
+                                                isGrading ? "@min-[18rem]/roster:w-[148px]" : "@min-[18rem]/roster:w-[192px]",
                                                 sheet ? "col-start-2 row-span-2 row-start-1"
-                                                    : "col-start-3 row-start-1 lg:col-start-2 lg:row-span-2 lg:grid lg:w-[92px] lg:grid-cols-[60px_28px] lg:gap-1 lg:self-center",
+                                                    : cn("col-start-3 row-start-1 lg:col-start-2 lg:row-span-2 lg:w-[116px] lg:gap-3 lg:self-center",
+                                                        !isGrading && "lg:@min-[18rem]/roster:w-[148px]"),
                                             )}>
                                                 <AttendanceControls
                                                     student={student}
@@ -496,10 +496,33 @@ export default function ClassSessionDetails({
                                                             : undefined
                                                     }
                                                 />
-                                                <Tooltip>
-                                                    <TooltipTrigger
-                                                        render={
-                                                            isGrading ? (
+                                                <div className="flex shrink-0 items-center lg:gap-1">
+                                                    {!isGrading && (
+                                                        <Tooltip>
+                                                            <TooltipTrigger
+                                                                render={
+                                                                    <DialogPrimitive.Trigger
+                                                                        handle={studentDialogHandle}
+                                                                        payload={student.entry}
+                                                                        render={
+                                                                            <Button
+                                                                                variant="outline"
+                                                                                size="icon-sm"
+                                                                                aria-label={`Open progress checklist for ${student.name}`}
+                                                                                className="hidden size-11 rounded-md text-foreground/70 hover:text-foreground @min-[18rem]/roster:inline-flex lg:size-8"
+                                                                            />
+                                                                        }
+                                                                    />
+                                                                }
+                                                            >
+                                                                <ClipboardCheck aria-hidden="true" />
+                                                            </TooltipTrigger>
+                                                            <TooltipContent>Progress checklist</TooltipContent>
+                                                        </Tooltip>
+                                                    )}
+                                                    <Tooltip>
+                                                        <TooltipTrigger
+                                                            render={
                                                                 <Button
                                                                     render={
                                                                         <Link
@@ -511,43 +534,26 @@ export default function ClassSessionDetails({
                                                                         />
                                                                     }
                                                                     nativeButton={false}
-                                                                    variant="ghost"
+                                                                    variant="outline"
                                                                     size="icon-sm"
                                                                     aria-label={`View student overview for ${student.name}`}
-                                                                    className="size-11 rounded-md text-foreground/70 hover:text-foreground lg:size-7"
+                                                                    className="size-11 rounded-md text-foreground/70 hover:text-foreground lg:size-8"
                                                                 />
-                                                            ) : (
-                                                                <DialogPrimitive.Trigger
-                                                                    handle={studentDialogHandle}
-                                                                    payload={student.entry}
-                                                                    render={
-                                                                        <Button
-                                                                            variant="ghost"
-                                                                            size="icon-sm"
-                                                                            aria-label={`View student details and techniques for ${student.name}`}
-                                                                            className="size-11 rounded-md text-foreground/70 hover:text-foreground lg:size-7"
-                                                                        />
-                                                                    }
-                                                                />
-                                                            )
-                                                        }
-                                                    >
-                                                        <UserRound aria-hidden="true" />
-                                                    </TooltipTrigger>
-                                                    <TooltipContent>
-                                                        {isGrading
-                                                            ? "Student overview"
-                                                            : "Student details and techniques"}
-                                                    </TooltipContent>
-                                                </Tooltip>
+                                                            }
+                                                        >
+                                                            <UserRound aria-hidden="true" />
+                                                        </TooltipTrigger>
+                                                        <TooltipContent>Student overview</TooltipContent>
+                                                    </Tooltip>
+                                                </div>
                                             </div>
                                             <div className={cn(
-                                                "flex min-w-0 items-center gap-1",
+                                                "flex min-w-0 flex-wrap items-center gap-1",
                                                 sheet ? "col-start-1 row-start-2" : "col-start-2 row-start-1 lg:col-start-1 lg:row-start-2",
                                             )}>
                                                 <GradeBadge
                                                     grade={student.grade}
-                                                    className={cn("h-auto max-w-16 flex-nowrap rounded-none border-0 bg-transparent p-0 text-3xs text-muted-foreground lg:h-4 lg:max-w-full lg:leading-4 [&>span:first-child]:min-w-0 [&>span:first-child]:truncate [&>span:first-child]:font-normal [&>[aria-hidden]]:h-1.5 [&>[aria-hidden]]:w-2 lg:[&>[aria-hidden]]:w-3", sheet && "max-w-full text-2xs [&>[aria-hidden]]:w-3")}
+                                                    className="min-w-0 px-1.5 [&>span:first-child]:truncate"
                                                 />
                                                 {student.targetGrade && (
                                                     <>
@@ -558,7 +564,7 @@ export default function ClassSessionDetails({
                                                         <span className="sr-only">grading for</span>
                                                         <GradeBadge
                                                             grade={student.targetGrade}
-                                                            className={cn("h-auto max-w-16 flex-nowrap rounded-none border-0 bg-transparent p-0 text-3xs text-muted-foreground lg:h-4 lg:max-w-full lg:leading-4 [&>span:first-child]:min-w-0 [&>span:first-child]:truncate [&>span:first-child]:font-normal [&>[aria-hidden]]:h-1.5 [&>[aria-hidden]]:w-2 lg:[&>[aria-hidden]]:w-3", sheet && "max-w-full text-2xs [&>[aria-hidden]]:w-3")}
+                                                            className="min-w-0 px-1.5 [&>span:first-child]:truncate"
                                                         />
                                                     </>
                                                 )}
@@ -595,12 +601,16 @@ export default function ClassSessionDetails({
                         </TooltipProvider>
                     </>
                 )}
-                {(canEdit || (showGrading && !gradingInFooter)) && (
+                {(canEdit || showUnavailable || (showGrading && !gradingInFooter)) && (
                     <div className={cn(
                         "shrink-0 space-y-2",
                         // The roster's own bottom border separates it in the sheet.
-                        sheet ? "p-4" : "border-t border-border/50 p-3",
+                        sheet ? "p-4 md:border-t md:border-border/50" : "border-t border-border/50 p-3",
                     )}>
+                        {(canEdit || showUnavailable) && (
+                        // Mark all and "I'm unavailable" side by side; they wrap onto two
+                        // lines only when the row is too narrow for both labels.
+                        <div className="flex flex-wrap gap-2">
                         {canEdit && (
                             <Button
                                 variant="outline"
@@ -614,8 +624,8 @@ export default function ClassSessionDetails({
                                 onClick={() => markAll(allPresent ? "absent" : "present")}
                                 title="Applies to editable entries; recorded late and excused attendance is preserved."
                                 className={cn(
-                                    "h-auto min-h-11 w-full px-3 py-1.5 whitespace-normal",
-                                    sheet ? "text-sm" : "text-xs lg:min-h-8",
+                                    "h-11 min-h-11 flex-auto px-2.5 py-0 whitespace-nowrap",
+                                    sheet ? "text-xs" : "text-xs lg:h-8 lg:min-h-8",
                                 )}
                             >
                                 {allPresent ? (
@@ -625,6 +635,24 @@ export default function ClassSessionDetails({
                                 )}
                                 {allPresent ? "Mark All Absent" : "Mark All Present"}
                             </Button>
+                        )}
+                        {showUnavailable && (
+                            <ClassUnavailableDialog
+                                key={dialogContext}
+                                eventId={event.id}
+                                className="contents"
+                                triggerClassName={cn(
+                                    "h-11 w-auto flex-auto px-2.5 py-0 whitespace-nowrap",
+                                    sheet ? "text-xs" : "text-xs lg:h-8 lg:min-h-8",
+                                )}
+                            />
+                        )}
+                        </div>
+                        )}
+                        {showUnavailable && sheet && (
+                            <p className="text-sm text-muted-foreground md:hidden">
+                                Can’t teach this class? Let the admin team know so they can find cover.
+                            </p>
                         )}
                         {showGrading && !gradingInFooter && (
                             <Button
@@ -658,6 +686,7 @@ export default function ClassSessionDetails({
                 <StudentTrainingDialog
                     key={dialogContext}
                     handle={studentDialogHandle}
+                    onOpenChange={sheet ? suspendSheet ?? undefined : undefined}
                 />
             )}
         </div>

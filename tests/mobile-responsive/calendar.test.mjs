@@ -448,7 +448,7 @@ test('recorded attendance survives resize with editable controls and the drawer 
         const lateBadge = drawer.querySelector('[aria-label$=": Late"]');
         const late = { text: lateBadge?.textContent, colour: w.getComputedStyle(lateBadge).backgroundColor };
         const session = w.location.search;
-        const note = drawer.querySelector('button[aria-label^="View student details and techniques for"]')?.getAttribute('aria-haspopup');
+        const note = drawer.querySelector('button[aria-label^="Open progress checklist for"]')?.getAttribute('aria-haspopup');
         f.style.width = '1280px'; await wait(500);
         const desktop = { drawer: !!d.querySelector('[data-slot="drawer-content"]'), session: w.location.search, marked: [...d.querySelectorAll('button[aria-label]')].find(e => e.getAttribute('aria-label')?.startsWith(student + ' present'))?.getAttribute('aria-pressed') };
         f.style.width = '320px'; await wait(500);
@@ -476,23 +476,32 @@ test('recorded attendance survives resize with editable controls and the drawer 
     assert.equal(result.focused, true);
 });
 
-test('past classes remain read-only and retain student-details modal triggers', async () => {
+test('past classes remain read-only and keep overview links; the checklist button shows only when the roster has room', async () => {
     const result = await inCalendar(320, '/instructor/calendar?view=day&date=2026-10-27', async (w, wait) => {
         const d = w.document;
         d.querySelector('[data-mobile-event]').click(); await wait();
         const drawer = d.querySelector('[data-slot="drawer-content"]');
         const ids = [...d.querySelectorAll('[id]')].map(e => e.id);
+        const checklists = () => [...drawer.querySelectorAll('button[aria-label^="Open progress checklist for"]')];
+        const narrow = checklists().filter(e => e.getBoundingClientRect().width > 0).length;
+        w.frameElement.style.width = '390px'; await wait(500);
         return { editable: drawer.querySelectorAll('button[aria-label^="Mark "]').length,
             bulk: [...drawer.querySelectorAll('button')].some(e => e.textContent.includes('Mark All')),
-            notes: [...drawer.querySelectorAll('button[aria-label^="View student details and techniques for"]')].map(e => e.getAttribute('aria-haspopup')),
+            overview: [...drawer.querySelectorAll('a[aria-label^="View student overview for"]')].map(e => e.getAttribute('href')),
+            notes: checklists().map(e => e.getAttribute('aria-haspopup')),
+            narrow, wide: checklists().filter(e => e.getBoundingClientRect().width > 0).length,
             duplicateIds: ids.filter((id, i) => ids.indexOf(id) !== i),
             nameCount: drawer.querySelectorAll('[aria-label="Student roster"] li').length };
     });
     assert.equal(result.editable, 0);
     assert.equal(result.bulk, false);
     assert.ok(result.nameCount > 0);
+    assert.equal(result.overview.length, result.nameCount);
+    assert.ok(result.overview.every(href => /^\/instructor\/students\/[^?]+\?.*tab=overview/.test(href)))
     assert.equal(result.notes.length, result.nameCount);
     assert.ok(result.notes.every(popup => popup === 'dialog'));
+    assert.equal(result.narrow, 0, 'a 320px roster has no room for the checklist button');
+    assert.equal(result.wide, result.nameCount);
     assert.deepEqual(result.duplicateIds, []);
 });
 

@@ -12,12 +12,10 @@ import {
 import { sentEmailsKey } from "@/lib/admin/sent-emails";
 import {
     ArrowRight,
-    CheckCircle2,
     ChevronDown,
     ChevronRight,
     Mail,
     PencilLine,
-    XCircle,
 } from "lucide-react";
 import { GradeLabelBadge } from "@/components/shared/grade/GradeBadge";
 import FilterPopover, { FilterField } from "@/components/shared/filters/FilterPopover";
@@ -85,12 +83,6 @@ interface LiveEligibleStudent {
     min_age_years: number | null;
     min_sessions: number | null;
     sessions_attended: number;
-    techniques: {
-        id: string;
-        label: string;
-        category: string;
-        signed: boolean;
-    }[];
 }
 
 function studentName(student: LiveEligibleStudent) {
@@ -148,14 +140,6 @@ function liveRequirements(
             label: "Training sessions since last grading",
             actual: String(student.sessions_attended),
             required: String(student.min_sessions),
-            met: true,
-        });
-    if (student.techniques.length)
-        requirements.push({
-            key: "techniques",
-            label: "Target-grade techniques signed off",
-            actual: String(student.techniques.filter((item) => item.signed).length),
-            required: String(student.techniques.length),
             met: true,
         });
     requirements.push({
@@ -463,36 +447,6 @@ export default function GradingEligibility() {
                                     key={selectedStudent.id}
                                     requirements={selectedRequirements}
                                     compact
-                                    techniqueDetails={
-                                        selectedStudent.techniques.length ? (
-                                            <ul className="space-y-2">
-                                                {selectedStudent.techniques.map((item) => (
-                                                    <li
-                                                        key={item.id}
-                                                        className="flex items-start gap-2 text-sm"
-                                                    >
-                                                        {item.signed ? (
-                                                            <CheckCircle2
-                                                                className="mt-0.5 size-4 shrink-0 text-success"
-                                                                aria-hidden="true"
-                                                            />
-                                                        ) : (
-                                                            <XCircle
-                                                                className="mt-0.5 size-4 shrink-0 text-destructive"
-                                                                aria-hidden="true"
-                                                            />
-                                                        )}
-                                                        <span>
-                                                            {item.label}{" "}
-                                                            <span className="text-xs text-muted-foreground">
-                                                                ({item.category})
-                                                            </span>
-                                                        </span>
-                                                    </li>
-                                                ))}
-                                            </ul>
-                                        ) : undefined
-                                    }
                                 />
                             </div>
                         </>
