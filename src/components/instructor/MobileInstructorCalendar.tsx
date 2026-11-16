@@ -3,7 +3,6 @@ import {
     Calendar,
     CalendarDays,
     ChevronRight,
-    Columns2,
     List,
     Plus,
 } from "lucide-react";
@@ -29,14 +28,18 @@ import type {
 import { cn } from "@/lib/utils";
 import MobileCalendarTimeline from "./MobileCalendarTimeline";
 import WeekStrip from "@/components/shared/calendar/WeekStrip";
+import BackToTopButton from "@/components/shared/calendar/BackToTopButton";
 import MobileCalendarHeader from "@/components/shared/calendar/MobileCalendarHeader";
 import type { MobileViewOption } from "@/components/shared/calendar/MobileCalendarHeader";
 import { useSwipeDay } from "@/hooks/use-swipe-day";
 
-export type MobileCalendarView = "day" | "multi-day" | "month" | "list";
+// The same three phone views as the admin and student calendars.
+/** "10:00 AM" never splits across lines: the space before AM/PM becomes non-breaking. */
+const keepTimeTogether = (label: string) => label.replace(/ (AM|PM)\b/g, "\u00a0$1");
+
+export type MobileCalendarView = "day" | "month" | "list";
 const mobileViews: MobileViewOption<MobileCalendarView>[] = [
     { value: "day", label: "day", icon: Calendar },
-    { value: "multi-day", label: "Multi Day", icon: Columns2, ariaLabel: "Multi Day (two-day schedule)" },
     { value: "month", label: "month", icon: CalendarDays },
     { value: "list", label: "list", icon: List },
 ];
@@ -87,10 +90,12 @@ function Agenda({
                             aria-label={`${entry.event?.name ?? "Available"}, ${fullDate(date)}, ${entry.event ? calendarTimeLabel(entry.event, " to ") : `${formatTime(entry.startTime)} to ${formatTime(entry.endTime)}`}. View details`}
                             className="flex min-h-18 w-full items-stretch gap-3 rounded-md py-4 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
-                            <span className="w-18 shrink-0 whitespace-nowrap text-[13px] leading-5 tabular-nums max-md:w-20 max-md:text-[1rem] max-md:leading-6 text-muted-foreground">
-                                <span className="block">{formatTime(entry.startTime)}</span>
+                            {/* Wraps between words so longer labels ("Report at 10:00 AM" for gradings)
+                                stay inside the column instead of running into the title. */}
+                            <span className="w-18 shrink-0 text-[13px] leading-5 tabular-nums max-md:w-20 max-md:text-[1rem] max-md:leading-6 text-muted-foreground">
+                                <span className="block">{keepTimeTogether(formatTime(entry.startTime))}</span>
                                 <span className="block opacity-70">
-                                    {formatTime(entry.endTime)}
+                                    {keepTimeTogether(formatTime(entry.endTime))}
                                 </span>
                             </span>
                             <span
@@ -143,7 +148,7 @@ function MonthGrid({
     return (
         <div
             aria-label="Month dates"
-            className="-mx-4 grid grid-cols-7 gap-y-1 border-b border-border/60 pt-2 pb-4"
+            className="-mx-4 mb-3 grid grid-cols-7 gap-y-1 border-b border-border/60 pt-2 pb-4"
         >
             {weekDates(date).map((day) => (
                 <span
@@ -252,10 +257,14 @@ export default function MobileInstructorCalendar({
         month: "long",
     });
     return (
+        // A card, like the admin and student calendars: the header (pulled to the card's edges)
+        // is its tinted top strip; overflow-clip keeps the sticky day headings sticking.
+        // Phones: reach 17px into the page's 24px inset so the 7-column month grid and week
+        // strip keep the width (and tap-target size) they had before the card.
         <section
             aria-label="Instructor calendar"
             data-mobile-calendar
-            className="min-w-0"
+            className="min-w-0 overflow-clip rounded-xl border bg-card p-4 shadow-xs max-sm:-mx-[17px]"
         >
             <MobileCalendarHeader
                 date={date}
@@ -264,6 +273,7 @@ export default function MobileInstructorCalendar({
                 onViewChange={onChangeView}
                 stepUnit={view === "month" ? "month" : "day"}
                 onToday={onToday}
+                todayLabel="Go to today"
                 onPrevious={() => onSelectDate(view === "month" ? addMonths(date, -1) : addDays(date, -1))}
                 onNext={() => onSelectDate(view === "month" ? addMonths(date, 1) : addDays(date, 1))}
                 extras={onAddAvailability && <Button
@@ -314,21 +324,22 @@ export default function MobileInstructorCalendar({
                 <h2
                     aria-live="polite"
                     aria-atomic="true"
-                    className="py-3 text-[15px] font-semibold max-md:text-[1rem]"
+                    // Screen readers still hear the chosen date; the grid already shows it on screen.
+                    className="sr-only"
                 >
                     {selectedDayLabel}
                 </h2>
             )}
             <div {...swipe}>
                 <div className="animate-in fade-in-0 duration-150 motion-reduce:animate-none">
-                    {content ?? (view === "day" || view === "multi-day" ? (
+                    {content ?? (view === "day" ? (
                         <MobileCalendarTimeline
                             getEvents={getEvents}
                             date={date}
                             now={now}
                             slots={slots}
                             focusRequest={focusRequest}
-                            dayCount={view === "multi-day" ? 2 : 1}
+                            dayCount={1}
                             onSelectClass={onSelectClass}
                             onSelectAvailability={onSelectAvailability}
                             onSelectRange={onSelectRange}
@@ -343,11 +354,12 @@ export default function MobileInstructorCalendar({
                         />
                     ) : (
                         <div aria-label="Chronological agenda" className="space-y-6 pt-4">
-                            {Array.from({ length: 14 }, (_, index) =>
-                                addDays(date, index),
+                            {/* The selected day (today on load) through the end of its week, as on the admin calendar. */}
+                            {weekDates(date).filter((day) =>
+                                day.getTime() >= new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime(),
                             ).map((day) => (
                                 <section key={dateKey(day)}>
-                                    <h3 className="sticky top-[var(--mobile-site-nav-height)] z-10 border-b border-border/50 bg-background py-2 text-[14px] font-semibold max-md:text-[1rem]">
+                                    <h3 className="sticky top-[var(--mobile-site-nav-height)] z-10 border-b border-border/50 bg-card py-2 text-[14px] font-semibold max-md:text-[1rem]">
                                         {day.toLocaleDateString("en-GB", {
                                             weekday: "short",
                                             day: "numeric",
@@ -367,6 +379,7 @@ export default function MobileInstructorCalendar({
                     ))}
                 </div>
             </div>
+            <BackToTopButton enabled={!content && view === "day"} />
         </section>
     );
 }

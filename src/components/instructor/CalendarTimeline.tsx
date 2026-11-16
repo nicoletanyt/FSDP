@@ -194,7 +194,7 @@ export default function CalendarTimeline({
             )}
             <div
                 ref={scrollRef}
-                className="h-[min(60dvh,36rem)] min-h-48 overflow-auto overscroll-contain rounded-xl border bg-card lg:h-auto lg:min-h-0 lg:flex-1"
+                className="h-[min(60dvh,36rem)] min-h-48 overflow-auto overscroll-contain rounded-xl border bg-card shadow-xs lg:h-auto lg:min-h-0 lg:flex-1"
             >
                 <div
                     className="grid"

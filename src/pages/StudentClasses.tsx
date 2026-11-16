@@ -10,7 +10,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
     Link,
     useLocation,
@@ -39,6 +39,8 @@ import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { StudentContext } from "@/layouts/StudentLayout";
 import { supabase } from "@/lib/supabase";
+import { useStudentQuery } from "@/hooks/use-student-query";
+import { studentQueryKeys as keys, studentQueryTimes as times } from "@/lib/student/query-keys";
 import { classTypes, dateKey } from "@/lib/instructor-calendar";
 import { cn } from "@/lib/utils";
 import {
@@ -259,7 +261,7 @@ function ClassSessionPicker({
     return (
         <>
             {/* Phones: a container, so the days size to the 70% column rather than the screen. */}
-            <div className="min-w-0 self-start rounded-lg border bg-card p-2 max-md:@container md:col-start-1 md:row-start-1 md:justify-self-start md:p-3">
+            <div className="min-w-0 self-start rounded-lg border bg-card p-2 shadow-xs max-md:@container md:col-start-1 md:row-start-1 md:justify-self-start md:p-3">
                 <Calendar
                     aria-label="Class dates"
                     mode="single"
@@ -618,28 +620,22 @@ export default function StudentClasses() {
 
     const { pathname } = useLocation();
     const [params, setParams] = useSearchParams();
-    const [catalog, setCatalog] = useState<ClassType[] | null>(null);
-    const [catalogError, setCatalogError] = useState(false);
-    const [catalogRevision, setCatalogRevision] = useState(0);
-
-    useEffect(() => {
-        const controller = new AbortController();
-        async function loadCatalog() {
-            try {
-                const { data, error } = await supabase
-                    .from("class_types")
-                    .select("id, label, description")
-                    .order("label")
-                    .abortSignal(controller.signal);
-                if (error) throw error;
-                if (!controller.signal.aborted) setCatalog(data);
-            } catch {
-                if (!controller.signal.aborted) setCatalogError(true);
-            }
-        }
-        void loadCatalog();
-        return () => controller.abort();
-    }, [catalogRevision]);
+    const catalogQuery = useStudentQuery(
+        keys.classTypes,
+        async (_userId, signal) => {
+            const { data, error } = await supabase
+                .from("class_types")
+                .select("id, label, description")
+                .order("label")
+                .abortSignal(signal);
+            if (error) throw error;
+            return data as ClassType[];
+        },
+        times.reference,
+    );
+    const catalog = catalogQuery.data ?? null;
+    const catalogError =
+        !catalog && catalogQuery.isError && !catalogQuery.isFetching;
 
     const upcoming = useMemo(() => {
         const now = new Date();
@@ -768,8 +764,7 @@ export default function StudentClasses() {
                 <RetryAlert
                     message="Could not load the full class list."
                     onRetry={() => {
-                        setCatalogError(false);
-                        setCatalogRevision((revision) => revision + 1);
+                        void catalogQuery.refetch();
                     }}
                 />
             ) : !catalog ? (
@@ -874,7 +869,7 @@ function BalanceCard({
     return (
         <Link
             to="/student/credits"
-            className="flex items-center gap-2.5 rounded-lg border bg-card px-3 py-2 transition-colors hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-ring md:w-fit md:min-w-56"
+            className="flex items-center gap-2.5 rounded-lg border bg-card px-3 py-2 shadow-xs transition-colors hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-ring md:w-fit md:min-w-56"
         >
             <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
                 <Coins aria-hidden="true" className="size-4" />
@@ -914,7 +909,7 @@ function BookingSummary({
     return (
         <section
             aria-labelledby="booking-summary-title"
-            className="flex flex-col gap-4 rounded-xl border bg-card p-4 md:sticky md:top-4 md:col-start-2 md:row-span-2 md:row-start-1 md:self-start xl:col-start-3 xl:row-span-1"
+            className="flex flex-col gap-4 rounded-xl border bg-card p-4 shadow-xs md:sticky md:top-4 md:col-start-2 md:row-span-2 md:row-start-1 md:self-start xl:col-start-3 xl:row-span-1"
         >
             <div className="space-y-1">
                 <div className="flex items-center justify-between gap-3">
@@ -1246,7 +1241,8 @@ function ClassBooking({
 
     return (
         <section className="space-y-4" aria-labelledby="booking-class-title">
-            <div id="booking-class-title">
+            {/* Same gap below as every PageHeader (16px, 24px from md), for the phone header too. */}
+            <div id="booking-class-title" className="mb-4 md:mb-6">
                 {phone ? (
                     <header className="space-y-3">
                         <div className="flex items-start justify-between gap-3">

@@ -458,7 +458,8 @@ function GradingTable({
                                                     disabled={locked || absent.has(student.student_id)}
                                                     maxLength={2000}
                                                     rows={3}
-                                                    className="w-full min-w-40 rounded-md border border-input bg-background px-3 py-2 text-sm disabled:opacity-50 sm:min-w-52"
+                                                    // Phones: the column follows the A/B/C picker, not this box.
+                                                    className="w-full min-w-0 rounded-md border border-input bg-background px-3 py-2 text-sm disabled:opacity-50 sm:min-w-52"
                                                 />
                                             )}
                                             columnDisabled={(student) =>

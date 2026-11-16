@@ -39,9 +39,11 @@ student's saved Membership snapshot, provided `last_graded_at` is NULL. Existing
 ranked grades are left untouched. Snapshots with ambiguous/invalid/conflicting
 rank values are skipped for manual dojo review, not guessed or overwritten.
 
-No hosted database has been changed by this implementation. Apply the migration
-to the actual connected Supabase project before expecting existing records or
-new submissions there to change.
+The initial implementation required deployment to the connected Supabase project.
+A later live investigation found that a name/email wrapper replacement had lost
+this write again. The durable follow-up was deployed and verified against the real
+database/API; see [membership-grade-sync.md](membership-grade-sync.md). That fix
+preserves the deployed wrapper rather than blindly replaying older definitions.
 
 ## Verification
 

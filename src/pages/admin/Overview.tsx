@@ -83,6 +83,8 @@ export default function Overview() {
   return (
     <div className="flex flex-col gap-4">
       <PageHeader
+        // The parent's 16px gap adds to the header's margin; net 16px / 24px like every page.
+        className="mb-0 md:mb-2"
         title="Overview"
         actions={centresQuery.isSuccess
           ? <FilterPopover title="Filter overview" activeCount={selectedCentre ? 1 : 0} onReset={() => setCentreId('all')}>

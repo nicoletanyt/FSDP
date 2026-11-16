@@ -34,9 +34,11 @@ export default function InstructorGradingDay() {
     const photos = useExaminerPhotos(day.data?.panel.map((member) => member.instructorId) ?? [], api.getInstructorPhotos);
     return (
         <section className="w-full space-y-4">
-            <BackNav {...(calendarReturn
+            {/* Back returns to wherever the day was opened from (calendar, gradings,
+                a student…); the fixed page is only a fallback when there's no history. */}
+            <BackNav history {...(calendarReturn
                 ? { to: calendarReturn, label: "Back to calendar" }
-                : { to: "/instructor/gradings", label: "Back to gradings" })}>
+                : { to: "/instructor/gradings", label: "Back" })}>
             {day.isPending ? (
                 <InstructorDataStatus loading onRetry={() => void day.refetch()} variant="card" />
             ) : day.isError ? (

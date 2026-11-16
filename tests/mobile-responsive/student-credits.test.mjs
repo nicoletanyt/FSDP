@@ -138,18 +138,22 @@ test('batch expiration warning preserves the card layout at mobile and desktop s
 test('Credits page shows each saved pass expiry, remaining credits and truthful legacy/history states', async () => {
   for (const width of [320, 1440]) {
     await open(width, 'list', 'passes')
-    await until(`document.querySelectorAll('[data-credit-batch]').length === 4`)
-    assert.equal(await evaluate(`document.querySelector('[data-credit-batch="soon"]').textContent.includes('4 / 10 credits remaining')`), true)
-    assert.equal(await evaluate(`document.querySelector('[data-credit-batch="soon"]').textContent.includes('9 days remaining')`), true)
-    assert.equal(await evaluate(`document.querySelector('[data-credit-batch="later"]').textContent.includes('60 days remaining')`), true)
-    assert.equal(await evaluate(`document.querySelector('[data-credit-batch="unlimited"]') === null`), true)
-    assert.equal(await evaluate(`document.querySelector('[data-credit-batch="expired"]').textContent.includes('Not available for booking')`), true)
+    // Unlimited passes hold 0 credits but are still passes you own, so they're listed too.
+    await until(`document.querySelectorAll('[data-credit-batch]').length === 5`)
+    const pass = (id) => `document.querySelector('[data-credit-batch="${id}"]').textContent`
+    assert.match(await evaluate(pass('soon')), /4 credits left/)
+    assert.match(await evaluate(pass('soon')), /9 days left/)
+    assert.match(await evaluate(pass('soon')), /Use by/)
+    assert.match(await evaluate(pass('soon')), /Bought/)
+    assert.match(await evaluate(pass('later')), /60 days left/)
+    assert.match(await evaluate(pass('unlimited')), /Unlimited classes/)
+    assert.match(await evaluate(pass('legacy')), /No expiry/)
+    assert.match(await evaluate(pass('legacy')), /Carried over from your previous balance/)
     assert.equal(await evaluate(`document.querySelector('[data-credit-batch="used"]') === null`), true)
-    assert.equal(await evaluate(`document.querySelector('[data-credit-batch="legacy"]').textContent.includes('No expiry recorded')`), true)
-    assert.equal(await evaluate(`document.querySelector('[data-credit-batch="legacy"]').textContent.includes('Carried over on')`), true)
-    assert.equal(await evaluate(`document.querySelector('[data-credit-batch="soon"]').textContent.includes('Purchased on')`), true)
-    assert.equal(await evaluate(`document.querySelector('[data-credit-batch="soon"]').textContent.includes('Expires in 9 days')`), true)
-    assert.deepEqual(await evaluate(`Array.from(document.querySelectorAll('[data-credit-batch]')).map(el => el.getAttribute('data-credit-batch'))`), ['expired','soon','later','legacy'])
+    // Expired passes sit in a closed "Expired passes" section, after the ones you can use.
+    assert.equal(await evaluate(`document.querySelector('[data-credit-batch="expired"]').closest('details')?.open`), false)
+    assert.match(await evaluate(pass('expired')), /2 credits unused/)
+    assert.deepEqual(await evaluate(`Array.from(document.querySelectorAll('[data-credit-batch]')).map(el => el.getAttribute('data-credit-batch'))`), ['soon','unlimited','later','legacy','expired'])
     assert.equal(await evaluate(`document.querySelector('[data-credit-batch="soon"] time').dateTime.length > 0`), true)
     assert.equal(await evaluate('document.documentElement.scrollWidth <= innerWidth'), true)
     const screenshot = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true })
@@ -159,7 +163,7 @@ test('Credits page shows each saved pass expiry, remaining credits and truthful 
 
 test('pass list has an empty state and a recoverable error instead of invented expiry dates', async () => {
   await open(320, 'empty', 'passes')
-  await until(`document.getElementById('my-passes').textContent.includes('No passes with credits remaining')`)
+  await until(`document.getElementById('my-passes').textContent.includes('No passes yet')`)
   await open(320, 'error', 'passes')
   await until(`document.getElementById('my-passes').textContent.includes('Unable to load your passes.')`)
   assert.equal(await evaluate(`document.querySelectorAll('[data-credit-batch]').length`), 0)

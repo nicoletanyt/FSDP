@@ -73,15 +73,19 @@ export default function MobileCalendarTimeline({
     const height = (end - start) * scale;
     const currentMinute = now.getHours() * 60 + now.getMinutes();
     const timeline = useRef<HTMLDivElement>(null);
-    const previousFocusRequest = useRef(focusRequest);
+    // null on first render, so the timeline opens at the current time like the admin day view.
+    const previousFocusRequest = useRef<number | null>(null);
     const [error, setError] = useState<string | null>(null);
     useEffect(() => {
         setError(null);
     }, [key]);
     useEffect(() => {
-        if (previousFocusRequest.current === focusRequest) return;
+        const opening = previousFocusRequest.current === null;
+        if (!opening && previousFocusRequest.current === focusRequest) return;
         previousFocusRequest.current = focusRequest;
         if (!timeline.current) return;
+        // On opening, only today has a "now" worth jumping to.
+        if (opening && dateKey(date) !== dateKey(now)) return;
         const rect = timeline.current.getBoundingClientRect();
         const offset =
             (Math.max(start, Math.min(end, currentMinute)) - start) * scale;
@@ -92,7 +96,7 @@ export default function MobileCalendarTimeline({
             headerHeight + Math.max(0, window.innerHeight - headerHeight) / 2;
         window.scrollTo({
             top: Math.max(0, window.scrollY + rect.top + offset - visibleCenter),
-            behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+            behavior: opening || window.matchMedia("(prefers-reduced-motion: reduce)").matches
                 ? "instant"
                 : "smooth",
         });

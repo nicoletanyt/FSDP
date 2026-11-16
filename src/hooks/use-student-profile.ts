@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback } from 'react'
 import { useAuth } from '@/hooks/use-auth'
+import { useStudentQuery } from '@/hooks/use-student-query'
+import { studentQueryKeys as keys, studentQueryTimes as times } from '@/lib/student/query-keys'
 import { studentPhotoUrl } from '@/lib/student-photo'
 import { supabase } from '@/lib/supabase'
 import type { Payment, Profile, Standing } from '@/lib/student-profile'
@@ -113,35 +115,22 @@ async function loadProfile(userId: string, accountName: string): Promise<Profile
 /** The signed-in student's membership card, details and payment history. */
 export function useStudentProfile() {
   const { session, profile } = useAuth()
-  const userId = session?.user.id
   const accountName = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || profile?.email || ''
-  const [result, setResult] = useState<{ userId: string; profile: Profile | null; error: boolean } | null>(null)
-  const [version, setVersion] = useState(0)
-
-  useEffect(() => {
-    if (!userId) return
-    let cancelled = false
-    loadProfile(userId, accountName)
-      .then((loaded) => !cancelled && setResult({ userId, profile: loaded, error: false }))
-      .catch((failure) => {
-        console.error('Could not load student profile:', failure)
-        if (!cancelled) setResult({ userId, profile: null, error: true })
-      })
-    return () => {
-      cancelled = true
+  const query = useStudentQuery(userId => keys.profile(userId, accountName), async (userId) => {
+    try {
+      return await loadProfile(userId, accountName)
+    } catch (failure) {
+      console.error('Could not load student profile:', failure)
+      throw failure
     }
-  }, [userId, accountName, version])
-
-  const reload = useCallback(() => {
-    setResult(null)
-    setVersion((v) => v + 1)
-  }, [])
-
-  const current = result?.userId === userId ? result : null
+  }, times.account)
+  const loading = !!session?.user.id && query.data === undefined && (query.isPending || query.isFetching)
+  const { refetch } = query
+  const reload = useCallback(() => { void refetch() }, [refetch])
   return {
-    profile: current?.profile ?? null,
-    loading: !!userId && !current,
-    error: current?.error ?? false,
+    profile: query.data ?? null,
+    loading,
+    error: query.data === undefined && !loading && query.isError,
     reload,
   }
 }

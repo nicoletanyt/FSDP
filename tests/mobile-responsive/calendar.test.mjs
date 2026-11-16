@@ -68,7 +68,8 @@ test('all mobile views fit 320–430px, with one document scroller and accuratel
         const result = await inCalendar(width, '/instructor/calendar?view=week&date=2026-11-4', async (w, wait) => {
             const d = w.document;
             const output = [];
-            for (const mode of ['day', 'multi-day', 'month', 'list']) {
+            // Phones share Day / Month / List with the admin and student calendars (no Multi Day).
+            for (const mode of ['day', 'month', 'list']) {
                 d.querySelector('[aria-label="Change calendar view"]').click(); await wait();
                 d.querySelector(`[data-calendar-view="${mode}"]`).click();
                 await wait();
@@ -89,14 +90,12 @@ test('all mobile views fit 320–430px, with one document scroller and accuratel
                 scrollers: [...d.querySelector('[data-mobile-calendar]').querySelectorAll('*')].filter(e => ['auto', 'scroll'].includes(w.getComputedStyle(e).overflowY) && e.scrollHeight > e.clientHeight).length };
         });
         assert.ok(result.output.every(view => view.fits), JSON.stringify(result));
-        assert.ok(result.output.every(view => view.pickerClosed && view.iconOnly && view.pickerDescription === `current view: ${view.mode === 'multi-day' ? 'multi day' : view.mode}`), JSON.stringify(result));
+        assert.ok(result.output.every(view => view.pickerClosed && view.iconOnly && view.pickerDescription === `current view: ${view.mode}`), JSON.stringify(result));
         assert.equal(result.output.find(view => view.mode === 'month').month, 42);
         assert.equal(result.output.find(view => view.mode === 'list').agenda, true);
         assert.equal(result.output.find(view => view.mode === 'list').dateHeading, false);
         assert.equal(result.output.find(view => view.mode === 'list').weekStrip, false);
         assert.equal(result.output.find(view => view.mode === 'day').dateHeading, false);
-        assert.equal(result.output.find(view => view.mode === 'multi-day').dateHeading, false);
-        assert.deepEqual(result.output.find(view => view.mode === 'multi-day').timelineDays, ['2026-11-4', '2026-11-5']);
         assert.deepEqual(result.output.find(view => view.mode === 'day').timelineDays, ['2026-11-4']);
         // First entry is the existing 09:00–11:00 availability; 08:00 origin,
         // 1.6px/minute, with a one-pixel inset at each end.
@@ -111,7 +110,7 @@ test('calendar controls are distinct from site navigation and information stays 
         const result = await inCalendar(width, '/instructor/calendar?view=week&date=2026-11-4', async (w, wait) => {
             const d = w.document;
             const header = d.querySelector('[data-mobile-calendar] header');
-            const today = [...header.querySelectorAll('button')].find(e => e.textContent === 'Today');
+            const today = [...header.querySelectorAll('button')].find(e => e.textContent === 'Go to today');
             const add = [...header.querySelectorAll('button')].find(e => e.textContent.includes('Add Availability'));
             const info = header.querySelector('[aria-label="Calendar colours"]');
             const title = header.querySelector('h1');
@@ -129,7 +128,7 @@ test('calendar controls are distinct from site navigation and information stays 
             };
         });
         assert.equal(result.separateNavigation, true);
-        assert.deepEqual(result.views, ['day', 'multi day', 'month', 'list']);
+        assert.deepEqual(result.views, ['day', 'month', 'list']);
         assert.equal(result.besideTitle, true);
         assert.match(result.title, /2026/);
         assert.equal(result.todayAndArrows, true);
@@ -190,9 +189,9 @@ test('site navbar sticks to the viewport and view-picker options retain distinct
         assert.ok(result.scrollY >= 500);
         assert.ok(Math.abs(result.top) <= 1);
         assert.equal(result.fits, true);
-        assert.equal(result.icons.length, 4);
+        assert.equal(result.icons.length, 3);
         assert.ok(result.icons.every(Boolean));
-        assert.equal(new Set(result.icons).size, 4);
+        assert.equal(new Set(result.icons).size, 3);
         assert.equal(result.labelled, true);
     }
 });
@@ -299,7 +298,7 @@ test('mobile spacing keeps generous targets, separates controls and gives agenda
             const d = w.document;
             const header = d.querySelector('[data-mobile-calendar] header');
             const buttons = [...header.querySelectorAll('button')];
-            const today = buttons.find(button => button.textContent === 'Today');
+            const today = buttons.find(button => button.textContent === 'Go to today');
             const nav = [...today.parentElement.querySelectorAll('button')].map(button => button.getBoundingClientRect());
             const minimum = elements => [...elements].reduce((sizes, element) => { const r = element.getBoundingClientRect(); return [Math.min(sizes[0], r.width), Math.min(sizes[1], r.height)]; }, [Infinity, Infinity]);
             const headerTargets = minimum(buttons);
@@ -416,11 +415,11 @@ test('the second day opens its own UUID class and saves availability on the sele
     assert.equal(result.dialog, false);
 });
 
-test('Today returns to the current date and refocuses the document timeline', async () => {
+test('Go to today returns to the current date and refocuses the document timeline', async () => {
     for (const [width, height] of [[390, 700], [568, 320], [844, 390]]) {
         const result = await inCalendar(width, '/instructor/calendar?view=day&date=2026-11-27', async (w, wait) => {
             const d = w.document;
-            [...d.querySelectorAll('button')].find(e => e.textContent === 'Today').click();
+            [...d.querySelectorAll('button')].find(e => e.textContent === 'Go to today').click();
             await wait(1000);
             const marker = d.querySelector('[role="img"][aria-label^="Current time:"]');
             const rect = marker?.getBoundingClientRect();

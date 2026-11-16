@@ -53,8 +53,13 @@ test('real UUID profiles preserve responsive layout and use stored contact, medi
       const contacts = dialog.textContent
       const email = dialog.querySelector('a[href^="mailto:"]').getAttribute('href')
       dialog.querySelector('[data-slot="dialog-close"]').click(); await wait()
-      button('Medical alerts').click(); await wait()
-      return { main, contacts, email, medical: d.querySelector('.student-detail-view[role="dialog"]').textContent,
+      // Phones show medical alerts in the details card; wider screens keep the dialog.
+      const phone = w.innerWidth < 768
+      const card = [...d.querySelectorAll('[aria-label="Student information"]')].find(e => e.getClientRects().length > 0)
+      const medicalButton = button('Medical alerts')
+      if (!phone) { medicalButton.click(); await wait() }
+      return { main, contacts, email, phone, medicalButton: Boolean(medicalButton),
+        medical: phone ? card?.textContent : d.querySelector('.student-detail-view[role="dialog"]').textContent,
         fits: d.documentElement.scrollWidth <= d.documentElement.clientWidth }
     })
     assert.equal(result.fits, true)
@@ -65,6 +70,7 @@ test('real UUID profiles preserve responsive layout and use stored contact, medi
     assert.match(result.contacts, /Phone not recorded/)
     assert.ok(result.contacts.indexOf('Primary Guardian') < result.contacts.indexOf('Secondary Guardian'))
     assert.match(result.medical, /Stored medical alert/)
+    assert.equal(result.medicalButton, !result.phone, 'phones have no Medical alerts dialog button')
     assert.doesNotMatch(result.main, /example\.com|Passed/)
   })
 })
@@ -114,8 +120,9 @@ test('missing optional joins and records have explicit empty states', async () =
     buttons().find(e => e.textContent.trim() === 'Contact').click(); await wait()
     const contacts = d.querySelector('.student-detail-view[role="dialog"]').textContent
     d.querySelector('.student-detail-view[role="dialog"] [data-slot="dialog-close"]').click(); await wait()
-    buttons().find(e => e.textContent.trim() === 'Medical alerts').click(); await wait()
-    return { main, contacts, medical: d.querySelector('.student-detail-view[role="dialog"]').textContent }
+    // At 390px medical alerts are shown in the details card, not a dialog.
+    const card = [...d.querySelectorAll('[aria-label="Student information"]')].find(e => e.getClientRects().length > 0)
+    return { main, contacts, medical: card?.textContent ?? '' }
   }, { query: '?fixtureData=detail-optional' })
   assert.match(result.main, /Grade not recorded/)
   assert.match(result.main, /Dojo not recorded/)

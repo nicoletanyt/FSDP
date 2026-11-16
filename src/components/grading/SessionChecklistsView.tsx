@@ -48,11 +48,12 @@ export function ExaminerPicker({ examiners, selected, onSelect, scope, viewerId,
   viewerId?: string; progress?: (examiner: Examiner) => string | undefined
 }) {
   return (
-    <div role="group" aria-label="Examiner" className="flex flex-wrap gap-2">
+    // Phones: a two-column grid so every examiner gets the same width.
+    <div role="group" aria-label="Examiner" className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
       {examiners.map(examiner => (
         <Button key={examiner.instructorId} type="button" variant={examiner.instructorId === selected ? 'secondary' : 'outline'}
           aria-pressed={examiner.instructorId === selected} onClick={() => onSelect(examiner.instructorId)}
-          className="h-auto min-h-11 flex-col items-start gap-0 px-3 py-1.5 text-left">
+          className="h-auto min-h-11 min-w-0 flex-col items-start gap-0.5 px-3 py-2 text-left whitespace-normal">
           <span className="font-medium">
             {examiner.name}
             {examiner.isChief && <span className="font-normal text-muted-foreground"> · Chief</span>}
@@ -101,7 +102,7 @@ export function ExaminerChecklist({ examiner, session, scope }: { examiner: Exam
                 : <span className="inline-flex min-h-11 items-center text-muted-foreground"><span aria-hidden="true">–</span><span className="sr-only">Not marked</span></span>
             }}
             comment={student => student.notes
-              ? <p className="min-w-40 whitespace-pre-wrap sm:min-w-52">{student.notes}</p>
+              ? <p className="whitespace-pre-wrap sm:min-w-52">{student.notes}</p>
               : <span className="text-muted-foreground">No comment</span>} />
         </div>
       ))}

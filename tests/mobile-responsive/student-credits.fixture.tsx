@@ -39,6 +39,7 @@ Object.defineProperty(supabase, 'from', {
       select: () => query,
       eq: () => query,
       gt: () => query,
+      or: () => query,
       order: () => query,
       range: () => query,
       abortSignal: () => table === 'credit_batches'

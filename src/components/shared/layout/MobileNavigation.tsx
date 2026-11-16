@@ -103,33 +103,8 @@ export default function MobileNavigation({
             data-mobile-site-nav
             className="sticky top-0 z-40 h-[var(--mobile-site-nav-height)] shrink-0 border-b bg-background px-4 pt-[calc(1rem+env(safe-area-inset-top))] pb-4 lg:hidden"
         >
-            <div className="flex h-11 items-center justify-between gap-3">
-                <Link
-                    to={homeTo}
-                    aria-label="Aikido Shinju-Kai home"
-                    className="flex min-h-11 min-w-0 items-center gap-2 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                    <img
-                        src={logo}
-                        alt=""
-                        width={32}
-                        height={32}
-                        className="size-8 shrink-0 object-contain"
-                    />
-                    <span className="min-w-0 leading-tight">
-                        <span className="block text-[14px] font-semibold max-md:text-[1rem]">
-                            <span className="text-primary">Aikido</span>{" "}
-                            <span className="whitespace-nowrap text-brand-red-ink">
-                                Shinju-Kai
-                            </span>
-                        </span>
-                        {profile && (
-                            <span className="mt-0.5 block text-3xs leading-none font-normal tracking-normal text-muted-foreground">
-                                {role}
-                            </span>
-                        )}
-                    </span>
-                </Link>
+            {/* Menu button first (it opens the menu from the left), then the logo. */}
+            <div className="flex h-11 items-center gap-3">
                 <Sheet open={open} onOpenChange={setOpen}>
                     <SheetTrigger
                         aria-label="Open navigation menu"
@@ -222,6 +197,32 @@ export default function MobileNavigation({
                         )}
                     </SheetContent>
                 </Sheet>
+                <Link
+                    to={homeTo}
+                    aria-label="Aikido Shinju-Kai home"
+                    className="flex min-h-11 min-w-0 items-center gap-2 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                    <img
+                        src={logo}
+                        alt=""
+                        width={32}
+                        height={32}
+                        className="size-8 shrink-0 object-contain"
+                    />
+                    <span className="min-w-0 leading-tight">
+                        <span className="block text-[14px] font-semibold max-md:text-[1rem]">
+                            <span className="text-primary">Aikido</span>{" "}
+                            <span className="whitespace-nowrap text-brand-red-ink">
+                                Shinju-Kai
+                            </span>
+                        </span>
+                        {profile && (
+                            <span className="mt-0.5 block text-3xs leading-none font-normal tracking-normal text-muted-foreground">
+                                {role}
+                            </span>
+                        )}
+                    </span>
+                </Link>
             </div>
         </header>
     );

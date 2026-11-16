@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import { Receipt } from "lucide-react";
 
 import FilterPopover, { FilterField } from "@/components/shared/filters/FilterPopover";
-import { BackNav } from "@/components/shared/layout/BackLink";
 import EmptyState from "@/components/shared/layout/EmptyState";
 import PageHeader from "@/components/shared/layout/PageHeader";
 import RetryAlert from "@/components/shared/layout/RetryAlert";
@@ -35,19 +34,15 @@ export default function StudentPayments() {
 
   return (
     <section className="w-full space-y-4">
-      <div>
-        <BackNav to="/profile" label="Back to profile">
-        <PageHeader
-          title="Payments"
-          actions={(
-            <div className="text-right">
-              <p className="text-xs text-muted-foreground">Total paid</p>
-              <p className="text-xl font-semibold tabular-nums">{loading || error ? "—" : money.format(totalPaid)}</p>
-            </div>
-          )}
-        />
-        </BackNav>
-      </div>
+      <PageHeader
+        title="Payments"
+        actions={(
+          <div className="text-right">
+            <p className="text-xs text-muted-foreground">Total paid</p>
+            <p className="text-xl font-semibold tabular-nums">{loading || error ? "—" : money.format(totalPaid)}</p>
+          </div>
+        )}
+      />
 
       {loading ? (
         <TableSkeleton rows={5} cols={5} label="Loading payments…" />

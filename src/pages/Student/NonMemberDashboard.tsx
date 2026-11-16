@@ -37,7 +37,7 @@ export default function NonMemberDashboard({ firstName, status }: Props) {
       />
 
       {/* Empty state, in place of the member page's key figures, next class and belt progress */}
-      <section aria-label="Overview" className="mt-6">
+      <section aria-label="Overview">
         <Card className="min-h-72 items-center justify-center gap-4 p-5 py-12 text-center">
           <span className="grid size-14 place-items-center rounded-2xl bg-muted text-muted-foreground">
             <Users className="size-7" strokeWidth={1.8} aria-hidden="true" />

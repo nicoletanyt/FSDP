@@ -1,4 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import type { SyntheticEvent } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Link, useLocation } from 'react-router'
 import { CalendarDays, Coins, GraduationCap, IdCard, LayoutDashboard, QrCode, Receipt, Ticket, UserCircle, Users } from 'lucide-react'
 import logo from '@/assets/logo.png'
@@ -12,6 +14,7 @@ import { useMembershipStatus, type MembershipStatus } from '@/hooks/use-membersh
 import { useStudentCredits } from '@/hooks/use-student-credits'
 import { useSignOut } from '@/hooks/use-sign-out'
 import { fetchAttendanceQr } from '@/lib/attendance-qr'
+import { prefetchStudentSchedule } from '@/lib/student/schedule-query'
 import { pageWidth } from '@/lib/page-width'
 import { cn } from '@/lib/utils'
 
@@ -79,6 +82,31 @@ function useTodayCheckIn(enabled: boolean) {
   return available
 }
 
+const scheduleRoutes = new Set([classes.to, schedule.to])
+
+/**
+ * Warms the cached class schedule when a Classes or My schedule link is
+ * hovered (after 150ms, as on the instructor calendar), focused or touched.
+ * Listens on a wrapper so the shared nav components need no prefetch hooks.
+ */
+function useSchedulePrefetch(userId: string | undefined) {
+  const client = useQueryClient()
+  const hover = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => { if (hover.current) clearTimeout(hover.current) }, [])
+  const target = (event: SyntheticEvent) =>
+    scheduleRoutes.has((event.target as Element).closest?.('a')?.getAttribute('href') ?? '')
+  const now = useCallback((event: SyntheticEvent) => {
+    if (target(event)) prefetchStudentSchedule(client, userId)
+  }, [client, userId])
+  const later = useCallback((event: SyntheticEvent) => {
+    if (hover.current) clearTimeout(hover.current)
+    hover.current = null
+    if (!target(event)) return
+    hover.current = setTimeout(() => { hover.current = null; prefetchStudentSchedule(client, userId) }, 150)
+  }, [client, userId])
+  return { onPointerOver: later, onFocus: now, onTouchStart: now }
+}
+
 export default function StudentNavigation() {
   const { pathname } = useLocation()
   const { handleSignOut, signingOut, error } = useSignOut()
@@ -86,6 +114,7 @@ export default function StudentNavigation() {
   const checkIn = useTodayCheckIn(status === 'active')
   const { profile } = useAuth()
   const creditAccount = useStudentCredits(profile?.id, null)
+  const prefetch = useSchedulePrefetch(profile?.id)
   const balance = creditAccount.unlimited
     ? 'Unlimited pass'
     : creditAccount.error
@@ -101,7 +130,8 @@ export default function StudentNavigation() {
   }))
 
   return (
-    <>
+    // display: contents keeps the layout unchanged; events still bubble here.
+    <div className="contents" {...prefetch}>
       <MobileNavigation
         homeTo="/dashboard"
         links={items}
@@ -161,6 +191,6 @@ export default function StudentNavigation() {
           </div>
         </div>
       </header>
-    </>
+    </div>
   )
 }

@@ -240,7 +240,8 @@ export default function InstructorProfile() {
     }
     return (
         <section className="w-full space-y-6">
-            <header>
+            {/* Same gap below as every page header (16px, 24px from md); overrides the section's space-y. */}
+            <header className="mb-4 md:mb-6">
                 <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Profile</h1>
             </header>
             <Card>
