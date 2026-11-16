@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Receipt } from "lucide-react";
 
 import FilterPopover, { FilterField } from "@/components/shared/filters/FilterPopover";
-import BackLink from "@/components/shared/layout/BackLink";
+import { BackNav } from "@/components/shared/layout/BackLink";
 import EmptyState from "@/components/shared/layout/EmptyState";
 import PageHeader from "@/components/shared/layout/PageHeader";
 import RetryAlert from "@/components/shared/layout/RetryAlert";
@@ -36,7 +36,7 @@ export default function StudentPayments() {
   return (
     <section className="w-full space-y-4">
       <div>
-        <BackLink to="/profile">Back to profile</BackLink>
+        <BackNav to="/profile" label="Back to profile">
         <PageHeader
           title="Payments"
           actions={(
@@ -46,6 +46,7 @@ export default function StudentPayments() {
             </div>
           )}
         />
+        </BackNav>
       </div>
 
       {loading ? (

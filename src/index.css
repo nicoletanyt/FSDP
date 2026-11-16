@@ -223,6 +223,14 @@
     }
 }
 
+/* Phones: once a page header shows its own ‹ beside the title (BackNav),
+   the "Back to …" text link above it is redundant. */
+@media (max-width: 47.999rem) {
+    :has(> [data-back-link]):has([data-back-inline]) > [data-back-link] {
+        display: none;
+    }
+}
+
 @media (max-width: 47.999rem) {
     :root {
         /* Phones: the small sizes lift to 16px (the minimum). text-sm and up
@@ -549,4 +557,12 @@
 
 body:has([data-check-in-kiosk="true"]) [data-floating-chatbot] {
   display: none;
+}
+
+/* Class booking on phones and tablets: the chat button sits above the pinned
+   Enrol bar (44px button + 12px padding either side), not beside it. */
+@media (max-width: 63.999rem) {
+  body:has([data-enrol-bar]) [data-floating-chatbot] {
+    bottom: calc(4.5rem + 0.75rem + env(safe-area-inset-bottom));
+  }
 }

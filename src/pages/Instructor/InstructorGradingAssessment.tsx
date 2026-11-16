@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { Link, useParams } from "react-router";
-import { Check, ChevronLeft } from "lucide-react";
+import { Check } from "lucide-react";
+import BackLink, { BackArrow, BackNav } from "@/components/shared/layout/BackLink";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -38,24 +39,22 @@ function AssessmentForm({ detail }: { detail: AssessmentDetail }) {
 
     return (
         <section className="space-y-6">
-            <Link
-                to={sessionCalendarHref(session)}
-                className="inline-flex items-center gap-1 rounded-sm text-sm text-muted-foreground hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-ring"
-            >
-                <ChevronLeft aria-hidden="true" className="size-4" /> Back to assessment
-                class
-            </Link>
+            <BackNav to={sessionCalendarHref(session)} label="Back to assessment class">
             <header>
                 <p className="mb-2 text-xs text-muted-foreground">
                     Recorded assessment{!canEdit && " · Read-only"}
                 </p>
-                <h1 className="text-2xl font-semibold tracking-tight md:text-3xl [overflow-wrap:anywhere]">
-                    Assess {name}
-                </h1>
+                <div className="flex items-start gap-1">
+                    <BackArrow />
+                    <h1 className="min-w-0 text-2xl font-semibold tracking-tight md:text-3xl [overflow-wrap:anywhere]">
+                        Assess {name}
+                    </h1>
+                </div>
                 <p className="mt-2 text-sm text-muted-foreground">
                     {session.event.name} · {sessionDateLabel(session)} · {session.centre?.name ?? "Dojo not recorded"}
                 </p>
             </header>
+            </BackNav>
             <Card>
                 <CardHeader>
                     <CardTitle>Grading assessment</CardTitle>
@@ -171,16 +170,18 @@ function GradingAssessmentPage() {
         : queryKeys.assessmentRoute(userId, assessmentId, eventId, studentId), load,
     { ...queryTimes.assessment, retainDuringWrite });
     if (query.status !== "success") return <section className="space-y-4">
-        <Link to="/instructor/calendar" className="text-sm underline">Back to calendar</Link>
+        <BackLink to="/instructor/calendar">Back to calendar</BackLink>
         <InstructorDataStatus loading={query.status === "loading"} error={query.error} onRetry={query.retry} variant="assessment" />
     </section>;
     if (!query.data) {
         return (
             <section className="space-y-4">
-                <Link to="/instructor/calendar" className="text-sm underline">
-                    Back to calendar
-                </Link>
-                <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Assessment not found</h1>
+                <BackNav to="/instructor/calendar" label="Back to calendar">
+                    <div className="flex items-start gap-1">
+                        <BackArrow />
+                        <h1 className="min-w-0 text-2xl font-semibold tracking-tight md:text-3xl">Assessment not found</h1>
+                    </div>
+                </BackNav>
                 <p className="text-sm text-muted-foreground">
                     Open a candidate’s assessment from a grading session in the calendar.
                 </p>

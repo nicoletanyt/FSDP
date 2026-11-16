@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router'
 import { CreditCard, GraduationCap, Loader2, ShieldCheck } from 'lucide-react'
-import BackLink from '@/components/shared/layout/BackLink'
+import { BackNav } from '@/components/shared/layout/BackLink'
 import PageHeader from '@/components/shared/layout/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -62,12 +62,13 @@ export default function GradingPayment() {
 
   return (
     <section className="w-full max-w-3xl">
-      <BackLink to="/grading/applications">Back to grading applications</BackLink>
-      <div className="mb-6">
-        <PageHeader
-          title="Complete your grading payment"
-        />
-      </div>
+      <BackNav to="/grading/applications" label="Back to grading applications">
+        <div className="mb-6">
+          <PageHeader
+            title="Complete your grading payment"
+          />
+        </div>
+      </BackNav>
 
       {!eventId || !gradeId ? <Card className="p-6">
         <p>Select an eligible grading session before making payment.</p>

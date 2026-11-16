@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { Check, ChevronDown, ExternalLink } from 'lucide-react'
-import BackLink from '@/components/shared/layout/BackLink'
+import { BackNav } from '@/components/shared/layout/BackLink'
 import { Segmented } from '@/components/shared/Segmented'
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import PageHeader from '@/components/shared/layout/PageHeader'
@@ -146,12 +146,13 @@ export default function GradingRequirements() {
 
   return (
     <section className="w-full">
-      <BackLink to="/grading">Back to grading</BackLink>
+      <BackNav to="/grading" label="Back to grading">
 
       <PageHeader
         title="Grading requirements"
         actions={<Link to="/grading" className={buttonVariants({ variant: 'outline' })}>View grading applications</Link>}
       />
+      </BackNav>
 
       <YourEligibility />
 

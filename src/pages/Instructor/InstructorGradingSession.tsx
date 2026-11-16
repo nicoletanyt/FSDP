@@ -30,10 +30,10 @@ import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
 import GradingSignatureDialog from "@/components/instructor/GradingSignatureDialog";
 import GradingChecklistTable from "@/components/grading/GradingChecklistTable";
 import {
-    GradingBackLink,
     GradingNote,
     GradingPageHeader,
 } from "@/components/grading/GradingParts";
+import { BackNav } from "@/components/shared/layout/BackLink";
 import {
     ExaminerChecklist,
     ExaminerPicker,
@@ -661,16 +661,17 @@ function useGradingSessionData(eventId: string | undefined) {
 }
 
 // "Back to calendar" when opened from the calendar's View Grading, else the grading day.
-function BackLink({ eventId }: { eventId: string | undefined }) {
+function Back({ eventId, children }: { eventId: string | undefined; children: ReactNode }) {
     const calendarReturn = useCalendarReturn();
     return calendarReturn ? (
-        <GradingBackLink to={calendarReturn}>Back to calendar</GradingBackLink>
+        <BackNav to={calendarReturn} label="Back to calendar">{children}</BackNav>
     ) : (
-        <GradingBackLink
+        <BackNav
             to={eventId ? `/instructor/gradings/${eventId}` : "/instructor/gradings"}
+            label="Back to grading sessions"
         >
-            Back to grading sessions
-        </GradingBackLink>
+            {children}
+        </BackNav>
     );
 }
 
@@ -719,8 +720,7 @@ function Shell({
 }) {
     return (
         <section className="w-full space-y-4">
-            <BackLink eventId={eventId} />
-            {children}
+            <Back eventId={eventId}>{children}</Back>
         </section>
     );
 }
