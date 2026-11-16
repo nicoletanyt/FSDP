@@ -44,7 +44,11 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useMembershipStatus } from "@/hooks/use-membership-status";
 
 type Action =
-    | { kind: "enroll"; sessions: ClassOffering[] }
+    | {
+        kind: "enroll";
+        sessions: ClassOffering[];
+        repeat?: { month: string; skippedSessions: string[] };
+    }
     | { kind: "waitlist" | "leave"; session: ClassOffering };
 
 type ClassType = { id: string; label: string; description: string };
@@ -776,6 +780,66 @@ function ClassBooking({
             !conflictingIds.has(session.id),
     );
 
+    function reviewWeeklyBookings() {
+        const anchor = selected[0];
+        if (!anchor) return;
+
+        const month = anchor.dateId.slice(0, 7);
+        const recurring = [...selected];
+        const skippedSessions: string[] = [];
+
+        for (const slot of selected) {
+            const matchesByDate = new Map<string, ClassOffering[]>();
+            for (const session of classSessions) {
+                if (
+                    session.dateId <= slot.dateId ||
+                    session.dateId.slice(0, 7) !== month ||
+                    session.date.getDay() !== slot.date.getDay() ||
+                    session.centre !== slot.centre ||
+                    session.startTime !== slot.startTime ||
+                    session.endTime !== slot.endTime
+                ) continue;
+
+                const matches = matchesByDate.get(session.dateId) ?? [];
+                matches.push(session);
+                matchesByDate.set(session.dateId, matches);
+            }
+
+            for (const matches of matchesByDate.values()) {
+                if (matches.some((session) => recurring.some((item) => item.id === session.id))) {
+                    continue;
+                }
+
+                const eligible = matches.find((session) =>
+                    session.bookable &&
+                    !schedule.isFull(session) &&
+                    !schedule.isBooked(session.id) &&
+                    !bookings.some((booking) => conflict(session, booking)) &&
+                    !recurring.some((booking) => conflict(session, booking))
+                );
+
+                if (eligible) {
+                    recurring.push(eligible);
+                } else {
+                    const session = matches[0];
+                    skippedSessions.push(
+                        prettyDate(session.date) + " · " + sessionTime(session) + " · " + session.centre,
+                    );
+                }
+            }
+        }
+
+        recurring.sort((left, right) => dateTime(left).getTime() - dateTime(right).getTime());
+        setAction({
+            kind: "enroll",
+            sessions: recurring,
+            repeat: {
+                month: anchor.date.toLocaleDateString("en-SG", { month: "long", year: "numeric" }),
+                skippedSessions,
+            },
+        });
+    }
+
     function applyDay(date: Date) {
         setDay(dateKey(date));
         setPendingChange(null);
@@ -864,7 +928,7 @@ function ClassBooking({
                     if (error) {
                         failed.push(session);
                         errors.push(
-                            `${sessionTime(session)} at ${session.centre}: ${error}`,
+                            `${prettyDate(session.date)} · ${sessionTime(session)} at ${session.centre}: ${error}`,
                         );
                     } else {
                         // The booking RPC already charged the earliest-expiring batch.
@@ -877,11 +941,13 @@ function ClassBooking({
                     const count = completed.length;
                     notify({
                         title: "Enrolment confirmed",
-                        description: `Enrolled in ${count} ${count === 1 ? "class" : "classes"} on ${prettyDate(action.sessions[0].date)}.`,
+                                                description: action.repeat
+                            ? `Enrolled in ${plural(count, "class", "classes")} in ${action.repeat.month}.`
+                            : `Enrolled in ${plural(count, "class", "classes")} on ${prettyDate(action.sessions[0].date)}.`,
                     });
                 }
                 if (failed.length) {
-                    setAction({ kind: "enroll", sessions: failed });
+                    setAction({ ...action, sessions: failed });
                     setActionError(
                         [
                             ...(completed.length
@@ -983,6 +1049,16 @@ function ClassBooking({
                                 {selectionError}
                             </p>
                         )}
+                        {selected.length > 0 && schedule.active && (
+                            <Button
+                                type="button"
+                                variant="outline"
+                                disabled={busy}
+                                onClick={reviewWeeklyBookings}
+                            >
+                                Repeat weekly this month
+                            </Button>
+                        )}
                         <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
                             <div className="min-w-0 space-y-0.5">
                                 <p role="status" className="font-medium">
@@ -1074,7 +1150,7 @@ function ClassBooking({
                         <AlertDialogHeader>
                             <AlertDialogTitle>
                                 {action.kind === "enroll"
-                                    ? "Confirm enrolment?"
+                                    ? action.repeat ? "Confirm weekly bookings?" : "Confirm enrolment?"
                                     : action.kind === "waitlist"
                                         ? "Join the waitlist?"
                                         : "Leave the waitlist?"}
@@ -1082,11 +1158,12 @@ function ClassBooking({
                             {action.kind === "enroll" ? (
                                 <>
                                     <AlertDialogDescription>
-                                        {type} · {prettyDate(action.sessions[0].date)}
+                                        {type} · {action.repeat?.month ?? prettyDate(action.sessions[0].date)}
                                     </AlertDialogDescription>
                                     <ul className="max-h-48 space-y-1 overflow-y-auto text-left text-sm">
                                         {action.sessions.map((session) => (
                                             <li key={session.id}>
+                                                {action.repeat && <>{prettyDate(session.date)} · </>}
                                                 {sessionTime(session)} · {session.centre}
                                             </li>
                                         ))}
@@ -1101,6 +1178,11 @@ function ClassBooking({
                                                 (enrolmentCount === 1 ? " credit" : " credits")}
                                         </span>
                                     </div>
+                                    {action.repeat && action.repeat.skippedSessions.length > 0 && (
+                                        <p className="text-sm text-muted-foreground">
+                                            Skipped because the session is unavailable, already booked, or clashes with a booking: {action.repeat.skippedSessions.join("; ")}.
+                                        </p>
+                                    )}
                                     {insufficientCredits && (
                                         <p className="text-sm text-destructive">
                                             {creditAccount.credits} credits available.{" "}
