@@ -98,15 +98,18 @@ async function setValue(id, value) {
 test('5th Kyu stays $77 through application, review and Stripe redirect at 320â€“1440px', async () => {
   for (const width of [320, 390, 768, 1440]) {
     await open(width, '?appRoute=%2Fgrading')
-    await until(`document.querySelector('#target-grade [data-grade-id="blue-gold-5th-kyu"]') !== null`)
+    await until(`document.querySelector('#apply-grading-trigger') !== null`)
     assert.match(await evaluate(`document.querySelector('#your-eligibility').textContent`), /Adult Track/)
+    assert.equal(await evaluate(`document.querySelector('#base-fee')`), null)
+    assert.equal(await evaluate(`document.querySelector('#target-grade')`), null)
+    assert.equal(await evaluate(`document.querySelector('#grading-application-form') === null`), true)
+    assert.equal(await evaluate(`document.documentElement.scrollWidth <= innerWidth`), true, `${width}px application`)
+    await evaluate(`Array.from(document.querySelectorAll('button')).find(b => b.textContent === 'Apply for Grading').click()`)
+    await until(`document.querySelector('#grading-full-name') !== null`)
+    await until(`document.querySelector('#target-grade [data-grade-id="blue-gold-5th-kyu"]') !== null`)
     assert.equal(await evaluate(`document.querySelector('select#target-grade')`), null)
     assert.match(await evaluate(`document.querySelector('#base-fee').textContent`), /55\.00/)
     assert.equal(await evaluate(`document.querySelector('#current-grade [data-grade-id="blue-6th-kyu"]') !== null`), true)
-    assert.equal(await evaluate(`document.documentElement.scrollWidth <= innerWidth`), true, `${width}px application`)
-    assert.equal(await evaluate(`Array.from(document.querySelectorAll('button')).find(b => b.textContent === 'Proceed to Payment').disabled`), true)
-    await evaluate(`Array.from(document.querySelectorAll('button')).find(b => b.textContent === 'Apply for Grading').click()`)
-    await until(`document.querySelector('#grading-full-name') !== null`)
     assert.equal(await evaluate(`document.querySelector('#grading-full-name').readOnly && document.querySelector('#grading-emergency_phone').readOnly`), true)
     assert.match(await evaluate(`document.body.textContent`), /Retrieved from your Membership Profile/)
     assert.equal(await evaluate(`document.querySelector('#official-grading-date').value`), '')
@@ -140,6 +143,9 @@ test('5th Kyu stays $77 through application, review and Stripe redirect at 320â€
 
 test('rank and next-grade fee stay visible without an eligible session', async () => {
   await open(390, '?appRoute=%2Fgrading&empty=1')
+  await until(`document.querySelector('#apply-grading-trigger') !== null`)
+  assert.equal(await evaluate(`document.querySelector('#base-fee')`), null)
+  await evaluate(`Array.from(document.querySelectorAll('button')).find(b => b.textContent === 'Apply for Grading').click()`)
   await until(`document.querySelector('#target-grade [data-grade-id="blue-gold-5th-kyu"]') !== null`)
   assert.match(await evaluate(`document.querySelector('#base-fee').textContent`), /55\.00/)
   assert.equal(await evaluate(`document.querySelector('#grading-event')`), null)
@@ -147,11 +153,12 @@ test('rank and next-grade fee stay visible without an eligible session', async (
 
 test('children follow the database children ladder, not the adult ladder', async () => {
   await open(390, '?appRoute=%2Fgrading&child=1')
-  await until(`document.querySelector('#target-grade [data-grade-id="blue-silver-6th-kyu"]') !== null`)
+  await until(`document.querySelector('#apply-grading-trigger') !== null`)
   assert.match(await evaluate(`document.querySelector('#your-eligibility').textContent`), /Children Track/)
   assert.equal(await evaluate(`document.querySelector('#grading-event')`), null)
   await evaluate(`Array.from(document.querySelectorAll('button')).find(b => b.textContent === 'Apply for Grading').click()`)
   await until(`document.querySelector('#official-grading-date') !== null`)
+  assert.equal(await evaluate(`document.querySelector('#target-grade [data-grade-id="blue-silver-6th-kyu"]') !== null`), true)
   assert.equal(await evaluate(`document.querySelector('#official-grading-date option[value="2026-12-06"]') !== null`), true)
   await setValue('official-grading-date', '2026-12-06')
   assert.equal(await evaluate(`Array.from(document.querySelectorAll('button')).find(b => b.textContent === 'Proceed to Payment').disabled`), true)
@@ -177,10 +184,11 @@ test('expired and pending members are told why they cannot apply', async () => {
 
 test('a checkout option for a skipped grade is not offered', async () => {
   await open(390, '?appRoute=%2Fgrading&grade=brown-4th-kyu')
-  await until(`document.querySelector('#target-grade [data-grade-id="blue-gold-5th-kyu"]') !== null`)
+  await until(`document.querySelector('#apply-grading-trigger') !== null`)
   assert.equal(await evaluate(`document.querySelector('#grading-event')`), null)
   await evaluate(`Array.from(document.querySelectorAll('button')).find(b => b.textContent === 'Apply for Grading').click()`)
   await until(`document.querySelector('#official-grading-date') !== null`)
+  assert.equal(await evaluate(`document.querySelector('#target-grade [data-grade-id="blue-gold-5th-kyu"]') !== null`), true)
   await setValue('official-grading-date', '2026-12-13')
   assert.equal(await evaluate(`Array.from(document.querySelectorAll('button')).find(b => b.textContent === 'Proceed to Payment').disabled`), true)
 })
@@ -234,13 +242,14 @@ test('test success is verified without claiming a formal application was submitt
   await open(390, '?empty=1&appRoute=' + encodeURIComponent('/grading?checkout=test-success&session_id=cs_test_preview'))
   await until(`document.body.textContent.includes('test payment preview, not an official grading application')`)
   assert.equal(await evaluate(`document.body.textContent.includes('Application submitted')`), false)
-  assert.equal(await evaluate(`Array.from(document.querySelectorAll('button')).find(b => b.textContent === 'Proceed to Payment').disabled`), true)
+  assert.equal(await evaluate(`document.querySelector('#apply-grading-trigger') === null`), true)
 })
 
 test('previously recorded payments reload as paid and prevent repeat payment', async () => {
   await open(390, '?paidApplication=1&appRoute=%2Fgrading')
   await until(`document.body.textContent.includes('Payment confirmed')`)
   assert.match(await evaluate(`document.body.textContent`), /Awaiting dojo review/)
+  assert.equal(await evaluate(`document.querySelector('#apply-grading-trigger') === null`), true)
   assert.equal(await evaluate(`Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Payment confirmed')).disabled`), true)
 })
 
@@ -280,6 +289,112 @@ test('selecting a date cannot unlock payment for an ineligible student', async (
   await setValue('official-grading-date', '2026-12-13')
   assert.equal(await evaluate(`Array.from(document.querySelectorAll('button')).find(b => b.textContent === 'Proceed to Payment').disabled`), true)
   assert.equal(await evaluate(`window.gradingCheckoutCalls.length`), 0)
+})
+
+test('grading opens a viewport-bounded accessible modal; X, Cancel, Escape and backdrop close it and restore focus', async () => {
+  for (const width of [320, 390, 768, 1440]) {
+    await open(width, '?appRoute=%2Fgrading')
+    await until(`document.querySelector('#apply-grading-trigger') !== null`)
+    const pageHeight = await evaluate(`document.querySelector('section').getBoundingClientRect().height`)
+    const show = async () => {
+      await evaluate(`document.querySelector('#apply-grading-trigger').click()`)
+      await until(`document.querySelector('[role="dialog"] #grading-full-name') !== null`)
+    }
+    const closed = async () => {
+      await until(`document.querySelector('[role="dialog"]') === null`)
+      await until(`document.activeElement?.id === 'apply-grading-trigger'`)
+    }
+    await show()
+    await until(`document.activeElement?.textContent === 'Your application details'`)
+    const geometry = await evaluate(`(() => {
+      const d = document.querySelector('[role="dialog"]'), r = d.getBoundingClientRect()
+      const backdrop = document.querySelector('[data-slot="grading-application-overlay"]')
+      const scroll = document.querySelector('#grading-application-form')
+      return { role: d.getAttribute('aria-modal'), left: r.left, right: r.right, top: r.top, bottom: r.bottom, height: r.height,
+        bodyWidth: scroll.scrollWidth, bodyClient: scroll.clientWidth, overflow: getComputedStyle(scroll).overflowY,
+        backdrop: getComputedStyle(backdrop).backgroundColor, blur: getComputedStyle(backdrop).backdropFilter,
+        pageHeight: document.querySelector('section').getBoundingClientRect().height }
+    })()`)
+    assert.equal(geometry.role, 'true')
+    assert.ok(geometry.left >= 0 && geometry.right <= width + 1)
+    assert.ok(geometry.top >= 0 && geometry.bottom <= 901 && geometry.height <= 812)
+    assert.equal(geometry.overflow, 'auto')
+    assert.ok(geometry.bodyWidth <= geometry.bodyClient + 1)
+    assert.match(geometry.backdrop, /^(rgba\(0, 0, 0, 0\.5\)|oklab\(0 0 0 \/ 0\.5\))$/)
+    assert.match(geometry.blur, /blur/)
+    assert.ok(geometry.pageHeight <= pageHeight + 1, 'opening a modal does not expand the underlying page')
+    assert.equal(await evaluate(`document.querySelector('section').querySelector('#grading-application-form') === null`), true)
+    assert.equal(await evaluate(`document.querySelectorAll('#official-grading-date').length`), 1)
+    assert.equal(await evaluate(`document.querySelectorAll('#base-fee').length`), 1)
+    await setValue('official-grading-date', '2026-12-13')
+    const screenshot = await send('Page.captureScreenshot', { format: 'png' })
+    await writeFile(join(process.env.LOCALAPPDATA, 'Temp', 'opencode', `grading-modal-${width}.png`), Buffer.from(screenshot.data, 'base64'))
+    await evaluate(`Array.from(document.querySelectorAll('[role="dialog"] button')).find(b => b.textContent === 'Cancel').focus()`)
+    for (let i = 0; i < 12; i++) {
+      await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 })
+      await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 })
+      await until(`document.querySelector('[role="dialog"]')?.contains(document.activeElement)`)
+      assert.equal(await evaluate(`document.querySelector('[role="dialog"]').contains(document.activeElement)`), true)
+    }
+    await evaluate(`Array.from(document.querySelectorAll('[role="dialog"] button')).find(b => b.textContent === 'Cancel').click()`)
+    await closed()
+    await show()
+    assert.equal(await evaluate(`document.querySelector('#official-grading-date').value`), '2026-12-13')
+    await evaluate(`document.querySelector('[aria-label="Close grading application"]').click()`)
+    await closed()
+    await show()
+    await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
+    await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
+    await closed()
+    await show()
+    await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: 4, y: 4, button: 'left', clickCount: 1 })
+    await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: 4, y: 4, button: 'left', clickCount: 1 })
+    await closed()
+    assert.equal(await evaluate(`window.gradingCheckoutCalls.length`), 0)
+  }
+})
+
+test('modal adapts to dark mode and short landscape viewports with internal scrolling', async () => {
+  await open(844, '?appRoute=%2Fgrading')
+  await send('Emulation.setDeviceMetricsOverride', { width: 844, height: 390, deviceScaleFactor: 1, mobile: false })
+  await evaluate(`document.documentElement.classList.add('dark')`)
+  await until(`document.querySelector('#apply-grading-trigger') !== null`)
+  await evaluate(`document.querySelector('#apply-grading-trigger').click()`)
+  await until(`document.querySelector('[role="dialog"] #grading-full-name') !== null`)
+  const result = await evaluate(`(() => {
+    const d = document.querySelector('[role="dialog"]'), body = document.querySelector('#grading-application-form'), r = d.getBoundingClientRect()
+    return { background: getComputedStyle(d).backgroundColor, top: r.top, bottom: r.bottom, scrolls: body.scrollHeight > body.clientHeight }
+  })()`)
+  assert.notEqual(result.background, 'rgb(255, 255, 255)')
+  assert.ok(result.top >= 0 && result.bottom <= 391)
+  assert.equal(result.scrolls, true)
+  const screenshot = await send('Page.captureScreenshot', { format: 'png' })
+  await writeFile(join(process.env.LOCALAPPDATA, 'Temp', 'opencode', 'grading-modal-dark-landscape.png'), Buffer.from(screenshot.data, 'base64'))
+})
+
+test('checkout errors stay inside the modal and cancelling an in-flight quote never redirects later', async () => {
+  await open(390, '?appRoute=%2Fgrading&rpc=fail')
+  await until(`document.querySelector('#apply-grading-trigger') !== null`)
+  await evaluate(`document.querySelector('#apply-grading-trigger').click()`)
+  await until(`document.querySelector('#grading-full-name') !== null`)
+  await setValue('official-grading-date', '2026-12-13')
+  await evaluate(`Array.from(document.querySelectorAll('[role="dialog"] button')).find(b => b.textContent === 'Proceed to Payment').click()`)
+  await until(`document.querySelector('[role="dialog"] [role="alert"]') !== null`)
+  assert.match(await evaluate(`document.querySelector('[role="dialog"] [role="alert"]').textContent`), /Unable to contact checkout/)
+  await open(390, '?appRoute=%2Fgrading&rpc=slow')
+  await until(`document.querySelector('#apply-grading-trigger') !== null`)
+  await evaluate(`document.querySelector('#apply-grading-trigger').click()`)
+  await until(`document.querySelector('#grading-full-name') !== null`)
+  await setValue('official-grading-date', '2026-12-13')
+  await evaluate(`Array.from(document.querySelectorAll('[role="dialog"] button')).find(b => b.textContent === 'Proceed to Payment').click()`)
+  await until(`window.gradingCheckoutCalls.some(c => c.action === 'quote')`)
+  await evaluate(`Array.from(document.querySelectorAll('[role="dialog"] button')).find(b => b.textContent === 'Cancel').click()`)
+  await until(`document.querySelector('[role="dialog"]') === null`)
+  await evaluate(`document.querySelector('#apply-grading-trigger').click()`)
+  await until(`document.querySelector('[role="dialog"] #grading-full-name') !== null`)
+  await wait(2800)
+  assert.equal(await evaluate(`location.origin`), origin)
+  assert.equal(await evaluate(`window.gradingCheckoutCalls.some(c => c.action === 'checkout')`), false)
 })
 
 test('Membership belt options switch by DOB, clear invalid selections and preserve shared ranks at mobile/desktop widths', async () => {
