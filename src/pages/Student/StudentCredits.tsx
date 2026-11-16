@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Navigate, useSearchParams } from "react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { BadgeCheck, Sparkles, Loader2 } from "lucide-react";
 
 import PageHeader from "@/components/shared/layout/PageHeader";
@@ -16,6 +17,7 @@ import {
 } from "@/lib/membership";
 import { money } from "@/lib/format";
 import { supabase } from "@/lib/supabase";
+import { studentQueryKeys } from "@/lib/student/query-keys";
 import { useAuth } from "@/hooks/use-auth";
 import CreditBatchList from "@/components/student/CreditBatchList";
 import CreditBalanceCard from "./CreditBalanceCard";
@@ -29,6 +31,8 @@ type PassPackage = {
     title: string;
     price: number;
     credits: number;
+    /** Membership fees extend the membership itself; class passes add credits. */
+    kind?: "class" | "membership";
     /** Shown after the price: the per-class price, a discount, or how it's billed. Left out when it would repeat the line above. */
     priceNote?: string;
     validity: string;
@@ -115,6 +119,43 @@ const JUNIOR_PASSES: PassPackage[] = [
     },
 ];
 
+// Membership and registration fees are one-time payments. They are the same for
+// every member, so they are never discounted by membership type or a student card.
+const MEMBERSHIP_FEES: PassPackage[] = [
+    {
+        id: "reg-fee",
+        title: "Registration/Material Fees 【New Enrolment】",
+        price: 60.0,
+        credits: 1,
+        validity: "Valid for 12 months",
+        kind: "membership",
+    },
+    {
+        id: "renew-1y",
+        title: "Annual Membership Fees Renewal 【Existing Member】",
+        price: 48.0,
+        credits: 1,
+        validity: "Valid for 12 months",
+        kind: "membership",
+    },
+    {
+        id: "renew-5y",
+        title: "5 Years Annual Membership Fees Renewal 【Existing Members】",
+        price: 240.0,
+        credits: 1,
+        validity: "Valid for 5 years",
+        kind: "membership",
+    },
+    {
+        id: "renew-10y",
+        title: "10 Years Annual Membership Fees Renewal 【Existing Members】",
+        price: 480.0,
+        credits: 1,
+        validity: "Valid for 10 years",
+        kind: "membership",
+    },
+];
+
 const STUDENT_DISCOUNT = 0.5;
 
 async function checkoutErrorMessage(error: unknown) {
@@ -197,9 +238,11 @@ function PassCard({
                 )}
             </div>
             <p className="col-span-2 mt-1.5 text-sm text-muted-foreground sm:col-span-1 sm:mt-1">
-                {pass.credits === UNLIMITED_CREDITS
-                    ? "Unlimited classes"
-                    : `${pass.credits} credits`}{" "}
+                {pass.kind === "membership"
+                    ? "Membership fee"
+                    : pass.credits === UNLIMITED_CREDITS
+                      ? "Unlimited classes"
+                      : `${pass.credits} credits`}{" "}
                 · {pass.validity}
             </p>
             <div className="mt-3 flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5 self-end sm:mt-2 sm:self-auto">
@@ -223,7 +266,7 @@ function PassCard({
                 type="button"
                 onClick={onBuy}
                 disabled={busy}
-                // Six "Buy" buttons: the name says which pass each one buys.
+                // Every card has a "Buy" button: the name says which pass it buys.
                 aria-label={redirecting ? undefined : `Buy ${pass.title}`}
                 aria-describedby={error ? errorId : undefined}
                 className="mt-3 self-end px-6 sm:col-start-2 sm:row-span-3 sm:row-start-1 sm:mt-0 sm:self-center sm:px-8"
@@ -266,6 +309,20 @@ export default function StudentCredits() {
         null,
     );
     const checkoutState = searchParams.get("checkout");
+    const membershipState = searchParams.get("membership");
+    const queryClient = useQueryClient();
+
+    // Stripe returns here after a membership payment. Refresh the membership so the
+    // new expiry shows without waiting for the page's own poll.
+    useEffect(() => {
+        if (membershipState !== "success" || !profile?.id) return;
+        void queryClient.invalidateQueries({
+            queryKey: studentQueryKeys.membershipDetails(profile.id),
+        });
+        void queryClient.invalidateQueries({
+            queryKey: studentQueryKeys.membership(profile.id),
+        });
+    }, [membershipState, profile?.id, queryClient]);
 
     const audience = classPassAudience(membershipType);
     const isStudent = isStudentMembership(membershipType);
@@ -278,19 +335,23 @@ export default function StudentCredits() {
     const heading =
         audience === "junior" ? "Junior class passes" : "Adult class passes";
 
-    // Sends the student to Stripe Checkout for this pass.
+    // Sends the student to Stripe Checkout for this pass or membership fee.
     const handlePurchase = async (pass: PassPackage) => {
-        setLoadingPassId(pass.id);
         setError(null);
+        setLoadingPassId(pass.id);
+
+        const membership = pass.kind === "membership";
 
         try {
             // The Edge Function resolves the price server-side; never send an amount.
-            // Only the verified webhook creates a batch and its expiration. Returning
-            // from Checkout must never insert credits from the browser.
+            // Only the verified webhook adds credits or extends the membership.
+            // Returning from Checkout must never change a balance from the browser.
             const { data, error: fnError } = await supabase.functions.invoke<{
                 url: string;
-            }>("create-credit-checkout", {
-                body: { passId: pass.id, membershipType },
+            }>(membership ? "create-membership-checkout" : "create-credit-checkout", {
+                body: membership
+                    ? { feeId: pass.id }
+                    : { passId: pass.id, membershipType },
                 headers: { "Idempotency-Key": randomUUID() },
             });
 
@@ -337,6 +398,23 @@ export default function StudentCredits() {
                     </Alert>
                 )}
 
+                {membershipState === "success" && (
+                    <Alert role="status" className="mt-6">
+                        <AlertDescription>
+                            Membership payment received. Your new expiry date appears
+                            in My passes as soon as Stripe confirms it.
+                        </AlertDescription>
+                    </Alert>
+                )}
+
+                {membershipState === "cancel" && (
+                    <Alert role="status" className="mt-6">
+                        <AlertDescription>
+                            Membership checkout was cancelled. No payment was taken.
+                        </AlertDescription>
+                    </Alert>
+                )}
+
                 <div className="mt-6">
                     <CreditBalanceCard topUp={false} compact />
                 </div>
@@ -377,6 +455,40 @@ export default function StudentCredits() {
                             </div>
                         </section>
                     ))}
+                </section>
+
+                <section
+                    className="mt-10 space-y-3 border-t pt-8"
+                    aria-labelledby="membership-fees-title"
+                >
+                    <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                        <h2
+                            id="membership-fees-title"
+                            className="text-lg font-semibold"
+                        >
+                            Membership &amp; Registration Fees
+                        </h2>
+                        <p className="text-sm text-muted-foreground">
+                            One-time payment · Same for all members
+                        </p>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                        Registration for new enrolments and annual membership renewals.
+                        Payment extends your membership by the period shown — it never
+                        adds class credits.
+                    </p>
+                    <div className="grid gap-4 xl:grid-cols-2">
+                        {MEMBERSHIP_FEES.map((fee) => (
+                            <PassCard
+                                key={fee.id}
+                                pass={fee}
+                                busy={loadingPassId !== null}
+                                redirecting={loadingPassId === fee.id}
+                                error={error?.passId === fee.id ? error.message : ""}
+                                onBuy={() => void handlePurchase(fee)}
+                            />
+                        ))}
+                    </div>
                 </section>
 
                 <CreditBatchList userId={profile?.id} />

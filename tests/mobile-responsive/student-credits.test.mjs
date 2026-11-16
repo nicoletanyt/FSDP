@@ -145,6 +145,14 @@ test('Credits page shows each saved pass expiry, remaining credits and truthful 
     assert.match(await evaluate(pass('soon')), /9 days left/)
     assert.match(await evaluate(pass('soon')), /Use by/)
     assert.match(await evaluate(pass('soon')), /Bought/)
+    // The membership fee is a payment, not a pass, so it needs its own row here.
+    const membership = `document.querySelector('[data-membership]').textContent`
+    assert.match(await evaluate(membership), /Membership/)
+    assert.match(await evaluate(membership), /Valid until/)
+    assert.match(await evaluate(membership), /days left/)
+    assert.match(await evaluate(membership), /ASJ20260001/)
+    assert.match(await evaluate(membership), /\$60\.00/)
+    assert.match(await evaluate(membership), /Paid/)
     assert.match(await evaluate(pass('later')), /60 days left/)
     assert.match(await evaluate(pass('unlimited')), /Unlimited classes/)
     assert.match(await evaluate(pass('legacy')), /No expiry/)
@@ -159,6 +167,16 @@ test('Credits page shows each saved pass expiry, remaining credits and truthful 
     const screenshot = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true })
     await writeFile(join(temp, `credit-pass-list-${width}.png`), Buffer.from(screenshot.data, 'base64'))
   }
+})
+
+test('membership shows an expired state with the date it ended', async () => {
+  await open(320, 'expired', 'passes')
+  await until(`document.querySelector('[data-membership="expired"]') !== null`)
+  const membership = `document.querySelector('[data-membership]').textContent`
+  assert.match(await evaluate(membership), /Expired/)
+  assert.match(await evaluate(membership), /Ended/)
+  assert.match(await evaluate(membership), /\$60\.00/)
+  assert.equal(await evaluate('document.documentElement.scrollWidth <= innerWidth'), true)
 })
 
 test('pass list has an empty state and a recoverable error instead of invented expiry dates', async () => {

@@ -12,6 +12,7 @@ export const studentQueryKeys = {
   profile: (userId: string, accountName: string) => [...studentQueryKeys.profileAll(userId), accountName] as const,
   dashboard: (userId: string) => [...studentQueryKeys.all(userId), 'dashboard'] as const,
   membership: (userId: string) => [...studentQueryKeys.all(userId), 'membership'] as const,
+  membershipDetails: (userId: string) => [...studentQueryKeys.all(userId), 'membership-details'] as const,
   dashboardGrading: (userId: string) => [...studentQueryKeys.all(userId), 'dashboard-grading'] as const,
   grading: (userId: string) => [...studentQueryKeys.all(userId), 'grading'] as const,
   reference: (userId: string) => [...studentQueryKeys.all(userId), 'reference'] as const,
