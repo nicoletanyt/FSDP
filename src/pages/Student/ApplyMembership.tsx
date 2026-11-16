@@ -8,7 +8,7 @@ import {
 } from "@/lib/student/query-keys";
 import type { ReactNode } from "react";
 import { useSearchParams } from "react-router";
-import { Check, ChevronDown, ChevronUp, Info, UploadCloud } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, UploadCloud } from "lucide-react";
 import { NativeSelect } from "@/components/admin/form-controls";
 import FilterCombobox from "@/components/shared/filters/FilterCombobox";
 import { DatabaseGradeBadge } from "@/components/shared/grade/GradeBadge";
