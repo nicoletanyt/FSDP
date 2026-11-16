@@ -263,8 +263,9 @@ After configuring secrets, deploy the backend separately from the frontend:
 npx supabase@latest functions deploy instructor-chat --project-ref YOUR_PROJECT_REF --use-api
 ```
 
-Apply migration `20261113130000_instructor_follow_up_students.sql` (the
-follow-up tool). The existing instructor directory, attendance summary/history,
+Apply migrations `20261113130000_instructor_follow_up_students.sql` (the
+follow-up tool) and `20261117120000_instructor_chat_schedule.sql` (the
+instructor-only, pre-paginated chat schedule). The existing instructor directory, attendance summary/history,
 calendar, event report, endorsement and grading panel RPCs must already be deployed. Do not blindly run
 `db push` against a project whose migration history differs from this checkout.
 For local testing, serve the function with the Supabase CLI against a local
@@ -290,6 +291,7 @@ Verification:
 
 ```sh
 node --test tests/instructor-chat.test.mjs
+node --test tests/instructor-chat-schedule-db.test.mjs
 node --test tests/chat-markdown.test.mjs
 node --test tests/chat-output.test.mjs
 npm run check:functions
