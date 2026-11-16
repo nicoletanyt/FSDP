@@ -3,7 +3,7 @@ import { CalendarDays, Clock3, MapPin } from "lucide-react";
 import { cn } from "cn";
 import { Card, CardContent } from "@/components/ui/card";
 import { DatabaseGradeBadge as GradeBadge } from "@/components/shared/grade/GradeBadge";
-import InstructorDataStatus from "./InstructorDataStatus";
+import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
 import { useInstructorQuery } from "@/hooks/use-instructor-data";
 import { useInstructorApi } from "@/lib/instructor/data-context";
 import { instructorQueryKeys as keys, instructorQueryTimes as times } from "@/lib/instructor/query-keys";

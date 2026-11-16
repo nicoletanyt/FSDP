@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import InstructorDataStatus from "./InstructorDataStatus";
+import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
 import { useInstructorQuery } from "@/hooks/use-instructor-data";
 import { useAuth } from "@/hooks/use-auth";
 import { instructorQueryKeys as queryKeys, instructorQueryTimes as queryTimes } from "@/lib/instructor/query-keys";

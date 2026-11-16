@@ -1,8 +1,8 @@
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { Fragment, useMemo } from 'react'
 import { TableSkeleton } from '@/components/shared/skeletons'
 import { useQuery } from '@tanstack/react-query'
 import { AlertTriangle, ChevronRight, Download, GraduationCap, Users, X } from 'lucide-react'
-import { useSearchParams } from 'react-router'
+import { Link, useNavigate, useSearchParams } from 'react-router'
 import { GradeLabelBadge } from '@/components/shared/grade/GradeBadge'
 import StatCard from '@/components/shared/layout/StatCard'
 import EmptyState from '@/components/shared/layout/EmptyState'
@@ -13,11 +13,10 @@ import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, Tabl
 import { useAuth } from '@/hooks/use-auth'
 import { useAdminFilters } from '@/lib/admin/admin-filters'
 import { downloadCsv } from '@/lib/admin/export'
-import { formatDate, formatPercent, initials, relativeDay } from '@/lib/admin/format'
+import { formatPercent, initials, relativeDay } from '@/lib/admin/format'
 import { loadCalendarCentres } from '@/lib/admin/live-class-calendar'
 import type { MembershipStatus, RiskLevel } from '@/lib/admin/types'
 import { supabase } from '@/lib/supabase'
-import { cn } from 'cn'
 import FilterPopover, { FilterField } from '@/components/shared/filters/FilterPopover'
 import SearchInput from '@/components/shared/filters/SearchInput'
 
@@ -73,7 +72,7 @@ export default function LiveStudentsTab() {
   const { session } = useAuth()
   const { centreId, setCentreId } = useAdminFilters()
   const [searchParams, setSearchParams] = useSearchParams()
-  const [expanded, setExpanded] = useState<string | null>(null)
+  const navigate = useNavigate()
   const search = searchParams.get('q') ?? ''
   const risk = searchParams.get('risk') ?? 'all'
   const eligibility = searchParams.get('eligibility') ?? 'all'
@@ -96,7 +95,6 @@ export default function LiveStudentsTab() {
   const loading = centresQuery.isPending || directory.isPending || !validCentre
   const students = !error && validCentre && directory.isSuccess ? directory.data : []
 
-  useEffect(() => { setExpanded(null) }, [centreId])
 
   const filtered = useMemo(() => {
     const needle = search.trim().toLowerCase()
@@ -187,9 +185,9 @@ export default function LiveStudentsTab() {
               <TableHead className="text-right"><span className="sr-only">Details</span></TableHead>
             </TableRow></TableHeader>
             <TableBody>{filtered.map(student => {
-              const isExpanded = expanded === student.id
+              const detailsHref = `/admin/students/${student.id}`
               return <Fragment key={student.id}>
-                <TableRow className="cursor-pointer" onClick={() => setExpanded(isExpanded ? null : student.id)}>
+                <TableRow className="cursor-pointer" onClick={() => navigate(detailsHref)}>
                   <TableCell><div className="flex items-center gap-3">
                     <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
                       {initials(student.first_name, student.last_name)}
@@ -200,27 +198,13 @@ export default function LiveStudentsTab() {
                   <TableCell className="hidden md:table-cell text-right font-medium tabular-nums">{student.attendance_rate === null ? '—' : formatPercent(student.attendance_rate)}</TableCell>
                   <TableCell><StudentRisk level={student.risk_level} /></TableCell>
                   <TableCell className="hidden md:table-cell text-muted-foreground">{relativeDay(student.last_attended ?? '')}</TableCell>
-                  <TableCell className="text-right"><Button variant="ghost" size="sm" type="button"
-                    aria-label={`${isExpanded ? 'Hide' : 'View'} details for ${studentName(student)}`}
-                    aria-expanded={isExpanded} aria-controls={isExpanded ? `student-directory-details-${student.id}` : undefined}
-                    onClick={event => { event.stopPropagation(); setExpanded(isExpanded ? null : student.id) }}>
-                    <span className="hidden md:inline">{isExpanded ? 'Hide details' : 'View details'}</span>
-                    <ChevronRight className={cn('size-4 transition-transform', isExpanded && 'rotate-90')} aria-hidden="true" />
+                  <TableCell className="text-right"><Button variant="ghost" size="sm" render={<Link to={detailsHref} />} nativeButton={false}
+                    aria-label={`View details for ${studentName(student)}`}
+                    onClick={event => event.stopPropagation()}>
+                    <span className="hidden md:inline">View details</span>
+                    <ChevronRight className="size-4" aria-hidden="true" />
                   </Button></TableCell>
                 </TableRow>
-                {isExpanded && <TableRow id={`student-directory-details-${student.id}`}><TableCell colSpan={7} className="bg-muted/30">
-                  <dl className="grid gap-x-8 gap-y-2 whitespace-normal text-sm sm:grid-cols-2 lg:grid-cols-4">
-                    {/* Columns hidden on phones. */}
-                    <div className="md:hidden"><dt className="text-muted-foreground">Grade</dt><dd><StudentGrade label={student.grade} /></dd></div>
-                    <div className="md:hidden"><dt className="text-muted-foreground">Membership</dt><dd><MembershipBadge status={student.membership_status} /></dd></div>
-                    <div className="md:hidden"><dt className="text-muted-foreground">Last 5 enrolments</dt><dd>{student.attendance_rate === null ? '—' : formatPercent(student.attendance_rate)}</dd></div>
-                    <div className="md:hidden"><dt className="text-muted-foreground">Last attended</dt><dd>{relativeDay(student.last_attended ?? '')}</dd></div>
-                    <div><dt className="text-muted-foreground">Email</dt><dd className="break-all">{student.email}</dd></div>
-                    <div><dt className="text-muted-foreground">Date of birth</dt><dd>{formatDate(student.date_of_birth)}</dd></div>
-                    <div><dt className="text-muted-foreground">Recent enrolments</dt><dd>{student.enrolments} completed · {student.attended} attended · {student.missed} missed</dd></div>
-                    <div><dt className="text-muted-foreground">Grading</dt><dd><GradingStatus status={student.grading_status} /></dd></div>
-                  </dl>
-                </TableCell></TableRow>}
               </Fragment>
             })}</TableBody>
           </Table>

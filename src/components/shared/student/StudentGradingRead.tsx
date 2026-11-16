@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { DatabaseGradeBadge as GradeBadge } from "@/components/shared/grade/GradeBadge";
-import InstructorDataStatus from "./InstructorDataStatus";
+import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
 import { gradingEventDate } from "@/lib/instructor/adapters";
 import { singaporeToday } from "@/lib/instructor/directory";
 import {

@@ -17,7 +17,6 @@ const StudentLayout = lazy(() => import('./layouts/StudentLayout'))
 const AdminLayout = lazy(() => import('./pages/admin/AdminLayout'))
 const AdminOverview = lazy(() => import('./pages/admin/Overview'))
 const AdminCentres = lazy(() => import('./pages/admin/Centres'))
-const AdminStudentDetail = lazy(() => import('./pages/admin/StudentDetail'))
 const AdminAttendance = lazy(() => import('./pages/admin/Attendance'))
 const AdminAttendanceRegister = lazy(() => import('./pages/admin/LiveAttendanceRegister'))
 const AdminAttendanceMonitoring = lazy(() => import('./pages/admin/AttendanceMonitoring'))
@@ -55,7 +54,7 @@ const InstructorDashboard = lazy(() => import('./pages/Instructor/InstructorDash
 const InstructorStudents = lazy(() => import('./pages/Instructor/InstructorStudents'))
 const InstructorProfile = lazy(() => import('./pages/Instructor/InstructorProfile'))
 const InstructorCheckIn = lazy(() => import('./pages/Instructor/InstructorCheckIn'))
-const InstructorStudentDetails = lazy(() => import('./pages/Instructor/InstructorStudentDetails'))
+const SharedStudentDetail = lazy(() => import('./pages/shared/StudentDetail'))
 const InstructorGradingSession = lazy(() => import('./pages/Instructor/InstructorGradingSession'))
 const InstructorGradings = lazy(() => import('./pages/Instructor/InstructorGradings'))
 const InstructorGradingDay = lazy(() => import('./pages/Instructor/InstructorGradingDay'))
@@ -119,7 +118,7 @@ export default function App() {
                 <Route path="check-in" element={<InstructorCheckIn />} />
                 <Route path="cover/:invitationId" element={<LegacyCoverInvitationRedirect />} />
                 <Route path="nfc_checkin" element={<InstructorCheckIn />} />
-                <Route path="students/:studentId" element={<InstructorStudentDetails />} />
+                <Route path="students/:studentId" element={<SharedStudentDetail />} />
                 <Route path="reports/:eventId" element={<Navigate to="/instructor/calendar" replace />} />
                 <Route path="gradings" element={<InstructorGradings />} />
                 <Route path="gradings/:eventId" element={<InstructorGradingDay />} />
@@ -137,7 +136,7 @@ export default function App() {
                 <Route index element={<AdminStudentDirectory />} />
                 <Route path="attendance" element={<AdminAttendanceMonitoring />} />
               </Route>
-              <Route path="students/:studentId" element={<AdminStudentDetail />} />
+              <Route path="students/:studentId" element={<SharedStudentDetail />} />
               <Route path="centres" element={<AdminCentres />} />
               <Route path="calendar" element={<AdminAttendance />}>
                 <Route index element={<AdminAttendanceRegister />} />

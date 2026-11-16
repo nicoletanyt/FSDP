@@ -95,7 +95,8 @@ export async function loadInstructorPhotos(client: Pick<SupabaseClient, 'from'> 
 }
 
 export function createInstructorApi(client: InstructorClient) {
-  async function getInstructorAccount(signal?: AbortSignal) {
+  // Instructors always; administrators too when `allowAdmin` (student read paths shared with the admin app).
+  async function getInstructorAccount(signal?: AbortSignal, allowAdmin = false) {
     try {
       signal?.throwIfAborted()
       const { data: { user }, error } = await client.auth.getUser()
@@ -108,7 +109,7 @@ export function createInstructorApi(client: InstructorClient) {
           .maybeSingle<{ id: string; role: string }>(),
         'Unable to verify instructor permissions. Please try again.', signal,
       )
-      if (profile?.id !== userId || profile.role !== 'instructor') {
+      if (profile?.id !== userId || (profile.role !== 'instructor' && !(allowAdmin && profile.role === 'administrator'))) {
         throw new InstructorDataError('forbidden', 'Instructor access is required.')
       }
       return { userId }
@@ -211,7 +212,7 @@ export function createInstructorApi(client: InstructorClient) {
     for (const value of [options.oldestFirst, options.recordedAssessmentsOnly]) {
       if (value !== undefined && typeof value !== 'boolean') invalidRequest('Choose valid history filters.')
     }
-    await getInstructorAccount(page.signal)
+    await getInstructorAccount(page.signal, true)
     const data = await rpc('instructor_student_history', {
       target_student: studentId, page_size: page.limit, page_offset: page.offset,
       filter_type: options.eventType ?? null,
@@ -341,7 +342,7 @@ export function createInstructorApi(client: InstructorClient) {
     },
 
     async getReferenceData(signal?: AbortSignal): Promise<InstructorReferenceData> {
-      await getInstructorAccount(signal)
+      await getInstructorAccount(signal, true)
       const [centres, grades, gradeTracks, gradeRequirements, syllabusItems, classTypes] = await Promise.all([
         allRows('centres', ['name', 'id'], decodeCentre, signal),
         allRows('grades', ['sort_order', 'id'], decodeGrade, signal),
@@ -460,7 +461,7 @@ export function createInstructorApi(client: InstructorClient) {
 
     async getStudentDetail(id: StudentId, signal?: AbortSignal) {
       const studentId = parseEntityId(id, 'student')
-      await getInstructorAccount(signal)
+      await getInstructorAccount(signal, true)
       const data = await requestInstructorData(
         () => cancellable(client.from('students').select(`${studentSelect}, emergency_contacts(*), medical_alerts:student_medical_alerts(*)`)
           .eq('id', studentId), signal).maybeSingle<unknown>(),
@@ -510,7 +511,7 @@ export function createInstructorApi(client: InstructorClient) {
     // Every grading application the student has made, newest first.
     async getStudentApplications(id: StudentId, signal?: AbortSignal) {
       const studentId = parseEntityId(id, 'student')
-      await getInstructorAccount(signal)
+      await getInstructorAccount(signal, true)
       return allRows('grading_applications', ['submitted_at', 'id'], decodeStudentApplication, signal,
         'id,status,submitted_at,target_grade:grades(*),session:grading_sessions(position,starts_at,ends_at),'
         + 'grading:gradings(grading_date,track,event:events(id,name,starts_at,status,centre:centres(name)))', { student_id: studentId })
@@ -565,13 +566,13 @@ export function createInstructorApi(client: InstructorClient) {
 
     async getStudentSummary(id: StudentId, signal?: AbortSignal) {
       const studentId = parseEntityId(id, 'student')
-      await getInstructorAccount(signal)
+      await getInstructorAccount(signal, true)
       return decodeSummary(await rpc('instructor_student_summary', { target_student: studentId }, signal))
     },
 
     async getTechniqueProgress(id: StudentId, signal?: AbortSignal) {
       const studentId = parseEntityId(id, 'student')
-      await getInstructorAccount(signal)
+      await getInstructorAccount(signal, true)
       const rows = await allRows('technique_progress', ['updated_at', 'id'], decodeTechniqueProgress, signal,
         '*, instructor:instructors(*)', { student_id: studentId })
       if (rows.some(item => item.progress.student_id !== studentId)) throw new InstructorDataError('invalid_data', 'The technique progress does not match the student.')

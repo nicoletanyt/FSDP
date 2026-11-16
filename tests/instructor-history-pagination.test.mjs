@@ -22,7 +22,7 @@ before(async () => {
   ;({ createQueryAuthBoundary: createBoundary } = await server.ssrLoadModule('/src/lib/query-auth-boundary.ts'))
   ;({ AuthContext } = await server.ssrLoadModule('/src/lib/auth-context.ts'))
   ;({ InstructorApiContext } = await server.ssrLoadModule('/src/lib/instructor/data-context.ts'))
-  ;({ default: StudentSessionHistory } = await server.ssrLoadModule('/src/components/instructor/StudentSessionHistory.tsx'))
+  ;({ default: StudentSessionHistory } = await server.ssrLoadModule('/src/components/shared/student/StudentSessionHistory.tsx'))
 })
 after(async () => { await server?.close() })
 

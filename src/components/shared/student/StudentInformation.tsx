@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { CreditCard, HeartPulse, Mail, MapPin, Phone, X } from "lucide-react";
 import { cn } from "cn";
 import { Button } from "@/components/ui/button";
@@ -44,8 +45,10 @@ function StudentContactDetails({ detail }: { detail: StudentDetail }) {
     );
 }
 
-export function StudentInformationCards({ detail, compact = false }: {
+export function StudentInformationCards({ detail, compact = false, keyFob }: {
     detail: StudentDetail
+    /** Admin-only key fob status, shown after membership. */
+    keyFob?: ReactNode
     /** Phones: one card for a narrow column, each fact's label above its value. */
     compact?: boolean
 }) {
@@ -83,6 +86,12 @@ export function StudentInformationCards({ detail, compact = false }: {
                     <dt className="detail-label text-xs text-muted-foreground">Membership</dt>
                     <dd>{status}</dd>
                 </div>
+                {keyFob && (
+                    <div className="space-y-1.5 py-3">
+                        <dt className="detail-label text-xs text-muted-foreground">Key fob</dt>
+                        <dd>{keyFob}</dd>
+                    </div>
+                )}
                 {/* Shown in place, not behind a dialog: a safety note should be read without a tap. */}
                 <div className="space-y-1.5 py-3">
                     <dt className="detail-label flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -131,6 +140,14 @@ export function StudentInformationCards({ detail, compact = false }: {
                     {status}
                 </CardContent>
             </Card>
+            {keyFob && (
+                <Card size="sm" className="detail-card">
+                    <CardContent className="space-y-2">
+                        <h3 className="detail-label text-xs text-muted-foreground">Key fob</h3>
+                        {keyFob}
+                    </CardContent>
+                </Card>
+            )}
         </div>
     );
 }
