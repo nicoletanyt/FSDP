@@ -1,5 +1,4 @@
 import { useState, type ReactNode } from "react";
-import { Link } from "react-router";
 import { Check, ChevronDown, ExternalLink } from "lucide-react";
 import { BackNav } from "@/components/shared/layout/BackLink";
 import { Segmented } from "@/components/shared/Segmented";
@@ -13,7 +12,6 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import PageHeader from "@/components/shared/layout/PageHeader";
-import { buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { StatusBadge } from "@/components/shared/status/StatusBadge";
 import { useStudentDashboard } from "@/hooks/use-student-dashboard";

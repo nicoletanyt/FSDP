@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
-import { ChevronDown, ShieldCheck, Info, Loader2 } from "lucide-react";
+import { ChevronDown, Info, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NativeSelect } from "@/components/admin/form-controls";
 import PageHeader from "@/components/shared/layout/PageHeader";

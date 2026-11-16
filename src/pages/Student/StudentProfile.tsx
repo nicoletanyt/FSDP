@@ -1,5 +1,5 @@
 import { Link } from "react-router";
-import { CalendarDays, GraduationCap, IdCard, Mail, MapPin } from "lucide-react";
+import { CalendarDays, GraduationCap, IdCard, Mail, MapPin, User, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
@@ -13,6 +13,7 @@ import ChangePasswordDialog from "@/components/profile/ChangePasswordDialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useStudentProfile } from "@/hooks/use-student-profile";
 import { formatDate } from "@/lib/format";
+import { isStudentMembership, membershipLabel, resolveMembershipType } from "@/lib/membership";
 import { beltBackground, type Profile, type Standing } from "@/lib/student-profile";
 
 /* ---------- Helpers ---------- */
@@ -44,6 +45,16 @@ function Detail({ icon: Icon, term, children }: { icon: LucideIcon; term: string
       </dt>
       <dd className="font-semibold [overflow-wrap:anywhere]">{children}</dd>
     </div>
+  );
+}
+
+function MembershipTypePill() {
+  const type = resolveMembershipType();
+  return (
+    <StatusBadge tone="info" dot={false}>
+      {isStudentMembership(type) ? <GraduationCap aria-hidden="true" /> : <User aria-hidden="true" />}
+      {membershipLabel(type)}
+    </StatusBadge>
   );
 }
 
@@ -168,6 +179,10 @@ function MembershipDetails({ profile }: { profile: Profile }) {
           </Detail>
           <Detail icon={GraduationCap} term="Current grade">{profile.belt.name}</Detail>
           <Detail icon={MapPin} term="Home dojo">{profile.homeDojo ?? "—"}</Detail>
+          {/* Moved here from the Credits page: it describes the membership, not a purchase. */}
+          <Detail icon={Users} term="Membership type">
+            <MembershipTypePill />
+          </Detail>
           <Detail icon={CalendarDays} term={standing === "Active" ? "Member since" : "Applied on"}>
             {profile.memberSince ? formatDate(profile.memberSince) : "—"}
           </Detail>
