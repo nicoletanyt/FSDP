@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router'
-import { CalendarDays, GraduationCap, IdCard, LayoutDashboard, QrCode, Receipt, Ticket, UserCircle, Users } from 'lucide-react'
+import { CalendarDays, Coins, GraduationCap, IdCard, LayoutDashboard, QrCode, Receipt, Ticket, UserCircle, Users } from 'lucide-react'
 import logo from '@/assets/logo.png'
 import ThemeToggle from '@/components/theme-toggle'
 import StudentAccountMenu from '@/components/student/StudentAccountMenu'
 import MobileNavigation from '@/components/shared/layout/MobileNavigation'
 import OverflowNav from '@/components/shared/layout/OverflowNav'
 import { buttonVariants } from '@/components/ui/button'
+import { useAuth } from '@/hooks/use-auth'
 import { useMembershipStatus, type MembershipStatus } from '@/hooks/use-membership-status'
+import { useStudentCredits } from '@/hooks/use-student-credits'
 import { useSignOut } from '@/hooks/use-sign-out'
 import { fetchAttendanceQr } from '@/lib/attendance-qr'
 import { pageWidth } from '@/lib/page-width'
@@ -82,6 +84,15 @@ export default function StudentNavigation() {
   const { handleSignOut, signingOut, error } = useSignOut()
   const { status } = useMembershipStatus()
   const checkIn = useTodayCheckIn(status === 'active')
+  const { profile } = useAuth()
+  const creditAccount = useStudentCredits(profile?.id, null)
+  const balance = creditAccount.unlimited
+    ? 'Unlimited pass'
+    : creditAccount.error
+      ? 'Balance unavailable'
+      : creditAccount.loading
+        ? 'Loading credits…'
+        : `${creditAccount.credits} ${creditAccount.credits === 1 ? 'credit' : 'credits'}`
   const items = studentRoutes(status).map(({ label, to, icon }) => ({
     label,
     to,
@@ -107,6 +118,18 @@ export default function StudentNavigation() {
         onSignOut={handleSignOut}
         signingOut={signingOut}
         error={error}
+        hideAccountMeta
+        accountDetail={(
+          <Link
+            to="/student/credits"
+            // 44px tap target kept; -my-2.5 cancels its empty space so the balance sits right under the name.
+            className="-my-2.5 inline-flex min-h-11 items-center gap-1.5 rounded-md text-[16px] font-medium text-primary outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Coins aria-hidden="true" className="size-4 shrink-0" />
+            <span className="sr-only">Credit balance: </span>
+            {balance}
+          </Link>
+        )}
       />
       <header className="hidden shrink-0 border-b bg-background lg:block">
         <div className={cn(pageWidth, 'flex items-center gap-6 py-5')}>

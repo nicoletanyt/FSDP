@@ -13,6 +13,9 @@ type CreditState = {
   payment: 'none' | 'pending' | 'confirmed' | 'delayed'
 }
 
+// Every mounted copy of the hook (the student layout's and the navbar's) refreshes together.
+const CREDITS_CHANGED = 'student-credits-changed'
+
 export function useStudentCredits(userId: string | undefined, sessionId: string | null) {
   const key = JSON.stringify([userId, sessionId])
   const initial: CreditState = {
@@ -21,17 +24,24 @@ export function useStudentCredits(userId: string | undefined, sessionId: string 
   }
   const [state, setState] = useState<CreditState>(initial)
   const [revision, setRevision] = useState(0)
-  const retry = useCallback(() => setRevision((previous) => previous + 1), [])
+  const retry = useCallback(() => window.dispatchEvent(new Event(CREDITS_CHANGED)), [])
 
   useEffect(() => {
-    const refresh = () => { if (document.visibilityState === 'visible') retry() }
+    const reload = () => setRevision((previous) => previous + 1)
+    window.addEventListener(CREDITS_CHANGED, reload)
+    return () => window.removeEventListener(CREDITS_CHANGED, reload)
+  }, [])
+
+  useEffect(() => {
+    // Every copy already hears focus itself, so this reloads only this copy (no broadcast).
+    const refresh = () => { if (document.visibilityState === 'visible') setRevision((previous) => previous + 1) }
     window.addEventListener('focus', refresh)
     document.addEventListener('visibilitychange', refresh)
     return () => {
       window.removeEventListener('focus', refresh)
       document.removeEventListener('visibilitychange', refresh)
     }
-  }, [retry])
+  }, [])
 
   useEffect(() => {
     const controller = new AbortController()
