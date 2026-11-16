@@ -60,13 +60,18 @@ function GradingBody() {
 
 function StudentPreview({ entry }: { entry?: StudentEntry | null }) {
   const name = entry ? [entry.student.first_name.trim(), entry.student.last_name.trim()].filter(Boolean).join(' ') || entry.student.email : null
-  return <section className="student-detail-view space-y-2 md:space-y-6">
-    <div className="flex min-w-0 items-center gap-2">
+  // Mirrors the loaded page's header so the name doesn't jump when details arrive.
+  return <section className="student-detail-view space-y-4 md:space-y-6">
+    <div className="flex min-w-0 items-start gap-1">
+      <Link to="/instructor/students" aria-label="Back to students"
+        className="-my-1.5 -ml-3 inline-flex size-11 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring md:hidden">
+        <ChevronLeft aria-hidden="true" className="size-6" />
+      </Link>
+      {name ? <h1 className="min-w-0 text-2xl font-semibold tracking-tight wrap-break-word md:hidden">{name}</h1> : <Bar className="h-8 w-44 md:hidden" />}
       <Button render={<Link to="/instructor/students" />} nativeButton={false} variant="ghost"
-        className="-ml-5 max-w-full min-w-0 max-md:h-auto max-md:min-h-11 max-md:py-2">
+        className="-ml-5 hidden max-w-full min-w-0 md:inline-flex">
         <ChevronLeft aria-hidden="true" />
-        {name ? <h1 className="min-w-0 text-left whitespace-normal md:hidden">{name}</h1> : <Bar className="h-5 w-36 md:hidden" />}
-        <span className="hidden md:inline">Back to students</span>
+        Back to students
       </Button>
     </div>
     <div className="grid items-start gap-6 lg:grid-cols-[20rem_minmax(0,1fr)]">

@@ -10,13 +10,14 @@ const detail = { student: { id: 'student', date_of_birth: '2000-12-31', joined_a
   current_grade_id: current.id, membership_status: 'active', outstanding_fees: false }, grade: current }
 const reads = { reference: { grades: [target, current], gradeTracks: [{ grade_id: current.id, track: 'adult' }, { grade_id: target.id, track: 'adult' }],
   gradeRequirements: [{ grade_id: target.id, track: 'adult', min_months: 3, max_months: 6, min_age_years: 15, max_age_years: null, min_sessions: 20 }], syllabusItems: [item] },
-  summary: { cycleStart: '2026-01-01', cycleAttended: 20 }, signOffs: [], assessments: [] }
+  summary: { cycleStart: '2026-01-01', cycleAttended: 20 }, progress: [], assessments: [] }
 
-test('readiness uses stored grade ordering, published requirements and complete cycle attendance, excluding all technique sign-offs', () => {
+test('readiness uses stored grade ordering, published requirements and complete cycle attendance, excluding all technique progress', () => {
   const result = studentGrading(detail, reads, '2026-11-05')
   assert.equal(result.target.id, target.id)
   assert.equal(result.ready, true)
-  assert.equal(result.signOffs.length, 0)
+  assert.equal(result.progress.length, 0)
+  assert.deepEqual(result.progressSummary, { total: 1, counts: { not_assessed: 1, introduced: 0, developing: 0, consistent: 0 }, latest: null })
   assert.equal(result.syllabus.length, 1)
   assert.deepEqual(result.requirements.map(row => row.key), ['membership', 'membership-length', 'age', 'time', 'sessions', 'fees'])
   assert.equal(result.requirements.find(row => row.key === 'time').met, true, 'maximum published range is not an expiration')
@@ -52,14 +53,28 @@ test('unranked time begins at joining, year-of-thirteen changes tracks and month
   assert.equal(studentGrading({ ...detail, student }, data, '2026-12-01').ready, true)
 })
 
-test('stored sign-off identities/notes apply only to the actual student and target syllabus IDs', () => {
-  const signOff = { student_id: detail.student.id, syllabus_item_id: item.id, signed_off_at: '2026-11-02T17:00:00Z', signed_off_by: null, note: 'Stored sign-off note' }
-  const view = studentGrading(detail, { ...reads, signOffs: [{ signOff, instructor: null },
-    { signOff: { ...signOff, syllabus_item_id: 'earlier-grade-item' }, instructor: null },
-    { signOff: { ...signOff, student_id: 'another-student' }, instructor: null }] }, '2026-11-05')
-  assert.equal(view.signOffs.length, 1)
-  assert.equal(view.signOffs[0].signOff, signOff)
-  assert.equal(view.signOffs[0].instructor, null)
+test('stored progress applies only to the actual student and target syllabus IDs; the summary counts each status', () => {
+  const progress = { id: 'p1', student_id: detail.student.id, syllabus_item_id: item.id, status: 'developing', note: 'Stored progress note',
+    updated_at: '2026-11-02T17:00:00Z', updated_by: null }
+  const view = studentGrading(detail, { ...reads, progress: [{ progress, instructor: null },
+    { progress: { ...progress, syllabus_item_id: 'earlier-grade-item', updated_at: '2026-11-04T17:00:00Z' }, instructor: null },
+    { progress: { ...progress, student_id: 'another-student' }, instructor: null }] }, '2026-11-05')
+  assert.equal(view.progress.length, 1)
+  assert.equal(view.progress[0].progress, progress)
+  assert.equal(view.progress[0].instructor, null)
+  assert.deepEqual(view.progressSummary.counts, { not_assessed: 0, introduced: 0, developing: 1, consistent: 0 })
+  assert.equal(view.progressSummary.latest.progress, progress)
+  assert.equal(view.ready, true, 'progress never changes readiness')
+})
+
+test('progress summary picks the latest update and counts a note-only row as not assessed', () => {
+  const base = { id: 'p', student_id: 's', syllabus_item_id: 'a', note: null, updated_by: null }
+  const summary = grading.progressSummary(3, [
+    { progress: { ...base, status: 'consistent', updated_at: '2026-11-01T00:00:00Z' }, instructor: null },
+    { progress: { ...base, syllabus_item_id: 'b', status: null, note: 'Watch posture', updated_at: '2026-11-03T00:00:00+00:00' }, instructor: null },
+  ])
+  assert.deepEqual(summary.counts, { not_assessed: 2, introduced: 0, developing: 0, consistent: 1 })
+  assert.equal(summary.latest.progress.syllabus_item_id, 'b')
 })
 
 test('date-only events retain null timestamps; release metadata controls only actual reporting-time display', () => {
@@ -93,13 +108,13 @@ test('grading loaders follow every recorded assessment page; partial failures/ca
   const signal = new AbortController().signal
   const requests = []
   const items = Array.from({ length: 205 }, (_, index) => ({ record: { event_id: `event-${index}`, student_id: 'student' } }))
-  const api = { getReferenceData: async () => reads.reference, getStudentSummary: async () => reads.summary, getTechniqueSignOffs: async () => [],
+  const api = { getReferenceData: async () => reads.reference, getStudentSummary: async () => reads.summary, getTechniqueProgress: async () => [],
     getRecordedAssessments: async (id, options) => { assert.equal(id, 'student'); requests.push(options.offset); return {
       items: items.slice(options.offset, options.offset + 40), total: 205, offset: options.offset, limit: options.limit,
     } } }
   assert.equal((await loadStudentGrading(api, 'student', signal)).assessments.length, 205)
   assert.deepEqual(requests, [0, 40, 80, 120, 160, 200])
-  await assert.rejects(loadStudentGrading({ ...api, getTechniqueSignOffs: async () => { throw new Error('Read failed') } }, 'student', signal), /Read failed/)
+  await assert.rejects(loadStudentGrading({ ...api, getTechniqueProgress: async () => { throw new Error('Read failed') } }, 'student', signal), /Read failed/)
   const controller = new AbortController(); controller.abort()
   await assert.rejects(loadStudentGrading(api, 'student', controller.signal), { name: 'AbortError' })
 })

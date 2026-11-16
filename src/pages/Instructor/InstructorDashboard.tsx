@@ -69,14 +69,23 @@ function EventCard({
     onToggle,
     layout = "week",
     detailsInPanel = false,
+    sheet = false,
 }: {
     event: CalendarEvent;
     expanded: boolean;
     onToggle: () => void;
     layout?: "day" | "week" | "panel";
     detailsInPanel?: boolean;
+    /** Rendered in the phone/tablet bottom sheet: an inset card like the student sheet, larger facts, one 16px inset. */
+    sheet?: boolean;
 }) {
     const showSummary = layout !== "week";
+    // Time, dojo and roster size are what the instructor opened the sheet for.
+    // From 768px (iPad) the sheet uses the desktop panel's facts styling; phones keep the larger stacked facts.
+    const fact = sheet
+        ? "flex items-start gap-2 text-sm font-normal text-current md:items-center md:gap-1.5 md:text-2xs md:opacity-80"
+        : "flex items-center gap-1.5 text-2xs font-normal text-current opacity-80";
+    const factIcon = sheet ? "mt-0.5 size-4 shrink-0 opacity-75 md:mt-0 md:size-3 md:opacity-100" : "size-3 shrink-0";
     const style = getEventStyle(event);
     return (
         <Card
@@ -84,7 +93,8 @@ function EventCard({
             className={cn(
                 "gap-0 rounded-lg border py-0 shadow-none ring-0 transition-[border-color,box-shadow] duration-200 hover:border-foreground/25 has-focus-visible:ring-2 has-focus-visible:ring-ring",
                 style.card,
-                layout === "panel" && "border-0 lg:h-full lg:min-h-0 lg:border",
+                layout === "panel" && !sheet && "border-0 lg:h-full lg:min-h-0 lg:border",
+                // Sheet: like the other bottom sheets, a bordered card inside the sheet's 16px padding.
                 expanded && (detailsInPanel
                     ? "relative z-10 border-primary ring-2 ring-primary ring-offset-2 ring-offset-background"
                     : "border-primary/40 ring-1 ring-primary/15"),
@@ -114,7 +124,8 @@ function EventCard({
                     <span className="min-w-0 wrap-break-word">
                         {event.name}
                     </span>
-                    {expanded && detailsInPanel ? <SelectedClassIndicator className="mt-0.5" /> : <ChevronDown
+                    {/* The sheet closes with Done, so no collapse chevron there. */}
+                    {sheet ? null : expanded && detailsInPanel ? <SelectedClassIndicator className="mt-0.5" /> : <ChevronDown
                         aria-hidden="true"
                         className={cn(
                             "mt-0.5 size-3 shrink-0 transition-transform duration-200 motion-reduce:transition-none",
@@ -126,34 +137,45 @@ function EventCard({
                 <div
                     className={cn(
                         "flex gap-2",
-                        expanded || showSummary
-                            ? "flex-row flex-wrap items-center justify-between"
-                            : "flex-col items-start",
+                        // The sheet stacks one fact per line, so nothing wraps mid-row on a phone.
+                        sheet ? "flex-col items-start gap-1.5 md:flex-row md:flex-wrap md:items-center md:justify-between md:gap-2"
+                            : expanded || showSummary
+                                ? "flex-row flex-wrap items-center justify-between"
+                                : "flex-col items-start",
                     )}
                 >
-                    <span className="flex items-center gap-1.5 text-2xs font-normal text-current opacity-80">
+                    <span className={cn(fact, sheet && "font-medium tabular-nums md:font-normal")}>
                         <Clock3
                             aria-hidden="true"
-                            className="mt-0.5 size-3 shrink-0"
+                            className={cn(factIcon, !sheet && "mt-0.5")}
                         />
                         <span className="min-w-0 wrap-break-word">
                             {calendarTimeLabel(event)}
                         </span>
                     </span>
-                    <span className="flex items-center gap-1.5 text-2xs font-normal text-current opacity-80">
+                    <span className={fact}>
                         <MapPin
                             aria-hidden="true"
-                            className="size-3 shrink-0"
+                            className={factIcon}
                         />{" "}
                         <span className="min-w-0 wrap-break-word">
                             {event.dojo}
                         </span>
                     </span>
+                    {sheet && (
+                        // The desktop panel puts the roster size on its own line; iPad matches it.
+                        <span className={cn(fact, "md:basis-full")}>
+                            <Users aria-hidden="true" className={factIcon} />
+                            {rosterSizeLabel(event)}
+                        </span>
+                    )}
                 </div>
-                <span className="flex items-center gap-1.5 text-2xs font-normal opacity-80">
-                    <Users aria-hidden="true" className="size-3 shrink-0" />
-                    {rosterSizeLabel(event)}
-                </span>
+                {!sheet && (
+                    <span className="flex items-center gap-1.5 text-2xs font-normal opacity-80">
+                        <Users aria-hidden="true" className="size-3 shrink-0" />
+                        {rosterSizeLabel(event)}
+                    </span>
+                )}
             </Button>
             {!detailsInPanel && (showSummary ? (
                 <ClassSessionDetails
@@ -161,7 +183,8 @@ function EventCard({
                     summary
                     expanded={expanded}
                     showAttendanceToggle={layout !== "panel"}
-                    fillHeight={layout === "panel"}
+                    fillHeight={layout === "panel" && !sheet}
+                    sheet={sheet}
                     onToggle={onToggle}
                 />
             ) : (
@@ -360,8 +383,8 @@ function CalendarMonth({
         }));
         const hasEntries = entries.some(group => group.events.length || group.slots.length);
         return <section aria-label="Monthly class agenda" className="space-y-4">
-            {!hasEntries && <p className="rounded-xl border bg-card p-4 text-sm text-muted-foreground">No classes or availability this month. Select a date to view that day.</p>}
-            {entries.map(({ day, events, slots }) => <section key={dateKey(day)} className="space-y-2 rounded-xl border bg-card p-3">
+            {!hasEntries && <p className="rounded-xl border bg-card shadow-xs p-4 text-sm text-muted-foreground">No classes or availability this month. Select a date to view that day.</p>}
+            {entries.map(({ day, events, slots }) => <section key={dateKey(day)} className="space-y-2 rounded-xl border bg-card shadow-xs p-3">
                 <Button variant="ghost" onClick={() => onSelectDate(day)} aria-current={dateKey(day) === dateKey(today) ? "date" : undefined} className="min-h-11 w-full justify-start whitespace-normal text-left">
                     {day.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}
                 </Button>
@@ -382,7 +405,7 @@ function CalendarMonth({
                 <p role="status" className="py-3 text-sm text-muted-foreground">No classes or availability this month.</p>}
             <div
                 aria-label="Month dates"
-                className="flex min-w-0 flex-col rounded-xl border bg-card lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain"
+                className="flex min-w-0 flex-col rounded-xl border bg-card shadow-xs lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain"
             >
                 <div className="sticky top-0 z-10 grid shrink-0 grid-cols-7 border-b bg-card">
                     {days.slice(0, 7).map((day) => (
@@ -752,14 +775,15 @@ export default function InstructorDashboard() {
                 if (row && event.currentTarget.contains(row) && row.dataset.prefetchClass) prefetch.touchClass(row.dataset.prefetchClass);
             }}>
             {!wide ? <MobileInstructorCalendar
-                date={selectedDate} now={now} view={mobileList ? "list" : view === "week" ? "multi-day" : view} slots={availability} focusRequest={timelineFocusRequest}
+                date={selectedDate} now={now} view={mobileList || view === "week" ? "list" : view} slots={availability} focusRequest={timelineFocusRequest}
                 getEvents={getEvents} classCatalogue={calendar.data?.classTypes ?? []} catalogueStatus={catalogueStatus} content={calendarStatus ?? selectionStatus}
                 onSelectDate={selectDay} onSelectClass={calendarProps.onToggleClass} onSelectAvailability={selectAvailability}
                 onAddAvailability={canUseAvailability ? addAvailability : undefined} onSelectRange={canUseAvailability ? selectRange : undefined}
                 onToday={() => { const current = singaporeClock(); setNow(current); updateSelection(new Date(current.getFullYear(), current.getMonth(), current.getDate())); setTimelineFocusRequest(value => value + 1); }}
-                onChangeView={(mode: MobileCalendarView) => { setMobileList(mode === "list"); if (mode !== "list") changeView(mode === "multi-day" ? "week" : mode); }}
+                onChangeView={(mode: MobileCalendarView) => { setMobileList(mode === "list"); if (mode !== "list") changeView(mode); }}
             /> : <>
-            <header className="shrink-0">
+            {/* Shown from 785px only: the section's 16px gap + 8px = the 24px every page header has there. */}
+            <header className="mb-2 shrink-0">
                 <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
                     Your calendar
                 </h1>
@@ -860,7 +884,7 @@ export default function InstructorDashboard() {
                 title={lastSelectedSession.current?.type === "grading" ? "Grading session details" : "Class details"}
                 description={lastSelectedSession.current?.date.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}
                 finalFocus={() => classTriggerRef.current?.isConnected ? classTriggerRef.current : document.querySelector<HTMLElement>('[data-mobile-calendar] button')}>
-                {lastSelectedSession.current && <EventCard key={lastSelectedSession.current.id} event={lastSelectedSession.current} layout="panel" expanded onToggle={() => updateSelection(selectedDate)} />}
+                {lastSelectedSession.current && <EventCard key={lastSelectedSession.current.id} event={lastSelectedSession.current} layout="panel" sheet expanded onToggle={() => updateSelection(selectedDate)} />}
             </ClassDetailsOverlay>}
             {feedbackDialog}
             {canUseAvailability && availabilityDialog && <InstructorAvailabilityEditor

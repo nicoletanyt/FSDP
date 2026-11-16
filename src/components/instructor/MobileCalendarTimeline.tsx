@@ -73,15 +73,19 @@ export default function MobileCalendarTimeline({
     const height = (end - start) * scale;
     const currentMinute = now.getHours() * 60 + now.getMinutes();
     const timeline = useRef<HTMLDivElement>(null);
-    const previousFocusRequest = useRef(focusRequest);
+    // null on first render, so the timeline opens at the current time like the admin day view.
+    const previousFocusRequest = useRef<number | null>(null);
     const [error, setError] = useState<string | null>(null);
     useEffect(() => {
         setError(null);
     }, [key]);
     useEffect(() => {
-        if (previousFocusRequest.current === focusRequest) return;
+        const opening = previousFocusRequest.current === null;
+        if (!opening && previousFocusRequest.current === focusRequest) return;
         previousFocusRequest.current = focusRequest;
         if (!timeline.current) return;
+        // On opening, only today has a "now" worth jumping to.
+        if (opening && dateKey(date) !== dateKey(now)) return;
         const rect = timeline.current.getBoundingClientRect();
         const offset =
             (Math.max(start, Math.min(end, currentMinute)) - start) * scale;
@@ -92,7 +96,7 @@ export default function MobileCalendarTimeline({
             headerHeight + Math.max(0, window.innerHeight - headerHeight) / 2;
         window.scrollTo({
             top: Math.max(0, window.scrollY + rect.top + offset - visibleCenter),
-            behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+            behavior: opening || window.matchMedia("(prefers-reduced-motion: reduce)").matches
                 ? "instant"
                 : "smooth",
         });
@@ -110,7 +114,7 @@ export default function MobileCalendarTimeline({
             className="pt-4"
         >
             {error && (
-                <p role="alert" className="mb-3 text-[14px] text-destructive">
+                <p role="alert" className="mb-3 text-[14px] text-destructive max-md:text-[1rem]">
                     {error}
                 </p>
             )}
@@ -120,7 +124,7 @@ export default function MobileCalendarTimeline({
                     {days.map(({ day }) => (
                         <h3
                             key={dateKey(day)}
-                            className="text-center text-[13px] font-semibold"
+                            className="text-center text-[13px] font-semibold max-md:text-cal-lg"
                             aria-label={day.toLocaleDateString("en-GB", {
                                 weekday: "long",
                                 day: "numeric",
@@ -147,7 +151,7 @@ export default function MobileCalendarTimeline({
             >
                 <div
                     aria-hidden="true"
-                    className="relative text-[11px] tabular-nums text-muted-foreground"
+                    className="relative text-[11px] tabular-nums text-muted-foreground max-md:text-cal"
                 >
                     {Array.from(
                         { length: (end - start) / 60 + 1 },
@@ -253,14 +257,14 @@ export default function MobileCalendarTimeline({
                                     width: `calc(${100 / lanes}% - 8px)`,
                                 }}
                             >
-                                <span className="w-full text-[14px] leading-tight font-semibold [overflow-wrap:anywhere]">
+                                <span className="w-full text-[14px] leading-tight font-semibold max-md:text-cal-lg [overflow-wrap:anywhere]">
                                     {item.event?.name ?? "Available"}
                                 </span>
-                                <span className="mt-1 text-[11px] leading-tight">
+                                <span className="mt-1 text-[11px] leading-tight max-md:text-cal">
                                     {formatTime(item.startTime)} – {formatTime(item.endTime)}
                                 </span>
                                 {item.event && (
-                                    <span className="mt-1 truncate text-[12px] opacity-75">
+                                    <span className="mt-1 truncate text-[12px] opacity-75 max-md:text-cal">
                                         {item.event.dojo}
                                     </span>
                                 )}

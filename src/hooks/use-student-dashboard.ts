@@ -1,41 +1,19 @@
-import { useCallback, useEffect, useState } from 'react'
-import { useAuth } from '@/hooks/use-auth'
-import { fetchDashboardSummary, type DashboardSummary } from '@/lib/student-dashboard'
+import { useCallback } from 'react'
+import { useStudentQuery, useStudentUserId } from '@/hooks/use-student-query'
+import { fetchDashboardSummary } from '@/lib/student-dashboard'
+import { studentQueryKeys as keys, studentQueryTimes as times } from '@/lib/student/query-keys'
 
 /** Loads the signed-in student's dashboard summary (belt, progress, classes, grading). */
 export function useStudentDashboard() {
-  const { session } = useAuth()
-  const userId = session?.user.id
-  const [result, setResult] = useState<{
-    userId: string
-    summary: DashboardSummary | null
-    error: boolean
-  } | null>(null)
-  const [version, setVersion] = useState(0)
-
-  useEffect(() => {
-    if (!userId) return
-    let cancelled = false
-    fetchDashboardSummary()
-      .then((summary) => !cancelled && setResult({ userId, summary, error: false }))
-      .catch(() => !cancelled && setResult({ userId, summary: null, error: true }))
-    return () => {
-      cancelled = true
-    }
-  }, [userId, version])
-
-  const reload = useCallback(() => {
-    setResult(null)
-    setVersion((v) => v + 1)
-  }, [])
-
-  // Ignore a result left over from a previously signed-in user.
-  const current = result?.userId === userId ? result : null
-
+  const userId = useStudentUserId()
+  const query = useStudentQuery(keys.dashboard, (_userId, signal) => fetchDashboardSummary(signal), times.account)
+  const loading = !!userId && query.data === undefined && (query.isPending || query.isFetching)
+  const { refetch } = query
+  const reload = useCallback(() => { void refetch() }, [refetch])
   return {
-    summary: current?.summary ?? null,
-    loading: !!userId && !current,
-    error: current?.error ?? false,
+    summary: query.data ?? null,
+    loading,
+    error: query.data === undefined && !loading && query.isError,
     reload,
   }
 }

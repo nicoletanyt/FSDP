@@ -19,10 +19,8 @@ import type {
     SessionControl,
 } from "@/components/grading/GradingDayView";
 import { ScheduleStatusPills } from "@/components/grading/ScheduleNotice";
-import {
-    GradingBackLink,
-    GradingNote,
-} from "@/components/grading/GradingParts";
+import { GradingNote } from "@/components/grading/GradingParts";
+import { BackNav } from "@/components/shared/layout/BackLink";
 import { DatabaseGradeBadge } from "@/components/shared/grade/GradeBadge";
 import { Button } from "@/components/ui/button";
 import {
@@ -576,10 +574,9 @@ function GradingDayPage() {
 export default function AdminGradingDay() {
     return (
         <div className="space-y-4">
-            <GradingBackLink to="/admin/grading/opportunities">
-                Back to schedule
-            </GradingBackLink>
-            <GradingDayPage />
+            <BackNav to="/admin/grading/opportunities" label="Back to schedule">
+                <GradingDayPage />
+            </BackNav>
         </div>
     );
 }

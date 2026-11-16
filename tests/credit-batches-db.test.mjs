@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 import { PGlite } from '@electric-sql/pglite'
 
-test('credit batches: verified grants, expiry, FEFO, refunds, moves, RLS and atomic rollback', async () => {
+test('credit batches: verified grants, expiry, FEFO, refunds, no rescheduling, RLS and atomic rollback', async () => {
   const db = new PGlite()
   const id = n => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
   const [alice, bob, centre, first, second, third, fourth, fifth] = Array.from({ length: 8 }, (_, i) => id(i + 1))
@@ -54,6 +54,7 @@ test('credit batches: verified grants, expiry, FEFO, refunds, moves, RLS and ato
     }
     await db.query('insert into public.credit_accounts(user_id,credits) values($1,20)', [alice])
     await migration('20261115064757_add_credit_batches')
+    await migration('20261116061758_remove_class_reschedule')
     // Explicit privileges required by the service-only SECURITY INVOKER finalizer.
     await db.exec('grant select on public.users,public.students to service_role')
 
@@ -89,11 +90,14 @@ test('credit batches: verified grants, expiry, FEFO, refunds, moves, RLS and ato
     await book(alice, 'enrol', second)
     assert.equal(await remaining(late), 1)
     assert.equal(await remaining(expired), 9)
-    await book(alice, 'reschedule', third, second)
+    // Rescheduling is gone: it's refused and nothing moves or is charged.
+    await assert.rejects(book(alice, 'reschedule', third, second), /can't be rescheduled/)
     assert.equal((await summary(alice)).credits, 1)
-    await book(alice, 'cancel', third)
+    assert.equal((await db.query('select count(*)::int as n from public.event_students where event_id=$1', [third])).rows[0].n, 0)
+    // Cancelling instead refunds to the original pass.
+    await book(alice, 'cancel', second)
     assert.equal(await remaining(late), 2)
-    await assert.rejects(book(alice, 'cancel', third), /No cancellable/)
+    await assert.rejects(book(alice, 'cancel', second), /No cancellable/)
     assert.equal(await remaining(late), 2)
     // Expiry after booking: refund is recorded, but does not revive expired credit.
     await db.query("update public.credit_batches set expires_at=now()-interval '1 second' where id=$1", [early])
@@ -146,7 +150,7 @@ test('credit batches: verified grants, expiry, FEFO, refunds, moves, RLS and ato
     await book(alice, 'leave', first)
     assert.equal(await remaining(finite), 1)
     await book(alice, 'enrol', second)
-    await assert.rejects(book(alice, 'reschedule', first, second), /full/)
+    await assert.rejects(book(alice, 'reschedule', first, second), /can't be rescheduled/)
     assert.equal(await remaining(finite), 0)
     assert.equal((await db.query('select count(*)::int as n from credit_private.booking_allocations where event_id=$1', [second])).rows[0].n, 1)
     await book(alice, 'cancel', second)

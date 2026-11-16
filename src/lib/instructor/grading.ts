@@ -4,7 +4,7 @@ import { dateOnly } from './decoders'
 import { directoryTrack } from './directory'
 import type {
   GradeRow, GradeTrack, InstructorReferenceData, ReadinessRequirement, StudentAttendanceSummary,
-  StudentDetail, StudentHistoryEntry, TechniqueSignOffEntry,
+  StudentDetail, StudentHistoryEntry, TechniqueProgressEntry, TechniqueStatus,
 } from './types'
 
 function monthsElapsed(start: string | null, today: string): number | null {
@@ -20,16 +20,16 @@ const INTERMEDIATE_GRADE_IDS = ['green-8th-kyu', 'purple-7th-kyu', 'blue-silver-
 export interface StudentGradingReads {
   reference: InstructorReferenceData
   summary: StudentAttendanceSummary
-  signOffs: TechniqueSignOffEntry[]
+  progress: TechniqueProgressEntry[]
   assessments: StudentHistoryEntry[]
 }
 
 export async function loadStudentGrading(api: InstructorApi, studentId: StudentDetail['student']['id'], signal: AbortSignal): Promise<StudentGradingReads> {
-  const [reference, summary, signOffs, assessments] = await Promise.all([
-    api.getReferenceData(signal), api.getStudentSummary(studentId, signal), api.getTechniqueSignOffs(studentId, signal),
+  const [reference, summary, progress, assessments] = await Promise.all([
+    api.getReferenceData(signal), api.getStudentSummary(studentId, signal), api.getTechniqueProgress(studentId, signal),
     collectCalendarPages(options => api.getRecordedAssessments(studentId, options), item => `${item.record.event_id}:${item.record.student_id}`, signal),
   ])
-  return { reference, summary, signOffs, assessments }
+  return { reference, summary, progress, assessments }
 }
 
 export function studentGrading(detail: StudentDetail, reads: StudentGradingReads, today: string) {
@@ -93,10 +93,33 @@ export function studentGrading(detail: StudentDetail, reads: StudentGradingReads
   }
   const syllabus = target ? reads.reference.syllabusItems.filter(item => item.grade_id === target.id && item.track === targetTrack)
     .sort((a, b) => a.category.localeCompare(b.category) || a.sort_order - b.sort_order || a.id.localeCompare(b.id)) : []
-  const signOffs = reads.signOffs.filter(entry => entry.signOff.student_id === student.id && syllabus.some(item => item.id === entry.signOff.syllabus_item_id))
+  const syllabusIds = new Set(syllabus.map(item => item.id))
+  const progress = reads.progress.filter(entry => entry.progress.student_id === student.id && syllabusIds.has(entry.progress.syllabus_item_id))
   const ready = requirements.length > 0 && requirements.every(requirement => requirement.met === true)
   const status = ready ? 'Ready to start assessment' : requirements.some(requirement => requirement.met === null) || !requirements.length ? 'Readiness unverified' : 'Not ready to start assessment'
-  return { track, targetTrack, current, target, spec, requirements, syllabus, signOffs, ready, status }
+  return { track, targetTrack, current, target, spec, requirements, syllabus, progress, progressSummary: progressSummary(syllabus.length, progress), ready, status }
+}
+
+export const TECHNIQUE_STATUSES: readonly TechniqueStatus[] = ['not_assessed', 'introduced', 'developing', 'consistent']
+
+export const techniqueStatusLabels: Record<TechniqueStatus, string> = {
+  not_assessed: 'Not assessed', introduced: 'Introduced', developing: 'Developing', consistent: 'Consistent',
+}
+
+export function techniqueStatus(entry: TechniqueProgressEntry | undefined): TechniqueStatus {
+  return entry?.progress.status ?? 'not_assessed'
+}
+
+/** Status counts for the target-grade syllabus and the most recent update. */
+export function progressSummary(total: number, progress: TechniqueProgressEntry[]) {
+  const counts: Record<TechniqueStatus, number> = { not_assessed: total, introduced: 0, developing: 0, consistent: 0 }
+  let latest: TechniqueProgressEntry | null = null
+  for (const entry of progress) {
+    const status = techniqueStatus(entry)
+    if (status !== 'not_assessed') { counts[status] += 1; counts.not_assessed -= 1 }
+    if (!latest || Date.parse(entry.progress.updated_at) > Date.parse(latest.progress.updated_at)) latest = entry
+  }
+  return { total, counts, latest }
 }
 
 const requirementLabels: Record<ReadinessRequirement['key'], string> = {

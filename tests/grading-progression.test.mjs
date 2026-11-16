@@ -5,8 +5,9 @@ import { stripTypeScriptTypes } from 'node:module'
 
 const moduleUrl = (source) => 'data:text/javascript;base64,' + Buffer.from(stripTypeScriptTypes(source)).toString('base64')
 const fees = moduleUrl(await readFile(new URL('../src/lib/grading-fees.ts', import.meta.url), 'utf8'))
+const trackModule = moduleUrl((await readFile(new URL('../src/lib/grading-tracks.ts', import.meta.url), 'utf8')).replace("'./grading-fees'", JSON.stringify(fees)))
 const source = await readFile(new URL('../src/lib/grading-progression.ts', import.meta.url), 'utf8')
-const { gradingProgression } = await import(moduleUrl(source.replace("'./grading-fees'", JSON.stringify(fees))))
+const { gradingProgression } = await import(moduleUrl(source.replace("'./grading-fees'", JSON.stringify(fees)).replace("'./grading-tracks'", JSON.stringify(trackModule))))
 
 const grades = [
   { id: 'unranked', label: 'Unranked', sort_order: 0 },
@@ -52,4 +53,19 @@ test('last grade has no target; unknown ranks and invalid birth dates are not gu
 
 test('missing fees are not silently presented as free', () => {
   assert.equal(progression('blue', '2000-01-01', []).feeCents, null)
+})
+
+test('readiness target and track are authoritative for the next grade and its fee', () => {
+  const databaseFees = [
+    { grade_id: 'brown', track: 'adult', fee_cents: 6000 },
+    { grade_id: 'brown', track: 'children', fee_cents: 6100 },
+  ]
+  const result = gradingProgression({ current_grade_id: 'blue-silver', date_of_birth: '2020-01-01' },
+    grades, tracks, databaseFees, '2026-11-16', { target_grade_id: 'brown', track: 'adult' })
+  assert.equal(result.studentTrack, 'children')
+  assert.equal(result.track, 'adult')
+  assert.equal(result.target.id, 'brown')
+  assert.equal(result.feeCents, 6000)
+  assert.throws(() => gradingProgression({ current_grade_id: 'blue', date_of_birth: '2000-01-01' },
+    grades, tracks, databaseFees, '2026-11-16', { target_grade_id: 'unknown', track: 'adult' }), /missing from the catalogue/)
 })

@@ -106,7 +106,8 @@ async function loadRequirements(userId: string): Promise<GradingRequirements | n
       .select('id, category, label, note, sort_order')
       .eq('grade_id', next.id).eq('track', track)
       .order('sort_order'),
-    supabase.from('technique_sign_offs').select('syllabus_item_id').eq('student_id', student.id),
+    // Consistent techniques on the progress checklist. Shown only; not a grading requirement.
+    supabase.from('technique_progress').select('syllabus_item_id').eq('student_id', student.id).eq('status', 'consistent'),
   ])
   for (const result of [requirementRow, attendance, syllabusRows, signOffs]) {
     if (result.error) throw result.error
@@ -173,7 +174,6 @@ async function loadRequirements(userId: string): Promise<GradingRequirements | n
     categories.set(item.category, entry)
   }
   const syllabus = [...categories.values()]
-  const allSignedOff = syllabus.every((group) => group.items.every((item) => item.signedOff))
 
   return {
     currentGrade: current?.label ?? 'Unranked',
@@ -181,7 +181,7 @@ async function loadRequirements(userId: string): Promise<GradingRequirements | n
     track,
     requirements,
     syllabus,
-    eligible: allSignedOff && requirements.every((r) => r.met),
+    eligible: requirements.every((r) => r.met),
   }
 }
 

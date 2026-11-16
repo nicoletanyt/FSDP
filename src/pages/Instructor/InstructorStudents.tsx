@@ -128,7 +128,8 @@ export default function InstructorStudents() {
 
     return (
         <section aria-busy={data.status === "loading" || outOfRange} className="student-directory-view space-y-2 md:space-y-6">
-            <header>
+            {/* Same gap below as every page header (16px, 24px from md); overrides the section's space-y. */}
+            <header className="mb-4 md:mb-6">
                 <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Students</h1>
             </header>
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">

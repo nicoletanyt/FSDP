@@ -39,6 +39,7 @@ export default function CalendarToolbar({
     actions,
     legend,
     filter,
+    todayLabel = "Today",
 }: {
     view: CalendarRange;
     onViewChange: (view: CalendarRange) => void;
@@ -54,6 +55,8 @@ export default function CalendarToolbar({
     legend: ReactNode;
     /** The Filter button, always last (far right). */
     filter?: ReactNode;
+    /** Text for the jump-to-today button (the admin calendar says "Go to today"). */
+    todayLabel?: string;
 }) {
     const viewLabel = `${view[0].toUpperCase()}${view.slice(1)}`;
     return (
@@ -61,7 +64,7 @@ export default function CalendarToolbar({
             <div className="flex min-w-0 w-full items-center gap-3 lg:w-auto lg:gap-4">
                 <div role="group" aria-label={`${viewLabel} navigation`} className="flex shrink-0 items-center gap-1 sm:gap-2">
                     <Button variant="outline" onClick={onToday} className="mr-1 h-11 px-4 lg:h-10">
-                        Today
+                        {todayLabel}
                     </Button>
                     <Button
                         variant="ghost"

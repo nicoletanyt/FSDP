@@ -43,7 +43,7 @@ function Calendar({
         weeks: cn("flex flex-col", defaultClassNames.weeks),
         weekdays: cn("flex", defaultClassNames.weekdays),
         weekday: cn(
-          "w-8 rounded-md text-center text-[0.7rem] font-normal text-muted-foreground",
+          "w-8 rounded-md text-center text-[0.7rem] font-normal max-md:text-cal text-muted-foreground",
           defaultClassNames.weekday,
         ),
         week: cn("mt-1 flex w-full", defaultClassNames.week),

@@ -18,5 +18,7 @@ test('student Grading entry selects a real application before Stripe payment', a
   const application = await read('src/pages/Student/StudentGrading.tsx')
   assert.match(application, /getGradingQuote\(selected.id, selected.target_grade\)/)
   assert.match(application, /quote.totalCents !== selected.total_amount/)
-  assert.match(application, /window.location.assign\(await getGradingCheckoutUrl\(quote\)\)/)
+  assert.match(application, /getGradingCheckoutUrl\(quote, selectedGradingDate\)/)
+  assert.match(application, /window.location.assign\(checkoutUrl\)/)
+  assert.doesNotMatch(application, /\.from\("grading_applications"\)\.insert|testCheckout/)
 })

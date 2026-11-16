@@ -37,6 +37,8 @@ function parseApplication(body: unknown) {
       phone: text(contact.phone, 30),
     },
     medical_details: text(input.medical_details, 1000),
+    // Optional NFC key fob for attendance, charged with the membership.
+    key_fob: input.key_fob === true,
   }
   if (
     !application.first_name || !application.last_name ||
@@ -85,10 +87,18 @@ export async function handleRequest(request: Request): Promise<Response> {
       price.unit_amount !== 6000 || price.livemode) {
       throw new Error('Membership price must be an active SGD 60.00 test-mode one-time price.')
     }
+    const keyFob = application.key_fob
+      ? await stripe.prices.retrieve(requireEnv('STRIPE_NFC_FEE_ID'))
+      : null
+    if (keyFob && (!keyFob.active || keyFob.type !== 'one_time' || keyFob.currency !== 'sgd' ||
+      keyFob.unit_amount !== 200 || keyFob.livemode)) {
+      throw new Error('Key fob price must be an active SGD 2.00 test-mode one-time price.')
+    }
 
     const db = adminClient()
+    const { key_fob: _keyFob, ...studentFields } = application
     const { data: rows, error } = await db.rpc('submit_membership_application', {
-      auth_user: user, application,
+      auth_user: user, application: studentFields,
     })
     if (error || !rows?.length) {
       console.error('Membership application rejected:', error)
@@ -107,13 +117,18 @@ export async function handleRequest(request: Request): Promise<Response> {
     const appOrigin = new URL(requireEnv('APP_URL')).origin
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
-      line_items: [{ price: price.id, quantity: 1 }],
+      line_items: [
+        { price: price.id, quantity: 1 },
+        ...(keyFob ? [{ price: keyFob.id, quantity: 1 }] : []),
+      ],
       client_reference_id: studentId,
-      metadata: { membership_student_id: studentId },
+      metadata: { membership_student_id: studentId, ...(keyFob ? { key_fob: 'true' } : {}) },
       success_url: `${appOrigin}/dashboard?checkout=success`,
       cancel_url: `${appOrigin}/apply-membership?checkout=cancel`,
     }, {
-      idempotencyKey: `membership-${studentId}-${idempotencyKey}`,
+      // Includes the key fob choice: ticking it after a failed attempt is a different
+      // request, which Stripe would otherwise reject for reusing the same key.
+      idempotencyKey: `membership-${studentId}-${idempotencyKey}-${keyFob ? 'fob' : 'nofob'}`,
     })
 
     if (!session.url) throw new Error('Stripe did not return a Checkout URL.')
@@ -121,8 +136,11 @@ export async function handleRequest(request: Request): Promise<Response> {
     // Show the attempt in payment history; the webhook later marks it paid.
     // A retried request returns the same session, so the insert is skipped.
     const { error: paymentError } = await db.from('payments').upsert({
-      student_id: studentId, item: 'Membership', description: 'Membership fee',
-      amount_cents: price.unit_amount, currency: price.currency, stripe_session_id: session.id,
+      // The total, which the webhook checks the paid amount against.
+      student_id: studentId, item: 'Membership',
+      description: keyFob ? 'Membership fee + key fob' : 'Membership fee',
+      amount_cents: price.unit_amount! + (keyFob?.unit_amount ?? 0), currency: price.currency,
+      stripe_session_id: session.id,
     }, { onConflict: 'stripe_session_id', ignoreDuplicates: true })
     if (paymentError) console.error('Could not record pending membership payment:', paymentError)
 

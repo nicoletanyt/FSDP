@@ -1,70 +1,46 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { creditLoadErrorMessage, loadStudentCredits } from '@/lib/student-credits'
-import type { ExpiringCredits } from '@/lib/student-credits'
+import { studentQueryKeys as keys, studentQueryTimes as times } from '@/lib/student/query-keys'
 
-type CreditState = {
-  key: string
-  credits: number
-  unlimited: boolean
-  expiring: ExpiringCredits | null
-  loading: boolean
-  error: string
-  payment: 'none' | 'pending' | 'confirmed' | 'delayed'
-}
+// Stop fast-polling an unconfirmed checkout after this many reads.
+const CONFIRMATION_ATTEMPTS = 30
 
 export function useStudentCredits(userId: string | undefined, sessionId: string | null) {
-  const key = JSON.stringify([userId, sessionId])
-  const initial: CreditState = {
-    key, credits: 0, unlimited: false, expiring: null, loading: Boolean(userId), error: '',
-    payment: sessionId ? 'pending' : 'none',
+  const client = useQueryClient()
+  const query = useQuery({
+    queryKey: keys.credits(userId ?? '', sessionId),
+    queryFn: ({ signal }) => loadStudentCredits(supabase, userId!, sessionId, signal),
+    ...times.credits,
+    enabled: Boolean(userId),
+    // Re-render on every read, even an unchanged one, so the attempt count below advances.
+    notifyOnChangeProps: ['data', 'error', 'isError', 'dataUpdatedAt'],
+    // Continue reconciling expirations while the page remains open, and poll
+    // quickly while a returned checkout is still unconfirmed.
+    refetchInterval: (current) => {
+      const pending = Boolean(sessionId && current.state.data && !current.state.data.confirmed)
+      return pending && current.state.dataUpdateCount < CONFIRMATION_ATTEMPTS ? 2000 : 60_000
+    },
+  })
+  // Every mounted copy (the layout's and the navbar's) shares the credits prefix.
+  const retry = useCallback(() => {
+    if (userId) void client.invalidateQueries({ queryKey: keys.creditsAll(userId) })
+  }, [client, userId])
+
+  const data = query.data
+  // Each data update re-renders this hook, so reading the count here stays current.
+  const reads = client.getQueryState(keys.credits(userId ?? '', sessionId))?.dataUpdateCount ?? 0
+  const payment: 'none' | 'pending' | 'confirmed' | 'delayed' = !sessionId ? 'none'
+    : data?.confirmed ? 'confirmed'
+      : reads < CONFIRMATION_ATTEMPTS ? 'pending' : 'delayed'
+  return {
+    credits: data?.credits ?? 0,
+    unlimited: data?.unlimited ?? false,
+    expiring: data?.expiring ?? null,
+    loading: Boolean(userId) && data === undefined && !query.isError,
+    error: query.isError ? creditLoadErrorMessage(query.error) : '',
+    payment,
+    retry,
   }
-  const [state, setState] = useState<CreditState>(initial)
-  const [revision, setRevision] = useState(0)
-  const retry = useCallback(() => setRevision((previous) => previous + 1), [])
-
-  useEffect(() => {
-    const refresh = () => { if (document.visibilityState === 'visible') retry() }
-    window.addEventListener('focus', refresh)
-    document.addEventListener('visibilitychange', refresh)
-    return () => {
-      window.removeEventListener('focus', refresh)
-      document.removeEventListener('visibilitychange', refresh)
-    }
-  }, [retry])
-
-  useEffect(() => {
-    const controller = new AbortController()
-    let timer: ReturnType<typeof setTimeout> | undefined
-    let attempts = 0
-    setState({ key, credits: 0, unlimited: false, expiring: null, loading: Boolean(userId), error: '', payment: sessionId ? 'pending' : 'none' })
-
-    async function refresh() {
-      if (!userId) return
-      try {
-        const result = await loadStudentCredits(supabase, userId, sessionId, controller.signal)
-        if (controller.signal.aborted) return
-        attempts++
-        const pending = Boolean(sessionId && !result.confirmed)
-        setState({
-          key, credits: result.credits, unlimited: result.unlimited, expiring: result.expiring, loading: false, error: '',
-          payment: !sessionId ? 'none' : result.confirmed ? 'confirmed' : attempts < 30 ? 'pending' : 'delayed',
-        })
-        // Continue reconciling expirations while the dashboard remains open.
-        timer = setTimeout(() => void refresh(), pending && attempts < 30 ? 2000 : 60_000)
-      } catch (failure) {
-        if (!controller.signal.aborted) {
-          setState((previous) => ({ ...previous, loading: false, error: creditLoadErrorMessage(failure) }))
-        }
-      }
-    }
-
-    void refresh()
-    return () => {
-      controller.abort()
-      clearTimeout(timer)
-    }
-  }, [key, userId, sessionId, revision])
-
-  return { ...(state.key === key ? state : initial), retry }
 }

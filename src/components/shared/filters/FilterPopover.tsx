@@ -27,6 +27,7 @@ export default function FilterPopover({
     contentClassName,
     controlClassName,
     titleClassName,
+    iconOnlyOnPhones = false,
 }: {
     /** Popover heading and the trigger's accessible name, e.g. "Filter students". */
     title: string;
@@ -38,6 +39,8 @@ export default function FilterPopover({
     /** Extra classes for the trigger and footer buttons. */
     controlClassName?: string;
     titleClassName?: string;
+    /** Phones show just the icon (and count), so the trigger fits beside a page title. */
+    iconOnlyOnPhones?: boolean;
 }) {
     const [open, setOpen] = useState(false);
     const triggerRef = useRef<HTMLButtonElement>(null);
@@ -58,7 +61,7 @@ export default function FilterPopover({
                 }
             >
                 <SlidersHorizontal aria-hidden="true" className="size-4" />
-                <span>Filter</span>
+                <span className={cn(iconOnlyOnPhones && "max-md:hidden")}>Filter</span>
                 {activeCount > 0 && <CountBadge count={activeCount} />}
             </PopoverTrigger>
             <PopoverContent

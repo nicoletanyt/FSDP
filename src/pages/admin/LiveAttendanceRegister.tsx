@@ -196,6 +196,7 @@ export default function LiveAttendanceRegister() {
           onDisplayModeChange={changeDisplayMode}
           heading={heading}
           onToday={goToday}
+          todayLabel="Go to today"
           onPrevious={() => move(-1)}
           onNext={() => move(1)}
           filter={filterNode}

@@ -214,7 +214,7 @@ test('mobile typography is exact and desktop keeps its existing scale', async t 
             if (width < 768) {
                 assert.deepEqual(result.styles, {
                     heading: [24, 32], input: [16, 24], button: [16, 24], name: [16, 24],
-                    metadata: [14, 20], badge: [12, 16], filter: [16, 24], label: [12, 16], done: [16, 24], option: [16, 24],
+                    metadata: [16, 24], badge: [16, 20], filter: [16, 24], label: [16, 24], done: [16, 24], option: [16, 24],
                 });
                 assert.ok(result.firstTop < 300, JSON.stringify(result));
             } else {

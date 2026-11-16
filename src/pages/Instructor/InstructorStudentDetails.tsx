@@ -23,6 +23,7 @@ import InstructorLoadingBoundary from "@/components/instructor/InstructorLoading
 import { InstructorSkeleton } from "@/components/instructor/InstructorSkeletons";
 import StudentSessionHistory from "@/components/instructor/StudentSessionHistory";
 import StudentGradingRead from "@/components/instructor/StudentGradingRead";
+import { ProgressChecklistDialog } from "@/components/instructor/ProgressChecklistEditor";
 import StudentApplications from "@/components/instructor/StudentApplications";
 import { useAuth } from "@/hooks/use-auth";
 import { useInstructorQuery } from "@/hooks/use-instructor-data";
@@ -181,6 +182,7 @@ function StudentDetailContent({ detail }: { detail: StudentDetail }) {
     );
     const grading = useInstructorQuery(userId => queryKeys.studentGrading(userId, detail.student.id), loadGrading,
         queryTimes.studentGrading);
+    const [progressOpen, setProgressOpen] = useState(false);
     const sidebarRef = useRef<HTMLElement>(null);
     const [sidebarFits, setSidebarFits] = useState(false);
     useEffect(() => {
@@ -218,27 +220,36 @@ function StudentDetailContent({ detail }: { detail: StudentDetail }) {
         ? `/instructor/calendar?session=${linkedContext.session.event.id}${gradingEventDate(linkedContext.session.event, linkedContext.session.grading) ? `&date=${gradingEventDate(linkedContext.session.event, linkedContext.session.grading)}` : ""}`
         : "/instructor/students";
     return (
-        <section className="student-detail-view space-y-2 md:space-y-6">
+        // 16px between blocks on phones, as below every page header; 24px from md.
+        <section className="student-detail-view space-y-4 md:space-y-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex min-w-0 max-w-full items-center justify-between gap-2 max-md:w-full">
+                <div className="flex min-w-0 max-w-full items-start gap-1 max-md:w-full">
+                    {/* Phones: ‹ beside the name, like every other page with a way back.
+                        The name is the page title, not part of the back link. */}
+                    <Link
+                        to={backHref}
+                        aria-label={linkedContext ? "Back to calendar" : "Back to students"}
+                        className="-my-1.5 -ml-3 inline-flex size-11 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring md:hidden"
+                    >
+                        <ChevronLeft aria-hidden="true" className="size-6" />
+                    </Link>
+                    <h1 className="min-w-0 text-2xl font-semibold tracking-tight wrap-break-word md:hidden">
+                        {profile.name}
+                    </h1>
                     <Button
                         render={<Link to={backHref} />}
                         nativeButton={false}
                         variant="ghost"
-                        className="-ml-5 max-w-full min-w-0 max-md:h-auto max-md:min-h-11 max-md:shrink max-md:py-2"
+                        className="-ml-5 hidden max-w-full min-w-0 md:inline-flex"
                     >
                         <ChevronLeft aria-hidden="true" />
-                        <h1 className="min-w-0 text-left whitespace-normal md:hidden">
-                            {profile.name}
-                        </h1>
-                        <span className="hidden md:inline">
-                            {linkedContext ? "Back to calendar" : "Back to students"}
-                        </span>
+                        {linkedContext ? "Back to calendar" : "Back to students"}
                     </Button>
                 </div>
                 {roster.length > 1 && (
                     <div
-                        className="flex flex-wrap items-center gap-2 sm:gap-3"
+                        // Phones: one full-width row, Previous and Next the same width either side.
+                        className="grid w-full grid-cols-[1fr_auto_1fr] items-center gap-2 sm:flex sm:w-auto sm:flex-wrap sm:gap-3"
                         role="group"
                         aria-label="Students in this class"
                     >
@@ -256,7 +267,7 @@ function StudentDetailContent({ detail }: { detail: StudentDetail }) {
                             <ChevronLeft aria-hidden="true" />
                             Previous
                         </Button>
-                        <span className="text-xs text-muted-foreground tabular-nums">
+                        <span className="text-center text-xs text-muted-foreground tabular-nums">
                             Student {position + 1} of {roster.length}
                         </span>
                         <Button
@@ -345,17 +356,33 @@ function StudentDetailContent({ detail }: { detail: StudentDetail }) {
                             <div className="detail-section-header">
                                 <h2>Details</h2>
                             </div>
-                            <StudentAvatar name={profile.name} />
-                            <p className="detail-meta text-sm text-muted-foreground">
-                                {profile.memberNo}{profile.age !== null && ` · Age ${profile.age}`}
-                            </p>
-                            <StudentInformationCards detail={detail} />
-                            <StudentInformationActions detail={detail} showDetailsLink={false} />
+                            {/* Identity first, then the facts as one card, then contact and medical. */}
+                            {/* Left: who (avatar, member ID and age) and how to reach them.
+                                Right: their grading, principal dojo and membership. */}
+                            <div className="grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)] items-start gap-4">
+                                <div className="flex min-w-0 flex-col items-start gap-3">
+                                    <StudentAvatar name={profile.name} className="size-24 [&_[data-slot=avatar-fallback]]:text-2xl" />
+                                    <p className="detail-meta min-w-0 text-sm text-muted-foreground wrap-break-word">
+                                        {profile.memberNo}
+                                        {profile.age !== null && <span className="block">Age {profile.age}</span>}
+                                    </p>
+                                    <StudentInformationActions detail={detail} showDetailsLink={false} stacked showMedical={false} />
+                                </div>
+                                <StudentInformationCards detail={detail} compact />
+                            </div>
                         </section>
                         <AttendanceSummary studentId={detail.student.id} />
                         <StudentGradingRead title="Next grading" detail={detail} reads={grading} onRetry={grading.retry} onViewGrading={() => selectTab("grading")} />
                         <StudentApplications studentId={detail.student.id} today={singaporeToday()} />
-                        <StudentGradingRead title="Technique checklist" detail={detail} reads={grading} onRetry={grading.retry} />
+                        <StudentGradingRead title="Progress checklist" detail={detail} reads={grading} onRetry={grading.retry} onEdit={() => setProgressOpen(true)} />
+                        <ProgressChecklistDialog
+                            open={progressOpen}
+                            onOpenChange={setProgressOpen}
+                            studentName={profile.name}
+                            detail={detail}
+                            reads={grading}
+                            onRetry={grading.retry}
+                        />
                     </TabsContent>
                     <TabsContent value="sessions">
                         <StudentSessionHistory

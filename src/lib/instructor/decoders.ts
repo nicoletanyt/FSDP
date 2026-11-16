@@ -5,7 +5,7 @@ import type {
   EventEndorsement, StudentApplication, GradeRequirementRow, GradeRow, GradeTrackRow, GradingApplicationRow, GradingEndorsement, GradingEndorsementStatus, GradingRow,
   InstructorAvailabilityRow, Page, RosterEntry, StudentAttendanceSummary,
   StudentDetail, StudentDirectory, StudentEntry, StudentHistoryEntry, StudentRow,
-  SyllabusItemRow, TechniqueSignOffEntry, TechniqueSignOffRow, AssessmentSnapshot, SessionSaveResult,
+  SyllabusItemRow, TechniqueProgressEntry, TechniqueProgressRow, AssessmentSnapshot, SessionSaveResult,
   GradingBatch, GradingSignature, AvailabilitySaveResult,
 } from './types'
 
@@ -235,9 +235,10 @@ export function decodeAvailabilitySave(value: unknown): AvailabilitySaveResult {
   if (result.kind === 'update' ? result.slot?.id !== result.slotId : result.slot !== null) return invalid()
   return result
 }
-const decodeSignOff = row<TechniqueSignOffRow>({
-  id: uuid, student_id: studentId, syllabus_item_id: text, signed_off_at: timestamp,
-  signed_off_by: nullable(instructorId), note: nullable(text),
+const decodeProgress = row<TechniqueProgressRow>({
+  id: uuid, student_id: studentId, syllabus_item_id: text,
+  status: nullable(enumeration('introduced', 'developing', 'consistent')), note: nullable(text),
+  updated_at: timestamp, updated_by: nullable(instructorId),
 })
 
 export function decodeStudentEntry(value: unknown): StudentEntry {
@@ -346,12 +347,12 @@ export function decodeSummary(value: unknown): StudentAttendanceSummary {
   return { ...totals, lastAttended }
 }
 
-export function decodeTechniqueSignOff(value: unknown): TechniqueSignOffEntry {
+export function decodeTechniqueProgress(value: unknown): TechniqueProgressEntry {
   const source = object(value)
-  const signOff = decodeSignOff(source)
-  const instructor = nullable(parseInstructorRow)(source.instructor)
-  if (instructor && instructor.id !== signOff.signed_off_by) return invalid()
-  return { signOff, instructor }
+  const progress = decodeProgress(source)
+  const instructor = nullable(parseInstructorRow)(source.instructor ?? null)
+  if (instructor && instructor.id !== progress.updated_by) return invalid()
+  return { progress, instructor }
 }
 
 export function assertAssessment(detail: AssessmentDetail): AssessmentDetail {
