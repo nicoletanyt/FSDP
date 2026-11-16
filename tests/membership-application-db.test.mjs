@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 import { PGlite } from '@electric-sql/pglite'
 
-test('membership submission is atomic, owner-scoped and never resets paid credits or awards ranks', async () => {
+test('membership submission preserves credits and confirmed ranks; initial grade is persisted after repair', async () => {
   const db = new PGlite()
   const user = '00000000-0000-4000-8000-000000000001'
   const other = '00000000-0000-4000-8000-000000000002'
@@ -193,6 +193,132 @@ test('membership submission is atomic, owner-scoped and never resets paid credit
       create trigger reject_contact before insert on public.emergency_contacts for each row execute function reject_contact();`)
     await assert.rejects(submit(other, { ...form, fullName: 'Should Rollback', email: '' }), /contact unavailable/)
     assert.equal((await db.query('select first_name from public.students where user_id = $1', [other])).rows[0].first_name, 'Other')
+    await db.exec('drop trigger reject_contact on public.emergency_contacts')
+
+    // From here, submissions keep each account's own email (blank = account email),
+    // so the shared form's contact email doesn't collide across students.
+    form.email = ''
+
+    // Reproduce the old bug before applying the repair: the saved Membership
+    // says Green, but the student is left at the default even after payment.
+    await db.exec(`insert into public.grades values
+      ('green-8th-kyu','Green (8th Kyu)'),('yellow-10th-kyu','Yellow (10th Kyu)'),
+      ('black-2nd-kyu','Black (2nd Kyu)')`)
+    await submit(other, { ...form, fullName: 'Other', currentBelt: 'green' })
+    await db.query("update public.students set membership_status='active' where user_id=$1", [other])
+    const rank = async account => (await db.query('select current_grade_id from public.students where user_id=$1', [account])).rows[0]?.current_grade_id
+    assert.equal(await rank(other), 'unranked')
+    await db.exec(await readFile(new URL('../supabase/migrations/20261116063221_membership_current_grade.sql', import.meta.url), 'utf8'))
+    assert.equal(await rank(other), 'green-8th-kyu')
+    assert.equal(await rank(user), '1st-dan') // never overwrite a ranked existing member
+
+    const newcomer = '00000000-0000-4000-8000-000000000005'
+    const explicitOnly = '00000000-0000-4000-8000-000000000006'
+    await db.query("insert into public.users values($1,'new@example.com','student'),($2,'explicit@example.com','student')", [newcomer, explicitOnly])
+    await assert.rejects(submit(newcomer, { ...form, currentBelt: 'made-up-belt' }), /Invalid or ambiguous/)
+    await assert.rejects(submit(newcomer, { ...form, currentBelt: 'green', current_grade_id: '1st-dan' }), /same grade/)
+    await assert.rejects(submit(newcomer, { ...form, current_grade_id: 'not-a-grade' }), /Invalid current grade/)
+    await assert.rejects(submit(newcomer, form), /exact Kyu or Dan/) // black alone is ambiguous
+    assert.equal(await rank(newcomer), undefined)
+
+    const green = await submit(newcomer, { ...form, currentBelt: 'green' })
+    assert.equal(green.current_grade_id, 'green-8th-kyu')
+    assert.equal(await rank(newcomer), 'green-8th-kyu')
+    assert.equal(green.verifiedRank, 'Green (8th Kyu)')
+    const specific = await submit(newcomer, { ...form, currentBelt: 'yellow-10th-kyu', current_grade_id: 'yellow-10th-kyu' })
+    assert.equal(specific.current_grade_id, 'yellow-10th-kyu')
+    assert.equal(specific.beltRank, 'Yellow (10th Kyu)')
+    assert.equal(await rank(newcomer), 'yellow-10th-kyu')
+
+    const { currentBelt: _legacyBelt, ...idOnly } = form
+    const direct = await submit(explicitOnly, { ...idOnly, current_grade_id: 'green-8th-kyu' })
+    assert.equal(direct.current_grade_id, 'green-8th-kyu')
+    assert.equal(direct.declaredBelt, 'green-8th-kyu')
+    assert.equal((await confirmation(explicitOnly)).beltRank, 'Green (8th Kyu)')
+    const savedGrade = (await db.query('select form_data from membership_private.application_details where user_id=$1', [explicitOnly])).rows[0].form_data
+    assert.equal(savedGrade.current_grade_id, 'green-8th-kyu')
+
+    await db.query("update public.students set membership_status='active' where user_id=$1", [newcomer])
+    await submit(newcomer, { ...form, currentBelt: '1st-dan', current_grade_id: '1st-dan' })
+    assert.equal(await rank(newcomer), 'yellow-10th-kyu')
+    await assert.rejects(submit(instructor, { ...form, currentBelt: 'green' }), /Only student/)
+    await db.exec('begin; set local role authenticated')
+    await assert.rejects(db.query("select membership_private.resolve_current_grade('{\"currentBelt\":\"green\"}')"), /permission denied/)
+    await db.exec('rollback')
+    // Reproduce the deployed regression: a newer name/email wrapper calls the
+    // original submission transaction but no longer writes current_grade_id.
+    await db.exec(`
+      create or replace function membership_private.submit_formatted_application(application jsonb)
+      returns jsonb language plpgsql security definer set search_path='' as $$
+      declare result jsonb; saved public.students%rowtype; caller uuid := auth.uid();
+      begin
+        result := membership_private.submit_application(application);
+        if application ? 'firstName' then
+          update public.students set first_name=application->>'firstName',last_name=application->>'lastName'
+          where user_id=caller and membership_status='pending';
+        end if;
+        if application ? 'contactEmail' then
+          update public.students set email=application->>'contactEmail' where user_id=caller and membership_status='pending';
+          update membership_private.application_details set form_data=form_data||jsonb_build_object('email',application->>'contactEmail') where user_id=caller;
+        end if;
+        select * into saved from public.students where user_id=caller;
+        return result||jsonb_build_object('membershipId',saved.member_no,'startDate',saved.joined_at);
+      end $$;
+      insert into public.grades values('brown-gold-3rd-kyu','Brown-Gold (3rd Kyu)');
+    `)
+    const wrapperFingerprint = async () => (await db.query("select md5(pg_get_functiondef('membership_private.submit_formatted_application(jsonb)'::regprocedure)) as fingerprint")).rows[0].fingerprint
+    const beforeFingerprint = await wrapperFingerprint()
+    await db.exec(await readFile(new URL('../supabase/migrations/20261116084104_durable_membership_grade_sync.sql', import.meta.url), 'utf8'))
+    assert.equal(await wrapperFingerprint(), beforeFingerprint, 'the installed name/email wrapper is not overwritten')
+    const durableUser = '00000000-0000-4000-8000-000000000007'
+    const failedUser = '00000000-0000-4000-8000-000000000008'
+    await db.query("insert into public.users values($1,'durable@example.com','student'),($2,'failed@example.com','student')", [durableUser,failedUser])
+    const brownForm = { ...form, firstName: 'Mary Jane', lastName: 'Smith', fullName: 'Mary Jane Smith',
+      contactEmail: 'membership-contact@example.com', currentBelt: 'brown-gold-3rd-kyu', current_grade_id: 'brown-gold-3rd-kyu' }
+    const durable = await submit(durableUser, brownForm)
+    assert.equal(await rank(durableUser), 'brown-gold-3rd-kyu')
+    assert.equal(durable.verifiedRank, 'Brown-Gold (3rd Kyu)')
+    const durableRow = (await db.query('select first_name,last_name,email from public.students where user_id=$1',[durableUser])).rows[0]
+    assert.deepEqual(durableRow, { first_name: 'Mary Jane', last_name: 'Smith', email: 'membership-contact@example.com' })
+    await submit(durableUser, { ...brownForm, currentBelt: 'green-8th-kyu', current_grade_id: 'green-8th-kyu' })
+    assert.equal(await rank(durableUser), 'green-8th-kyu')
+    await db.query("update public.students set current_grade_id='1st-dan' where user_id=$1",[durableUser])
+    await submit(durableUser, brownForm)
+    assert.equal(await rank(durableUser), '1st-dan', 'a staff/imported grade unrelated to the last declaration is protected')
+    await assert.rejects(submit(failedUser, { ...brownForm, current_grade_id: 'missing-grade' }), /Invalid current grade/)
+    assert.equal(await rank(failedUser), undefined)
+    await db.exec('create trigger reject_contact before insert on public.emergency_contacts for each row execute function reject_contact()')
+    await assert.rejects(submit(failedUser, { ...brownForm, contactEmail: 'another-contact@example.com' }), /contact unavailable/)
+    assert.equal(await rank(failedUser), undefined, 'grade and snapshot writes roll back with a failed contact write')
+    assert.equal((await db.query('select count(*)::int as n from membership_private.application_details where user_id=$1',[failedUser])).rows[0].n, 0)
+    await db.exec('drop trigger reject_contact on public.emergency_contacts')
+
+    // The merged wrapper: names, editable email and canonical grade in one submission.
+    const merged = await readFile(new URL('../supabase/migrations/20261116090000_membership_submission_merged.sql', import.meta.url), 'utf8')
+    await db.exec(merged)
+    await db.exec(merged)
+    const mergedUser = '00000000-0000-4000-8000-000000000009'
+    await db.query("insert into public.users values($1,'merged-login@example.com','student')", [mergedUser])
+    const mergedForm = { ...form, firstName: ' Mei Ling ', lastName: 'Tan', fullName: 'Mei Ling Tan',
+      email: 'Merged.Contact@Example.com ', currentBelt: 'green-8th-kyu', current_grade_id: 'green-8th-kyu' }
+    const mergedResult = await submit(mergedUser, mergedForm)
+    assert.equal(mergedResult.current_grade_id, 'green-8th-kyu')
+    assert.equal(mergedResult.beltRank, 'Green (8th Kyu)')
+    assert.equal(await rank(mergedUser), 'green-8th-kyu')
+    assert.deepEqual((await db.query('select first_name,last_name,email from public.students where user_id=$1', [mergedUser])).rows[0],
+      { first_name: 'Mei Ling', last_name: 'Tan', email: 'merged.contact@example.com' })
+    assert.equal((await db.query('select form_data from membership_private.application_details where user_id=$1', [mergedUser])).rows[0].form_data.email,
+      'merged.contact@example.com')
+    assert.equal((await db.query('select email from public.users where id=$1', [mergedUser])).rows[0].email, 'merged-login@example.com')
+    // Grade checks still apply; name and email checks run before any write.
+    await assert.rejects(submit(mergedUser, { ...mergedForm, currentBelt: 'black', current_grade_id: '' }), /exact Kyu or Dan/)
+    await assert.rejects(submit(mergedUser, { ...mergedForm, lastName: ' ' }), /first and last name/)
+    await assert.rejects(submit(mergedUser, { ...mergedForm, email: 'not an email' }), /valid email/)
+    // "No experience" on the form submits as unranked.
+    const beginner = '00000000-0000-4000-8000-000000000010'
+    await db.query("insert into public.users values($1,'beginner@example.com','student')", [beginner])
+    await submit(beginner, { ...mergedForm, email: '', currentBelt: 'unranked', current_grade_id: 'unranked' })
+    assert.equal(await rank(beginner), 'unranked')
   } finally {
     await db.close()
   }

@@ -153,6 +153,12 @@ export async function handleRequest(request: Request): Promise<Response> {
       totalCents: attempt.amount, applicationDeadline: attempt.deadline,
     }
     if (body.action === 'quote') return Response.json({ quote }, { headers })
+    const { data: reserved, error: reservedError } = await db.from('grading_checkout_attempts')
+      .select('grading_date').eq('id', attempt.attempt_id).single()
+    if (reservedError) throw reservedError
+    if (!reserved?.grading_date || (body.grading_date !== undefined && body.grading_date !== reserved.grading_date)) {
+      return Response.json({ error: 'The official grading date changed. Refresh and select it again.' }, { status: 409, headers })
+    }
     // The client total is only a review guard, never the source of the charge.
     if (body.expected_amount !== attempt.amount) {
       return Response.json({ error: 'The fee changed. Review the updated total before paying.', quote }, { status: 409, headers })
@@ -169,7 +175,7 @@ export async function handleRequest(request: Request): Promise<Response> {
       line_items: [line(`Grading examination — ${quote.gradeLabel}`, attempt.base_amount),
         ...(attempt.late_amount > 0 ? [line('Late submission charge', attempt.late_amount)] : [])],
       client_reference_id: attempt.attempt_id,
-      metadata: { grading_attempt_id: attempt.attempt_id },
+      metadata: { grading_attempt_id: attempt.attempt_id, grading_date: reserved.grading_date },
       success_url: `${config.appOrigin}/grading/applications?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${config.appOrigin}/grading/applications?checkout=cancel`,
     }, { idempotencyKey: `grading-${attempt.attempt_id}-${attempt.revision}-${attempt.amount}` })

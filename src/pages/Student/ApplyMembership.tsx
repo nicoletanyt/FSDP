@@ -36,6 +36,7 @@ import {
 } from "@/lib/membership";
 import { cn } from "@/lib/utils";
 import { randomUUID } from "@/lib/uuid";
+import { gradingTrackForDob, gradingTrackLabel, membershipBeltOptions } from "@/lib/grading-tracks";
 
 const STEPS = [
     { id: 1, title: "Personal information" },
@@ -240,10 +241,7 @@ export default function ApplyMembership() {
         },
         times.reference,
     );
-    // "Unranked" is what someone who hasn't trained gets, so it isn't offered here.
-    const grades = (gradeQuery.data ?? []).filter(
-        (grade) => grade.id !== "unranked",
-    );
+    const gradeCatalogue = gradeQuery.data ?? [];
     const gradesLoading =
         gradeQuery.data === undefined &&
         (gradeQuery.isPending || gradeQuery.isFetching);
@@ -342,6 +340,33 @@ export default function ApplyMembership() {
 
     const age = calculateAge(formData.dob);
     const isMinor = age !== null && age < 18;
+    // ASK grading rules: the belt list depends on the track for the age reached this
+    // calendar year (adult or children). "Unranked" is what answering "No" means,
+    // so it isn't offered in the list.
+    const gradingTrack = gradingTrackForDob(formData.dob);
+    let belts: { value: string; label: string }[] = [];
+    let beltCatalogueError = "";
+    if (gradeCatalogue.length && gradingTrack) {
+        try {
+            belts = membershipBeltOptions(gradeCatalogue, gradingTrack).filter(
+                (belt) => belt.value !== "unranked",
+            );
+        } catch (failure) {
+            beltCatalogueError = failure instanceof Error ? failure.message : "Unable to match your belt grades.";
+        }
+    }
+    const beltIds = belts.map((belt) => belt.value).join(",");
+
+    // A date-of-birth change must not carry a children's-only belt into an adult
+    // form (or vice versa). Grades valid on both tracks stay selected.
+    useEffect(() => {
+        if (gradesLoading || gradesError || beltCatalogueError || !gradingTrack) return;
+        setFormData((previous) =>
+            previous.currentBelt && !beltIds.split(",").includes(previous.currentBelt)
+                ? { ...previous, currentBelt: "" }
+                : previous,
+        );
+    }, [beltIds, gradingTrack, gradesLoading, gradesError, beltCatalogueError]);
 
     useEffect(() => {
         if (isMinor) setShowGuardian(true);
@@ -403,7 +428,7 @@ export default function ApplyMembership() {
             if (!formData.hasExperience)
                 found.hasExperience =
                     "Tell us whether you have trained in aikido before.";
-            else if (formData.hasExperience === "yes" && !formData.currentBelt)
+            else if (formData.hasExperience === "yes" && !belts.some((belt) => belt.value === formData.currentBelt))
                 found.currentBelt = "Select your current belt.";
         }
         if (step === 3) {
@@ -511,6 +536,8 @@ export default function ApplyMembership() {
                             fullName: `${firstName} ${lastName}`,
                             // Someone who hasn't trained starts unranked; the follow-up answers only apply after a yes.
                             currentBelt: trained ? formData.currentBelt : "unranked",
+                            // The canonical grade id the database stores as the starting grade.
+                            current_grade_id: trained ? formData.currentBelt : "unranked",
                             experienceDetails: trained ? formData.experienceDetails : "",
                             parqAnswers,
                             waiverSigned,
@@ -1009,20 +1036,20 @@ export default function ApplyMembership() {
                                         name="currentBelt"
                                         label="Current belt"
                                         error={errors.currentBelt}
+                                        hint={gradingTrack
+                                            ? `${gradingTrackLabel(gradingTrack)}, based on the age reached this calendar year. Your dojo confirms your grade.`
+                                            : "Enter a valid date of birth first."}
                                     >
                                         <FilterCombobox
                                             id={fieldId("currentBelt")}
-                                            options={grades.map((grade) => ({
-                                                value: grade.id,
-                                                label: grade.label,
-                                            }))}
+                                            options={belts}
                                             value={formData.currentBelt}
                                             onChange={(value) => setField("currentBelt", value)}
                                             placeholder={
-                                                gradesLoading ? "Loading belts…" : "Select belt"
+                                                gradesLoading ? "Loading belts…" : !gradingTrack ? "Enter your date of birth first" : "Select belt"
                                             }
                                             emptyText="No belts match your search."
-                                            disabled={gradesLoading || Boolean(gradesError)}
+                                            disabled={gradesLoading || !gradingTrack || Boolean(gradesError || beltCatalogueError)}
                                             invalid={Boolean(errors.currentBelt)}
                                             describedBy={
                                                 errors.currentBelt
@@ -1032,7 +1059,7 @@ export default function ApplyMembership() {
                                             renderOption={(option) => (
                                                 <DatabaseGradeBadge
                                                     grade={
-                                                        grades.find((grade) => grade.id === option.value) ??
+                                                        gradeCatalogue.find((grade) => grade.id === option.value) ??
                                                         null
                                                     }
                                                     showBeltLabel
@@ -1052,6 +1079,9 @@ export default function ApplyMembership() {
                                                     Try again
                                                 </button>
                                             </p>
+                                        )}
+                                        {beltCatalogueError && (
+                                            <p role="alert" className="text-sm text-destructive">{beltCatalogueError}</p>
                                         )}
                                     </FormField>
                                     <FormField
@@ -1403,8 +1433,8 @@ export default function ApplyMembership() {
                                     {formData.hasExperience === "yes" && (
                                         <ReviewItem term="Current belt">
                                             {formData.currentBelt &&
-                                                grades.find(
-                                                    (grade) => grade.id === formData.currentBelt,
+                                                belts.find(
+                                                    (belt) => belt.value === formData.currentBelt,
                                                 )?.label}
                                         </ReviewItem>
                                     )}

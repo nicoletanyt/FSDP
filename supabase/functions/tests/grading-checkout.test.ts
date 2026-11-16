@@ -42,6 +42,7 @@ Deno.test('grading Stripe Checkout uses the database quote including the S$22 la
         storedSession = (await request.json()).stripe_session_id
         return Response.json({ id: attemptId })
       }
+      if (url.searchParams.get('select') === 'grading_date') return Response.json({ grading_date: '2026-12-13' })
       assert.equal(url.searchParams.get('students.user_id'), `eq.${userId}`)
       return Response.json({ status: paymentStatus === 'paid' ? 'paid' : 'pending' })
     }
@@ -85,11 +86,17 @@ Deno.test('grading Stripe Checkout uses the database quote including the S$22 la
       assert.equal(body.get('line_items[1][price_data][unit_amount]'), '2200')
       assert.equal(body.get('line_items[1][price_data][product_data][name]'), 'Late submission charge')
       assert.equal(body.get('metadata[grading_attempt_id]'), attemptId)
+      assert.equal(body.get('metadata[grading_date]'), '2026-12-13')
       assert.equal(body.get('success_url'), `${environment.APP_URL}/grading/applications?checkout=success&session_id={CHECKOUT_SESSION_ID}`)
       assert.equal(keys[0], `grading-${attemptId}-0-7700`)
     })
     await test.step('duplicate clicks reuse the original open session', async () => {
       assert.equal((await handleRequest(request({ ...selection, action: 'checkout', expected_amount: 7700 }))).status, 200)
+      assert.equal(stripeCreates.length, 1)
+    })
+    await test.step('a browser cannot substitute an unofficial grading date', async () => {
+      const response = await handleRequest(request({ ...selection, action: 'checkout', expected_amount: 7700, grading_date: '2026-09-14' }))
+      assert.equal(response.status, 409)
       assert.equal(stripeCreates.length, 1)
     })
     await test.step('expired sessions are retired and requoted before reuse', async () => {

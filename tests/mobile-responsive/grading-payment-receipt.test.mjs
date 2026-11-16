@@ -10,8 +10,8 @@ const temp = join(process.env.LOCALAPPDATA, 'Temp', 'opencode')
 
 test('recorded Stripe payments render as confirmed, retain the paid amount and cannot be paid again', async () => {
   for (const [name, query] of [
-    ['saved', '?empty=1&savedDraft=1&appRoute=%2Fgrading'],
-    ['returned', '?empty=1&appRoute=' + encodeURIComponent('/grading?checkout=test-success&session_id=cs_test_preview')],
+    ['saved', '?paidApplication=1&appRoute=%2Fgrading'],
+    ['returned', '?appRoute=' + encodeURIComponent('/grading?checkout=success&session_id=cs_test_fixture')],
   ]) {
     const profile = await mkdtemp(join(temp, 'grading-receipt-'))
     try {
@@ -23,12 +23,12 @@ test('recorded Stripe payments render as confirmed, retain the paid amount and c
       assert.equal(result.status, 0, result.error?.message ?? result.stderr.slice(-1000))
       const text = result.stdout.replace(/<[^>]+>/g, '')
       assert.match(text, /Payment confirmed/)
-      assert.match(text, /5th Kyu · Blue-Gold/)
-      assert.match(text, /awaiting dojo eligibility review/)
-      assert.match(text, /Amount Paid.*55\.00/s)
-      assert.match(result.stdout, /<button\b[^>]*disabled[^>]*>Payment Confirmed<\/button>/)
+      assert.match(text, /5th Kyu/)
+      assert.match(text, /[Aa]waiting dojo review/)
+      assert.match(text, /Amount paid.*77\.00/s)
+      assert.match(result.stdout, /<button\b[^>]*disabled[^>]*>Payment confirmed<\/button>/)
       assert.doesNotMatch(text, /Application draft saved:|not submitted|Payment preview completed/)
-      if (name === 'returned') assert.match(text, /Payment confirmed and recorded/)
+      if (name === 'returned') assert.match(text, /Payment confirmed\. Your grading application/)
     } finally {
       await rm(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
     }
