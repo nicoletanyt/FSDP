@@ -17,6 +17,7 @@ export const studentQueryKeys = {
   reference: (userId: string) => [...studentQueryKeys.all(userId), 'reference'] as const,
   classTypes: (userId: string) => [...studentQueryKeys.reference(userId), 'class-types'] as const,
   centres: (userId: string) => [...studentQueryKeys.reference(userId), 'centres'] as const,
+  grades: (userId: string) => [...studentQueryKeys.reference(userId), 'grades'] as const,
 }
 
 export const studentQueryTimes = {

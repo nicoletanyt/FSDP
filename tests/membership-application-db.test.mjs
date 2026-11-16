@@ -11,7 +11,7 @@ test('membership submission is atomic, owner-scoped and never resets paid credit
   const centre = '00000000-0000-4000-8000-000000000004'
   const form = {
     fullName: 'Test Student', nric: 'S1234567A', nationality: 'singaporean', dob: '2000-01-01',
-    gender: 'female', email: 'untrusted@example.com', mobile: '91234567', address: 'Test address',
+    gender: 'female', email: 'Contact@Example.com ', mobile: '91234567', address: 'Test address',
     photoName: 'photo.jpg', principalDojo: centre, membershipType: 'adult', currentBelt: 'black',
     hasExperience: 'yes', experienceDetails: 'Previous training', emergencyName: 'Test Contact',
     emergencyRelationship: 'parent', emergencyPhone: '92345678', medicalDetails: 'Test medical note',
@@ -56,6 +56,9 @@ test('membership submission is atomic, owner-scoped and never resets paid credit
     const confirmationMigration = await readFile(new URL('../supabase/migrations/20261114161341_membership_application_confirmation.sql', import.meta.url), 'utf8')
     await db.exec(confirmationMigration)
     await db.exec(confirmationMigration)
+    const namesMigration = await readFile(new URL('../supabase/migrations/20261116075932_membership_application_names_and_grades.sql', import.meta.url), 'utf8')
+    await db.exec(namesMigration)
+    await db.exec(namesMigration)
 
     async function confirmation(account, role = 'authenticated') {
       await db.exec(`begin; set local role ${role};`)
@@ -100,10 +103,12 @@ test('membership submission is atomic, owner-scoped and never resets paid credit
     const member = (await db.query('select * from public.students')).rows[0]
     assert.equal(member.user_id, user)
     assert.notEqual(member.id, first.membershipId)
-    assert.equal(member.email, 'student@example.com')
+    // The edited contact email is saved (normalised); the sign-in email is untouched.
+    assert.equal(member.email, 'contact@example.com')
+    assert.equal((await db.query('select email from public.users where id = $1', [user])).rows[0].email, 'student@example.com')
     const saved = (await db.query('select * from membership_private.application_details')).rows[0]
     assert.equal(saved.user_id, user)
-    assert.equal(saved.form_data.email, 'student@example.com')
+    assert.equal(saved.form_data.email, 'contact@example.com')
     for (const key of Object.keys(form).filter(key => key !== 'email')) assert.deepEqual(saved.form_data[key], form[key])
     assert.deepEqual(await confirmation(user), first)
     assert.equal(await confirmation(other), null)
@@ -129,11 +134,15 @@ test('membership submission is atomic, owner-scoped and never resets paid credit
       credits: 35, unlimited: true, active: true,
     })
 
-    const otherResult = await submit(other, { ...form, fullName: 'Other' })
+    // Another member can't take an email that's already in use, and a malformed one is refused.
+    await assert.rejects(submit(other, { ...form, fullName: 'Other' }), /already used by another member/)
+    await assert.rejects(submit(other, { ...form, fullName: 'Other', email: 'not an email' }), /valid email/)
+    // Without an email (older clients) the account email is kept.
+    const otherResult = await submit(other, { ...form, fullName: 'Other', email: '' })
     assert.notEqual(otherResult.membershipId, first.membershipId)
     // Existing UUID numbers can be repaired explicitly without changing PKs.
     await db.query('update public.students set member_no = $1 where user_id = $2', ['IMPORTED-123', other])
-    assert.equal((await submit(other, { ...form, fullName: 'Other' })).membershipId, 'IMPORTED-123')
+    assert.equal((await submit(other, { ...form, fullName: 'Other', email: '' })).membershipId, 'IMPORTED-123')
     const otherId = (await db.query('select id from public.students where user_id = $1', [other])).rows[0].id
     await db.query('select setseed(0.42)')
     const collision = (await db.query("select 'ASJ' || extract(year from current_date)::text || lpad(floor(random() * 9000 + 1000)::text, 4, '0') as number")).rows[0].number
@@ -161,6 +170,20 @@ test('membership submission is atomic, owner-scoped and never resets paid credit
     assert.equal((await submit(user)).membershipId, actual)
     assert.equal((await db.query('select member_no = id::text as unchanged from public.students where user_id = $1', [other])).rows[0].unchanged, true)
 
+    // Separate name fields keep multi-word first names; belts come from public.grades.
+    const named = { ...form, email: 'mei.ling@example.com', firstName: ' Mei Ling ', lastName: 'Tan Wei', fullName: 'Mei Ling Tan Wei', currentBelt: '1st-dan' }
+    const namedResult = await submit(other, named)
+    assert.equal(namedResult.beltRank, '1st Dan')
+    assert.equal(namedResult.declaredBelt, '1st-dan')
+    assert.deepEqual((await db.query('select first_name, last_name from public.students where user_id = $1', [other])).rows[0],
+      { first_name: 'Mei Ling', last_name: 'Tan Wei' })
+    await assert.rejects(submit(other, { ...named, currentBelt: 'made-up-belt' }), /current belt/)
+    await assert.rejects(submit(other, { ...named, lastName: '  ' }), /first and last name/)
+    // An active membership keeps its names even when the new fields are sent.
+    await submit(user, { ...named, email: '', firstName: 'Not', lastName: 'Changed' })
+    assert.equal((await db.query('select first_name from public.students where user_id = $1', [user])).rows[0].first_name, 'Test')
+    await db.query("update public.students set first_name = 'Other', last_name = '' where user_id = $1", [other])
+
     await db.exec('begin; set local role authenticated;')
     await assert.rejects(db.query('select * from membership_private.application_details'), /permission denied/)
     await db.exec('rollback')
@@ -168,7 +191,7 @@ test('membership submission is atomic, owner-scoped and never resets paid credit
     await db.exec(`create function reject_contact() returns trigger language plpgsql as $$
       begin raise exception 'contact unavailable'; end; $$;
       create trigger reject_contact before insert on public.emergency_contacts for each row execute function reject_contact();`)
-    await assert.rejects(submit(other, { ...form, fullName: 'Should Rollback' }), /contact unavailable/)
+    await assert.rejects(submit(other, { ...form, fullName: 'Should Rollback', email: '' }), /contact unavailable/)
     assert.equal((await db.query('select first_name from public.students where user_id = $1', [other])).rows[0].first_name, 'Other')
   } finally {
     await db.close()
