@@ -7,8 +7,10 @@ import { CardListSkeleton } from "@/components/shared/skeletons";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useStudentCreditBatches } from "@/hooks/use-student-credit-batches";
+import { useStudentMembership } from "@/hooks/use-student-membership";
 import { creditBatchStatus, type CreditBatch } from "@/lib/student-credit-batches";
 import { cn } from "@/lib/utils";
+import MembershipSummary from "./MembershipSummary";
 
 // Dates only: the time of day doesn't change when a student should use a pass.
 const dateFormat = new Intl.DateTimeFormat("en-SG", {
@@ -124,6 +126,18 @@ export default function CreditBatchList({
 }) {
     const { hash } = useLocation();
     const { batches, loading, error, retry } = useStudentCreditBatches(userId);
+    // Membership fees are payments, not credit batches: read them separately so the
+    // fee the student paid and its expiry sit beside the passes.
+    const {
+        membership,
+        loading: membershipLoading,
+        error: membershipError,
+        retry: retryMembership,
+    } = useStudentMembership(userId);
+    const refresh = () => {
+        retry();
+        retryMembership();
+    };
     const [expanded, setExpanded] = useState(false);
     useEffect(() => {
         if (hash === "#my-passes")
@@ -165,14 +179,27 @@ export default function CreditBatchList({
                     variant="ghost"
                     size="touch"
                     className="shrink-0 text-muted-foreground max-sm:size-11 max-sm:px-0"
-                    aria-label="Refresh passes"
-                    disabled={loading || !userId}
-                    onClick={retry}
+                    aria-label="Refresh passes and membership"
+                    disabled={loading || membershipLoading || !userId}
+                    onClick={refresh}
                 >
                     <RefreshCw aria-hidden="true" className="size-4" />
                     <span className="max-sm:hidden">Refresh passes</span>
                 </Button>
             </div>
+            {/* Membership comes first: it is what the passes belong to, and the fee
+                is a payment rather than a pass, so it needs its own row. */}
+            {membershipLoading || membershipError || (membership && membership.status !== "none") ? (
+                <div className="mb-3 max-sm:mb-4">
+                    {membershipLoading ? (
+                        <CardListSkeleton count={1} label="Loading your membership…" />
+                    ) : membershipError ? (
+                        <RetryAlert message={membershipError} onRetry={retryMembership} />
+                    ) : membership ? (
+                        <MembershipSummary membership={membership} now={now} />
+                    ) : null}
+                </div>
+            ) : null}
             {loading ? (
                 <CardListSkeleton count={2} label="Loading your passes…" />
             ) : error ? (

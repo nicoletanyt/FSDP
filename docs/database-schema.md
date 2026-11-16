@@ -38,12 +38,21 @@ Member record for a dojo student. Optionally linked to an auth user, with home c
 | `date_of_birth`     | `date`              | no       | —                   |
 | `current_grade_id`  | `text`              | no       | `'unranked'`        |
 | `membership_status` | `membership_status` | no       | `'active'`          |
+| `membership_expires_on` | `date`          | yes      | —                   |
 | `joined_at`         | `date`              | no       | —                   |
 | `last_graded_at`    | `date`              | yes      | —                   |
 | `follow_up_status`  | `follow_up_status`  | no       | `'none'`            |
 | `outstanding_fees`  | `boolean`           | no       | `false`             |
 | `created_at`        | `timestamptz`       | no       | `now()`             |
 | `updated_at`        | `timestamptz`       | no       | `now()`             |
+
+`membership_expires_on` (`20261116120000_membership_expiry.sql`) is the Singapore
+date the membership lapses. Verified membership payments extend it by the months the
+fee covers, from the later of today and the current expiry; the migration backfilled
+existing members from their latest paid membership fee (or `joined_at + 12 months`).
+`finalize_membership_fee` applies online membership fee purchases, and
+`finalize_membership_checkout` (application checkout, optional key fob) delegates to
+it. See `docs/membership-fees.md`.
 
 ### `instructors`
 

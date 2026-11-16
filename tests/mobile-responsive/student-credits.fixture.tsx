@@ -1,4 +1,5 @@
 // Test-only database responses; the dashboard, card and credit hook are real.
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createRoot } from 'react-dom/client'
 import { MemoryRouter, Outlet, Route, Routes } from 'react-router'
 import { useStudentCredits } from '../../src/hooks/use-student-credits'
@@ -19,6 +20,14 @@ const batchRows = [
   { id: 'expired', credits_total: 10, credits_remaining: 2, expires_at: stamp(-3), unlimited: false, source: 'purchase', credit_purchases: { pass_title: 'Previous 10 Session Pass' } },
   { id: 'used', credits_total: 10, credits_remaining: 0, expires_at: stamp(5), unlimited: false, source: 'purchase', credit_purchases: { pass_title: 'Used 10 Session Pass' } },
 ].map(row => ({ ...row, created_at: stamp(-30) }))
+// The membership is a students row plus the fee in payments, not a credit batch.
+const studentRow = {
+  id: 'student-fixture', member_no: 'ASJ20260001', membership_status: scenario === 'expired' ? 'expired' : 'active',
+  joined_at: '2026-01-10', membership_expires_on: (scenario === 'expired' ? stamp(-1) : stamp(366)).slice(0, 10),
+}
+const membershipPaymentRow = {
+  amount_cents: 6000, description: 'Membership fee', paid_at: stamp(-300), created_at: stamp(-300),
+}
 let receipts = 0
 Object.defineProperty(supabase, 'rpc', {
   value: () => ({
@@ -41,6 +50,7 @@ Object.defineProperty(supabase, 'from', {
       gt: () => query,
       or: () => query,
       order: () => query,
+      limit: () => query,
       range: () => query,
       abortSignal: () => table === 'credit_batches'
         ? Promise.resolve({ data: scenario === 'empty' ? [] : batchRows, error: scenario === 'error' ? new Error('offline') : null }) : query,
@@ -50,6 +60,8 @@ Object.defineProperty(supabase, 'from', {
           receipts++
           return { data: receipts > 1 ? { stripe_session_id: 'cs_fixture' } : null, error: null }
         }
+        if (table === 'students') return { data: studentRow, error: null }
+        if (table === 'payments') return { data: membershipPaymentRow, error: null }
         return { data: { credits: receipts > 1 ? 35 : 10, unlimited: scenario === 'unlimited', active: true }, error: null }
       },
     }
@@ -63,14 +75,16 @@ function Layout() {
 }
 
 createRoot(document.getElementById('root')!).render(
-  <AuthContext.Provider value={{ session: null, profile: passesPage ? {
-    id: 'fixture-user', first_name: 'Test', last_name: 'Student', email: 'test@example.com', role: 'student', created_at: stamp(-30),
-  } : null, loading: false, error: null, reloadProfile() {}, async signOut() {} }}>
-    <MemoryRouter initialEntries={[passesPage ? '/student/credits' : '/dashboard']}>
-      <Routes><Route element={<Layout />}>
-        <Route path="/dashboard" element={<StudentDashboard />} />
-        <Route path="/student/credits" element={<StudentCredits />} />
-      </Route></Routes>
-    </MemoryRouter>
-  </AuthContext.Provider>,
+  <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+    <AuthContext.Provider value={{ session: null, profile: passesPage ? {
+      id: 'fixture-user', first_name: 'Test', last_name: 'Student', email: 'test@example.com', role: 'student', created_at: stamp(-30),
+    } : null, loading: false, error: null, reloadProfile() {}, async signOut() {} }}>
+      <MemoryRouter initialEntries={[passesPage ? '/student/credits' : '/dashboard']}>
+        <Routes><Route element={<Layout />}>
+          <Route path="/dashboard" element={<StudentDashboard />} />
+          <Route path="/student/credits" element={<StudentCredits />} />
+        </Route></Routes>
+      </MemoryRouter>
+    </AuthContext.Provider>
+  </QueryClientProvider>,
 )
