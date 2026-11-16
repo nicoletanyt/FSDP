@@ -7,6 +7,7 @@ const environment = {
   STRIPE_SECRET_KEY: 'sk_test_unit_test_only',
   STRIPE_WEBHOOK_SECRET: 'whsec_unit_test_only',
   STRIPE_MEMBERSHIP_FEE_ID: 'price_membership',
+  STRIPE_NFC_FEE_ID: 'price_key_fob',
   APP_URL: 'http://localhost:5173',
   SUPABASE_URL: 'https://example.supabase.co',
   SUPABASE_ANON_KEY: 'unit_test_anon',
@@ -26,6 +27,7 @@ function installFakes(state: {
   role?: string
   status?: string
   price?: Record<string, unknown>
+  fobPrice?: Record<string, unknown>
   session?: Record<string, unknown>
   submitError?: { code: string; message: string }
   /** The payment row written when checkout started; null means it is missing. */
@@ -45,6 +47,10 @@ function installFakes(state: {
       if (url.pathname === '/v1/prices/price_membership') {
         return Response.json({ id: 'price_membership', object: 'price', active: true, type: 'one_time',
           currency: 'sgd', unit_amount: 6000, livemode: false, ...state.price })
+      }
+      if (url.pathname === '/v1/prices/price_key_fob') {
+        return Response.json({ id: 'price_key_fob', object: 'price', active: true, type: 'one_time',
+          currency: 'sgd', unit_amount: 200, livemode: false, ...state.fobPrice })
       }
       if (url.pathname === '/v1/checkout/sessions' && request.method === 'POST') {
         return Response.json({ id: 'cs_test_membership', object: 'checkout.session',
@@ -164,12 +170,47 @@ Deno.test('membership checkout and activation', async (test) => {
       assert.equal(body.get('client_reference_id'), studentId)
       assert.equal(body.get('success_url'), `${environment.APP_URL}/dashboard?checkout=success`)
       assert.equal(body.get('cancel_url'), `${environment.APP_URL}/apply-membership?checkout=cancel`)
-      assert.equal(create.key, `membership-${studentId}-${retryKey}`)
+      assert.equal(create.key, `membership-${studentId}-${retryKey}-nofob`)
+      assert.equal(body.get('line_items[1][price]'), null)
+      assert.equal(body.get('metadata[key_fob]'), null)
+      assert.ok(!fakes.calls.some((c) => c.path === '/v1/prices/price_key_fob'))
       const pending = fakes.calls.find((c) => c.path === '/rest/v1/payments')!
       assert.deepEqual(JSON.parse(pending.body), {
         student_id: studentId, item: 'Membership', description: 'Membership fee',
         amount_cents: 6000, currency: 'sgd', stripe_session_id: 'cs_test_membership',
       })
+    })
+
+    await test.step('an optional key fob adds its validated price, metadata and the total', async () => {
+      reset()
+      const response = await checkout(checkoutRequest({ body: { ...application, key_fob: true } }))
+      assert.equal(response.status, 200)
+      const submitted = JSON.parse(fakes.calls.find((c) => c.path.endsWith('submit_membership_application'))!.body)
+      assert.equal(submitted.application.key_fob, undefined, 'the fob choice is not a student column')
+      const create = fakes.calls.find((c) => c.path === '/v1/checkout/sessions')!
+      const body = new URLSearchParams(create.body)
+      assert.equal(body.get('line_items[0][price]'), 'price_membership')
+      assert.equal(body.get('line_items[1][price]'), 'price_key_fob')
+      assert.equal(body.get('line_items[1][quantity]'), '1')
+      assert.equal(body.get('metadata[key_fob]'), 'true')
+      assert.equal(create.key, `membership-${studentId}-${retryKey}-fob`)
+      const pending = fakes.calls.find((c) => c.path === '/rest/v1/payments')!
+      assert.deepEqual(JSON.parse(pending.body), {
+        student_id: studentId, item: 'Membership', description: 'Membership fee + key fob',
+        amount_cents: 6200, currency: 'sgd', stripe_session_id: 'cs_test_membership',
+      })
+    })
+
+    await test.step('a misconfigured key fob price never starts checkout', async () => {
+      reset()
+      state.fobPrice = { unit_amount: 500 }
+      const response = await checkout(checkoutRequest({ body: { ...application, key_fob: true } }))
+      assert.equal(response.status, 500)
+      assert.ok(!fakes.calls.some((c) => c.path === '/v1/checkout/sessions'))
+      // Only a literal true orders a fob.
+      reset()
+      assert.equal((await checkout(checkoutRequest({ body: { ...application, key_fob: 'yes' } }))).status, 200)
+      assert.ok(!fakes.calls.some((c) => c.path === '/v1/prices/price_key_fob'))
     })
 
     await test.step('Stripe returns to APP_URL even when checkout starts from allowed localhost', async () => {
@@ -222,6 +263,7 @@ Deno.test('membership checkout and activation', async (test) => {
       assert.equal(finalize.length, 1)
       assert.deepEqual(JSON.parse(finalize[0].body), {
         student: studentId, stripe_session: 'cs_test_membership', paid_amount: 6000, paid_currency: 'sgd',
+        key_fob: false,
       })
       const sends = fakes.calls.filter(call => call.path === '/api/v1.0/email/send')
       assert.equal(sends.length, 1)
@@ -229,6 +271,34 @@ Deno.test('membership checkout and activation', async (test) => {
       assert.deepEqual(JSON.parse(sends[0].body).template_params.bcc_emails, 'student@example.test')
       assert.equal((await webhook(await signedEvent({ membership_student_id: studentId }))).status, 200)
       assert.equal(fakes.calls.filter(call => call.path === '/api/v1.0/email/send').length, 1)
+    })
+
+    await test.step('a paid key fob order is finalised with the fob, checked against the total', async () => {
+      reset()
+      state.session = { amount_total: 6200, metadata: { membership_student_id: studentId, key_fob: 'true' } }
+      state.pendingPayment = { student_id: studentId, amount_cents: 6200 }
+      let response = await webhook(await signedEvent({ membership_student_id: studentId, key_fob: 'true' }))
+      assert.equal(response.status, 200)
+      let finalize = fakes.calls.filter((c) => c.path.endsWith('finalize_membership_checkout'))
+      assert.deepEqual(JSON.parse(finalize[0].body), {
+        student: studentId, stripe_session: 'cs_test_membership', paid_amount: 6200, paid_currency: 'sgd',
+        key_fob: true,
+      })
+      // Without the checkout-time row, the expected total is membership + fob price.
+      reset()
+      state.session = { amount_total: 6200, metadata: { membership_student_id: studentId, key_fob: 'true' } }
+      state.pendingPayment = null
+      response = await webhook(await signedEvent({ membership_student_id: studentId, key_fob: 'true' }))
+      assert.equal(response.status, 200)
+      finalize = fakes.calls.filter((c) => c.path.endsWith('finalize_membership_checkout'))
+      assert.equal(JSON.parse(finalize[0].body).key_fob, true)
+      // Paying only the membership price for a fob order is a mismatch.
+      reset()
+      state.session = { amount_total: 6000, metadata: { membership_student_id: studentId, key_fob: 'true' } }
+      state.pendingPayment = { student_id: studentId, amount_cents: 6200 }
+      response = await webhook(await signedEvent({ membership_student_id: studentId, key_fob: 'true' }))
+      assert.equal(response.status, 400)
+      assert.ok(!fakes.calls.some((c) => c.path.endsWith('finalize_membership_checkout')))
     })
 
     await test.step('wrong amount, unpaid, or mismatched student never activates', async () => {

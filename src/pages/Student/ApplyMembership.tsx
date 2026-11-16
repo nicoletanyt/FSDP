@@ -33,6 +33,7 @@ import {
     MEMBERSHIP_TYPE_STORAGE_KEY,
     calculateAge,
     membershipLabel,
+    membershipTypeAllowed,
 } from "@/lib/membership";
 import { cn } from "@/lib/utils";
 import { randomUUID } from "@/lib/uuid";
@@ -47,6 +48,9 @@ const STEPS = [
 
 // Shown for information only; the amount charged is set on the server.
 const MEMBERSHIP_FEE = 60;
+// The optional NFC key fob for attendance. Display only: the checkout function
+// charges Stripe's STRIPE_NFC_FEE_ID price and refuses to start if it isn't SGD 2.00.
+const KEY_FOB_FEE = 2;
 
 const NATIONALITIES = [
     { value: "singaporean", label: "Singaporean" },
@@ -296,6 +300,9 @@ export default function ApplyMembership() {
         guardianPhone: "",
     }));
 
+    const [keyFob, setKeyFob] = useState(false);
+    const totalFee = MEMBERSHIP_FEE + (keyFob ? KEY_FOB_FEE : 0);
+
     const [parqAnswers, setParqAnswers] = useState<Record<string, boolean>>({
         heart: false,
         dizziness: false,
@@ -340,6 +347,23 @@ export default function ApplyMembership() {
 
     const age = calculateAge(formData.dob);
     const isMinor = age !== null && age < 18;
+    // Membership types have age ranges (Junior 4–12, Student 17–25, ...). Only a
+    // valid date of birth narrows them; step 1 requires one before step 2.
+    const membershipAge = validDob(formData.dob) ? age : null;
+    const allowedTypes = MEMBERSHIP_TYPES.filter((type) => membershipTypeAllowed(type.value, membershipAge));
+    const typeAgeHint = membershipAge === null
+        ? null
+        : allowedTypes.length
+            ? `At age ${membershipAge} you can choose ${allowedTypes.map((type) => type.label.replace(/ \(.*\)$/, "")).join(" or ")}.`
+            : `Membership starts at age 4. Please contact your dojo.`;
+    // A date-of-birth change can rule out the chosen type; clear it rather than submit it.
+    useEffect(() => {
+        setFormData((previous) =>
+            previous.membershipType && !membershipTypeAllowed(previous.membershipType, membershipAge)
+                ? { ...previous, membershipType: "" }
+                : previous,
+        );
+    }, [membershipAge]);
     // ASK grading rules: the belt list depends on the track for the age reached this
     // calendar year (adult or children). "Unranked" is what answering "No" means,
     // so it isn't offered in the list.
@@ -423,8 +447,12 @@ export default function ApplyMembership() {
         if (step === 2) {
             if (!formData.principalDojo)
                 found.principalDojo = "Select your principal dojo.";
-            if (!formData.membershipType)
+            if (!allowedTypes.length)
+                found.membershipType = "Membership starts at age 4. Please contact your dojo.";
+            else if (!formData.membershipType)
                 found.membershipType = "Select a membership type.";
+            else if (!membershipTypeAllowed(formData.membershipType, membershipAge))
+                found.membershipType = `${membershipLabel(formData.membershipType)} isn’t available at age ${membershipAge}.`;
             if (!formData.hasExperience)
                 found.hasExperience =
                     "Tell us whether you have trained in aikido before.";
@@ -539,6 +567,8 @@ export default function ApplyMembership() {
                             // The canonical grade id the database stores as the starting grade.
                             current_grade_id: trained ? formData.currentBelt : "unranked",
                             experienceDetails: trained ? formData.experienceDetails : "",
+                            // Saved with the application; the paid order itself is set by the payment webhook.
+                            keyFob,
                             parqAnswers,
                             waiverSigned,
                             isDeclared,
@@ -581,6 +611,7 @@ export default function ApplyMembership() {
                             phone: formData.emergencyPhone.trim(),
                         },
                         medical_details: formData.medicalDetails.trim(),
+                        key_fob: keyFob,
                     },
                     retryKey.current,
                 );
@@ -963,6 +994,7 @@ export default function ApplyMembership() {
                                     MEMBERSHIP_TYPES.find(
                                         (type) => type.value === formData.membershipType,
                                     )?.description ??
+                                    typeAgeHint ??
                                     "Your membership type determines which class passes you can purchase and any discounts applied."
                                 }
                             >
@@ -975,13 +1007,39 @@ export default function ApplyMembership() {
                                     <option value="" disabled>
                                         Select type
                                     </option>
-                                    {MEMBERSHIP_TYPES.map((type) => (
-                                        <option key={type.value} value={type.value}>
-                                            {type.label}
-                                        </option>
-                                    ))}
+                                    {/* Types outside the applicant's age range stay listed but can't be picked. */}
+                                    {MEMBERSHIP_TYPES.map((type) => {
+                                        const allowed = membershipTypeAllowed(type.value, membershipAge);
+                                        return (
+                                            <option key={type.value} value={type.value} disabled={!allowed}>
+                                                {type.label}{allowed ? "" : " (not available at your age)"}
+                                            </option>
+                                        );
+                                    })}
                                 </NativeSelect>
                             </FormField>
+                            {/* Optional add-on, so no required marker. Charged in the same checkout. */}
+                            <div className={cn("rounded-lg border p-4", keyFob && "border-primary/40 bg-primary/5")}>
+                                <label className="flex cursor-pointer items-start gap-3 text-sm">
+                                    <input
+                                        id={fieldId("keyFob")}
+                                        type="checkbox"
+                                        checked={keyFob}
+                                        onChange={(e) => setKeyFob(e.target.checked)}
+                                        aria-describedby={`${fieldId("keyFob")}-hint`}
+                                        className="mt-0.5 size-5 shrink-0 accent-primary"
+                                    />
+                                    <span className="leading-relaxed">
+                                        <span className="flex flex-wrap items-baseline justify-between gap-x-3 font-semibold">
+                                            Add a key fob
+                                            <span className="font-medium tabular-nums">+{money.format(KEY_FOB_FEE)}</span>
+                                        </span>
+                                        <span id={`${fieldId("keyFob")}-hint`} className="block text-muted-foreground">
+                                            Tap in at the dojo instead of showing your check-in QR code. Your dojo gives it to you after payment.
+                                        </span>
+                                    </span>
+                                </label>
+                            </div>
                             <fieldset
                                 className="space-y-2"
                                 aria-required="true"
@@ -1438,6 +1496,9 @@ export default function ApplyMembership() {
                                                 )?.label}
                                         </ReviewItem>
                                     )}
+                                    <ReviewItem term="Key fob">
+                                        {keyFob ? `Yes, +${money.format(KEY_FOB_FEE)}` : "No"}
+                                    </ReviewItem>
                                 </dl>
                             </div>
 
@@ -1474,16 +1535,24 @@ export default function ApplyMembership() {
 
                             <div className="space-y-2 rounded-lg bg-muted p-4">
                                 <h3 className="font-semibold">Fee summary</h3>
-                                <div className="flex items-center justify-between gap-3 border-b pb-2 text-sm">
+                                <div className="flex items-center justify-between gap-3 text-sm">
                                     <span>Membership application fee</span>
-                                    <span className="text-lg font-semibold tabular-nums">
-                                        {money.format(MEMBERSHIP_FEE)}
-                                    </span>
+                                    <span className="tabular-nums">{money.format(MEMBERSHIP_FEE)}</span>
                                 </div>
                                 <p className="text-xs text-muted-foreground">
                                     Includes current year membership fee, student handbook, and
                                     membership booklet.
                                 </p>
+                                {keyFob && (
+                                    <div className="flex items-center justify-between gap-3 text-sm">
+                                        <span>Key fob</span>
+                                        <span className="tabular-nums">{money.format(KEY_FOB_FEE)}</span>
+                                    </div>
+                                )}
+                                <div className="flex items-center justify-between gap-3 border-t pt-2 text-sm">
+                                    <span className="font-medium">Total</span>
+                                    <span className="text-lg font-semibold tabular-nums">{money.format(totalFee)}</span>
+                                </div>
                             </div>
 
                             <div
@@ -1547,7 +1616,7 @@ export default function ApplyMembership() {
                                 ? "Next"
                                 : isSubmitting
                                     ? "Redirecting to payment…"
-                                    : `Submit and pay ${money.format(MEMBERSHIP_FEE)}`}
+                                    : `Submit and pay ${money.format(totalFee)}`}
                         </Button>
                     </div>
                 </CardContent>

@@ -111,9 +111,12 @@ export async function handleRequest(request: Request): Promise<Response> {
           const { data: pending, error: pendingError } = await db.from('payments')
             .select('student_id, amount_cents').eq('stripe_session_id', session.id).maybeSingle()
           if (pendingError) throw pendingError
+          // An optional key fob is charged in the same checkout (see create-checkout-session).
+          const keyFob = verified.metadata?.key_fob === 'true'
           const expectedAmount = pending
             ? (pending.student_id === studentId ? pending.amount_cents : null)
-            : (await stripe.prices.retrieve(requireEnv('STRIPE_MEMBERSHIP_FEE_ID'))).unit_amount
+            : (await stripe.prices.retrieve(requireEnv('STRIPE_MEMBERSHIP_FEE_ID'))).unit_amount! +
+              (keyFob ? (await stripe.prices.retrieve(requireEnv('STRIPE_NFC_FEE_ID'))).unit_amount! : 0)
           if (verified.payment_status !== 'paid' || verified.currency !== 'sgd' ||
             !expectedAmount || verified.amount_total !== expectedAmount || !studentId ||
             studentId !== session.metadata.membership_student_id ||
@@ -123,6 +126,7 @@ export async function handleRequest(request: Request): Promise<Response> {
           const { error } = await db.rpc('finalize_membership_checkout', {
             student: studentId, stripe_session: session.id,
             paid_amount: verified.amount_total, paid_currency: verified.currency,
+            key_fob: keyFob,
           })
           if (error) throw error
           // Best-effort: an email outage must not make Stripe retry a payment that is already recorded.

@@ -11,6 +11,8 @@ export interface MembershipApplication {
   home_centre_id: string
   emergency_contact: { name: string; relationship: string; phone: string }
   medical_details: string
+  /** Adds the optional NFC key fob (STRIPE_NFC_FEE_ID) to the same checkout. */
+  key_fob: boolean
 }
 
 /**

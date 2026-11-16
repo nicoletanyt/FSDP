@@ -5,7 +5,7 @@ import { Link, useParams } from 'react-router'
 import EmptyState from '@/components/shared/layout/EmptyState'
 import PageHeader from '@/components/shared/layout/PageHeader'
 import StatCard from '@/components/shared/layout/StatCard'
-import { MembershipBadge } from '@/components/shared/status/StatusBadge'
+import { MembershipBadge, StatusBadge } from '@/components/shared/status/StatusBadge'
 import AttendanceStateBadge from '@/components/shared/status/AttendanceStateBadge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -43,6 +43,31 @@ async function loadRecentClasses(studentId: string, signal: AbortSignal): Promis
   return (data ?? []) as unknown as RecentClass[]
 }
 
+type KeyFob = { key_fob_status: 'ordered' | 'issued' | null; key_fob_ordered_at: string | null }
+
+// The key fob bought with the membership (set by the payment webhook; "issued"
+// once staff issue a tag with scripts/nfc-tags.mjs).
+async function loadKeyFob(studentId: string, signal: AbortSignal): Promise<KeyFob | null> {
+  const { data, error } = await supabase.from('students')
+    .select('key_fob_status, key_fob_ordered_at').eq('id', studentId).abortSignal(signal).maybeSingle()
+  if (error) throw error
+  return data as KeyFob | null
+}
+
+function KeyFobStatus({ fob }: { fob: KeyFob | null | undefined }) {
+  if (fob === undefined) return <span className="text-muted-foreground">…</span>
+  if (fob?.key_fob_status === 'ordered') return (
+    <span className="inline-flex flex-col items-start gap-1 sm:items-end">
+      <StatusBadge tone="warning">To issue</StatusBadge>
+      <span className="text-xs text-muted-foreground">
+        Paid {fob.key_fob_ordered_at ? formatDate(fob.key_fob_ordered_at) : ''} · issue with scripts/nfc-tags.mjs
+      </span>
+    </span>
+  )
+  if (fob?.key_fob_status === 'issued') return <StatusBadge tone="success">Issued</StatusBadge>
+  return <span className="text-muted-foreground">Not ordered</span>
+}
+
 function Detail({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
@@ -64,6 +89,11 @@ export default function StudentDetail() {
   const recent = useQuery({
     queryKey: ['admin', session?.user.id, 'student-recent-classes', studentId],
     queryFn: ({ signal }) => loadRecentClasses(studentId, signal),
+    enabled: Boolean(session && studentId),
+  })
+  const keyFob = useQuery({
+    queryKey: ['admin', session?.user.id, 'student-key-fob', studentId],
+    queryFn: ({ signal }) => loadKeyFob(studentId, signal),
     enabled: Boolean(session && studentId),
   })
   const student = directory.data?.find(item => item.id === studentId)
@@ -124,6 +154,9 @@ export default function StudentDetail() {
             <Detail label="Email"><span className="break-all">{student.email}</span></Detail>
             <Detail label="Date of birth">{formatDate(student.date_of_birth)}</Detail>
             <Detail label="Membership"><MembershipBadge status={student.membership_status} /></Detail>
+            <Detail label="Key fob">
+              {keyFob.isError ? <span className="text-muted-foreground">Unavailable</span> : <KeyFobStatus fob={keyFob.data} />}
+            </Detail>
             <Detail label="Grading"><GradingStatus status={student.grading_status} /></Detail>
           </dl>
         </CardContent>
