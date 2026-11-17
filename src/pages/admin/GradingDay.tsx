@@ -574,7 +574,7 @@ function GradingDayPage() {
 export default function AdminGradingDay() {
     return (
         <div className="space-y-4">
-            <BackNav to="/admin/grading/opportunities" label="Back to schedule">
+            <BackNav history to="/admin/grading/opportunities" label="Back">
                 <GradingDayPage />
             </BackNav>
         </div>
