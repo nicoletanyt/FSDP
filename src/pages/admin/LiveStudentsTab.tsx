@@ -1,8 +1,8 @@
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { Fragment, useMemo } from 'react'
 import { TableSkeleton } from '@/components/shared/skeletons'
 import { useQuery } from '@tanstack/react-query'
 import { AlertTriangle, ChevronRight, Download, GraduationCap, Users, X } from 'lucide-react'
-import { useSearchParams } from 'react-router'
+import { Link, useNavigate, useSearchParams } from 'react-router'
 import { GradeLabelBadge } from '@/components/shared/grade/GradeBadge'
 import StatCard from '@/components/shared/layout/StatCard'
 import EmptyState from '@/components/shared/layout/EmptyState'
@@ -11,14 +11,16 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useAuth } from '@/hooks/use-auth'
+import { useScrollEdges } from '@/hooks/use-scroll-edges'
+import { cn } from 'cn'
 import { useAdminFilters } from '@/lib/admin/admin-filters'
 import { downloadCsv } from '@/lib/admin/export'
-import { formatDate, formatPercent, initials, relativeDay } from '@/lib/admin/format'
+import { formatPercent } from '@/lib/admin/format'
 import { loadCalendarCentres } from '@/lib/admin/live-class-calendar'
 import type { MembershipStatus, RiskLevel } from '@/lib/admin/types'
 import { supabase } from '@/lib/supabase'
-import { cn } from 'cn'
 import FilterPopover, { FilterField } from '@/components/shared/filters/FilterPopover'
+import StudentAvatar from '@/components/shared/student/StudentAvatar'
 import SearchInput from '@/components/shared/filters/SearchInput'
 
 export type DirectoryStudent = {
@@ -69,11 +71,20 @@ export async function loadStudentDirectory(centreId: string | null): Promise<Dir
   return data as DirectoryStudent[]
 }
 
+// Frozen edge columns: opaque so scrolled cells don't show through, with the
+// edge cue drawn only while content is hidden beneath them. The 1px divider
+// stays visible in dark mode, where a drop shadow disappears.
+const stickyLeft = 'sticky left-0 z-10'
+const stickyRight = 'sticky right-0 z-10'
+const rowBg = 'bg-card group-hover:bg-[color-mix(in_oklch,var(--muted)_50%,var(--card))]'
+const leftEdge = 'shadow-[inset_-1px_0_0_var(--color-border),8px_0_8px_-8px_oklch(0_0_0/0.18)] dark:shadow-[inset_-1px_0_0_oklch(1_0_0/0.22)]'
+const rightEdge = 'shadow-[inset_1px_0_0_var(--color-border),-8px_0_8px_-8px_oklch(0_0_0/0.18)] dark:shadow-[inset_1px_0_0_oklch(1_0_0/0.22)]'
+
 export default function LiveStudentsTab() {
   const { session } = useAuth()
   const { centreId, setCentreId } = useAdminFilters()
   const [searchParams, setSearchParams] = useSearchParams()
-  const [expanded, setExpanded] = useState<string | null>(null)
+  const navigate = useNavigate()
   const search = searchParams.get('q') ?? ''
   const risk = searchParams.get('risk') ?? 'all'
   const eligibility = searchParams.get('eligibility') ?? 'all'
@@ -96,7 +107,6 @@ export default function LiveStudentsTab() {
   const loading = centresQuery.isPending || directory.isPending || !validCentre
   const students = !error && validCentre && directory.isSuccess ? directory.data : []
 
-  useEffect(() => { setExpanded(null) }, [centreId])
 
   const filtered = useMemo(() => {
     const needle = search.trim().toLowerCase()
@@ -107,6 +117,7 @@ export default function LiveStudentsTab() {
       (membership === 'all' || student.membership_status === membership),
     )
   }, [students, search, risk, eligibility, membership])
+  const { ref: scrollRef, canScrollLeft, canScrollRight } = useScrollEdges<HTMLDivElement>([loading, filtered.length])
   const popoverFilters = [selectedCentre, risk, eligibility, membership].filter(value => value && value !== 'all').length
   const activeFilters = popoverFilters + (search ? 1 : 0)
   const attention = students.filter(student => student.risk_level === 'at_risk').length
@@ -178,49 +189,36 @@ export default function LiveStudentsTab() {
       {filtered.length === 0 ? <EmptyState title="No students match these filters"
         description="Try clearing the search or choosing a different centre, risk level, or membership status." /> :
         <Card className="overflow-hidden py-0"><CardContent className="px-0">
-          <Table className="[&_th]:px-4 [&_td]:px-4 [&_td]:py-4 [&_th:first-child]:pl-5 [&_td:first-child]:pl-5 [&_th:last-child]:pr-5 [&_td:last-child]:pr-5">
+          <Table containerRef={scrollRef}
+            containerProps={{ role: 'region', 'aria-label': 'Students table, scrolls horizontally', tabIndex: 0, className: 'relative w-full overflow-x-auto focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring' }}
+            className="[&_th]:px-4 [&_td]:px-4 [&_td]:py-4 [&_th:first-child]:pl-5 [&_td:first-child]:pl-5 [&_th:last-child]:pr-5 [&_td:last-child]:pr-5">
             <TableCaption className="sr-only">Live students matching the current filters</TableCaption>
             <TableHeader><TableRow>
-              <TableHead>Student</TableHead><TableHead className="hidden md:table-cell">Grade</TableHead>
+              <TableHead className={cn(stickyLeft, 'bg-card', canScrollLeft && leftEdge)}>Student</TableHead><TableHead className="hidden md:table-cell">Grade</TableHead>
               <TableHead className="hidden md:table-cell">Membership</TableHead><TableHead className="hidden md:table-cell text-right">Last 5 enrolments</TableHead>
-              <TableHead>Risk</TableHead><TableHead className="hidden md:table-cell">Last attended</TableHead>
-              <TableHead className="text-right"><span className="sr-only">Details</span></TableHead>
+              <TableHead>Risk</TableHead>
+              <TableHead className={cn(stickyRight, 'bg-card text-right', canScrollRight && rightEdge)}><span className="sr-only">Details</span></TableHead>
             </TableRow></TableHeader>
             <TableBody>{filtered.map(student => {
-              const isExpanded = expanded === student.id
+              const detailsHref = `/admin/students/${student.id}`
               return <Fragment key={student.id}>
-                <TableRow className="cursor-pointer" onClick={() => setExpanded(isExpanded ? null : student.id)}>
-                  <TableCell><div className="flex items-center gap-3">
-                    <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
-                      {initials(student.first_name, student.last_name)}
-                    </span><p className="min-w-0 truncate font-medium">{studentName(student)}</p>
+                <TableRow className="group cursor-pointer" onClick={() => navigate(detailsHref)}>
+                  <TableCell className={cn(stickyLeft, rowBg, canScrollLeft && leftEdge)}><div className="flex items-center gap-3">
+                    <StudentAvatar name={studentName(student)} studentId={student.id} className="size-10 shrink-0 [&_[data-slot=avatar-fallback]]:text-sm" />
+                    <p className="min-w-0 truncate font-medium">{studentName(student)}</p>
                   </div></TableCell>
                   <TableCell className="hidden md:table-cell"><StudentGrade label={student.grade} /></TableCell>
                   <TableCell className="hidden md:table-cell"><MembershipBadge status={student.membership_status} /></TableCell>
                   <TableCell className="hidden md:table-cell text-right font-medium tabular-nums">{student.attendance_rate === null ? '—' : formatPercent(student.attendance_rate)}</TableCell>
                   <TableCell><StudentRisk level={student.risk_level} /></TableCell>
-                  <TableCell className="hidden md:table-cell text-muted-foreground">{relativeDay(student.last_attended ?? '')}</TableCell>
-                  <TableCell className="text-right"><Button variant="ghost" size="sm" type="button"
-                    aria-label={`${isExpanded ? 'Hide' : 'View'} details for ${studentName(student)}`}
-                    aria-expanded={isExpanded} aria-controls={isExpanded ? `student-directory-details-${student.id}` : undefined}
-                    onClick={event => { event.stopPropagation(); setExpanded(isExpanded ? null : student.id) }}>
-                    <span className="hidden md:inline">{isExpanded ? 'Hide details' : 'View details'}</span>
-                    <ChevronRight className={cn('size-4 transition-transform', isExpanded && 'rotate-90')} aria-hidden="true" />
+                  
+                  <TableCell className={cn(stickyRight, rowBg, 'text-right', canScrollRight && rightEdge)}><Button variant="ghost" size="sm" render={<Link to={detailsHref} />} nativeButton={false}
+                    aria-label={`View details for ${studentName(student)}`}
+                    onClick={event => event.stopPropagation()}>
+                    <span className="hidden md:inline">View details</span>
+                    <ChevronRight className="size-4" aria-hidden="true" />
                   </Button></TableCell>
                 </TableRow>
-                {isExpanded && <TableRow id={`student-directory-details-${student.id}`}><TableCell colSpan={7} className="bg-muted/30">
-                  <dl className="grid gap-x-8 gap-y-2 whitespace-normal text-sm sm:grid-cols-2 lg:grid-cols-4">
-                    {/* Columns hidden on phones. */}
-                    <div className="md:hidden"><dt className="text-muted-foreground">Grade</dt><dd><StudentGrade label={student.grade} /></dd></div>
-                    <div className="md:hidden"><dt className="text-muted-foreground">Membership</dt><dd><MembershipBadge status={student.membership_status} /></dd></div>
-                    <div className="md:hidden"><dt className="text-muted-foreground">Last 5 enrolments</dt><dd>{student.attendance_rate === null ? '—' : formatPercent(student.attendance_rate)}</dd></div>
-                    <div className="md:hidden"><dt className="text-muted-foreground">Last attended</dt><dd>{relativeDay(student.last_attended ?? '')}</dd></div>
-                    <div><dt className="text-muted-foreground">Email</dt><dd className="break-all">{student.email}</dd></div>
-                    <div><dt className="text-muted-foreground">Date of birth</dt><dd>{formatDate(student.date_of_birth)}</dd></div>
-                    <div><dt className="text-muted-foreground">Recent enrolments</dt><dd>{student.enrolments} completed · {student.attended} attended · {student.missed} missed</dd></div>
-                    <div><dt className="text-muted-foreground">Grading</dt><dd><GradingStatus status={student.grading_status} /></dd></div>
-                  </dl>
-                </TableCell></TableRow>}
               </Fragment>
             })}</TableBody>
           </Table>

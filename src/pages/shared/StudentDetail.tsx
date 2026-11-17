@@ -16,16 +16,20 @@ import {
     PopoverTitle,
     PopoverTrigger,
 } from "@/components/ui/popover";
-import { StudentInformationCards, StudentInformationActions } from "@/components/instructor/StudentInformation";
+import { StudentInformationCards, StudentInformationActions } from "@/components/shared/student/StudentInformation";
 import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
-import StudentAvatar from "@/components/instructor/StudentAvatar";
+import KeyFobStatus from "@/components/shared/student/KeyFobStatus";
+import StudentAvatar from "@/components/shared/student/StudentAvatar";
 import InstructorLoadingBoundary from "@/components/instructor/InstructorLoadingBoundary";
 import { InstructorSkeleton } from "@/components/instructor/InstructorSkeletons";
-import StudentSessionHistory from "@/components/instructor/StudentSessionHistory";
-import StudentGradingRead from "@/components/instructor/StudentGradingRead";
+import StudentSessionHistory from "@/components/shared/student/StudentSessionHistory";
+import StudentGradingRead from "@/components/shared/student/StudentGradingRead";
 import { ProgressChecklistDialog } from "@/components/instructor/ProgressChecklistEditor";
-import StudentApplications from "@/components/instructor/StudentApplications";
+import StudentApplications from "@/components/shared/student/StudentApplications";
 import { useAuth } from "@/hooks/use-auth";
+import { InstructorApiContext } from "@/lib/instructor/data-context";
+import { createInstructorApi } from "@/lib/instructor/api";
+import { supabase } from "@/lib/supabase";
 import { useInstructorQuery } from "@/hooks/use-instructor-data";
 import { instructorQueryKeys as queryKeys, instructorQueryTimes as queryTimes } from "@/lib/instructor/query-keys";
 import { useInstructorApi } from "@/lib/instructor/data-context";
@@ -149,8 +153,12 @@ function AttendanceSummary({ studentId }: { studentId: StudentId }) {
 
 function StudentDetailContent({ detail }: { detail: StudentDetail }) {
     const api = useInstructorApi();
+    const { profile: account } = useAuth();
+    const isAdmin = account?.role === "administrator";
+    const base = isAdmin ? "/admin" : "/instructor";
     const [params, setParams] = useSearchParams();
-    const requestedContext = params.get("session") ?? params.get("class");
+    // Session roster context relies on the instructor's own assignments; admins see the plain page.
+    const requestedContext = isAdmin ? null : params.get("session") ?? params.get("class");
     const loadContext = useCallback(
         (signal: AbortSignal) =>
             loadStudentContext(api, parseEntityId(requestedContext && calendarEventId(requestedContext), "event"), signal),
@@ -173,6 +181,7 @@ function StudentDetailContent({ detail }: { detail: StudentDetail }) {
     const previous = roster[position - 1]?.student;
     const next = roster[position + 1]?.student;
     const profile = directoryStudent(detail, singaporeToday());
+    const keyFob = isAdmin ? <KeyFobStatus studentId={detail.student.id} /> : undefined;
     const tab = params.get("tab");
     const activeTab: DetailTab =
         tab === "sessions" || tab === "grading" ? tab : "overview";
@@ -214,11 +223,11 @@ function StudentDetailContent({ detail }: { detail: StudentDetail }) {
     const contextHref = (id: string) => {
         const nextParams = new URLSearchParams(params);
         nextParams.set("tab", activeTab);
-        return `/instructor/students/${id}?${nextParams}`;
+        return `${base}/students/${id}?${nextParams}`;
     };
     const backHref = linkedContext
-        ? `/instructor/calendar?session=${linkedContext.session.event.id}${gradingEventDate(linkedContext.session.event, linkedContext.session.grading) ? `&date=${gradingEventDate(linkedContext.session.event, linkedContext.session.grading)}` : ""}`
-        : "/instructor/students";
+        ? `${base}/calendar?session=${linkedContext.session.event.id}${gradingEventDate(linkedContext.session.event, linkedContext.session.grading) ? `&date=${gradingEventDate(linkedContext.session.event, linkedContext.session.grading)}` : ""}`
+        : `${base}/students`;
     return (
         // 16px between blocks on phones, as below every page header; 24px from md.
         <section className="student-detail-view space-y-4 md:space-y-6">
@@ -317,13 +326,13 @@ function StudentDetailContent({ detail }: { detail: StudentDetail }) {
                         className="hidden space-y-4 md:block"
                     >
                         <div>
-                            <StudentAvatar name={profile.name} className="mb-3" />
+                            <StudentAvatar name={profile.name} studentId={detail.student.id} className="mb-3" />
                             <h1 className="text-xl font-semibold">{profile.name}</h1>
                             <p className="detail-meta mt-1 text-sm text-muted-foreground">
                                 {profile.memberNo}{profile.age !== null && ` · Age ${profile.age}`}
                             </p>
                         </div>
-                        <StudentInformationCards detail={detail} />
+                        <StudentInformationCards detail={detail} keyFob={keyFob} />
                         <StudentInformationActions detail={detail} showDetailsLink={false} />
                     </section>
                 </aside>
@@ -361,28 +370,28 @@ function StudentDetailContent({ detail }: { detail: StudentDetail }) {
                                 Right: their grading, principal dojo and membership. */}
                             <div className="grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)] items-start gap-4">
                                 <div className="flex min-w-0 flex-col items-start gap-3">
-                                    <StudentAvatar name={profile.name} className="size-24 [&_[data-slot=avatar-fallback]]:text-2xl" />
+                                    <StudentAvatar name={profile.name} studentId={detail.student.id} className="size-24 [&_[data-slot=avatar-fallback]]:text-2xl" />
                                     <p className="detail-meta min-w-0 text-sm text-muted-foreground wrap-break-word">
                                         {profile.memberNo}
                                         {profile.age !== null && <span className="block">Age {profile.age}</span>}
                                     </p>
                                     <StudentInformationActions detail={detail} showDetailsLink={false} stacked showMedical={false} />
                                 </div>
-                                <StudentInformationCards detail={detail} compact />
+                                <StudentInformationCards detail={detail} compact keyFob={keyFob} />
                             </div>
                         </section>
                         <AttendanceSummary studentId={detail.student.id} />
                         <StudentGradingRead title="Next grading" detail={detail} reads={grading} onRetry={grading.retry} onViewGrading={() => selectTab("grading")} />
                         <StudentApplications studentId={detail.student.id} today={singaporeToday()} />
-                        <StudentGradingRead title="Progress checklist" detail={detail} reads={grading} onRetry={grading.retry} onEdit={() => setProgressOpen(true)} />
-                        <ProgressChecklistDialog
+                        <StudentGradingRead title="Progress checklist" detail={detail} reads={grading} onRetry={grading.retry} onEdit={isAdmin ? undefined : () => setProgressOpen(true)} />
+                        {!isAdmin && <ProgressChecklistDialog
                             open={progressOpen}
                             onOpenChange={setProgressOpen}
                             studentName={profile.name}
                             detail={detail}
                             reads={grading}
                             onRetry={grading.retry}
-                        />
+                        />}
                     </TabsContent>
                     <TabsContent value="sessions">
                         <StudentSessionHistory
@@ -413,14 +422,14 @@ function StudentDetailPage() {
     );
     const detail = useInstructorQuery(userId => queryKeys.studentDetail(userId, studentId?.toLowerCase() ?? ''), load, queryTimes.student);
     if (detail.status === "loading") {
-        const userId = profile?.role === 'instructor' && profile.id === session?.user.id ? session.user.id : undefined;
+        const userId = (profile?.role === 'instructor' || profile?.role === 'administrator') && profile.id === session?.user.id ? session.user.id : undefined;
         return <InstructorSkeleton variant="student-detail" entry={cachedStudentPreview(client, userId, studentId)} />;
     }
     if (detail.status === "error")
         return (
             <section className="student-detail-view space-y-4">
                 <Button
-                    render={<Link to="/instructor/students" />}
+                    render={<Link to={`${profile?.role === "administrator" ? "/admin" : "/instructor"}/students`} />}
                     nativeButton={false}
                     variant="outline"
                 >
@@ -437,7 +446,7 @@ function StudentDetailPage() {
         return (
             <section className="student-detail-view space-y-4">
                 <Button
-                    render={<Link to="/instructor/students" />}
+                    render={<Link to={`${profile?.role === "administrator" ? "/admin" : "/instructor"}/students`} />}
                     nativeButton={false}
                     variant="outline"
                 >
@@ -458,10 +467,18 @@ function StudentDetailPage() {
     );
 }
 
-export default function InstructorStudentDetails() {
-    return (
+const adminApi = createInstructorApi(supabase);
+
+function AdminApiProvider({ children }: { children: React.ReactNode }) {
+    return <InstructorApiContext.Provider value={adminApi}>{children}</InstructorApiContext.Provider>;
+}
+
+export default function StudentDetailRoute() {
+    const { profile } = useAuth();
+    const page = (
         <InstructorLoadingBoundary>
             <StudentDetailPage />
         </InstructorLoadingBoundary>
     );
+    return profile?.role === "administrator" ? <AdminApiProvider>{page}</AdminApiProvider> : page;
 }

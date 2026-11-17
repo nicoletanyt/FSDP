@@ -36,6 +36,7 @@ Deno.test('credit webhook deployment preserves membership finalization and faile
     if (url.pathname === '/rest/v1/rpc/finalize_membership_checkout') {
       assert.deepEqual(await request.json(), {
         student: studentId, stripe_session: 'cs_membership', paid_amount: 1000, paid_currency: 'sgd',
+        key_fob: false,
       })
       finalized++
       return Response.json(null)

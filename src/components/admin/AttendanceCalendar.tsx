@@ -341,9 +341,8 @@ function CalendarDays({
               className={cn(
                 'min-h-0 min-w-0 grow flex-col bg-card transition-[flex-basis,flex-grow,background-color,box-shadow] duration-200 ease-in-out motion-reduce:transition-none min-[785px]:shrink-0',
                 isSelected ? 'flex' : 'hidden min-[785px]:flex',
-                isExpanded && view === 'week'
-                  ? 'bg-accent/60 min-[785px]:grow-0 min-[785px]:basis-[clamp(300px,24vw,320px)]'
-                  : 'min-[785px]:grow min-[785px]:basis-0',
+                'min-[785px]:grow min-[785px]:basis-0',
+                isExpanded && view === 'week' && 'bg-accent/60',
               )}
               data-selected={isExpanded}
             >

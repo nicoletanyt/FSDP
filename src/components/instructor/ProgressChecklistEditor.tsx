@@ -21,7 +21,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import InstructorDataStatus from "./InstructorDataStatus";
-import { GradeTransition, MissingGradingData, statusDot } from "./StudentGradingRead";
+import { GradeTransition, MissingGradingData, statusDot } from "@/components/shared/student/StudentGradingRead";
 import {
     studentGrading,
     TECHNIQUE_STATUSES,
