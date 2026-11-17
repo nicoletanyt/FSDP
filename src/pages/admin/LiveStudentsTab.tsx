@@ -13,11 +13,12 @@ import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, Tabl
 import { useAuth } from '@/hooks/use-auth'
 import { useAdminFilters } from '@/lib/admin/admin-filters'
 import { downloadCsv } from '@/lib/admin/export'
-import { formatPercent, initials, relativeDay } from '@/lib/admin/format'
+import { formatPercent, relativeDay } from '@/lib/admin/format'
 import { loadCalendarCentres } from '@/lib/admin/live-class-calendar'
 import type { MembershipStatus, RiskLevel } from '@/lib/admin/types'
 import { supabase } from '@/lib/supabase'
 import FilterPopover, { FilterField } from '@/components/shared/filters/FilterPopover'
+import StudentAvatar from '@/components/shared/student/StudentAvatar'
 import SearchInput from '@/components/shared/filters/SearchInput'
 
 export type DirectoryStudent = {
@@ -189,9 +190,8 @@ export default function LiveStudentsTab() {
               return <Fragment key={student.id}>
                 <TableRow className="cursor-pointer" onClick={() => navigate(detailsHref)}>
                   <TableCell><div className="flex items-center gap-3">
-                    <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
-                      {initials(student.first_name, student.last_name)}
-                    </span><p className="min-w-0 truncate font-medium">{studentName(student)}</p>
+                    <StudentAvatar name={studentName(student)} studentId={student.id} className="size-10 shrink-0 [&_[data-slot=avatar-fallback]]:text-sm" />
+                    <p className="min-w-0 truncate font-medium">{studentName(student)}</p>
                   </div></TableCell>
                   <TableCell className="hidden md:table-cell"><StudentGrade label={student.grade} /></TableCell>
                   <TableCell className="hidden md:table-cell"><MembershipBadge status={student.membership_status} /></TableCell>

@@ -229,7 +229,7 @@ function AttendanceDays({
         return (
           <section key={dateKey(day)} aria-label={day.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}
             className={cn('flex min-w-0 flex-col bg-card', fill ? 'min-h-0' : 'min-h-64',
-              selected && view === 'week' && days.length > 2 ? 'shrink-0 grow-0 basis-[clamp(220px,20vw,300px)] bg-accent/60' : 'flex-1 basis-0')}>
+              'flex-1 basis-0', selected && view === 'week' && days.length > 2 && 'bg-accent/60')}>
             {view === 'week' && (
               <header className="h-20 shrink-0 border-b p-2">
                 <button type="button" onClick={() => onSelectDate(day)} aria-pressed={selected}

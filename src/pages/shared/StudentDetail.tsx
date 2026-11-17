@@ -326,7 +326,7 @@ function StudentDetailContent({ detail }: { detail: StudentDetail }) {
                         className="hidden space-y-4 md:block"
                     >
                         <div>
-                            <StudentAvatar name={profile.name} className="mb-3" />
+                            <StudentAvatar name={profile.name} studentId={detail.student.id} className="mb-3" />
                             <h1 className="text-xl font-semibold">{profile.name}</h1>
                             <p className="detail-meta mt-1 text-sm text-muted-foreground">
                                 {profile.memberNo}{profile.age !== null && ` · Age ${profile.age}`}
@@ -370,7 +370,7 @@ function StudentDetailContent({ detail }: { detail: StudentDetail }) {
                                 Right: their grading, principal dojo and membership. */}
                             <div className="grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)] items-start gap-4">
                                 <div className="flex min-w-0 flex-col items-start gap-3">
-                                    <StudentAvatar name={profile.name} className="size-24 [&_[data-slot=avatar-fallback]]:text-2xl" />
+                                    <StudentAvatar name={profile.name} studentId={detail.student.id} className="size-24 [&_[data-slot=avatar-fallback]]:text-2xl" />
                                     <p className="detail-meta min-w-0 text-sm text-muted-foreground wrap-break-word">
                                         {profile.memberNo}
                                         {profile.age !== null && <span className="block">Age {profile.age}</span>}
