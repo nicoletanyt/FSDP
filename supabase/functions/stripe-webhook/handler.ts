@@ -1,6 +1,7 @@
 import { cryptoProvider, getStripe, requireEnv } from '../_shared/stripe.ts'
 import { adminClient } from '../_shared/grading.ts'
 import { resolveCreditPass } from '../_shared/credit-passes.ts'
+import { resolveMembershipFee } from '../_shared/membership-fees.ts'
 import { sendMembershipPaidEmail } from '../send-membership-email/handler.ts'
 import { confirmGradingPreview } from '../_shared/grading-drafts.ts'
 import { sendCreditReceipt } from '../_shared/credit-receipt.ts'
@@ -51,7 +52,7 @@ export async function handleRequest(request: Request): Promise<Response> {
       event.type === 'checkout.session.async_payment_failed'
     ) {
       const session = event.data.object
-      if (session.metadata?.membership_student_id) {
+      if (session.metadata?.membership_student_id || session.metadata?.membership_fee === 'true') {
         const { error } = await adminClient().from('payments').delete()
           .eq('stripe_session_id', session.id).eq('status', 'pending')
         if (error) throw error
@@ -76,12 +77,18 @@ export async function handleRequest(request: Request): Promise<Response> {
         if (session.metadata?.grading_attempt_id) {
           const verified = await stripe.checkout.sessions.retrieve(session.id)
           const db = adminClient()
-          // The live grading flow fixes a per-grade fee on the checkout attempt, when checkout started.
+          // Reconcile the signed event with Stripe and the server-owned attempt.
+          // The RPC atomically snapshots its date, records payment and moves the
+          // formal application to under_review (pending dojo review).
           const { data: attemptRow, error: attemptError } = await db.from('grading_checkout_attempts')
-            .select('amount_cents').eq('id', session.metadata.grading_attempt_id).maybeSingle()
+            .select('amount_cents,stripe_session_id,grading_date').eq('id', session.metadata.grading_attempt_id).maybeSingle()
           if (attemptError) throw attemptError
-          if (verified.payment_status !== 'paid' || verified.currency !== 'sgd' || !attemptRow?.amount_cents ||
+          if (verified.mode !== 'payment' || verified.livemode !== false ||
+            verified.payment_status !== 'paid' || verified.currency !== 'sgd' || !attemptRow?.amount_cents ||
             verified.amount_total !== attemptRow.amount_cents ||
+            attemptRow.stripe_session_id !== verified.id || verified.id !== session.id ||
+            verified.client_reference_id !== session.metadata.grading_attempt_id ||
+            (verified.metadata?.grading_date && verified.metadata.grading_date !== attemptRow.grading_date) ||
             verified.metadata?.grading_attempt_id !== session.metadata.grading_attempt_id) {
             return new Response('Grading payment mismatch.', { status: 400 })
           }
@@ -105,9 +112,12 @@ export async function handleRequest(request: Request): Promise<Response> {
           const { data: pending, error: pendingError } = await db.from('payments')
             .select('student_id, amount_cents').eq('stripe_session_id', session.id).maybeSingle()
           if (pendingError) throw pendingError
+          // An optional key fob is charged in the same checkout (see create-checkout-session).
+          const keyFob = verified.metadata?.key_fob === 'true'
           const expectedAmount = pending
             ? (pending.student_id === studentId ? pending.amount_cents : null)
-            : (await stripe.prices.retrieve(requireEnv('STRIPE_MEMBERSHIP_FEE_ID'))).unit_amount
+            : (await stripe.prices.retrieve(requireEnv('STRIPE_MEMBERSHIP_FEE_ID'))).unit_amount! +
+              (keyFob ? (await stripe.prices.retrieve(requireEnv('STRIPE_NFC_FEE_ID'))).unit_amount! : 0)
           if (verified.payment_status !== 'paid' || verified.currency !== 'sgd' ||
             !expectedAmount || verified.amount_total !== expectedAmount || !studentId ||
             studentId !== session.metadata.membership_student_id ||
@@ -117,6 +127,7 @@ export async function handleRequest(request: Request): Promise<Response> {
           const { error } = await db.rpc('finalize_membership_checkout', {
             student: studentId, stripe_session: session.id,
             paid_amount: verified.amount_total, paid_currency: verified.currency,
+            key_fob: keyFob,
           })
           if (error) throw error
           // Best-effort: an email outage must not make Stripe retry a payment that is already recorded.
@@ -125,6 +136,42 @@ export async function handleRequest(request: Request): Promise<Response> {
           } catch {
             console.error('Membership payment email could not be sent.')
           }
+          return Response.json({ received: true })
+        }
+
+        if (session.metadata?.membership_fee === 'true') {
+          // Re-read the session from Stripe rather than trusting the event body.
+          const verified = await stripe.checkout.sessions.retrieve(session.id)
+          const metadata = verified.metadata ?? {}
+          const fee = resolveMembershipFee(metadata.membership_fee_id)
+          const studentId = metadata.membership_fee_student_id
+          const months = Number(metadata.membership_fee_months)
+
+          if (
+            verified.payment_status !== 'paid' ||
+            verified.livemode !== false ||
+            verified.currency !== 'sgd' ||
+            !fee ||
+            !studentId ||
+            metadata.membership_fee !== 'true' ||
+            months !== fee.months ||
+            verified.amount_total !== fee.priceCents ||
+            verified.client_reference_id !== studentId
+          ) {
+            return new Response('Membership fee payment mismatch.', { status: 400 })
+          }
+
+          // Extends the membership by the months the fee covers; never adds credits.
+          const { error } = await adminClient().rpc('finalize_membership_fee', {
+            student: studentId,
+            stripe_session: session.id,
+            fee_title: fee.title,
+            months: fee.months,
+            paid_amount: verified.amount_total,
+            paid_currency: verified.currency,
+          })
+          if (error) throw error
+          console.log(`Membership fee finalized (${session.id})`)
           return Response.json({ received: true })
         }
 

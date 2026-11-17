@@ -1,6 +1,6 @@
 import { matchPath, Outlet, useLocation, useSearchParams } from 'react-router'
 import RetryAlert from '@/components/shared/layout/RetryAlert'
-import { PageSkeleton } from '@/components/shared/skeletons'
+import { StudentRouteSkeleton } from '@/components/student/StudentSkeletons'
 import { useAuth } from '@/hooks/use-auth'
 import { useLiveStudentSchedule } from '@/lib/use-live-student-schedule'
 import { useStudentCredits } from '@/hooks/use-student-credits'
@@ -23,7 +23,8 @@ export default function StudentLayout() {
   if (!['/timetable', '/classes', '/classes/choose'].some(path => matchPath(path, pathname))) {
     return <Outlet context={creditContext} />
   }
-  return <StudentScheduleOutlet key={profile?.id} {...creditContext} />
+  // Schedule keys are user-scoped, so remounting per user is unnecessary.
+  return <StudentScheduleOutlet {...creditContext} />
 }
 
 type CreditsContext = {
@@ -34,8 +35,9 @@ type CreditsContext = {
 }
 
 function StudentScheduleOutlet(creditContext: CreditsContext) {
-  const schedule = useLiveStudentSchedule(creditContext.creditAccount.retry)
-  if (schedule.loading) return <PageSkeleton label="Loading class schedule…" />
+  // Booking changes invalidate the cached credit queries themselves.
+  const schedule = useLiveStudentSchedule()
+  if (schedule.loading) return <StudentRouteSkeleton label="Loading class schedule…" />
   if (schedule.error) return <RetryAlert message={schedule.error} onRetry={schedule.retry} />
   return <Outlet context={{ ...creditContext, classes: schedule.classes, schedule }} />
 }

@@ -2,7 +2,8 @@ import { useParams } from "react-router";
 import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
 import GradingDayView from "@/components/grading/GradingDayView";
 import { ScheduleStatusPills } from "@/components/grading/ScheduleNotice";
-import { GradingBackLink, GradingNote } from "@/components/grading/GradingParts";
+import { GradingNote } from "@/components/grading/GradingParts";
+import { BackNav } from "@/components/shared/layout/BackLink";
 import { useGradingDayLayout } from "@/hooks/use-grading-day-layout";
 import { useGradingDay } from "@/hooks/use-grading-day";
 import { useCalendarReturn } from "@/hooks/use-calendar-return";
@@ -33,9 +34,11 @@ export default function InstructorGradingDay() {
     const photos = useExaminerPhotos(day.data?.panel.map((member) => member.instructorId) ?? [], api.getInstructorPhotos);
     return (
         <section className="w-full space-y-4">
-            {calendarReturn
-                ? <GradingBackLink to={calendarReturn}>Back to calendar</GradingBackLink>
-                : <GradingBackLink to="/instructor/gradings">Back to gradings</GradingBackLink>}
+            {/* Back returns to wherever the day was opened from (calendar, gradings,
+                a student…); the fixed page is only a fallback when there's no history. */}
+            <BackNav history {...(calendarReturn
+                ? { to: calendarReturn, label: "Back to calendar" }
+                : { to: "/instructor/gradings", label: "Back" })}>
             {day.isPending ? (
                 <InstructorDataStatus loading onRetry={() => void day.refetch()} variant="card" />
             ) : day.isError ? (
@@ -54,6 +57,7 @@ export default function InstructorGradingDay() {
                     // A draft can't be graded yet; the chief sees it to review only.
                     }) : null} />
             )}
+            </BackNav>
         </section>
     );
 }

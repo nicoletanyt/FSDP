@@ -180,7 +180,8 @@ export default function NfcCheckIn() {
             className="mx-auto flex w-full max-w-2xl flex-col gap-6"
             aria-label="NFC attendance"
         >
-            <header className="space-y-2">
+            {/* The section's 24px gap adds to this margin; net 16px / 24px like every page header. */}
+            <header className="-mb-2 space-y-2 md:mb-0">
                 <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
                     NFC attendance
                 </h1>

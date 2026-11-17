@@ -28,6 +28,7 @@ import {
     loadDirectorySnapshot,
     singaporeToday,
 } from "@/lib/instructor/directory";
+import StudentAvatar from "@/components/shared/student/StudentAvatar";
 import SearchInput from "@/components/shared/filters/SearchInput";
 
 export default function InstructorStudents() {
@@ -128,7 +129,8 @@ export default function InstructorStudents() {
 
     return (
         <section aria-busy={data.status === "loading" || outOfRange} className="student-directory-view space-y-2 md:space-y-6">
-            <header>
+            {/* Same gap below as every page header (16px, 24px from md); overrides the section's space-y. */}
+            <header className="mb-4 md:mb-6">
                 <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Students</h1>
             </header>
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
@@ -213,6 +215,7 @@ export default function InstructorStudents() {
                                             data-member-no={student.memberNo}
                                             className="relative flex min-h-17 items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/50 has-[a:focus-visible]:bg-muted/50 has-[a:focus-visible]:-outline-offset-2 has-[a:focus-visible]:outline-2 has-[a:focus-visible]:outline-ring"
                                         >
+                                            <StudentAvatar name={student.name} studentId={student.id} className="size-10 shrink-0 [&_[data-slot=avatar-fallback]]:text-sm" />
                                             <div className="min-w-0 flex-1">
                                                 <div className="flex flex-wrap items-start gap-x-2 gap-y-1">
                                                     <Link

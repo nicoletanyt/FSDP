@@ -6,16 +6,29 @@ export const MEMBERSHIP_TYPES: {
   value: MembershipType
   label: string
   description: string
+  /** Inclusive age range (age today); maxAge null means no upper limit. */
+  minAge: number
+  maxAge: number | null
 }[] = [
-  { value: 'adult', label: 'Adult (13+)', description: 'Standard adult class passes' },
-  { value: 'junior', label: 'Junior (4-12)', description: 'Children class passes' },
+  { value: 'adult', label: 'Adult (13+)', description: 'Standard adult class passes', minAge: 13, maxAge: null },
+  { value: 'junior', label: 'Junior (4-12)', description: 'Children class passes', minAge: 4, maxAge: 12 },
   {
     value: 'student',
     label: 'Student (Full-time, 17-25)',
     description: '50% off adult class passes with valid full-time student ID',
+    minAge: 17,
+    maxAge: 25,
   },
-  { value: 'senior', label: 'Senior (65+)', description: 'Adult class passes for senior members' },
+  { value: 'senior', label: 'Senior (65+)', description: 'Adult class passes for senior members', minAge: 65, maxAge: null },
 ]
+
+/** Whether someone of this age can choose this membership type. Unknown age allows all. */
+export function membershipTypeAllowed(value: string, age: number | null) {
+  const type = MEMBERSHIP_TYPES.find((item) => item.value === value)
+  if (!type) return false
+  if (age === null) return true
+  return age >= type.minAge && (type.maxAge === null || age <= type.maxAge)
+}
 
 export const MEMBERSHIP_TYPE_STORAGE_KEY = 'user_membership_type'
 export const DATE_OF_BIRTH_STORAGE_KEY = 'user_dob'

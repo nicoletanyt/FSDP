@@ -1,15 +1,20 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import type { SyntheticEvent } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Link, useLocation } from 'react-router'
-import { CalendarDays, GraduationCap, IdCard, LayoutDashboard, QrCode, Receipt, Ticket, UserCircle, Users } from 'lucide-react'
+import { CalendarDays, Coins, GraduationCap, IdCard, LayoutDashboard, QrCode, Receipt, Ticket, UserCircle, Users } from 'lucide-react'
 import logo from '@/assets/logo.png'
 import ThemeToggle from '@/components/theme-toggle'
 import StudentAccountMenu from '@/components/student/StudentAccountMenu'
 import MobileNavigation from '@/components/shared/layout/MobileNavigation'
 import OverflowNav from '@/components/shared/layout/OverflowNav'
 import { buttonVariants } from '@/components/ui/button'
+import { useAuth } from '@/hooks/use-auth'
 import { useMembershipStatus, type MembershipStatus } from '@/hooks/use-membership-status'
+import { useStudentCredits } from '@/hooks/use-student-credits'
 import { useSignOut } from '@/hooks/use-sign-out'
 import { fetchAttendanceQr } from '@/lib/attendance-qr'
+import { prefetchStudentSchedule } from '@/lib/student/schedule-query'
 import { pageWidth } from '@/lib/page-width'
 import { cn } from '@/lib/utils'
 
@@ -35,7 +40,12 @@ export function studentRoutes(status: MembershipStatus | null) {
   return [dashboard, classes, schedule, grading, credits]
 }
 
-/** Whether today's attendance QR is (or is about to be) available, for a shortcut in the phone menu. */
+/**
+ * Whether check-in is open right now (from 10 minutes before a booked class
+ * until it ends, as decided by student_attendance_qr), for a shortcut in the
+ * phone menu. Re-checks when check-in opens and every minute while it is open,
+ * so the shortcut appears on time and disappears after check-in or class end.
+ */
 function useTodayCheckIn(enabled: boolean) {
   const [available, setAvailable] = useState(false)
   useEffect(() => {
@@ -44,20 +54,57 @@ function useTodayCheckIn(enabled: boolean) {
       return
     }
     let active = true
+    let timer: number | undefined
     const check = () => {
+      window.clearTimeout(timer)
       fetchAttendanceQr()
-        .then(qr => { if (active) setAvailable(qr.status === 'ready' || qr.status === 'upcoming') })
+        .then(qr => {
+          if (!active) return
+          setAvailable(qr.status === 'ready')
+          const opensIn = qr.status === 'upcoming' ? Date.parse(qr.opensAt) - Date.now() : NaN
+          const delay = qr.status === 'ready' ? 60_000
+            : opensIn > 0 && opensIn < 24 * 60 * 60 * 1000 ? opensIn + 1_000
+              : null
+          if (delay !== null) timer = window.setTimeout(check, delay)
+        })
         .catch(() => { if (active) setAvailable(false) })
     }
     check()
+    // Background tabs throttle timers, so check again on return.
     const onVisible = () => { if (document.visibilityState === 'visible') check() }
     document.addEventListener('visibilitychange', onVisible)
     return () => {
       active = false
+      window.clearTimeout(timer)
       document.removeEventListener('visibilitychange', onVisible)
     }
   }, [enabled])
   return available
+}
+
+const scheduleRoutes = new Set([classes.to, schedule.to])
+
+/**
+ * Warms the cached class schedule when a Classes or My schedule link is
+ * hovered (after 150ms, as on the instructor calendar), focused or touched.
+ * Listens on a wrapper so the shared nav components need no prefetch hooks.
+ */
+function useSchedulePrefetch(userId: string | undefined) {
+  const client = useQueryClient()
+  const hover = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => { if (hover.current) clearTimeout(hover.current) }, [])
+  const target = (event: SyntheticEvent) =>
+    scheduleRoutes.has((event.target as Element).closest?.('a')?.getAttribute('href') ?? '')
+  const now = useCallback((event: SyntheticEvent) => {
+    if (target(event)) prefetchStudentSchedule(client, userId)
+  }, [client, userId])
+  const later = useCallback((event: SyntheticEvent) => {
+    if (hover.current) clearTimeout(hover.current)
+    hover.current = null
+    if (!target(event)) return
+    hover.current = setTimeout(() => { hover.current = null; prefetchStudentSchedule(client, userId) }, 150)
+  }, [client, userId])
+  return { onPointerOver: later, onFocus: now, onTouchStart: now }
 }
 
 export default function StudentNavigation() {
@@ -65,6 +112,16 @@ export default function StudentNavigation() {
   const { handleSignOut, signingOut, error } = useSignOut()
   const { status } = useMembershipStatus()
   const checkIn = useTodayCheckIn(status === 'active')
+  const { profile } = useAuth()
+  const creditAccount = useStudentCredits(profile?.id, null)
+  const prefetch = useSchedulePrefetch(profile?.id)
+  const balance = creditAccount.unlimited
+    ? 'Unlimited pass'
+    : creditAccount.error
+      ? 'Balance unavailable'
+      : creditAccount.loading
+        ? 'Loading credits…'
+        : `${creditAccount.credits} ${creditAccount.credits === 1 ? 'credit' : 'credits'}`
   const items = studentRoutes(status).map(({ label, to, icon }) => ({
     label,
     to,
@@ -73,7 +130,8 @@ export default function StudentNavigation() {
   }))
 
   return (
-    <>
+    // display: contents keeps the layout unchanged; events still bubble here.
+    <div className="contents" {...prefetch}>
       <MobileNavigation
         homeTo="/dashboard"
         links={items}
@@ -90,6 +148,18 @@ export default function StudentNavigation() {
         onSignOut={handleSignOut}
         signingOut={signingOut}
         error={error}
+        hideAccountMeta
+        accountDetail={(
+          <Link
+            to="/student/credits"
+            // 44px tap target kept; -my-2.5 cancels its empty space so the balance sits right under the name.
+            className="-my-2.5 inline-flex min-h-11 items-center gap-1.5 rounded-md text-[16px] font-medium text-primary outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Coins aria-hidden="true" className="size-4 shrink-0" />
+            <span className="sr-only">Credit balance: </span>
+            {balance}
+          </Link>
+        )}
       />
       <header className="hidden shrink-0 border-b bg-background lg:block">
         <div className={cn(pageWidth, 'flex items-center gap-6 py-5')}>
@@ -121,6 +191,6 @@ export default function StudentNavigation() {
           </div>
         </div>
       </header>
-    </>
+    </div>
   )
 }

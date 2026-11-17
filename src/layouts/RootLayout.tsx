@@ -4,6 +4,7 @@ import { LayoutDashboard, LogIn, UserPlus } from 'lucide-react'
 import { PageSkeleton } from '@/components/shared/skeletons'
 import MobileNavigation from '@/components/shared/layout/MobileNavigation'
 import StudentNavigation from '@/components/student/StudentNavigation'
+import { StudentRouteSkeleton } from '@/components/student/StudentSkeletons'
 import ThemeToggle from '@/components/theme-toggle'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/hooks/use-auth'
@@ -79,7 +80,9 @@ export default function RootLayout() {
     <div
       className={cn(
         'flex flex-col text-foreground',
-        isAdminCalendar ? 'h-dvh overflow-hidden' : 'min-h-screen',
+        // Desktop admin calendar: locked to the screen, the calendar scrolls inside.
+        // Below lg the calendar has no inner scroll area, so the page must scroll.
+        isAdminCalendar ? 'min-h-screen lg:h-dvh lg:overflow-hidden' : 'min-h-screen',
         isAdmin || isStudent ? 'bg-muted/30' : 'bg-background',
       )}
     >
@@ -179,11 +182,8 @@ export default function RootLayout() {
         <main
           className={cn('p-6', pageWidth, isStudent ? 'lg:py-8' : 'lg:py-12')}
         >
-          <Suspense
-            fallback={
-              <PageSkeleton />
-            }
-          >
+          {/* Student routes get their page's own shape; others the generic one. */}
+          <Suspense fallback={<StudentRouteSkeleton />}>
             <Outlet />
           </Suspense>
         </main>

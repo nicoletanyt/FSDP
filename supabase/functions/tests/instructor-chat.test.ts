@@ -149,7 +149,7 @@ Deno.test('Instructor chat authorization, scoped reads and provider failures', a
       record: { attendance_status: 'present', assessment_status: 'completed', assessment_notes: 'secret-notes', report: 'secret-report' },
       event, instructor: { first_name: 'Another', last_name: 'Teacher', email: 'private-instructor-email' }, targetGrade: { label: '10th Kyu' },
     }]))
-    if (url.pathname === '/rest/v1/rpc/instructor_calendar') return Response.json(paged([
+    if (url.pathname === '/rest/v1/rpc/instructor_chat_schedule') return Response.json(paged([
       { ...event, instructor_id: wrongOwner ? 'other-instructor' : instructorId },
       { ...event, id: 'grading', event_type: 'grading', starts_at: null, ends_at: null,
         grading: { grading_date: '2026-11-09', reporting_time: '10:30:00', reporting_release_on: '2099-01-01' } },
@@ -252,7 +252,7 @@ Deno.test('Instructor chat authorization, scoped reads and provider failures', a
     await test.step('calendar dates use Singapore boundaries and date-only times stay null', async () => {
       reset(); replies = [callTool('get_my_schedule', { from_date: '2026-11-08', to_date: '2026-11-10' }), answer()]
       assert.equal((await handleRequest(request())).status, 200)
-      const params = calls.find(call => call.url.pathname.endsWith('instructor_calendar'))!.body!
+       const params = calls.find(call => call.url.pathname.endsWith('instructor_chat_schedule'))!.body!
       assert.equal(params.range_from, '2026-11-08T00:00:00+08:00')
       assert.equal(params.range_to, '2026-11-10T00:00:00+08:00')
       assert.ok(!('instructor_id' in params))
@@ -273,7 +273,7 @@ Deno.test('Instructor chat authorization, scoped reads and provider failures', a
       replies = [callTool('get_my_schedule', { from_date: '2026-11-08', to_date: '2026-11-10' }), answer()]
       assert.equal((await handleRequest(request())).status, 200)
       assert.ok(toolResult('get_my_schedule').unavailable)
-      assert.ok(!calls.some(call => call.url.pathname.endsWith('instructor_calendar')))
+       assert.ok(!calls.some(call => call.url.pathname.endsWith('instructor_chat_schedule')))
     })
     await test.step('unknown tools, SQL, owner overrides and invalid ranges never reach database tools', async () => {
       for (const [name, args] of [
@@ -392,7 +392,7 @@ Deno.test('Instructor chat authorization, scoped reads and provider failures', a
       assert.ok(!('model' in sent))
     })
     await test.step('across every scenario the function only reads: no write RPCs or mutating table requests', () => {
-      const reads = ['instructor_student_directory', 'instructor_student_summary', 'instructor_student_history', 'instructor_calendar',
+       const reads = ['instructor_student_directory', 'instructor_student_summary', 'instructor_student_history', 'instructor_chat_schedule',
         'grading_endorsement_status', 'my_grading_panels', 'examiner_grading_day', 'instructor_follow_up_students']
       assert.ok(everyCall.length > 50)
       for (const call of everyCall) {

@@ -28,31 +28,45 @@ export default function MobileCalendarHeader<T extends string>({
     extras,
     legendTitle = "Calendar colours",
     legend,
+    rangeLabel,
+    plain = false,
+    todayLabel = "Today",
 }: {
     date: Date;
     view: T;
     views: MobileViewOption<T>[];
     onViewChange: (view: T) => void;
     /** "month" or "day": names the previous/next buttons. */
-    stepUnit: "month" | "day";
+    stepUnit: "month" | "week" | "day";
     onToday: () => void;
     onPrevious: () => void;
     onNext: () => void;
     extras?: ReactNode;
     legendTitle?: string;
     legend: ReactNode;
+    /** The days on screen, e.g. "11 – 12 Nov", shown after the month when the week strip is hidden. */
+    rangeLabel?: string;
+    /** No tinted background: the header sits on the page background. */
+    plain?: boolean;
+    /** Text for the jump-to-today button (the admin calendar says "Go to today"). */
+    todayLabel?: string;
 }) {
     const [pickerOpen, setPickerOpen] = useState(false);
     const active = views.find((option) => option.value === view) ?? views[0];
     const ActiveIcon = active.icon;
     return (
-        <header className="-mx-4 -mt-4 space-y-3 border-b bg-muted/40 p-4">
+        <header className={cn("-mx-4 -mt-4 space-y-3 border-b p-4", !plain && "bg-muted/40")}>
             <div className="flex items-center justify-between gap-2">
                 <h1 className="min-w-0 flex-1 text-[24px] leading-tight font-semibold tracking-tight">
                     {date.toLocaleDateString("en-GB", { month: "long" })}{" "}
-                    <span className="text-[15px] font-normal text-muted-foreground">
+                    <span className="text-[15px] font-normal text-muted-foreground max-md:text-[1rem]">
                         {date.getFullYear()}
                     </span>
+                    {rangeLabel && (
+                        <span className="ml-1.5 text-[15px] font-normal whitespace-nowrap text-muted-foreground">
+                            · {rangeLabel}
+                        </span>
+                    )}
                 </h1>
                 <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
                     <PopoverTrigger
@@ -64,7 +78,7 @@ export default function MobileCalendarHeader<T extends string>({
                         <ActiveIcon aria-hidden="true" className="size-5" />
                     </PopoverTrigger>
                     <PopoverContent className="w-56 gap-3 p-4">
-                        <PopoverTitle className="text-[13px] text-muted-foreground">Calendar view</PopoverTitle>
+                        <PopoverTitle className="text-[13px] text-muted-foreground max-md:text-[1rem]">Calendar view</PopoverTitle>
                         <div role="group" aria-label="Calendar view" className="grid gap-2">
                             {views.map(({ value, label, icon: Icon, ariaLabel }) => (
                                 <Button
@@ -78,7 +92,7 @@ export default function MobileCalendarHeader<T extends string>({
                                         setPickerOpen(false);
                                     }}
                                     className={cn(
-                                        "h-11 justify-start gap-3 px-3 text-[15px] capitalize",
+                                        "h-11 justify-start gap-3 px-3 text-[15px] capitalize max-md:text-[1rem]",
                                         view === value && "bg-accent text-accent-foreground",
                                     )}
                                 >
@@ -93,12 +107,13 @@ export default function MobileCalendarHeader<T extends string>({
             </div>
             <div className="flex flex-wrap items-center justify-between gap-y-2">
                 <div className="flex items-center gap-0.5">
+                    {/* Same Today button as the desktop CalendarToolbar. */}
                     <Button
-                        variant="ghost"
+                        variant="outline"
                         onClick={onToday}
-                        className="h-11 gap-1.5 rounded-full px-3 text-[14px] font-medium text-destructive"
+                        className="mr-1 h-11 px-4 lg:h-10"
                     >
-                        Today
+                        {todayLabel}
                     </Button>
                     <Button variant="ghost" size="icon-touch" aria-label={`Previous ${stepUnit}`} onClick={onPrevious}>
                         <ChevronLeft aria-hidden="true" />
@@ -116,7 +131,7 @@ export default function MobileCalendarHeader<T extends string>({
                         >
                             <Info aria-hidden="true" className="size-4 text-muted-foreground" />
                         </PopoverTrigger>
-                        <PopoverContent className="gap-2 text-[14px]">
+                        <PopoverContent className="gap-2 text-[14px] max-md:text-[1rem]">
                             <PopoverTitle>{legendTitle}</PopoverTitle>
                             {legend}
                         </PopoverContent>

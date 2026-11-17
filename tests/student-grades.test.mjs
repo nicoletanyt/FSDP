@@ -225,9 +225,9 @@ test('student details loads through Vite without missing grading component impor
   const { createServer } = await import('vite')
   const server = await createServer({ server: { middlewareMode: true, hmr: false }, appType: 'custom' })
   try {
-    const page = await server.ssrLoadModule('/src/pages/Instructor/InstructorStudentDetails.tsx')
+    const page = await server.ssrLoadModule('/src/pages/shared/StudentDetail.tsx')
     assert.equal(typeof page.default, 'function')
-    assert.ok((await server.transformRequest('/src/pages/Instructor/InstructorStudentDetails.tsx'))?.code)
+    assert.ok((await server.transformRequest('/src/pages/shared/StudentDetail.tsx'))?.code)
   } finally {
     await server.close()
   }

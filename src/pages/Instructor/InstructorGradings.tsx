@@ -71,7 +71,8 @@ export default function InstructorGradings() {
 
     return (
         <section className="w-full space-y-8">
-            <header>
+            {/* Same gap below as every page header (16px, 24px from md); overrides the section's space-y. */}
+            <header className="mb-4 md:mb-6">
                 <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Gradings</h1>
             </header>
             {sessions.isPending ? (

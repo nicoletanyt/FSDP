@@ -8,7 +8,7 @@ const uuid = (value: number) => `00000000-0000-4000-8000-${String(value).padStar
 const target = { id: 'stored-target-grade', label: 'Stored next grade', colour: 'Blue', is_ranked: true, sort_order: 100 }
 const syllabus = { id: 'database/adult/stored-target/basics/one', grade_id: target.id, category: 'Basics', label: 'Stored assessment technique', sort_order: 1, note: 'Stored syllabus note' }
 
-export function createGradingFixtureReads(account: string, mode: string | null): Pick<InstructorApi, 'getReferenceData' | 'getTechniqueSignOffs' | 'getRecordedAssessments'> {
+export function createGradingFixtureReads(account: string, mode: string | null): Pick<InstructorApi, 'getReferenceData' | 'getTechniqueProgress' | 'setTechniqueProgress' | 'getRecordedAssessments'> {
   const failed = new Set<string>()
   async function ready(resource: string, id?: StudentId) {
     if (mode === 'grading-loading' || (mode === 'grading-race' && id === uuid(100))) await new Promise(resolve => setTimeout(resolve, 1600))
@@ -33,11 +33,16 @@ export function createGradingFixtureReads(account: string, mode: string | null):
       if (mode === 'grading-terminal') reference.gradeTracks = reference.gradeTracks.filter(item => item.grade_id !== target.id)
       return reference
     },
-    async getTechniqueSignOffs(id) {
+    async getTechniqueProgress(id) {
       await ready('signoffs', id)
       if (mode === 'grading-ready' || mode === 'grading-empty') return []
-      return [{ signOff: { id: uuid(9100), student_id: id, syllabus_item_id: `children/${syllabus.id}`,
-        signed_off_at: '2026-11-01T17:00:00Z', signed_off_by: null, note: 'Stored sign-off note' }, instructor: null }]
+      return [{ progress: { id: uuid(9100), student_id: id, syllabus_item_id: `children/${syllabus.id}`, status: 'consistent',
+        note: 'Stored progress note', updated_at: '2026-11-01T17:00:00Z', updated_by: null }, instructor: null }]
+    },
+    async setTechniqueProgress(id, syllabusItemId, status, note) {
+      if (status === 'not_assessed' && !note) return null
+      return { progress: { id: uuid(9101), student_id: id, syllabus_item_id: syllabusItemId, status: status === 'not_assessed' ? null : status,
+        note: note?.trim() || null, updated_at: new Date().toISOString(), updated_by: null }, instructor: null }
     },
     async getRecordedAssessments(id, options = {}) {
       await ready('history', id)

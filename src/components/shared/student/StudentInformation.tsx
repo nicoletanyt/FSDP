@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { CreditCard, HeartPulse, Mail, MapPin, Phone, X } from "lucide-react";
 import { cn } from "cn";
 import { Button } from "@/components/ui/button";
@@ -44,9 +45,77 @@ function StudentContactDetails({ detail }: { detail: StudentDetail }) {
     );
 }
 
-export function StudentInformationCards({ detail }: { detail: StudentDetail }) {
+export function StudentInformationCards({ detail, compact = false, keyFob }: {
+    detail: StudentDetail
+    /** Admin-only key fob status, shown after membership. */
+    keyFob?: ReactNode
+    /** Phones: one card for a narrow column, each fact's label above its value. */
+    compact?: boolean
+}) {
     const profile = directoryStudent(detail, singaporeToday());
     const membership = detail.student.membership_status;
+    const status = (
+        <p className={cn(
+            "detail-status inline-flex w-fit items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium capitalize",
+            membership === "active" ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200" : "bg-muted text-muted-foreground",
+        )}>
+            <CreditCard aria-hidden="true" className="size-3.5" />
+            {membership}
+        </p>
+    );
+    if (compact) return (
+        <Card size="sm" className="detail-card py-0" aria-label="Student information">
+            {/* Label above value: the card sits in the right-hand column on phones. */}
+            <CardContent>
+            <dl className="divide-y">
+                <div className="space-y-1.5 py-3">
+                    <dt className="detail-label text-xs text-muted-foreground">Grading</dt>
+                    <dd className="space-y-1">
+                        <GradeBadge grade={profile.grade} className="min-w-0 px-3 py-1.5" />
+                        <span className="detail-meta block text-sm text-muted-foreground">{profile.trackLabel}</span>
+                    </dd>
+                </div>
+                <div className="space-y-1.5 py-3">
+                    <dt className="detail-label text-xs text-muted-foreground">Principal dojo</dt>
+                    <dd className="detail-body flex min-w-0 items-start gap-1.5 text-sm">
+                        <MapPin aria-hidden="true" className="mt-1 size-3.5 shrink-0 text-muted-foreground" />
+                        <span className="min-w-0 wrap-break-word">{profile.principalDojo}</span>
+                    </dd>
+                </div>
+                <div className="space-y-1.5 py-3">
+                    <dt className="detail-label text-xs text-muted-foreground">Membership</dt>
+                    <dd>{status}</dd>
+                </div>
+                {keyFob && (
+                    <div className="space-y-1.5 py-3">
+                        <dt className="detail-label text-xs text-muted-foreground">Key fob</dt>
+                        <dd>{keyFob}</dd>
+                    </div>
+                )}
+                {/* Shown in place, not behind a dialog: a safety note should be read without a tap. */}
+                <div className="space-y-1.5 py-3">
+                    <dt className="detail-label flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <HeartPulse aria-hidden="true" className="size-3.5 shrink-0" />
+                        Medical alerts
+                    </dt>
+                    {detail.medicalAlerts.length ? (
+                        <dd>
+                            <ul className="space-y-1.5">
+                                {detail.medicalAlerts.map((alert) => (
+                                    <li key={alert.id} className="detail-body rounded-md bg-amber-50 px-2.5 py-1.5 text-sm text-amber-950 wrap-break-word dark:bg-amber-950/40 dark:text-amber-200">
+                                        {alert.description}
+                                    </li>
+                                ))}
+                            </ul>
+                        </dd>
+                    ) : (
+                        <dd className="detail-body text-sm text-muted-foreground">No active medical alerts recorded.</dd>
+                    )}
+                </div>
+            </dl>
+            </CardContent>
+        </Card>
+    );
     return (
         <div className="space-y-3" aria-label="Student information">
             <Card size="sm" className="detail-card">
@@ -58,7 +127,7 @@ export function StudentInformationCards({ detail }: { detail: StudentDetail }) {
             </Card>
             <Card size="sm" className="detail-card">
                 <CardContent className="space-y-2">
-                    <h3 className="detail-label text-xs text-muted-foreground">Principal Dojo</h3>
+                    <h3 className="detail-label text-xs text-muted-foreground">Principal dojo</h3>
                     <p className="detail-body flex items-center gap-1.5 text-sm">
                         <MapPin aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
                         {profile.principalDojo}
@@ -68,26 +137,41 @@ export function StudentInformationCards({ detail }: { detail: StudentDetail }) {
             <Card size="sm" className="detail-card">
                 <CardContent className="space-y-2">
                     <h3 className="detail-label text-xs text-muted-foreground">Membership status</h3>
-                    <p className={cn(
-                        "detail-status inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium capitalize",
-                        membership === "active" ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200" : "bg-muted text-muted-foreground",
-                    )}>
-                        <CreditCard aria-hidden="true" className="size-3.5" />
-                        {membership}
-                    </p>
+                    {status}
                 </CardContent>
             </Card>
+            {keyFob && (
+                <Card size="sm" className="detail-card">
+                    <CardContent className="space-y-2">
+                        <h3 className="detail-label text-xs text-muted-foreground">Key fob</h3>
+                        {keyFob}
+                    </CardContent>
+                </Card>
+            )}
         </div>
     );
 }
 
-export function StudentInformationActions({ detail, showDetailsLink = true }: { detail: StudentDetail; showDetailsLink?: boolean }) {
+export function StudentInformationActions({ detail, showDetailsLink = true, stacked = false, showMedical = true }: {
+    detail: StudentDetail
+    showDetailsLink?: boolean
+    /** One button per row, for a narrow column (the phone details layout). */
+    stacked?: boolean
+    /** Off where the medical alerts are already shown in place (the phone details card). */
+    showMedical?: boolean
+}) {
+    const actions = showMedical ? (["contact", "medical"] as const) : (["contact"] as const);
     return (
-        <div className="flex flex-col gap-2 md:flex-1" aria-label="Contact and medical actions">
-            <div className="grid grid-cols-2 gap-2">
-                {(["contact", "medical"] as const).map((action) => (
+        <div className={cn("flex flex-col gap-2 md:flex-1", stacked && "w-full")} aria-label="Contact and medical actions">
+            <div className={cn("grid gap-2", stacked || actions.length === 1 ? "grid-cols-1" : "grid-cols-2")}>
+                {actions.map((action) => (
                     <Dialog key={action}>
-                        <DialogTrigger render={<Button variant="outline" size="touch" className="h-auto min-w-0 gap-2 px-3 py-2 whitespace-normal" />}>
+                        <DialogTrigger render={<Button variant="outline" size="touch" className={cn(
+                            "h-auto min-w-0 gap-2 px-3 py-2 whitespace-normal",
+                            // Active medical alerts are a safety flag, so the button says so before it's opened.
+                            action === "medical" && detail.medicalAlerts.length > 0 &&
+                                "border-amber-300 bg-amber-50 text-amber-950 hover:bg-amber-100 hover:text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200 dark:hover:bg-amber-950/60",
+                        )} />}>
                             {action === "contact" ? <Phone aria-hidden="true" className="size-4 shrink-0" /> : <HeartPulse aria-hidden="true" className="size-4 shrink-0" />}
                             <span className="min-w-0">{action === "contact" ? "Contact" : "Medical alerts"}</span>
                             {action === "medical" && detail.medicalAlerts.length > 0 && (

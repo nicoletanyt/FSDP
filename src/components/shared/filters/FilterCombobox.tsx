@@ -37,6 +37,9 @@ export default function FilterCombobox({
   renderOption,
   resetValue,
   searchable = true,
+  placeholder,
+  invalid,
+  describedBy,
 }: {
   options: FilterOption[]
   value: string
@@ -53,18 +56,27 @@ export default function FilterCombobox({
   resetValue?: string
   /** Show the "Search" box. Turn off for short lists so phones don't open the keyboard. */
   searchable?: boolean
+  /**
+   * Form use: shown while no option is chosen, instead of defaulting to the
+   * first option, so a required field starts empty.
+   */
+  placeholder?: string
+  /** Form use: marks the field invalid (styles it and sets aria-invalid). */
+  invalid?: boolean
+  /** Form use: id of the field's error message. */
+  describedBy?: string
 }) {
   const items = useMemo(() => options.map((option) => option.value), [options])
   const byValue = useMemo(() => new Map(options.map((option) => [option.value, option])), [options])
-  const selected = byValue.has(value) ? value : (options[0]?.value ?? '')
-  const selectedLabel = byValue.get(selected)?.label ?? ''
+  const selected = byValue.has(value) ? value : placeholder !== undefined ? null : (options[0]?.value ?? '')
+  const selectedLabel = selected === null ? '' : byValue.get(selected)?.label ?? ''
   const [open, setOpen] = useState(false)
 
   return (
     <Combobox
       items={items}
       value={selected}
-      onValueChange={(next) => onChange(next ?? selected)}
+      onValueChange={(next) => { if (next != null) onChange(next) }}
       itemToStringLabel={(item) => byValue.get(item)?.label ?? ''}
       isItemEqualToValue={(item, current) => item === current}
       // Without a search box nothing can be typed, so never filter on a stale query.
@@ -75,17 +87,24 @@ export default function FilterCombobox({
     >
       <ComboboxTrigger
         id={id}
-        aria-label={ariaLabel ? `${ariaLabel}: ${selectedLabel}` : undefined}
+        aria-label={ariaLabel ? `${ariaLabel}: ${selectedLabel || placeholder || ''}` : undefined}
+        aria-invalid={invalid || undefined}
+        aria-describedby={describedBy}
         disabled={disabled}
         render={
           <Button
             variant="outline"
-            className={cn('h-10 w-full min-w-0 cursor-pointer justify-between gap-2 px-4 font-normal', className)}
+            className={cn(
+              'h-10 w-full min-w-0 cursor-pointer justify-between gap-2 px-4 font-normal',
+              'aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20',
+              className,
+            )}
           />
         }
       >
-        <span className="flex min-w-0 items-center truncate">
-          {renderOption && byValue.has(selected) ? renderOption(byValue.get(selected)!) : selectedLabel}
+        <span className={cn('flex min-w-0 items-center truncate', selected === null && 'text-muted-foreground')}>
+          {selected === null ? placeholder
+            : renderOption && byValue.has(selected) ? renderOption(byValue.get(selected)!) : selectedLabel}
         </span>
       </ComboboxTrigger>
       <ComboboxContent className={cn('min-w-56 p-1.5 *:data-[slot=input-group]:m-0 *:data-[slot=input-group]:mb-1.5 *:data-[slot=input-group]:h-10', contentClassName)}>

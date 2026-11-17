@@ -65,6 +65,21 @@ test('grading eligibility follows the published sheets (offline PostgreSQL)', as
     await db.exec(await readFile(migration('20261112160000_grading_eligibility_sheet'), 'utf8'))
     await db.exec(await readFile(migration('20261112170000_grading_adult_crossover'), 'utf8'))
     await db.exec(await readFile(migration('20261112180000_grading_intermediate_direct_entry'), 'utf8'))
+    await db.exec(`
+      insert into public.grades(id,label,colour,is_ranked,sort_order) values
+        ('red-gold-11th-kyu','Red Gold (11th Kyu)','Red',true,2),
+        ('yellow-10th-kyu','Yellow (10th Kyu)','Yellow',true,3),
+        ('orange-9th-kyu','Orange (9th Kyu)','Orange',true,4),
+        ('green-8th-kyu','Green (8th Kyu)','Green',true,5),
+        ('purple-7th-kyu','Purple (7th Kyu)','Purple',true,6),
+        ('blue-6th-kyu','Blue (6th Kyu)','Blue',true,7),
+        ('blue-silver-6th-kyu','Blue Silver (6th Kyu)','Blue',true,8),
+        ('blue-gold-5th-kyu','Blue Gold (5th Kyu)','Blue',true,9),
+        ('brown-4th-kyu','Brown (4th Kyu)','Brown',true,10),
+        ('brown-silver-4th-kyu','Brown Silver (4th Kyu)','Brown',true,11);
+    `)
+    await db.exec(await readFile(migration('20261106062729_grading_fees'), 'utf8'))
+    await db.exec(await readFile(migration('20261116064918_grading_track_requirements_and_fees'), 'utf8'))
     await db.exec(await readFile(migration('20261113100000_grading_endorsements'), 'utf8'))
     await db.exec(await readFile(migration('20261113110000_grading_endorsements_surrogate_key'), 'utf8'))
     await sql("insert into public.instructors(id,user_id,first_name,last_name,email) values($1,$2,'Ada','Sensei','ada@example.test')", [instructor, instructorUser])
@@ -73,6 +88,41 @@ test('grading eligibility follows the published sheets (offline PostgreSQL)', as
       const { rows } = await sql("select grade_id, min_age_years, max_age_years from public.grade_requirements where track='adult' and grade_id in ('black-2nd-kyu','junior-dan') order by grade_id")
       assert.deepEqual(rows, [{ grade_id: 'black-2nd-kyu', min_age_years: null, max_age_years: null },
         { grade_id: 'junior-dan', min_age_years: null, max_age_years: 14 }])
+    })
+
+    await suite.test('adult and child Blue use different minimums, but the same S$50 fee', async () => {
+      const rows = (await sql(`select track,min_months,min_sessions,fee_cents from public.grade_requirements
+        where grade_id='blue-6th-kyu' order by track::text`)).rows
+      assert.deepEqual(rows, [
+        { track: 'adult', min_months: 3, min_sessions: 20, fee_cents: 5000 },
+        { track: 'children', min_months: 6, min_sessions: null, fee_cents: 5000 },
+      ])
+      assert.deepEqual((await sql(`select track,min_months,min_sessions,fee_cents from public.grade_requirements
+        where grade_id='blue-gold-5th-kyu' order by track::text`)).rows, [
+        { track: 'adult', min_months: 0, min_sessions: 24, fee_cents: 5500 },
+        { track: 'children', min_months: 6, min_sessions: null, fee_cents: 5500 },
+      ])
+      assert.equal((await sql("select min_sessions from public.grade_requirements where grade_id='brown-4th-kyu' and track='adult'")).rows[0].min_sessions, 32)
+    })
+
+    await suite.test('the readiness RPC actually applies the age-specific Blue requirements', async () => {
+      const adultBlue = uuid(201), childBlue = uuid(202)
+      await sql(`insert into public.students(id,member_no,first_name,last_name,email,home_centre_id,date_of_birth,joined_at,current_grade_id,last_graded_at)
+        values($1,'BLUE-ADULT','Adult','Blue','blue-adult@example.test',$3,'1990-01-01',current_date-100,'unranked',null),
+        ($2,'BLUE-CHILD','Child','Blue','blue-child@example.test',$3,make_date($4,1,1),current_date-400,'purple-7th-kyu',current_date-100)`,
+        [adultBlue,childBlue,centre,year-10])
+      const adultRows = await readiness(adultBlue), childRows = await readiness(childBlue)
+      assert.equal(adultRows[0].target_grade_id, 'blue-6th-kyu')
+      assert.equal(childRows[0].target_grade_id, 'blue-6th-kyu')
+      assert.equal(adultRows.find(row => row.key === 'time').required, '3 months')
+      assert.equal(adultRows.find(row => row.key === 'time').met, true)
+      assert.equal(adultRows.find(row => row.key === 'sessions').required, '20')
+      assert.equal(adultRows.find(row => row.key === 'sessions').met, false)
+      assert.equal(childRows.find(row => row.key === 'time').required, '6 months')
+      assert.equal(childRows.find(row => row.key === 'time').met, false)
+      assert.equal(childRows.some(row => row.key === 'sessions'), false)
+      await sql('update public.students set last_graded_at=current_date-200 where id=$1',[childBlue])
+      assert.equal((await readiness(childBlue)).find(row => row.key === 'time').met, true)
     })
 
     await suite.test('Junior Dan is for 14 and below; older 1st Kyu holders target 1st Dan', async () => {
@@ -182,6 +232,79 @@ test('grading eligibility follows the published sheets (offline PostgreSQL)', as
         insert into public.event_students(event_id,student_id,attendance_status) values('${classEvent}','${black}','present');
       `)
       assert.equal((await readiness(black)).find(row => row.key === 'sessions').actual, '1')
+    })
+
+    await suite.test('technique progress is tracked separately from eligibility, with an audit trail', async () => {
+      const item = 'children/red-12th-kyu/basics/rolls'
+      await sql("insert into public.syllabus_items(id,grade_id,track,category,sort_order,label) values($1,'red-12th-kyu','children','Basics',1,'Rolls')", [item])
+      await sql("insert into public.syllabus_items(id,grade_id,track,category,sort_order,label) values($1,'red-12th-kyu','children','Basics',2,'Falls')", [`${item}-2`])
+      await sql('insert into public.technique_sign_offs(student_id,syllabus_item_id,signed_off_by) values($1,$2,$3)', [teen, `${item}-2`, instructor])
+      // Before the change an unsigned technique blocks readiness.
+      assert.equal((await readiness(child)).find(row => row.key === 'techniques').met, false)
+
+      // Reproduce the live table: an event-scoped key instead of (student, item), plus the
+      // retired grading-time functions and triggers that exist outside these migrations.
+      await db.exec(`
+        alter table public.technique_sign_offs drop constraint technique_sign_offs_student_id_syllabus_item_id_key;
+        alter table public.technique_sign_offs add column event_id uuid references public.gradings(event_id) on delete cascade;
+        alter table public.technique_sign_offs add constraint technique_sign_offs_event_student_item_key
+          unique nulls not distinct (event_id, student_id, syllabus_item_id);
+        create index technique_sign_offs_student_syllabus_idx on public.technique_sign_offs(student_id, syllabus_item_id);
+        alter policy "Admins and instructors manage sign offs" on public.technique_sign_offs rename to "Admins manage sign offs";
+        create function public.start_assessment_from_technique() returns trigger language plpgsql as $$ begin return new; end $$;
+        create trigger technique_sign_off_starts_assessment after insert on public.technique_sign_offs
+          for each row when (new.event_id is not null) execute function public.start_assessment_from_technique();
+        create function public.instructor_assessment_checklist(target_event uuid, target_student uuid) returns jsonb
+          language sql as $$ select to_jsonb(count(*)) from public.technique_sign_offs where event_id = target_event $$;
+      `)
+      await sql('insert into public.technique_sign_offs(student_id,syllabus_item_id,event_id) values($1,$2,$3)', [teen, item, gradingEvent])
+      await db.exec(await readFile(migration('20261116153017_technique_progress_not_eligibility'), 'utf8'))
+      await db.exec(await readFile(migration('20261116153041_technique_progress'), 'utf8'))
+      // The retired path is gone and progress has one record per student and technique.
+      assert.deepEqual((await sql(`select to_regprocedure('public.instructor_assessment_checklist(uuid,uuid)') as checklist,
+        to_regprocedure('public.start_assessment_from_technique()') as starts,
+        (select count(*)::int from pg_trigger where tgrelid = 'public.technique_progress'::regclass and not tgisinternal and tgname <> 'technique_progress_history') as triggers,
+        (select count(*)::int from information_schema.columns where table_name = 'technique_progress' and column_name = 'event_id') as event_column,
+        (select count(*)::int from pg_policies where tablename = 'technique_progress' and policyname = 'Admins manage sign offs') as old_policy,
+        (select pg_get_constraintdef(oid) from pg_constraint where conname = 'technique_progress_student_id_syllabus_item_id_key') as unique_key`)).rows,
+        [{ checklist: null, starts: null, triggers: 0, event_column: 0, old_policy: 0, unique_key: 'UNIQUE (student_id, syllabus_item_id)' }])
+
+      assert.equal((await readiness(child)).some(row => row.key === 'techniques'), false)
+      assert.ok((await readiness(child)).every(row => row.met), 'unassessed techniques no longer block eligibility')
+      assert.deepEqual((await sql('select student_id from public.eligible_grading_students($1)', [gradingEvent])).rows, [{ student_id: child }])
+      // Existing sign-offs become Consistent.
+      assert.deepEqual((await sql('select status, updated_by from public.technique_progress where student_id=$1', [teen])).rows,
+        [{ status: 'consistent', updated_by: instructor }])
+
+      await as(instructorUser, async () => {
+        const set = async (status, note) => (await sql('select public.set_technique_progress($1,$2,$3::public.technique_status,$4) as data',
+          [child, item, status, note])).rows[0].data
+        const first = await set('developing', '  Tuck the chin  ')
+        assert.equal(first.status, 'developing')
+        assert.equal(first.note, 'Tuck the chin')
+        assert.equal(first.updated_by, instructor)
+        assert.equal(first.instructor.first_name, 'Ada')
+        assert.equal((await set('developing', 'Tuck the chin')).updated_at, first.updated_at, 'saving the same values changes nothing')
+        assert.equal((await set('consistent', null)).status, 'consistent')
+        assert.equal(await set(null, '  '), null)
+        assert.equal((await sql('select count(*)::int as n from public.technique_progress where student_id=$1', [child])).rows[0].n, 0)
+        const history = (await sql(`select previous_status, new_status, note, changed_by from public.technique_progress_history
+          where student_id=$1 order by changed_at, ctid`, [child])).rows
+        assert.deepEqual(history.map(row => [row.previous_status, row.new_status, row.note]),
+          [[null, 'developing', 'Tuck the chin'], ['developing', 'consistent', null], ['consistent', null, null]])
+        assert.ok(history.every(row => row.changed_by === instructor))
+        await assert.rejects(sql("select public.set_technique_progress($1,'missing-item','consistent',null)", [child]), /Technique not found/)
+      })
+      // Direct writes are refused; instructors use the RPC.
+      await assert.rejects(as(instructorUser, () => sql("insert into public.technique_progress(student_id,syllabus_item_id,status,updated_by) values($1,$2,'consistent',$3)",
+        [child, item, instructor])), { code: '42501' })
+      await assert.rejects(as(instructorUser, () => sql('insert into public.technique_progress_history(student_id,syllabus_item_id) values($1,$2)', [child, item])))
+      await assert.rejects(as(childUser, () => sql("select public.set_technique_progress($1,$2,'consistent',null)", [child, item])), /Only instructors/)
+      // Students can read their own progress but never the audit trail.
+      await as(instructorUser, () => sql("select public.set_technique_progress($1,$2,'introduced',null)", [teen, item]))
+      assert.equal((await sql('select count(*)::int as n from public.technique_progress_history')).rows[0].n, 0, 'rolled back')
+      assert.equal(await as(teenUser, async () => (await sql('select * from public.technique_progress_history')).rows.length), 0)
+      assert.equal(await as(teenUser, async () => (await sql('select * from public.technique_progress')).rows.length), 1)
     })
   } finally {
     await db.close()

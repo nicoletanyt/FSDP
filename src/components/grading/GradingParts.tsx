@@ -1,24 +1,15 @@
 import type { ReactNode } from 'react'
-import { Link } from 'react-router'
-import { ChevronLeft, ShieldCheck, TriangleAlert } from 'lucide-react'
+import { ShieldCheck, TriangleAlert } from 'lucide-react'
+import { BackArrow } from '@/components/shared/layout/BackLink'
 import type { LucideIcon } from 'lucide-react'
 import { InstructorAvatar } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
-import { CardFooter } from '@/components/ui/card'
+import { Card, CardFooter } from '@/components/ui/card'
 import { singaporeToday } from '@/lib/grading/format'
 import { cn } from 'cn'
 
 // Building blocks shared by the instructor and admin grading pages, so both
 // sides use one type scale, one spacing rhythm and one way to show each fact.
-
-export function GradingBackLink({ to, children }: { to: string; children: ReactNode }) {
-  return (
-    <Link to={to}
-      className="inline-flex min-h-11 items-center gap-1 rounded-sm text-sm text-muted-foreground hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-ring">
-      <ChevronLeft className="size-4" aria-hidden="true" /> {children}
-    </Link>
-  )
-}
 
 export interface GradingFact {
   key: string
@@ -29,7 +20,8 @@ export interface GradingFact {
 // One line of icon-labelled facts (date, time, place, candidates).
 export function GradingFacts({ items, className }: { items: GradingFact[]; className?: string }) {
   return (
-    <ul className={cn('flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground', className)}>
+    // Phones: one fact per line instead of a ragged wrap.
+    <ul className={cn('flex flex-col gap-2 text-sm text-muted-foreground sm:flex-row sm:flex-wrap sm:gap-x-6', className)}>
       {items.map(({ key, icon: Icon, label }) => (
         <li key={key} className="flex min-w-0 items-center gap-1.5">
           <Icon className="size-4 shrink-0" aria-hidden="true" />
@@ -72,15 +64,26 @@ export function GradingPageHeader({ title, badges, facts, actions, children }: {
 }) {
   return (
     <header className="flex flex-wrap items-start justify-between gap-4">
-      <div className="min-w-0 space-y-3">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <h1 className="min-w-0 text-2xl font-semibold tracking-tight md:text-3xl [overflow-wrap:anywhere]">{title}</h1>
+      <div className="min-w-0 space-y-4 max-sm:w-full">
+        {/* When the badges wrap under the title (phones), give the title room above them. */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-4">
+          {/* Inside a BackNav, phones get ‹ and the title on one row. */}
+          <div className="flex min-w-0 items-start gap-1">
+            <BackArrow />
+            <h1 className="min-w-0 text-2xl font-semibold tracking-tight md:text-3xl [overflow-wrap:anywhere]">{title}</h1>
+          </div>
           {badges}
         </div>
-        {facts && <GradingFacts items={facts} />}
+        {/* The session's details as one card, with room between each fact. */}
+        {facts && (
+          <Card className="px-4 shadow-none" data-grading-facts>
+            <GradingFacts items={facts} className="gap-3 sm:gap-x-8 sm:gap-y-3" />
+          </Card>
+        )}
         {children}
       </div>
-      {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
+      {/* Phones: the actions share one full-width row, each the same width. */}
+      {actions && <div className="flex flex-wrap gap-2 max-sm:w-full max-sm:[&>*]:flex-1">{actions}</div>}
     </header>
   )
 }
@@ -129,7 +132,7 @@ export function ExaminerPanel({ panel, viewerIsChief = false, label, photos = {}
           {panel.map(member => (
             <li key={member.instructorId} data-examiner
               className="inline-flex max-w-full items-center gap-2 rounded-full border bg-background py-1 pr-3 pl-1">
-              <InstructorAvatar interactive={false} avatarClassName="size-7" fallbackClassName="text-3xs"
+              <InstructorAvatar interactive={false} avatarClassName="size-7 max-md:size-9" fallbackClassName="text-3xs"
                 profile={{ id: member.instructorId, name: member.name, role: 'Examiner', avatarUrl: photos[member.instructorId] }} />
               {member.isChief && (
                 <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">

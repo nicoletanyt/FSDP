@@ -1,5 +1,6 @@
 import { FunctionsHttpError } from '@supabase/supabase-js'
 import { supabase } from './supabase'
+import { randomUUID } from '@/lib/uuid'
 
 /** Only fields with a database column; the server re-validates everything. */
 export interface MembershipApplication {
@@ -10,6 +11,8 @@ export interface MembershipApplication {
   home_centre_id: string
   emergency_contact: { name: string; relationship: string; phone: string }
   medical_details: string
+  /** Adds the optional NFC key fob (STRIPE_NFC_FEE_ID) to the same checkout. */
+  key_fob: boolean
 }
 
 /**
@@ -19,7 +22,7 @@ export interface MembershipApplication {
  */
 export async function startMembershipCheckout(
   application: MembershipApplication,
-  idempotencyKey: string = crypto.randomUUID(),
+  idempotencyKey: string = randomUUID(),
 ) {
   window.location.assign(await createMembershipCheckout(application, idempotencyKey))
 }
@@ -30,7 +33,7 @@ export async function startMembershipCheckout(
  */
 export async function createMembershipCheckout(
   application: MembershipApplication,
-  idempotencyKey: string = crypto.randomUUID(),
+  idempotencyKey: string = randomUUID(),
 ): Promise<string> {
   const { data, error } = await supabase.functions.invoke<{ url: string }>(
     'create-checkout-session',

@@ -17,7 +17,7 @@ before(async () => {
     server: { middlewareMode: true }, appType: 'custom', logLevel: 'silent' })
   ;({ InstructorSkeleton } = await server.ssrLoadModule('/src/components/instructor/InstructorSkeletons.tsx'))
   ;({ default: InstructorDataStatus } = await server.ssrLoadModule('/src/components/instructor/InstructorDataStatus.tsx'))
-  ;({ default: StudentDetail } = await server.ssrLoadModule('/src/pages/Instructor/InstructorStudentDetails.tsx'))
+  ;({ default: StudentDetail } = await server.ssrLoadModule('/src/pages/shared/StudentDetail.tsx'))
   ;({ AuthContext } = await server.ssrLoadModule('/src/lib/auth-context.ts'))
   ;({ InstructorApiContext } = await server.ssrLoadModule('/src/lib/instructor/data-context.ts'))
   ;({ instructorQueryKeys: keys } = await server.ssrLoadModule('/src/lib/instructor/query-keys.ts'))

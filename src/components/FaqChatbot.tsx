@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { useNavigate } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 import { ArrowRight, Bot, MessageCircle, Send, X } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import {
     type FaqTopic,
 } from "@/lib/chatbot-faq";
 import { cn } from "@/lib/utils";
+import { randomUUID } from "@/lib/uuid";
 
 type ChatMessage = {
     id: string;
@@ -40,7 +41,7 @@ function createMessage(
     content: string,
     extra: Pick<ChatMessage, "links" | "followUps"> = {},
 ): ChatMessage {
-    return { id: crypto.randomUUID(), role, content, timestamp: new Date(), ...extra };
+    return { id: randomUUID(), role, content, timestamp: new Date(), ...extra };
 }
 
 /** Short replies that don't need an FAQ lookup. */
@@ -66,11 +67,15 @@ function AssistantAvatar({ className }: { className?: string }) {
 
 /**
  * FAQ assistant for students and visitors. Instructors get the LLM-backed
- * FloatingChatbot from InstructorLayout instead, so this one stays hidden for them.
+ * FloatingChatbot from InstructorLayout instead, so this one stays hidden for
+ * them. Administrators don't get a chatbot: it's hidden for their role and on
+ * every admin page (including while the account is still loading).
  */
 export default function FaqChatbot() {
     const { profile } = useAuth();
-    if (profile?.role === "instructor") return null;
+    const { pathname } = useLocation();
+    const onAdminPage = pathname === "/admin" || pathname.startsWith("/admin/");
+    if (profile?.role === "instructor" || profile?.role === "administrator" || onAdminPage) return null;
     return <FaqChatbotPanel />;
 }
 

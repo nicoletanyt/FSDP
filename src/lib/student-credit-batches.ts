@@ -25,7 +25,8 @@ export async function loadStudentCreditBatches(client: SupabaseClient, userId: s
   for (let offset = 0; ; offset += pageSize) {
     const { data, error } = await client.from('credit_batches')
       .select('id, credits_total, credits_remaining, unlimited, expires_at, created_at, source, credit_purchases(pass_title)')
-      .eq('user_id', userId).gt('credits_remaining', 0)
+      // Unlimited passes hold 0 credits by design, so they're loaded by their flag, not their count.
+      .eq('user_id', userId).or('credits_remaining.gt.0,unlimited.eq.true')
       .order('expires_at').order('created_at').order('id')
       .range(offset, offset + pageSize - 1).abortSignal(signal)
     if (error) throw error
@@ -50,5 +51,5 @@ export async function loadStudentCreditBatches(client: SupabaseClient, userId: s
     }
     if (!data || data.length < pageSize) break
   }
-  return batches.filter(batch => batch.remaining > 0)
+  return batches.filter(batch => batch.unlimited || batch.remaining > 0)
 }

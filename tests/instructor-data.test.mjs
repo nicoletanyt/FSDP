@@ -652,14 +652,14 @@ test('assessment target labels come from the recorded application join, includin
   await assert.rejects(setup(application, { ...record, event_id: otherUserId, student }), { code: 'invalid_data' })
 })
 
-test('rosters, sign-offs and zero attendance summaries keep their real nullable values', async () => {
+test('rosters, technique progress and zero attendance summaries keep their real nullable values', async () => {
   const { api } = httpClient(async (_request, url) => {
     switch (url.pathname) {
       case '/rest/v1/events': return Response.json(calendarEntry)
       case '/rest/v1/event_students': return responsePage([{ ...record, attendance_status: 'excused', student }])
-      case '/rest/v1/technique_sign_offs': return responsePage([{
-        id: userId, student_id: studentId, syllabus_item_id: 'database/item', signed_off_at: metadata.created_at,
-        signed_off_by: null, note: null, instructor: null,
+      case '/rest/v1/technique_progress': return responsePage([{
+        id: userId, student_id: studentId, syllabus_item_id: 'database/item', status: null, note: null,
+        updated_at: metadata.created_at, updated_by: null, instructor: null,
       }])
       case '/rest/v1/rpc/instructor_student_summary': return Response.json({
         pastSessions: 0, present: 0, late: 0, absent: 0, excused: 0, unmarked: 0,
@@ -670,7 +670,7 @@ test('rosters, sign-offs and zero attendance summaries keep their real nullable 
     }
   })
   assert.equal((await api.getRoster(eventId)).items[0].record.attendance_status, 'excused')
-  assert.equal((await api.getTechniqueSignOffs(studentId))[0].instructor, null)
+  assert.equal((await api.getTechniqueProgress(studentId))[0].instructor, null)
   assert.equal((await api.getStudentSummary(studentId)).lastAttended, null)
 })
 
@@ -771,7 +771,7 @@ test('all student reads work for verified instructors without a domain link', as
         pastSessions: 0, present: 0, late: 0, absent: 0, excused: 0, unmarked: 0, periodStart: null, periodEnd: null,
         cycleStart: '2020-01-01', cycleAttended: 0, consecutiveAbsences: 0, lastAttended: null,
       })
-      case '/rest/v1/technique_sign_offs': return responsePage([])
+      case '/rest/v1/technique_progress': return responsePage([])
       default: assert.fail(`Unexpected read ${url.pathname}`)
     }
   }, { instructorRecord: null })
@@ -779,11 +779,29 @@ test('all student reads work for verified instructors without a domain link', as
   assert.equal((await api.getStudentDetail(studentId)).student.id, studentId)
   assert.equal((await api.getStudentHistory(studentId)).total, 0)
   assert.equal((await api.getStudentSummary(studentId)).pastSessions, 0)
-  assert.deepEqual(await api.getTechniqueSignOffs(studentId), [])
+  assert.deepEqual(await api.getTechniqueProgress(studentId), [])
   assert.ok(!requests.some(request => new URL(request.url).pathname === '/rest/v1/instructors'))
   const denied = createInstructorApi(fixtureClient({ profile: { id: userId, role: 'student' } }))
   for (const read of [() => denied.getStudents(), () => denied.getStudentDetail(studentId),
-    () => denied.getStudentHistory(studentId), () => denied.getStudentSummary(studentId), () => denied.getTechniqueSignOffs(studentId)]) {
+    () => denied.getStudentHistory(studentId), () => denied.getStudentSummary(studentId), () => denied.getTechniqueProgress(studentId)]) {
     await assert.rejects(read(), { code: 'forbidden' })
   }
+})
+
+test('technique progress saves send the status and trimmed note, decode the saved row and accept a cleared record', async () => {
+  const bodies = []
+  const { api } = httpClient(async (request, url) => {
+    assert.equal(url.pathname, '/rest/v1/rpc/set_technique_progress')
+    const body = await request.json(); bodies.push(body)
+    if (body.new_status === null && body.new_note === null) return Response.json(null)
+    return Response.json({ id: userId, student_id: studentId, syllabus_item_id: body.item, status: body.new_status, note: body.new_note,
+      updated_at: '2026-11-16T03:00:00.123456+00:00', updated_by: instructor.id, event_id: null, instructor })
+  })
+  const saved = await api.setTechniqueProgress(studentId, 'database/item', 'developing', '  Keep hips low  ')
+  assert.deepEqual(bodies[0], { target_student: studentId, item: 'database/item', new_status: 'developing', new_note: 'Keep hips low' })
+  assert.equal(saved.progress.status, 'developing')
+  assert.equal(saved.instructor.id, instructor.id)
+  assert.equal(await api.setTechniqueProgress(studentId, 'database/item', 'not_assessed', '   '), null)
+  assert.deepEqual(bodies[1], { target_student: studentId, item: 'database/item', new_status: null, new_note: null })
+  await assert.rejects(api.setTechniqueProgress(studentId, '', 'consistent', null), { code: 'invalid_request' })
 })

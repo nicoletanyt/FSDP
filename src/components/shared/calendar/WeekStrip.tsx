@@ -8,10 +8,13 @@ export default function WeekStrip({
     date,
     today,
     onSelectDate,
+    marks,
 }: {
     date: Date;
     today: Date;
     onSelectDate: (date: Date) => void;
+    /** Dot colour classes to show under a day, e.g. one per class type booked. */
+    marks?: (day: Date) => string[];
 }) {
     const viewport = useRef<HTMLDivElement>(null);
     const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -69,7 +72,7 @@ export default function WeekStrip({
                                 aria-current={isToday ? "date" : undefined}
                                 className="flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             >
-                                <span className="text-[11px] font-medium text-muted-foreground">
+                                <span className="text-[11px] font-medium text-muted-foreground max-md:text-cal">
                                     {day
                                         .toLocaleDateString("en-GB", { weekday: "short" })
                                         .slice(0, 2)
@@ -85,6 +88,13 @@ export default function WeekStrip({
                                 >
                                     {day.getDate()}
                                 </span>
+                                {marks && (
+                                    <span aria-hidden="true" className="flex h-1.5 gap-0.5">
+                                        {marks(day).slice(0, 3).map((mark) => (
+                                            <span key={mark} className={cn("size-1.5 rounded-full ring-1 ring-foreground/20", mark)} />
+                                        ))}
+                                    </span>
+                                )}
                             </button>
                         );
                     })}

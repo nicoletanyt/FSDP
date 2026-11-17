@@ -1,35 +1,17 @@
-import { useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { loadDashboardGrading } from '@/lib/dashboard-grading'
-
-type Snapshot = { userId: string; status: string; badge: number; loading: boolean }
+import { studentQueryKeys as keys, studentQueryTimes as times } from '@/lib/student/query-keys'
 
 export function useDashboardGrading(userId: string | undefined) {
-  const [snapshot, setSnapshot] = useState<Snapshot | null>(null)
-  const [revision, setRevision] = useState(0)
-
-  useEffect(() => {
-    const refresh = () => { if (document.visibilityState === 'visible') setRevision((value) => value + 1) }
-    window.addEventListener('focus', refresh)
-    document.addEventListener('visibilitychange', refresh)
-    return () => {
-      window.removeEventListener('focus', refresh)
-      document.removeEventListener('visibilitychange', refresh)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!userId) return
-    const controller = new AbortController()
-    setSnapshot({ userId, status: 'Loading applications…', badge: 0, loading: true })
-    void loadDashboardGrading(supabase, userId, controller.signal).then((result) => {
-      if (!controller.signal.aborted) setSnapshot({ userId, ...result, loading: false })
-    }).catch(() => {
-      if (!controller.signal.aborted) setSnapshot({ userId, status: 'Status unavailable — view applications', badge: 0, loading: false })
-    })
-    return () => controller.abort()
-  }, [userId, revision])
-
+  const query = useQuery({
+    queryKey: keys.dashboardGrading(userId ?? ''),
+    queryFn: ({ signal }) => loadDashboardGrading(supabase, userId!, signal),
+    ...times.account,
+    enabled: Boolean(userId),
+  })
   if (!userId) return { status: 'Sign in to view applications', badge: 0, loading: false }
-  return snapshot?.userId === userId ? snapshot : { status: 'Loading applications…', badge: 0, loading: true }
+  if (query.data) return { ...query.data, loading: false }
+  if (query.isError) return { status: 'Status unavailable — view applications', badge: 0, loading: false }
+  return { status: 'Loading applications…', badge: 0, loading: true }
 }

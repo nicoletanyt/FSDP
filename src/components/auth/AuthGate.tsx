@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { PageSkeleton } from '@/components/shared/skeletons'
+import { StudentRouteSkeleton } from '@/components/student/StudentSkeletons'
 import { Navigate, Outlet, useLocation } from 'react-router'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -29,7 +30,7 @@ function AuthStatus() {
   if (loading) {
     return (
       <div className={shell}>
-        <PageSkeleton label="Loading your account…" />
+        {shell ? <PageSkeleton label="Loading your account…" /> : <StudentRouteSkeleton label="Loading your account…" />}
       </div>
     )
   }

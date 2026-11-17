@@ -13,6 +13,6 @@ export function useInstructorQuery<T>(key: (userId: string) => QueryKey,
     placeholderData?: UseQueryOptions<T, Error, T, QueryKey>['placeholderData']
   }) {
   const { session, profile } = useAuth()
-  const userId = profile?.role === 'instructor' ? session?.user.id : undefined
+  const userId = profile?.role === 'instructor' || profile?.role === 'administrator' ? session?.user.id : undefined
   return useClassQuery(key(userId ?? ''), load, { ...options, enabled: Boolean(userId && options.enabled !== false) })
 }

@@ -38,12 +38,21 @@ Member record for a dojo student. Optionally linked to an auth user, with home c
 | `date_of_birth`     | `date`              | no       | —                   |
 | `current_grade_id`  | `text`              | no       | `'unranked'`        |
 | `membership_status` | `membership_status` | no       | `'active'`          |
+| `membership_expires_on` | `date`          | yes      | —                   |
 | `joined_at`         | `date`              | no       | —                   |
 | `last_graded_at`    | `date`              | yes      | —                   |
 | `follow_up_status`  | `follow_up_status`  | no       | `'none'`            |
 | `outstanding_fees`  | `boolean`           | no       | `false`             |
 | `created_at`        | `timestamptz`       | no       | `now()`             |
 | `updated_at`        | `timestamptz`       | no       | `now()`             |
+
+`membership_expires_on` (`20261116120000_membership_expiry.sql`) is the Singapore
+date the membership lapses. Verified membership payments extend it by the months the
+fee covers, from the later of today and the current expiry; the migration backfilled
+existing members from their latest paid membership fee (or `joined_at + 12 months`).
+`finalize_membership_fee` applies online membership fee purchases, and
+`finalize_membership_checkout` (application checkout, optional key fob) delegates to
+it. See `docs/membership-fees.md`.
 
 ### `instructors`
 
@@ -85,7 +94,7 @@ The examiners assigned to one grading event. The primary key is (`grading_event_
 
 Administrators and linked instructors can read panels; students and anonymous users cannot. Only administrators can write them. The admin UI replaces a whole panel with `set_grading_panel(target_event, examiner_ids, chief_id)`, which runs as the caller under RLS, so it is limited to administrators.
 
-**Who can grade:** the trigger function `enforce_grading_panel()` requires the acting instructor to be on the grading's panel (`PGP01`). It runs before every insert or update on `grading_batches` and `instructor_grading_reviews` (`instructor_id`), and on `technique_sign_offs` (`signed_off_by`) when the row has an `event_id`. Class-time sign-offs have no `event_id` and are not affected. Because the check is on the tables, every grading RPC is covered without changing it. Removing an examiner from a panel also locks their unsubmitted drafts.
+**Who can grade:** the trigger function `enforce_grading_panel()` requires the acting instructor to be on the grading's panel (`PGP01`). It runs before every insert or update on `grading_batches` and `instructor_grading_reviews` (`instructor_id`). Technique progress is a class-time coaching record and is not panel-gated (`20261116153017_technique_progress_not_eligibility.sql` drops the old sign-off trigger). Because the check is on the tables, every grading RPC is covered without changing it. Removing an examiner from a panel also locks their unsubmitted drafts.
 
 **Backfill** (`20261111123748_grading_panels.sql`): each existing grading's assessing instructor (`events.instructor_id`) became its chief examiner. Anyone who had already graded it (batches, reviews or sign-offs) became a member. Everyone backfilled was flagged as an examiner.
 
@@ -356,7 +365,7 @@ Resume/edit support: `20261108154345_resume_editable_grading_batches.sql`.
 
 Each instructor has one independent batch per `(event_id, instructor_id, track,
 target_grade_id)`. The only states are `draft` and `submitted`. No final grade,
-student promotion, legacy assessment-status update or technique sign-off is
+student promotion, legacy assessment-status update or technique progress is
 produced by saving/submitting a batch.
 
 | Table | Columns |
@@ -512,18 +521,42 @@ Both tables are administrator-only under RLS.
 
 The edit RPCs are `move_grading_candidate`, `split_grading_session`, `merge_grading_sessions` and `add_grading_session`. Each one re-times the day and turns the schedule back into a draft. `publish_grading_schedule` / `unpublish_grading_schedule` toggle publication; publishing needs every applicant placed and no empty sessions. `examiner_grading_day` adds `is_private`, `published_at`, `capacity`, `warnings` (administrators and the chief only) and, for each session, `transitions` with their lengths.
 
-### `technique_sign_offs`
+### `technique_progress`
 
-Instructor sign-off that a student has demonstrated one syllabus item.
+Progress checklist: one student's coaching status on one syllabus item (formerly `technique_sign_offs`; existing sign-offs became `consistent`). No row, or a null `status`, means **Not assessed**. Updating it is optional and it does **not** affect grading eligibility, which is assessed on the A/B/C grading checklist.
 
-| Column             | Type          | Nullable | Default             |
-| ------------------ | ------------- | -------- | ------------------- |
-| `id`               | `uuid`        | no       | `gen_random_uuid()` |
-| `student_id`       | `uuid`        | no       | —                   |
-| `syllabus_item_id` | `text`        | no       | —                   |
-| `signed_off_at`    | `timestamptz` | no       | `now()`             |
-| `signed_off_by`    | `uuid`        | yes      | —                   |
-| `note`             | `text`        | yes      | —                   |
+| Column             | Type               | Nullable | Default             |
+| ------------------ | ------------------ | -------- | ------------------- |
+| `id`               | `uuid`             | no       | `gen_random_uuid()` |
+| `student_id`       | `uuid`             | no       | —                   |
+| `syllabus_item_id` | `text`             | no       | —                   |
+| `status`           | `technique_status` | yes      | —                   |
+| `note`             | `text`             | yes      | —                   |
+| `updated_at`       | `timestamptz`      | no       | `now()`             |
+| `updated_by`       | `uuid`             | yes      | —                   |
+
+`technique_status` is `introduced`, `developing` or `consistent`. Unique on `(student_id, syllabus_item_id)`. Notes are at most 1,000 characters.
+
+`20261116153017_technique_progress_not_eligibility.sql` also retires the earlier grading-time sign-off path that some installations had outside these migrations: the `event_id` column and its keys, the `save_instructor_assessment_technique`, `instructor_assessment_checklist`, `finish_instructor_grading_review` and `start_assessment_from_technique` functions, and their triggers. Grading is marked on `grading_batches`.
+
+Administrators, the student themselves and instructors can read it; only administrators write directly. Instructors write through `set_technique_progress(target_student, item, new_status, new_note)`, which upserts the row (recording the caller as `updated_by`), ignores unchanged saves, and deletes the row when both status and note are empty. It returns the row with its `instructor`, or null when cleared.
+
+### `technique_progress_history`
+
+Audit trail written by a trigger on every insert, update and delete of `technique_progress`.
+
+| Column             | Type               | Nullable | Default             |
+| ------------------ | ------------------ | -------- | ------------------- |
+| `id`               | `uuid`             | no       | `gen_random_uuid()` |
+| `student_id`       | `uuid`             | no       | —                   |
+| `syllabus_item_id` | `text`             | no       | —                   |
+| `previous_status`  | `technique_status` | yes      | —                   |
+| `new_status`       | `technique_status` | yes      | —                   |
+| `note`             | `text`             | yes      | —                   |
+| `changed_by`       | `uuid`             | yes      | —                   |
+| `changed_at`       | `timestamptz`      | no       | `now()`             |
+
+A null status is Not assessed. Administrators and instructors can read it; nobody writes it directly.
 
 ## Notifications
 

@@ -30,10 +30,10 @@ import InstructorDataStatus from "@/components/instructor/InstructorDataStatus";
 import GradingSignatureDialog from "@/components/instructor/GradingSignatureDialog";
 import GradingChecklistTable from "@/components/grading/GradingChecklistTable";
 import {
-    GradingBackLink,
     GradingNote,
     GradingPageHeader,
 } from "@/components/grading/GradingParts";
+import { BackNav } from "@/components/shared/layout/BackLink";
 import {
     ExaminerChecklist,
     ExaminerPicker,
@@ -458,7 +458,8 @@ function GradingTable({
                                                     disabled={locked || absent.has(student.student_id)}
                                                     maxLength={2000}
                                                     rows={3}
-                                                    className="w-full min-w-40 rounded-md border border-input bg-background px-3 py-2 text-sm disabled:opacity-50 sm:min-w-52"
+                                                    // Phones: the column follows the A/B/C picker, not this box.
+                                                    className="w-full min-w-0 rounded-md border border-input bg-background px-3 py-2 text-sm disabled:opacity-50 sm:min-w-52"
                                                 />
                                             )}
                                             columnDisabled={(student) =>
@@ -661,16 +662,17 @@ function useGradingSessionData(eventId: string | undefined) {
 }
 
 // "Back to calendar" when opened from the calendar's View Grading, else the grading day.
-function BackLink({ eventId }: { eventId: string | undefined }) {
+function Back({ eventId, children }: { eventId: string | undefined; children: ReactNode }) {
     const calendarReturn = useCalendarReturn();
     return calendarReturn ? (
-        <GradingBackLink to={calendarReturn}>Back to calendar</GradingBackLink>
+        <BackNav to={calendarReturn} label="Back to calendar">{children}</BackNav>
     ) : (
-        <GradingBackLink
+        <BackNav
             to={eventId ? `/instructor/gradings/${eventId}` : "/instructor/gradings"}
+            label="Back to grading sessions"
         >
-            Back to grading sessions
-        </GradingBackLink>
+            {children}
+        </BackNav>
     );
 }
 
@@ -719,8 +721,7 @@ function Shell({
 }) {
     return (
         <section className="w-full space-y-4">
-            <BackLink eventId={eventId} />
-            {children}
+            <Back eventId={eventId}>{children}</Back>
         </section>
     );
 }

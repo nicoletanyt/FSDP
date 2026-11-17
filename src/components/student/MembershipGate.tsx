@@ -4,7 +4,7 @@ import { IdCard } from 'lucide-react'
 
 import EmptyState from '@/components/shared/layout/EmptyState'
 import PageHeader from '@/components/shared/layout/PageHeader'
-import { PageSkeleton } from '@/components/shared/skeletons'
+import { StudentRouteSkeleton } from '@/components/student/StudentSkeletons'
 import { buttonVariants } from '@/components/ui/button'
 import { useMembershipStatus } from '@/hooks/use-membership-status'
 
@@ -23,7 +23,7 @@ export default function MembershipGate({ title, feature, children }: {
 }) {
   const { status, loading } = useMembershipStatus()
 
-  if (loading) return <PageSkeleton label="Checking your membership…" />
+  if (loading) return <StudentRouteSkeleton label="Checking your membership…" />
   if (!status || status === 'active') return <>{children}</>
 
   const copy = status === 'pending'

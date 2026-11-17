@@ -16,7 +16,9 @@ function AdminShell() {
     <div
       className={cn(
         'flex flex-1 flex-col',
-        isCalendar && 'min-h-0 overflow-hidden',
+        // Desktop only: the calendar fills the screen and scrolls inside. Below lg it
+        // has no inner scroll area, so clipping here would leave it unscrollable.
+        isCalendar && 'lg:min-h-0 lg:overflow-hidden',
       )}
     >
       <AdminNavbar />
@@ -25,7 +27,7 @@ function AdminShell() {
           'flex-1 px-4 text-sm sm:px-6',
           pageWidth,
           isCalendar
-            ? 'flex min-h-0 flex-col overflow-hidden py-4 sm:py-6'
+            ? 'flex flex-col py-4 sm:py-6 lg:min-h-0 lg:overflow-hidden'
             : 'space-y-6 py-6 sm:py-8',
         )}
       >

@@ -8,12 +8,8 @@
 @theme inline {
     --font-heading: var(--font-sans);
     --font-sans: 'Geist Variable', sans-serif;
-    /* Scale typography by 1.25, keeping text-base at 20px. */
-    --text-3xs: 0.78125rem;
-    --text-3xs--line-height: 1.5;
-    --text-2xs: 0.859375rem;
-    --text-2xs--line-height: 1.5;
-    --text-xs: 0.9375rem;
+    /* Scale typography by 1.25, keeping text-base at 20px.
+       3xs/2xs/xs live in the non-inline @theme below so phones can raise them. */
     --text-sm: 1.09375rem;
     --text-base: 1.25rem;
     --text-lg: 1.40625rem;
@@ -26,6 +22,12 @@
     --text-7xl: 5.625rem;
     --text-8xl: 7.5rem;
     --text-9xl: 10rem;
+    /* Calendar markers (weekday letters, hour labels, timeline block text).
+       The only text allowed below 16px on phones, so calendars stay dense. */
+    --text-cal: 0.78125rem;
+    --text-cal--line-height: 1rem;
+    --text-cal-lg: 0.9375rem;
+    --text-cal-lg--line-height: 1.25rem;
     --color-brand-blue: var(--brand-blue);
     --color-brand-red: var(--brand-red);
     --color-brand-red-ink: var(--brand-red-ink);
@@ -72,6 +74,16 @@
     --radius-2xl: calc(var(--radius) * 1.8);
     --radius-3xl: calc(var(--radius) * 2.2);
     --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/* The small sizes are read through variables (not inlined) so the phone block
+   below can lift them to the 16px minimum without touching desktop. */
+@theme {
+    --text-3xs: 0.78125rem;
+    --text-3xs--line-height: 1.5;
+    --text-2xs: 0.859375rem;
+    --text-2xs--line-height: 1.5;
+    --text-xs: 0.9375rem;
 }
 
 /*
@@ -211,14 +223,25 @@
     }
 }
 
+/* Phones: once a page header shows its own ‹ beside the title (BackNav),
+   the "Back to …" text link above it is redundant. */
+@media (max-width: 47.999rem) {
+    :has(> [data-back-link]):has([data-back-inline]) > [data-back-link] {
+        display: none;
+    }
+}
+
 @media (max-width: 47.999rem) {
     :root {
-        --text-3xs: 0.625rem;
-        --text-3xs--line-height: 0.875rem;
-        --text-2xs: 0.6875rem;
-        --text-2xs--line-height: 1rem;
-        --text-xs: 0.75rem;
-        --text-xs--line-height: 1rem;
+        /* Phones: the small sizes lift to 16px (the minimum). text-sm and up
+           are inlined desktop sizes, already above 16px; only their line
+           heights below apply. Calendar markers use text-cal instead. */
+        --text-3xs: 1rem;
+        --text-3xs--line-height: 1.25rem;
+        --text-2xs: 1rem;
+        --text-2xs--line-height: 1.25rem;
+        --text-xs: 1rem;
+        --text-xs--line-height: 1.25rem;
         --text-sm: 0.875rem;
         --text-sm--line-height: 1.25rem;
         --text-base: 1rem;
@@ -249,8 +272,8 @@
        (e.g. text-3xl, font-medium) still win. */
     @layer base {
         body {
-            font-size: 0.875rem;
-            line-height: 1.25rem;
+            font-size: 1rem;
+            line-height: 1.5rem;
         }
 
         h1 {
@@ -272,14 +295,14 @@
         }
 
         h4 {
-            font-size: 0.875rem;
-            line-height: 1.25rem;
+            font-size: 1rem;
+            line-height: 1.5rem;
             font-weight: 600;
         }
 
         label {
-            font-size: 0.75rem;
-            line-height: 1rem;
+            font-size: 1rem;
+            line-height: 1.5rem;
             font-weight: 500;
         }
     }
@@ -297,29 +320,29 @@
     .student-directory-view .directory-meta,
     .student-directory-view .directory-copy,
     .student-directory-filters .directory-copy {
-        font-size: 0.875rem;
-        line-height: 1.25rem;
+        font-size: 1rem;
+        line-height: 1.5rem;
     }
 
     .student-directory-view [data-slot="grade-badge"],
     .student-directory-view .directory-filter-count {
-        font-size: 0.75rem;
-        line-height: 1rem;
+        font-size: 1rem;
+        line-height: 1.25rem;
     }
 
     /* Student detail typography roles: keep content and controls consistent. */
     .student-detail-view .detail-body,
     .student-detail-view .detail-meta {
-        font-size: 0.875rem;
-        line-height: 1.25rem;
+        font-size: 1rem;
+        line-height: 1.5rem;
         font-weight: 400;
     }
 
     .student-detail-view .detail-label,
     .student-detail-view .detail-status,
     .student-detail-view [data-slot="grade-badge"] {
-        font-size: 0.75rem;
-        line-height: 1rem;
+        font-size: 1rem;
+        line-height: 1.25rem;
         font-weight: 500;
     }
 
@@ -331,8 +354,8 @@
         [data-slot="popover-trigger"]
     ) {
         min-height: 2.75rem;
-        font-size: 0.875rem;
-        line-height: 1.25rem;
+        font-size: 1rem;
+        line-height: 1.5rem;
         font-weight: 500;
     }
 
@@ -371,9 +394,6 @@
         font-weight: 600;
     }
 
-    [data-student-training-dialog] [aria-label="Technique checklist"] > .detail-card {
-        box-shadow: none;
-    }
 }
 
 @media (min-width: 48rem) {
@@ -470,68 +490,21 @@
 }
 
 @media (max-width: 47.999rem), (max-height: 40rem) {
-    [data-student-training-dialog] [data-slot="dialog-header"] {
+    [data-student-training-dialog] [data-slot="dialog-header"],
+    [data-progress-checklist-dialog] [data-slot="dialog-header"] {
         gap: 0.25rem;
         padding: 0.5rem 1rem;
-    }
-
-    [data-student-training-dialog] > .overflow-hidden {
-        padding: 0.75rem 1rem;
-    }
-
-    .student-training-information {
-        gap: 0.5rem;
-    }
-
-    .student-training-information [aria-label="Student information"] {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 0.5rem;
-    }
-
-    .student-training-information .detail-card {
-        --card-spacing: 0;
-        min-width: 0;
-        margin: 0;
-        padding: 0;
-        border: 0;
-        border-radius: 0;
-        background: transparent;
-        box-shadow: none;
-    }
-
-    .student-training-information .detail-card:first-child {
-        grid-column: 1 / -1;
-    }
-
-    .student-training-information .detail-card:first-child [data-slot="card-content"] {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 0.5rem;
-    }
-
-    .student-training-information .detail-card:first-child [data-slot="card-content"] > * {
-        margin: 0;
-    }
-
-    .student-training-information .detail-card:first-child h3 {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        overflow: hidden;
-        clip-path: inset(50%);
-        white-space: nowrap;
-    }
-}
-
-@media (min-width: 30rem) and (max-height: 40rem) {
-    .student-training-layout {
-        grid-template-columns: 14rem minmax(0, 1fr);
-        grid-template-rows: minmax(0, 1fr);
     }
 }
 
 body:has([data-check-in-kiosk="true"]) [data-floating-chatbot] {
   display: none;
+}
+
+/* Class booking on phones and tablets: the chat button sits above the pinned
+   Enrol bar (44px button + 12px padding either side), not beside it. */
+@media (max-width: 63.999rem) {
+  body:has([data-enrol-bar]) [data-floating-chatbot] {
+    bottom: calc(4.5rem + 0.75rem + env(safe-area-inset-bottom));
+  }
 }
