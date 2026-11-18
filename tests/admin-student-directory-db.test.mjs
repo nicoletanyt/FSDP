@@ -21,8 +21,9 @@ test('student directory scopes live students and eligibility, and rejects non-ad
       create table public.students(id uuid primary key,member_no text,first_name text,last_name text,
         email text,date_of_birth date,home_centre_id uuid,current_grade_id text,membership_status text);
       create table public.events(id uuid primary key,status text);
-      create table public.gradings(event_id uuid,official_schedule boolean,application_status text,
-        grading_date date,application_opens_on date,application_deadline date);
+       create table public.gradings(event_id uuid,official_schedule boolean,application_status text,
+         grading_date date,application_opens_on date,application_deadline date);
+       create sequence public.eligibility_calls;
       create function public.admin_attendance_monitoring(target_centre uuid default null)
       returns jsonb language sql stable as $$
         select coalesce(jsonb_agg(jsonb_build_object(
@@ -31,14 +32,15 @@ test('student directory scopes live students and eligibility, and rejects non-ad
           'attended',2,'missed',2,'enrolments',4,'last_attended','2026-11-10'
         )), '[]'::jsonb) from public.students
         where target_centre is null or home_centre_id = target_centre $$;
-      create function public.eligible_grading_students(target_event uuid)
-      returns table(student_id uuid) language sql stable as $$
-        select id from public.students where member_no='A' $$;
+       create function public.eligible_grading_students(target_event uuid)
+       returns table(student_id uuid) language sql volatile as $$
+         select id from public.students where member_no='A' and nextval('public.eligibility_calls') > 0 $$;
       grant usage on schema public,auth to authenticated;
       grant execute on function auth.uid(),public.is_administrator(),
         public.admin_attendance_monitoring(uuid),public.eligible_grading_students(uuid) to authenticated;
     `)
     await db.exec(await readFile(new URL('../supabase/migrations/20261111031833_admin_student_directory.sql',import.meta.url),'utf8'))
+    await db.exec(await readFile(new URL('../supabase/migrations/20261118151727_materialize_student_directory_eligibility.sql',import.meta.url),'utf8'))
     await db.query("insert into public.users values ($1,'administrator'),($2,'student')",[id(1),id(2)])
     await db.query("insert into public.centres values ($1,'One'),($2,'Two')",[id(20),id(21)])
     await db.exec("insert into public.grades values ('unranked','Unranked')")
@@ -61,9 +63,16 @@ test('student directory scopes live students and eligibility, and rejects non-ad
     assert.equal(rows[0].membership_status,'active')
     assert.equal(rows[1].risk_level,'at_risk')
     assert.equal(rows[1].grading_status,'not_eligible')
+    await db.exec('reset role')
+    assert.equal((await db.query('select last_value from public.eligibility_calls')).rows[0].last_value,1,
+      'eligibility is calculated once, not once per directory student')
+    await db.exec(`set role authenticated`)
     const scoped = (await db.query('select public.admin_student_directory($1) as result',[id(20)])).rows[0].result
     assert.equal(scoped.length,1)
     assert.equal(scoped[0].id,id(10))
+    await db.exec('reset role')
+    assert.equal((await db.query('select last_value from public.eligibility_calls')).rows[0].last_value,2)
+    await db.exec('set role authenticated')
     await assert.rejects(() => db.query('select public.admin_student_directory($1)',[id(99)]),/Centre not found/)
   } finally { await db.close() }
 })

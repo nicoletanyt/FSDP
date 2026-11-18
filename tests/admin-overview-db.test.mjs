@@ -26,7 +26,7 @@ test('admin overview uses live bookings, scoped students and official grading da
       create table public.event_students(event_id uuid,student_id uuid,attendance_status text);
       create table public.gradings(event_id uuid,official_schedule boolean,application_status text,
         grading_date date,application_opens_on date,application_deadline date);
-      create table public.grading_applications(student_id uuid);
+       create table public.grading_applications(student_id uuid,grading_event_id uuid);
       create table public.grading_email_sends(status text,recipient_count integer);
       create function public.eligible_grading_students(target_event uuid)
       returns table(student_id uuid) language sql stable as $$
@@ -57,10 +57,18 @@ test('admin overview uses live bookings, scoped students and official grading da
       ((now() at time zone 'Asia/Singapore')::date+20+time '10:00') at time zone 'Asia/Singapore',
       ((now() at time zone 'Asia/Singapore')::date+20+time '11:00') at time zone 'Asia/Singapore')`,[id(50),id(20)])
     await db.query(`insert into public.gradings values ($1,true,'open',
-      (now() at time zone 'Asia/Singapore')::date+20,
-      (now() at time zone 'Asia/Singapore')::date-1,
-      (now() at time zone 'Asia/Singapore')::date+10)`,[id(50)])
-    await db.query('insert into public.grading_applications values ($1)',[id(11)])
+       (now() at time zone 'Asia/Singapore')::date+20,
+       (now() at time zone 'Asia/Singapore')::date-1,
+       (now() at time zone 'Asia/Singapore')::date+10)`,[id(50)])
+    // Today's session and future sessions count; previous-day sessions do not.
+    // The centre filter continues to use the student's home centre.
+    await db.query(`insert into public.gradings values
+      ($1,false,'closed',(now() at time zone 'Asia/Singapore')::date,null,null),
+      ($2,false,'closed',(now() at time zone 'Asia/Singapore')::date-1,null,null),
+      ($3,false,'closed',(now() at time zone 'Asia/Singapore')::date+3,null,null)`,[id(51),id(52),id(53)])
+    await db.query(`insert into public.grading_applications values
+      ($1,$4),($2,$5),($2,$6),($3,$7)`,[id(10),id(11),id(12),id(50),id(51),id(52),id(53)])
+    await db.exec(await readFile(new URL('../supabase/migrations/20261118150427_overview_current_upcoming_grading_applications.sql', import.meta.url), 'utf8'))
     await db.exec("insert into public.grading_email_sends values ('accepted',5),('failed',100)")
 
     await as(2)
@@ -77,7 +85,7 @@ test('admin overview uses live bookings, scoped students and official grading da
     assert.equal(snapshot.attention_students[1].no_recent,true)
     assert.equal(snapshot.eligible_count,1)
     assert.equal(snapshot.open_gradings,1)
-    assert.equal(snapshot.application_count,1)
+    assert.equal(snapshot.application_count,3)
     assert.equal(snapshot.invitation_recipients,5)
     assert.equal(snapshot.trend.length,12)
     assert.equal(snapshot.trend.reduce((total,point)=>total+point.sessions,0),6)
@@ -85,6 +93,7 @@ test('admin overview uses live bookings, scoped students and official grading da
     const {rows:[{snapshot:scoped}]} = await db.query('select public.admin_overview($1) as snapshot',[id(20)])
     assert.equal(scoped.total_students,2)
     assert.equal(scoped.attention_count,2)
+    assert.equal(scoped.application_count,2)
     assert.equal(scoped.trend.reduce((total,point)=>total+point.sessions,0),5)
     assert.equal(scoped.invitation_recipients,5)
     await assert.rejects(() => db.query('select public.admin_overview($1)',[id(99)]),/Centre not found/)
@@ -111,6 +120,7 @@ test('admin overview uses live bookings, scoped students and official grading da
     assert.equal(updated.attention_students[0].first_name,'Bob')
     assert.equal(updated.attention_students[0].missed,5)
     assert.equal(updated.total_students,3)
+    assert.equal(updated.application_count,3)
 
     await db.exec(`reset role;
       create table public.admin_attendance_email_sends (
