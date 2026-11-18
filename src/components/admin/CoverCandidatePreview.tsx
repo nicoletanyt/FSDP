@@ -38,7 +38,7 @@ export default function CoverCandidatePreview({ eventId, className, startsAt, en
       // The RPC checks distance, conflicting classes/unavailability, and a
       // matching positive slot for part-time instructors before this label.
       const available = (data as Candidate[]).filter(candidate =>
-        candidate.eligibility === 'demo_only_match' && candidate.distance_km !== null)
+       candidate.eligibility === 'estimated_match' && candidate.distance_km !== null)
       if (available.length === 0) return []
       const { data: instructors, error: instructorError } = await supabase.from('instructors')
         .select('id,employment_type').in('id', available.map(candidate => candidate.instructor_id))
@@ -60,12 +60,12 @@ export default function CoverCandidatePreview({ eventId, className, startsAt, en
   const invited = new Set(invitations.data?.filter(item => item.status === 'accepted').map(item => item.instructor_id))
 
   return <section aria-label="Cover candidate preview" className="mt-4 flex flex-1 flex-col gap-2 border-t border-foreground/10 pt-4">
-    <h5 className="text-sm font-medium">Nearby instructor preview</h5>
+     <h5 className="text-sm font-medium">Nearby instructor preview</h5>
     {preview.isPending && <p role="status">Checking linked instructors…</p>}
     {preview.isError && <div role="alert" className="flex flex-wrap items-center gap-2 text-destructive">
       {coverErrorMessage(preview.error)} <Button size="sm" variant="outline" onClick={() => void preview.refetch()}>Retry</Button>
     </div>}
-    {preview.isSuccess && preview.data.length === 0 && <p>No available nearby instructors for this class.</p>}
+    {preview.isSuccess && preview.data.length === 0 && <p>No eligible instructors found.</p>}
     {preview.isSuccess && preview.data.length > 0 && <ul className="divide-y divide-foreground/10">
       {preview.data.map(candidate => <li key={candidate.instructor_id} className="py-2 first:pt-0">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -73,7 +73,7 @@ export default function CoverCandidatePreview({ eventId, className, startsAt, en
           {invited.has(candidate.instructor_id) && <Badge variant="secondary" className="ml-auto bg-success/10 text-success" title="EmailJS accepted the invitation; delivery is not confirmed.">Invited</Badge>}
         </div>
         <p className="text-muted-foreground">{candidate.employment_type === 'full_time' ? 'Full time' : 'Part time'}</p>
-        <p className="text-muted-foreground">{candidate.distance_km} km to dojo</p>
+       <p className="text-muted-foreground">Approx. {candidate.distance_km} km to dojo</p>
       </li>)}
     </ul>}
     {preview.isSuccess && <CoverInvitationDialog eventId={eventId} className={className}

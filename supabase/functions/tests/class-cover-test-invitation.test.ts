@@ -1,10 +1,16 @@
 import assert from 'node:assert/strict'
-import { handleRequest, invitationCopy } from '../send-class-cover-test-invitation/handler.ts'
+import { handleRequest, invitationCopy, emailJsRejectionReason } from '../send-class-cover-test-invitation/handler.ts'
 
 const host = 'https://example.supabase.co'
 const eventId = '00000000-0000-4000-8000-000000000021'
 const instructorId = '00000000-0000-4000-8000-000000000011'
 const invitationId = '00000000-0000-4000-8000-000000000022'
+
+Deno.test('provider rejection diagnostics use fixed labels and never persist echoed private data', () => {
+  assert.match(emailJsRejectionReason('The recipients address is corrupted; priya@example.test; key=private-secret'), /recipient address/)
+  assert.equal(emailJsRejectionReason('invalid template_id: secret-template'), 'EmailJS rejected the template setting; no automatic retry.')
+  assert.doesNotMatch(emailJsRejectionReason('Unexpected priya@example.test accessToken=secret-key'), /priya|example|secret/)
+})
 
 Deno.test('test invitation copy links to an authenticated confirmation, not automatic assignment', () => {
   const copy = invitationCopy({ id: eventId, name: '[Cover Test] Weekday 3 PM', centre_id: 'x',
@@ -36,28 +42,31 @@ Deno.test('preview never sends, send reserves once, and rejected attempt stays t
   let providerTimesOut = false
   let recipientEmail = 'bentwo@example.com'
   let status = 'sending'
+  const audit: { failureReason: string | null } = { failureReason: null }
   globalThis.fetch = async (input,init) => {
     const req = new Request(input,init)
     if (req.url === `${host}/auth/v1/user`) return Response.json({ id:'00000000-0000-4000-8000-000000000001', aud:'authenticated', role:'authenticated', email:'admin@example.com', app_metadata:{},user_metadata:{},created_at:new Date().toISOString() })
     if (req.url.includes('/rest/v1/users?')) return Response.json({ role:'administrator' })
-    if (req.url.includes('/rest/v1/rpc/preview_class_cover_candidates')) return Response.json([{ instructor_id: instructorId, eligibility:'demo_only_match' }])
+    if (req.url.includes('/rest/v1/rpc/preview_class_cover_candidates')) return Response.json([{ instructor_id: instructorId, eligibility:'estimated_match' }])
     if (req.url.includes('/rest/v1/rpc/reserve_class_cover_test_invitation')) {
       reservations++
       return reservations === 1 ? Response.json(invitationId) : Response.json({code:'23505',message:'Already recorded'},{status:409})
     }
-    if (req.url.includes('/rest/v1/events?')) return Response.json({ id:eventId,name:'[Cover Test] Weekday 3 PM',centre_id:'test',
+    if (req.url.includes('/rest/v1/events?')) return Response.json({ id:eventId,name:'Mixed/Family',centre_id:'test',
       starts_at:'2099-11-09T07:00:00Z',ends_at:'2099-11-09T08:00:00Z',status:'scheduled',centres:{name:'Bukit Timah Dojo'} })
     if (req.url.includes('/rest/v1/instructors?')) return Response.json({ id:instructorId,first_name:'Ben',last_name:'Two',email:recipientEmail })
     if (req.url.includes('/rest/v1/class_cover_test_invitations?')) {
       const updated = await req.json()
-      if (updated.status) status = updated.status
+       if (updated.status) status = updated.status
+       if (updated.failure_reason) audit.failureReason = updated.failure_reason
       return new Response(null,{status:204})
     }
     if (req.url === 'https://api.emailjs.com/api/v1.0/email/send') {
       sends++
       const payload = await req.json()
       assert.equal(payload.template_id,'template_test')
-      assert.equal(payload.template_params.to_email,recipientEmail)
+       assert.equal(payload.template_params.to_email,'suroul29@gmail.com')
+       assert.equal(payload.template_params.bcc_emails,recipientEmail)
       assert.match(payload.template_params.email_subject,/Cover request/)
       assert.match(payload.template_params.email_body,/You have been requested to cover the following class/)
       assert.match(payload.template_params.email_body,/Thank you for your support\./)
@@ -86,11 +95,13 @@ Deno.test('preview never sends, send reserves once, and rejected attempt stays t
     assert.equal(sends,1)
     providerRejects = true
     reservations = 0
-    recipientEmail = 'benten@example.test.com'
+    recipientEmail = 'instructor@example.org'
     const failed = await handleRequest(request('send'))
     assert.equal((await failed.json()).status,'failed')
     assert.equal(status,'failed')
     assert.equal(sends,2)
+    assert.ok(audit.failureReason?.includes('unclassified'))
+    assert.doesNotMatch(audit.failureReason!, /suroul29|gmail|sensitive/)
     reservations = 0
     providerTimesOut = true
     const uncertain = await handleRequest(request('send'))

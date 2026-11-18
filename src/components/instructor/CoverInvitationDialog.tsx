@@ -23,7 +23,7 @@ const time = new Intl.DateTimeFormat('en-SG', {
 
 const messages: Record<Invitation['state'], string> = {
   open: 'Confirm your response below. The class is assigned only after a successful acceptance.',
-  accepted: 'You accepted this test class. It has been assigned to you.',
+   accepted: 'You accepted this class. It has been assigned to you.',
   declined: 'You declined this invitation. The cover request remains open.',
   not_sent: 'This invitation was not confirmed as sent. Contact the administrator if you need help.',
   covered: 'Another instructor has already been assigned to this class.',
@@ -63,7 +63,7 @@ export default function CoverInvitationDialog({ invitationId, onClose }: { invit
         await queryClient.invalidateQueries({ queryKey: ['instructor'] })
       } else {
         setOutcome(result === 'ineligible'
-          ? 'You are no longer eligible for this test class. Your response was not recorded; contact the administrator.'
+           ? 'You are no longer eligible for this class. Your response was not recorded; contact the administrator.'
           : result === 'covered' ? messages.covered : result === 'not_sent' ? messages.not_sent : messages.closed)
       }
       await invitation.refetch()
@@ -78,10 +78,10 @@ export default function CoverInvitationDialog({ invitationId, onClose }: { invit
     (invitation.data?.state === 'open' && outcome === messages.covered)
 
   return <Dialog open onOpenChange={open => { if (!open && !pending) onClose() }}>
-    <DialogContent showCloseButton={!pending} >
+    <DialogContent showCloseButton={!pending} className="h-auto max-h-[85dvh] w-[calc(100vw-2rem)] max-w-md">
       <DialogHeader>
         <DialogTitle>Class cover invitation</DialogTitle>
-        <DialogDescription>{covered ? 'No response is needed.' : 'Review this test invitation before responding.'}</DialogDescription>
+         <DialogDescription>{covered ? 'No response is needed.' : 'Review this invitation before responding.'}</DialogDescription>
       </DialogHeader>
       <div className="space-y-5">
         {!valid && <Alert variant="destructive"><AlertDescription>This invitation link is invalid.</AlertDescription></Alert>}

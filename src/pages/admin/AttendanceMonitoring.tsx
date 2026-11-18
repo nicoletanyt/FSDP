@@ -111,7 +111,7 @@ export default function AttendanceMonitoring() {
     <div className="space-y-4">
       <div className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm">
         <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning-foreground dark:text-warning" aria-hidden="true" />
-        <p className="text-muted-foreground">Based on each student’s last five completed class enrolments, not how often they book. Two or more missed classes means at risk. With no marked results, risk is not assessed. Unmarked and excused classes do not count as attendance results.</p>
+        <p className="text-muted-foreground">Based on each student’s last five finished class enrolments, not how often they book. Three or more missed classes means at risk. With no marked results, risk is not assessed. Unmarked and excused classes do not count as attendance results.</p>
       </div>
 
       {error && <Alert variant="destructive" role="alert"><AlertDescription className="flex flex-wrap items-center gap-3">
@@ -191,8 +191,8 @@ export default function AttendanceMonitoring() {
                 <p className="mt-2 text-sm">{student.enrolments} completed enrolments considered · {marked} marked · {student.attended} attended · {student.missed} missed.</p>
                 <p className="mt-1 text-sm text-muted-foreground">{marked === 0
                   ? 'No marked attendance in these enrolments; risk is not assessed.'
-                  : student.missed >= 2 ? 'Two or more missed classes in the last five enrolments.'
-                    : 'Fewer than two missed classes in the last five enrolments.'}</p>
+                  : student.missed >= 3 ? 'Three or more missed classes in the last five enrolments.'
+                    : 'Fewer than three missed classes in the last five enrolments.'}</p>
               </TableCell></TableRow>}
             </Fragment>
           })}</TableBody>
