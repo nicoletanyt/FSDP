@@ -72,3 +72,46 @@ npm run seed:grading -- --datetime "2026-11-28T10:00" --remove
 ```
 
 **Tests:** `node --test tests/create-test-grading.test.mjs`
+
+## Add credits (`seed:credits`)
+
+Adds class credits to a student account. Same setup as `seed:class`.
+
+```bash
+npm run seed:credits -- --student jamie.lim@example.test --amount 10
+npm run seed:credits -- --help
+```
+
+| Flag | Default | Description |
+|---|---|---|
+| `--student` | **required** | Student email. The student must have a login. |
+| `--amount` | **required** | Credits to add, 1–1000. |
+| `--expires` | never | Expiry date, `YYYY-MM-DD`. |
+
+Each run adds a new batch, so repeating it adds more credits. There is no remove flag.
+It prints the new balance. No payment or Stripe receipt is created.
+
+**Tests:** `node --test tests/add-credits.test.mjs`
+
+## Give a membership (`seed:membership`)
+
+Activates a student's membership without Stripe. Same setup as `seed:class`.
+
+```bash
+npm run seed:membership -- --student jamie.lim@example.test
+npm run seed:membership -- --student jamie.lim@example.test --rank yellow-10th-kyu --months 6
+npm run seed:membership -- --help
+```
+
+| Flag | Default | Description |
+|---|---|---|
+| `--student` | **required** | Student email. The student must have a login. |
+| `--rank` | keep current | A `grades.id`, e.g. `unranked`, `yellow-10th-kyu`. |
+| `--months` | `12` | Months added to the expiry, 1–120. |
+
+It runs the same `finalize_membership_fee` function as the Stripe webhook, with a fake session id.
+The student becomes active, the expiry moves forward, and a paid dummy "Membership fee (test)"
+payment (120 SGD) shows in their history. Missing phone and emergency contact get dummy values.
+Real data is never overwritten. Running it again extends the expiry again.
+
+**Tests:** `node --test tests/add-membership.test.mjs`
