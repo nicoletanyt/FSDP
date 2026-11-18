@@ -60,7 +60,7 @@ export function parseStart(value) {
   return date
 }
 
-function integer(value, flag, min, max) {
+export function integer(value, flag, min, max) {
   if (typeof value !== 'string' || !/^\d+$/.test(value) || Number(value) < min || (max && Number(value) > max)) {
     throw new Error(`--${flag} must be an integer from ${min}${max ? ` to ${max}` : ' up'}.`)
   }
@@ -80,13 +80,13 @@ export function validateArgs(values) {
 
 export const testClassId = startsAt => fixtureId(`class/${startsAt.toISOString()}`)
 
-function requiredEnv(name) {
+export function requiredEnv(name) {
   const value = process.env[name]?.trim()
   if (!value) throw new Error(`Set ${name} in the root .env.`)
   return value
 }
 
-function checked(result, operation) {
+export function checked(result, operation) {
   if (result.error) throw new Error(`${operation} failed${result.error.code ? ` (${result.error.code})` : ''}: ${result.error.message}`)
   return result.data
 }
