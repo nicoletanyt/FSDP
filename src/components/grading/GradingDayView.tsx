@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router'
-import { CalendarDays, ChevronRight, Clock3, MapPin, Users } from 'lucide-react'
+import { ArrowRight, CalendarDays, ChevronRight, Clock3, MapPin, Users } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { DatabaseGradeBadge as GradeBadge } from '@/components/shared/grade/GradeBadge'
 import {
@@ -11,20 +11,21 @@ import type { DayStudent, GradingCandidate, GradingDay, GradingSessionSummary } 
 import { candidateCount, gradingDate, gradingTimeLabel } from '@/lib/grading/format'
 import { cn } from 'cn'
 
+const appliedDate = (value: string) =>
+  new Date(value).toLocaleDateString('en-SG', { day: 'numeric', month: 'short', timeZone: 'Asia/Singapore' })
+
 export type GradingDayList = 'students' | 'sessions'
 
 const cellClass = 'px-3 py-3'
 const headClass = 'px-3 pb-2 font-medium'
 
-// Columns of placeholders are noise: only show numbers and member numbers when someone has one.
+// Columns of placeholders are noise: only show candidate numbers when someone has one.
 const anyNumber = (people: GradingCandidate[]) => people.some(person => person.candidateNumber !== null)
-const anyMemberNo = (people: GradingCandidate[]) => people.some(person => person.memberNo)
 
 // Every applicant, grouped by the grade they are attempting.
 function StudentList({ day, studentHref }: { day: GradingDay; studentHref: (studentId: string) => string }) {
   const sorted = day.sessions.length > 0
   const numbered = sorted && anyNumber(day.students)
-  const members = anyMemberNo(day.students)
   const position = new Map(day.sessions.map(session => [session.id, session.position]))
   const byGrade = new Map<string, DayStudent[]>()
   for (const student of day.students) byGrade.set(student.targetGrade.id, [...(byGrade.get(student.targetGrade.id) ?? []), student])
@@ -33,7 +34,7 @@ function StudentList({ day, studentHref }: { day: GradingDay; studentHref: (stud
       (a.candidateNumber ?? Infinity) - (b.candidateNumber ?? Infinity) || a.name.localeCompare(b.name)) }))
     .sort((a, b) => a.grade.sort_order - b.grade.sort_order)
   if (!groups.length) return <GradingNote>No candidates have applied for this grading yet.</GradingNote>
-  const columns = 2 + (numbered ? 1 : 0) + (members ? 1 : 0) + (sorted ? 1 : 0)
+  const columns = 3 + (numbered ? 1 : 0) + (sorted ? 1 : 0)
   return (
     <Card className="py-0">
       <CardContent className="overflow-x-auto px-0">
@@ -43,8 +44,8 @@ function StudentList({ day, studentHref }: { day: GradingDay; studentHref: (stud
             <tr className="border-b text-left text-muted-foreground">
               {numbered && <th scope="col" className="w-14 px-4 pt-3 pb-2 text-center font-medium">No.</th>}
               <th scope="col" className={cn(headClass, 'pt-3', !numbered && 'pl-4')}>Student</th>
-              {members && <th scope="col" className={cn(headClass, 'hidden pt-3 md:table-cell')}>Member no.</th>}
               <th scope="col" className={cn(headClass, 'pt-3', !sorted && 'pr-4')}>Current grade</th>
+              <th scope="col" className={cn(headClass, 'pt-3', !sorted && 'pr-4')}>Applied on</th>
               {sorted && <th scope="col" className={cn(headClass, 'pt-3 pr-4')}>Session</th>}
             </tr>
           </thead>
@@ -64,8 +65,11 @@ function StudentList({ day, studentHref }: { day: GradingDay; studentHref: (stud
                   <th scope="row" className={cn(cellClass, 'text-left font-medium', !numbered && 'pl-4')}>
                     <Link to={studentHref(student.studentId)} className="hover:underline focus-visible:outline-2 focus-visible:outline-ring">{student.name}</Link>
                   </th>
-                  {members && <td className={cn(cellClass, 'hidden tabular-nums text-muted-foreground md:table-cell')}>{student.memberNo ?? ''}</td>}
-                  <td className={cn(cellClass, !sorted && 'pr-4')}><GradeBadge grade={student.currentGrade} /></td>
+                  <td className={cn(cellClass)}><GradeBadge grade={student.currentGrade} /></td>
+                  <td className={cn(cellClass, 'whitespace-nowrap text-muted-foreground', !sorted && 'pr-4')}>
+                    {student.appliedAt ? appliedDate(student.appliedAt) : ''}
+                    {student.late && <span className="ml-2 rounded-full bg-warning/15 px-2 py-0.5 text-xs font-medium text-foreground">Late</span>}
+                  </td>
                   {sorted && <td className={cn(cellClass, 'whitespace-nowrap pr-4 text-muted-foreground')}>
                     {student.sessionId && position.has(student.sessionId) ? sessionLabel(position.get(student.sessionId)!) : 'Not sorted'}
                   </td>}
@@ -98,12 +102,10 @@ function SessionCard({ session, action, studentHref, renderMove, renderSessionAc
   renderSessionActions?: SessionControl
 }) {
   const label = sessionLabel(session.position)
-  const mixed = session.grades.length > 1
   const rows = session.grades.flatMap(group => group.candidates.map(candidate => ({ candidate, grade: group.grade })))
     .sort((a, b) => (a.candidate.candidateNumber ?? Infinity) - (b.candidate.candidateNumber ?? Infinity))
   const people = rows.map(row => row.candidate)
   const numbered = anyNumber(people)
-  const members = anyMemberNo(people)
   return (
     <Card>
       <CardHeader className="border-b">
@@ -128,9 +130,7 @@ function SessionCard({ session, action, studentHref, renderMove, renderSessionAc
             <tr className="border-b text-left text-muted-foreground">
               {numbered && <th scope="col" className="w-14 px-4 pb-2 text-center font-medium">No.</th>}
               <th scope="col" className={cn(headClass, !numbered && 'pl-4')}>Student</th>
-              {members && <th scope="col" className={cn(headClass, 'hidden sm:table-cell')}>Member no.</th>}
-              {mixed && <th scope="col" className={headClass}>Target grade</th>}
-              <th scope="col" className={cn(headClass, !renderMove && 'pr-4')}>Current grade</th>
+              <th scope="col" className={cn(headClass, !renderMove && 'pr-4')}>Current → target grade</th>
               {renderMove && <th scope="col" className="pr-2 pb-2"><span className="sr-only">Move</span></th>}
             </tr>
           </thead>
@@ -141,9 +141,13 @@ function SessionCard({ session, action, studentHref, renderMove, renderSessionAc
                 <th scope="row" className={cn(cellClass, 'text-left font-medium', !numbered && 'pl-4')}>
                   <Link to={studentHref(candidate.studentId)} className="hover:underline focus-visible:outline-2 focus-visible:outline-ring">{candidate.name}</Link>
                 </th>
-                {members && <td className={cn(cellClass, 'hidden tabular-nums text-muted-foreground sm:table-cell')}>{candidate.memberNo ?? ''}</td>}
-                {mixed && <td className={cellClass}><GradeBadge grade={grade} /></td>}
-                <td className={cn(cellClass, !renderMove && 'pr-4')}><GradeBadge grade={candidate.currentGrade} /></td>
+                <td className={cn(cellClass, !renderMove && 'pr-4')}>
+                  <span className="flex flex-wrap items-center gap-2">
+                    <GradeBadge grade={candidate.currentGrade} />
+                    <ArrowRight className="size-4 shrink-0 text-muted-foreground" aria-label="to" />
+                    <GradeBadge grade={grade} />
+                  </span>
+                </td>
                 {renderMove && <td className="w-px whitespace-nowrap py-1 pr-2 text-right">{renderMove(candidate, session)}</td>}
               </tr>
             ))}

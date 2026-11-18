@@ -92,6 +92,9 @@ export interface GradingCandidate {
 export interface DayStudent extends GradingCandidate {
   targetGrade: GradingGrade
   sessionId: string | null
+  // When the paid application was saved, and whether that was after the deadline.
+  appliedAt: string | null
+  late: boolean
 }
 
 // A time slot on the grading day; it can hold several target grades.
@@ -190,7 +193,8 @@ export function decodeGradingDay(value: unknown): GradingDay {
     warnings: Array.isArray(row.warnings) ? row.warnings.map(decodeWarning) : [],
     students: row.students.map(item => {
       const person = record(item)
-      return { ...decodeCandidate(person), targetGrade: decodeGrade(person.target_grade), sessionId: optionalText(person.session_id) }
+      return { ...decodeCandidate(person), targetGrade: decodeGrade(person.target_grade), sessionId: optionalText(person.session_id),
+        appliedAt: optionalText(person.applied_at), late: person.late === true }
     }),
     sessions: row.sessions.map(item => {
       const entry = record(item)
