@@ -156,7 +156,7 @@ function ClassSessionPicker({
             <div
                 role="group"
                 aria-label="Session times"
-                className="grid gap-2 p-1 max-md:gap-4 lg:max-h-[28rem] lg:overflow-y-auto"
+                className="grid gap-2 p-1 max-md:gap-4 lg:grid-cols-2"
             >
                 {daySessions.map((session) => {
                     const { tone, label } = sessionAvailability(session);
@@ -206,7 +206,7 @@ function ClassSessionPicker({
                             }}
                         >
                             <span className="min-w-0 max-md:space-y-1.5">
-                                <span className="block font-semibold">
+                                <span className="block font-semibold md:text-base">
                                     {sessionTime(session)}
                                 </span>
                                 <span className="flex items-center gap-1 text-sm max-md:gap-1.5">
@@ -265,7 +265,7 @@ function ClassSessionPicker({
     return (
         <>
             {/* Phones: a container, so the days size to the 70% column rather than the screen. */}
-            <div className="min-w-0 self-start rounded-lg border bg-card p-2 shadow-xs max-md:@container md:col-start-1 md:row-start-1 md:justify-self-start md:p-3">
+            <div className="min-w-0 self-start rounded-lg border bg-card p-2 shadow-xs @container md:col-start-1 md:row-start-1 md:p-4">
                 <Calendar
                     aria-label="Class dates"
                     mode="single"
@@ -275,7 +275,7 @@ function ClassSessionPicker({
                     startMonth={sessions[0]?.date}
                     endMonth={sessions.at(-1)?.date}
                     showOutsideDays={false}
-                    className="mx-auto p-0 [--booking-day:min(2.75rem,calc(100cqw/7))] md:p-3 md:[--booking-day:clamp(1.75rem,9vw,2.75rem)] lg:[--booking-day:3rem] [&_.rdp-weekday]:w-(--booking-day) [&_.rdp-day]:size-(--booking-day) [&_.rdp-day_button]:size-(--booking-day) [&_.rdp-day_button]:text-cal-lg [&_.rdp-caption_label]:text-base [&_.rdp-caption_label]:font-semibold"
+                    className="mx-auto p-0 [--booking-day:min(2.75rem,calc(100cqw/7))] md:[--booking-day:min(3.5rem,calc(100cqw/7))] [&_.rdp-weekday]:w-(--booking-day) [&_.rdp-day]:size-(--booking-day) [&_.rdp-day_button]:size-(--booking-day) [&_.rdp-day_button]:text-cal-lg md:[&_.rdp-day_button]:text-sm [&_.rdp-caption_label]:text-base [&_.rdp-caption_label]:font-semibold"
                     disabled={(day) => busy || !sessionsByDay.has(dateKey(day))}
                     // Today: a ring around the number, readable even on a day without classes.
                     // A selected today keeps the selected fill.
@@ -305,9 +305,9 @@ function ClassSessionPicker({
                     <div className="space-y-3">{times}</div>
                 </ClassDetailsOverlay>
             ) : (
-                <div className="min-w-0 space-y-3 md:col-start-1 md:row-start-2 xl:col-start-2 xl:row-start-1">
+                <div className="min-w-0 space-y-3 md:col-start-1 md:row-start-2">
                     <h2
-                        className="flex flex-wrap items-baseline gap-x-2 font-semibold"
+                        className="flex flex-wrap items-baseline gap-x-2 text-lg font-semibold"
                         aria-live="polite"
                     >
                         {prettyDate(date)}
@@ -917,11 +917,11 @@ function BookingSummary({
     return (
         <section
             aria-labelledby="booking-summary-title"
-            className="flex flex-col gap-4 rounded-xl border bg-card p-4 shadow-xs md:sticky md:top-4 md:col-start-2 md:row-span-2 md:row-start-1 md:self-start xl:col-start-3 xl:row-span-1"
+            className="flex flex-col gap-4 rounded-xl border bg-card p-4 shadow-xs md:sticky md:top-4 lg:top-28 lg:p-5 md:col-start-2 md:row-span-2 md:row-start-1 md:self-start"
         >
             <div className="space-y-1">
                 <div className="flex items-center justify-between gap-3">
-                    <h2 id="booking-summary-title" className="font-semibold">
+                    <h2 id="booking-summary-title" className="text-lg font-semibold">
                         Selected classes
                     </h2>
                     {count > 0 && (
@@ -1329,13 +1329,13 @@ function ClassBooking({
     return (
         <section className="space-y-4" aria-labelledby="booking-class-title">
             {/* Same gap below as every PageHeader (16px, 24px from md), for the phone header too. */}
-            <div id="booking-class-title" className="mb-4 md:mb-6">
+            <div className="mb-4 md:mb-6">
                 {phone ? (
                     <header className="space-y-3">
                         <div className="flex items-start justify-between gap-3">
                             <div className="flex min-w-0 items-start gap-1">
                                 <BackArrow />
-                                <h1 className="text-2xl font-semibold tracking-tight">
+                                <h1 id="booking-class-title" className="text-2xl font-semibold tracking-tight">
                                     Book a class
                                 </h1>
                             </div>
@@ -1351,15 +1351,19 @@ function ClassBooking({
                         </p>
                     </header>
                 ) : (
-                    <PageHeader title={type || "Choose a class"} actions={filter} />
+                    <PageHeader
+                        titleId="booking-class-title"
+                        title={type || "Choose a class"}
+                        actions={filter}
+                    />
                 )}
             </div>
             <BalanceCard creditAccount={creditAccount} creditError={creditError} />
             {!schedule.active && <BookingEligibility linked={schedule.linked} />}
             {current ? (
                 // Phones: calendar, then the selection at the bottom (times open in a sheet).
-                // md–lg: calendar over times, selection on the right. xl: three columns, selection still on the right.
-                <div className="grid min-w-0 gap-4 md:grid-cols-[minmax(0,1fr)_17rem] md:gap-5 xl:grid-cols-[auto_minmax(0,1fr)_18rem]">
+                // md and up: calendar over times, selection on the right.
+                <div className="grid min-w-0 gap-4 md:grid-cols-[minmax(0,1fr)_18rem] md:gap-5 lg:grid-cols-[minmax(0,1fr)_20rem] lg:gap-6">
                     <ClassSessionPicker
                         key={params.toString()}
                         sessions={sessions}

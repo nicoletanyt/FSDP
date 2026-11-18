@@ -9,6 +9,7 @@ import {
   decodeGradingBatch, decodeGradingSignature, decodeAvailabilitySave, decodeAvailabilitySnapshot,
   decodeEndorsementStatus, decodeEventEndorsements, decodeStudentApplication,
 } from './decoders'
+import type { Payment } from '../student-profile'
 import { InstructorDataError, toInstructorDataError } from './errors'
 import { createInstructorProfileApi } from './profile'
 import { decodeExaminerSessions, decodeGradingDay } from './grading-panels'
@@ -515,6 +516,20 @@ export function createInstructorApi(client: InstructorClient) {
       return allRows('grading_applications', ['submitted_at', 'id'], decodeStudentApplication, signal,
         'id,status,submitted_at,target_grade:grades(*),session:grading_sessions(position,starts_at,ends_at),'
         + 'grading:gradings(grading_date,track,event:events(id,name,starts_at,status,centre:centres(name)))', { student_id: studentId })
+    },
+
+    // Payment history for one student. Administrators and the student's instructors only.
+    async getStudentPayments(id: StudentId, signal?: AbortSignal): Promise<Payment[]> {
+      const studentId = parseEntityId(id, 'student')
+      await getInstructorAccount(signal, true)
+      const rows = await rpc('student_payment_history', { target_student: studentId }, signal,
+        'Unable to load payment history. Please try again.')
+      if (!Array.isArray(rows)) throw new InstructorDataError('invalid_data', 'The payment history response is invalid.')
+      return rows.map((row: Record<string, unknown>) => ({
+        id: String(row.id), date: String(row.paid_at), item: String(row.item),
+        description: String(row.description), method: String(row.method), amount: Number(row.amount_cents) / 100,
+        status: row.status === 'paid' ? 'Paid' as const : row.status === 'refunded' ? 'Refunded' as const : 'Pending' as const,
+      }))
     },
 
     async getEndorsementStatus(id: StudentId, signal?: AbortSignal) {
