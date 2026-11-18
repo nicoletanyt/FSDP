@@ -115,3 +115,33 @@ payment (120 SGD) shows in their history. Missing phone and emergency contact ge
 Real data is never overwritten. Running it again extends the expiry again.
 
 **Tests:** `node --test tests/add-membership.test.mjs`
+
+## Create an account (`seed:account`)
+
+Creates a student, instructor or administrator login. Same setup as `seed:class`.
+
+```bash
+npm run seed:account -- --username sam
+npm run seed:account -- --username coach --role instructor --examiner --full-time
+npm run seed:account -- --help
+```
+
+| Flag | Default | Description |
+|---|---|---|
+| `--username` | **required** | Login email. A bare name becomes `<name>@example.test`. |
+| `--password` | `TestPass123` | 8–128 characters with a letter and a number. |
+| `--role` | `student` | `student`, `instructor` or `administrator`. |
+| `--name` | username | `"First Last"`. |
+
+Instructor-only flags (all optional):
+
+| Flag | Description |
+|---|---|
+| `--examiner` | May sit on grading panels. |
+| `--chief-examiner` | Same as `--examiner`. Chief is set per grading in the admin panel. |
+| `--part-time` / `--full-time` | Employment type. Default: unspecified. |
+
+A student also gets a `pending` student record (dummy date of birth, first active centre).
+Run `seed:membership` to activate it. It fails if the email is already registered.
+
+**Tests:** `node --test tests/create-account.test.mjs`
