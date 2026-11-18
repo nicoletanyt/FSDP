@@ -667,6 +667,8 @@ The fetched reset migration does not contain `grade_requirements` policies. `202
 
 `20261105130000_instructor_all_students.sql` adds instructor SELECT policies for `students`, `emergency_contacts`, `student_medical_alerts`, `event_students`, `grading_applications` and `technique_sign_offs`, and updates directory/history/summary RPC role checks. Its read helpers do not require teaching assignments or `instructors.user_id` linkage. Existing write policies and report-author ownership remain separate; no table columns are changed.
 
+`20261118120000_student_payment_history.sql` adds `student_payment_history(target_student)`, a `security definer` RPC for administrators and instructors. It merges `payments`, `credit_purchases` and paid `grading_checkout_attempts` for one student (the same sources as the student's own payments page) without widening RLS on those tables.
+
 ## Enums referenced above
 
 | Enum                           | Values                                                         |

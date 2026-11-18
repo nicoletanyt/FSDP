@@ -25,6 +25,7 @@ import { InstructorSkeleton } from "@/components/instructor/InstructorSkeletons"
 import StudentSessionHistory from "@/components/shared/student/StudentSessionHistory";
 import StudentGradingRead from "@/components/shared/student/StudentGradingRead";
 import { ProgressChecklistDialog } from "@/components/instructor/ProgressChecklistEditor";
+import StudentPayments from "@/components/shared/student/StudentPayments";
 import StudentApplications from "@/components/shared/student/StudentApplications";
 import { useAuth } from "@/hooks/use-auth";
 import { InstructorApiContext } from "@/lib/instructor/data-context";
@@ -46,7 +47,7 @@ import {
 import type { StudentDetail, StudentId } from "@/lib/instructor/types";
 import { cn } from "cn";
 
-type DetailTab = "overview" | "sessions" | "grading";
+type DetailTab = "overview" | "sessions" | "grading" | "payments";
 
 function AttendanceSummary({ studentId }: { studentId: StudentId }) {
     const api = useInstructorApi();
@@ -184,7 +185,7 @@ function StudentDetailContent({ detail }: { detail: StudentDetail }) {
     const keyFob = isAdmin ? <KeyFobStatus studentId={detail.student.id} /> : undefined;
     const tab = params.get("tab");
     const activeTab: DetailTab =
-        tab === "sessions" || tab === "grading" ? tab : "overview";
+        tab === "sessions" || tab === "grading" || tab === "payments" ? tab : "overview";
     const loadGrading = useCallback(
         (signal: AbortSignal) => loadStudentGrading(api, detail.student.id, signal),
         [api, detail.student.id],
@@ -342,7 +343,8 @@ function StudentDetailContent({ detail }: { detail: StudentDetail }) {
                         if (
                             value === "overview" ||
                             value === "sessions" ||
-                            value === "grading"
+                            value === "grading" ||
+                            value === "payments"
                         )
                             selectTab(value);
                     }}
@@ -356,6 +358,7 @@ function StudentDetailContent({ detail }: { detail: StudentDetail }) {
                         <TabsTrigger value="overview">Overview</TabsTrigger>
                         <TabsTrigger value="sessions">Sessions</TabsTrigger>
                         <TabsTrigger value="grading">Grading</TabsTrigger>
+                        <TabsTrigger value="payments">Payments</TabsTrigger>
                     </TabsList>
                     <TabsContent value="overview" className="space-y-6">
                         <section
@@ -403,6 +406,9 @@ function StudentDetailContent({ detail }: { detail: StudentDetail }) {
                         <StudentGradingRead title="Grading eligibility" detail={detail} reads={grading} onRetry={grading.retry} />
                         <StudentApplications studentId={detail.student.id} today={singaporeToday()} />
                         <StudentGradingRead title="Grading history" detail={detail} reads={grading} onRetry={grading.retry} />
+                    </TabsContent>
+                    <TabsContent value="payments" className="space-y-6">
+                        <StudentPayments studentId={detail.student.id} />
                     </TabsContent>
                 </Tabs>
             </div>
