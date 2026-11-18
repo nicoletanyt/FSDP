@@ -15,6 +15,7 @@
     "seed:credits": "node --env-file=.env scripts/add-credits.mjs",
     "seed:membership": "node --env-file=.env scripts/add-membership.mjs",
     "seed:account": "node --env-file=.env scripts/create-account.mjs",
+    "seed:availability": "node --env-file=.env scripts/set-class-availability.mjs",
     "seed:grading": "node --env-file=.env scripts/create-test-grading.mjs",
     "seed:grading-sessions": "node --env-file=.env scripts/seed-grading-sessions.mjs",
     "test:auth-db": "node --test tests/auth-db.test.mjs",

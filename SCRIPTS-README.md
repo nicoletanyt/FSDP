@@ -145,3 +145,25 @@ A student also gets a `pending` student record (dummy date of birth, first activ
 Run `seed:membership` to activate it. It fails if the email is already registered.
 
 **Tests:** `node --test tests/create-account.test.mjs`
+
+## Class availability (`seed:availability`)
+
+Marks an instructor's class unavailable (a cover request), or available again. Same setup as `seed:class`.
+
+```bash
+npm run seed:availability -- --datetime "2026-11-25T18:00" --instructor coach@example.test --class-type adults
+npm run seed:availability -- --datetime "2026-11-25T18:00" --instructor coach@example.test --class-type adults --available
+```
+
+| Flag | Description |
+|---|---|
+| `--datetime` | **required.** Class start, to the minute. No offset means Singapore time. |
+| `--instructor` | **required.** Email of the assigned instructor. |
+| `--class-type` | **required.** `class_types.id`, e.g. `adults`. |
+| `--available` | Toggle back: cancels the request. |
+
+Unavailable creates the same request as the instructor's button, so the admin calendar shows it.
+No admin email is sent. The class must be scheduled and in the future. A class another instructor
+already covers can't be changed. Repeating a command is safe.
+
+**Tests:** `node --test tests/set-class-availability.test.mjs`
