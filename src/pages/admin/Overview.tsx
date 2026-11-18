@@ -132,7 +132,7 @@ export default function Overview() {
         <Card>
           <CardHeader>
             <CardTitle>Needs attention</CardTitle>
-            <CardDescription>Students who missed at least two of their last five completed class enrolments.</CardDescription>
+            <CardDescription>Students who missed at least three of their last five finished class enrolments.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
             {snapshot?.attention_students.map(student => (
@@ -153,10 +153,10 @@ export default function Overview() {
               </div>
             ))}
             {snapshot?.attention_count === 0 && <p className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">No students are at risk right now.</p>}
-            {snapshot && snapshot.attention_count > snapshot.attention_students.length && <p className="text-xs text-muted-foreground">Showing 5 of {snapshot.attention_count} students.</p>}
             {!snapshot && (error ? <p className="text-sm text-muted-foreground">Unavailable</p> : <div aria-hidden="true" className="space-y-3">{[0, 1, 2].map(row => <Skeleton key={row} className="h-12 w-full" />)}</div>)}
-            <div className="flex justify-end pt-2">
-              <Button variant="outline" size="sm" onClick={() => setNoticeOpen(true)} disabled={!snapshot}>
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
+              {snapshot && snapshot.attention_count > snapshot.attention_students.length && <p className="text-xs text-muted-foreground">Showing {snapshot.attention_students.length} out of {snapshot.attention_count} students.</p>}
+              <Button variant="outline" size="sm" className="ml-auto" onClick={() => setNoticeOpen(true)} disabled={!snapshot}>
                 <Bell aria-hidden="true" />Follow Up
               </Button>
             </div>
