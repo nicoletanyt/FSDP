@@ -4,11 +4,13 @@ import { BackArrow } from './BackLink'
 
 export default function PageHeader({
   title,
+  titleId,
   description,
   actions,
   className,
 }: {
   title: string
+  titleId?: string
   description?: string
   actions?: ReactNode
   className?: string
@@ -21,7 +23,7 @@ export default function PageHeader({
         {/* Inside a BackNav, phones get ‹ and the title on one row. */}
         <div className="flex items-start gap-1">
           <BackArrow />
-          <h1 className="min-w-0 text-2xl font-semibold tracking-tight md:text-3xl">{title}</h1>
+          <h1 id={titleId} className="min-w-0 text-2xl font-semibold tracking-tight md:text-3xl">{title}</h1>
         </div>
         {description && (
           <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
