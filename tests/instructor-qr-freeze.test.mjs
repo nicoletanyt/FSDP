@@ -11,7 +11,7 @@ const source = stripTypeScriptTypes(await readFile(new URL('../src/hooks/use-qr-
   .replaceAll("'jsqr'", JSON.stringify(import.meta.resolve('jsqr')))
 const { useQrCamera } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`)
 
-test('NFC window shows the final camera frame after the video track stops; manual stop clears it', async () => {
+test('optional camera freeze captures the last frame before stopping and clears it when disabled', async () => {
   let stopped = false, captures = 0
   globalThis.requestAnimationFrame = () => 1
   globalThis.cancelAnimationFrame = () => {}
