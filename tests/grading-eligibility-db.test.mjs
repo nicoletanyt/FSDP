@@ -82,6 +82,7 @@ test('grading eligibility follows the published sheets (offline PostgreSQL)', as
     await db.exec(await readFile(migration('20261116064918_grading_track_requirements_and_fees'), 'utf8'))
     await db.exec(await readFile(migration('20261113100000_grading_endorsements'), 'utf8'))
     await db.exec(await readFile(migration('20261113110000_grading_endorsements_surrogate_key'), 'utf8'))
+    await db.exec(await readFile(migration('20261118144517_grading_eligibility_without_login'), 'utf8'))
     await sql("insert into public.instructors(id,user_id,first_name,last_name,email) values($1,$2,'Ada','Sensei','ada@example.test')", [instructor, instructorUser])
 
     await suite.test('sheet values are written to grade_requirements', async () => {
@@ -182,6 +183,21 @@ test('grading eligibility follows the published sheets (offline PostgreSQL)', as
       await sql("update public.students set outstanding_fees = true where id = $1", [child])
       assert.equal((await sql('select * from public.eligible_grading_students($1)', [gradingEvent])).rows.length, 0)
       await sql("update public.students set outstanding_fees = false where id = $1", [child])
+    })
+
+    await suite.test('account-less students can be eligible but the eligibility RPC stays private', async () => {
+      const withoutLogin = uuid(203)
+      await db.exec('begin')
+      try {
+        await sql(`insert into public.students(id,member_no,first_name,last_name,email,home_centre_id,date_of_birth,joined_at,current_grade_id)
+          values($1,'NO-LOGIN','Unlinked','Student','unlinked@example.test',$2,$3,current_date-365,'unranked')`,
+        [withoutLogin, centre, `${year - 6}-06-01`])
+        assert.deepEqual((await sql('select student_id,user_id from public.eligible_grading_students($1) order by student_id', [gradingEvent])).rows,
+          [{ student_id: child, user_id: childUser }, { student_id: withoutLogin, user_id: null }])
+        assert.deepEqual((await sql(`select has_function_privilege('authenticated','public.eligible_grading_students(uuid)','EXECUTE') as direct_access,
+          has_function_privilege('authenticated','public.reserve_grading_checkout(uuid,uuid)','EXECUTE') as checkout_access`)).rows,
+          [{ direct_access: false, checkout_access: false }])
+      } finally { await db.exec('rollback') }
     })
 
     await suite.test('a student reads only their own checklist', async () => {

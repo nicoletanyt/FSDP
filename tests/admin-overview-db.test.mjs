@@ -26,7 +26,7 @@ test('admin overview uses live bookings, scoped students and official grading da
       create table public.event_students(event_id uuid,student_id uuid,attendance_status text);
       create table public.gradings(event_id uuid,official_schedule boolean,application_status text,
         grading_date date,application_opens_on date,application_deadline date);
-      create table public.grading_applications(student_id uuid);
+       create table public.grading_applications(student_id uuid,grading_event_id uuid);
       create table public.grading_email_sends(status text,recipient_count integer);
       create function public.eligible_grading_students(target_event uuid)
       returns table(student_id uuid) language sql stable as $$
@@ -57,10 +57,18 @@ test('admin overview uses live bookings, scoped students and official grading da
       ((now() at time zone 'Asia/Singapore')::date+20+time '10:00') at time zone 'Asia/Singapore',
       ((now() at time zone 'Asia/Singapore')::date+20+time '11:00') at time zone 'Asia/Singapore')`,[id(50),id(20)])
     await db.query(`insert into public.gradings values ($1,true,'open',
-      (now() at time zone 'Asia/Singapore')::date+20,
-      (now() at time zone 'Asia/Singapore')::date-1,
-      (now() at time zone 'Asia/Singapore')::date+10)`,[id(50)])
-    await db.query('insert into public.grading_applications values ($1)',[id(11)])
+       (now() at time zone 'Asia/Singapore')::date+20,
+       (now() at time zone 'Asia/Singapore')::date-1,
+       (now() at time zone 'Asia/Singapore')::date+10)`,[id(50)])
+    // Today's session and future sessions count; previous-day sessions do not.
+    // The centre filter continues to use the student's home centre.
+    await db.query(`insert into public.gradings values
+      ($1,false,'closed',(now() at time zone 'Asia/Singapore')::date,null,null),
+      ($2,false,'closed',(now() at time zone 'Asia/Singapore')::date-1,null,null),
+      ($3,false,'closed',(now() at time zone 'Asia/Singapore')::date+3,null,null)`,[id(51),id(52),id(53)])
+    await db.query(`insert into public.grading_applications values
+      ($1,$4),($2,$5),($2,$6),($3,$7)`,[id(10),id(11),id(12),id(50),id(51),id(52),id(53)])
+    await db.exec(await readFile(new URL('../supabase/migrations/20261118150427_overview_current_upcoming_grading_applications.sql', import.meta.url), 'utf8'))
     await db.exec("insert into public.grading_email_sends values ('accepted',5),('failed',100)")
 
     await as(2)
@@ -70,14 +78,13 @@ test('admin overview uses live bookings, scoped students and official grading da
     assert.equal(snapshot.total_students,3)
     assert.equal(snapshot.active_students,2)
     assert.equal(snapshot.attention_count,2)
-    assert.equal(snapshot.critical_count,1)
     assert.equal(snapshot.attention_students.length,2)
     assert.equal(snapshot.attention_students[0].first_name,'Bob')
     assert.equal(snapshot.attention_students[0].consecutive,5)
     assert.equal(snapshot.attention_students[1].no_recent,true)
     assert.equal(snapshot.eligible_count,1)
     assert.equal(snapshot.open_gradings,1)
-    assert.equal(snapshot.application_count,1)
+    assert.equal(snapshot.application_count,3)
     assert.equal(snapshot.invitation_recipients,5)
     assert.equal(snapshot.trend.length,12)
     assert.equal(snapshot.trend.reduce((total,point)=>total+point.sessions,0),6)
@@ -85,6 +92,7 @@ test('admin overview uses live bookings, scoped students and official grading da
     const {rows:[{snapshot:scoped}]} = await db.query('select public.admin_overview($1) as snapshot',[id(20)])
     assert.equal(scoped.total_students,2)
     assert.equal(scoped.attention_count,2)
+    assert.equal(scoped.application_count,2)
     assert.equal(scoped.trend.reduce((total,point)=>total+point.sessions,0),5)
     assert.equal(scoped.invitation_recipients,5)
     await assert.rejects(() => db.query('select public.admin_overview($1)',[id(99)]),/Centre not found/)
@@ -96,7 +104,7 @@ test('admin overview uses live bookings, scoped students and official grading da
       returns jsonb language sql stable as $$
         select coalesce(jsonb_agg(jsonb_build_object(
           'id', id, 'first_name', first_name, 'last_name', last_name,
-          'grade', current_grade_id, 'level', case when id='${id(11)}'::uuid then 'critical' else 'unassessed' end,
+          'grade', current_grade_id, 'level', case when id in ('${id(11)}'::uuid,'${id(13)}'::uuid,'${id(14)}'::uuid,'${id(15)}'::uuid) then 'at_risk' else 'unassessed' end,
           'missed', case when id='${id(11)}'::uuid then 5 else 0 end, 'enrolments', 5
         )), '[]'::jsonb) from public.students where target_centre is null or home_centre_id=target_centre
       $$;
@@ -107,10 +115,11 @@ test('admin overview uses live bookings, scoped students and official grading da
     await as(1)
     const updated = (await db.query('select public.admin_overview_recent_enrolments() result')).rows[0].result
     assert.equal(updated.attention_count,1)
-    assert.equal(updated.critical_count,1)
+    assert.equal(updated.critical_count,0)
     assert.equal(updated.attention_students[0].first_name,'Bob')
     assert.equal(updated.attention_students[0].missed,5)
     assert.equal(updated.total_students,3)
+    assert.equal(updated.application_count,3)
 
     await db.exec(`reset role;
       create table public.admin_attendance_email_sends (
@@ -136,6 +145,24 @@ test('admin overview uses live bookings, scoped students and official grading da
     await db.query("update public.admin_attendance_email_sends set completed_at=now()-interval '31 days' where status='accepted'")
     await as(1)
     assert.equal((await current()).attention_students[0].notified,false)
+    await db.exec('reset role')
+    await db.query(`insert into public.students values
+      ($1,'Dave','Flagged',$4,(now() at time zone 'Asia/Singapore')::date-40,'active','unranked'),
+      ($2,'Eve','Flagged',$4,(now() at time zone 'Asia/Singapore')::date-40,'active','unranked'),
+      ($3,'Fran','Flagged',$5,(now() at time zone 'Asia/Singapore')::date-40,'active','unranked')`,
+      [id(13),id(14),id(15),id(20),id(21)])
+    await db.exec(await readFile(new URL('../supabase/migrations/20261118155100_overview_two_attention_students.sql', import.meta.url), 'utf8'))
+    await as(1)
+    const limited = await current()
+    assert.equal(limited.attention_count,4)
+    assert.equal(limited.attention_students.length,2)
+    assert.deepEqual(limited.attention_students.map(student => student.first_name), ['Bob','Dave'])
+    const centre = (await db.query('select public.admin_overview_recent_enrolments($1) result',[id(20)])).rows[0].result
+    assert.equal(centre.attention_count,3)
+    assert.equal(centre.attention_students.length,2)
+    const otherCentre = (await db.query('select public.admin_overview_recent_enrolments($1) result',[id(21)])).rows[0].result
+    assert.equal(otherCentre.attention_count,1)
+    assert.equal(otherCentre.attention_students.length,1)
     await as(2)
     await assert.rejects(() => db.query('select public.admin_overview_recent_enrolments()'),/Administrator access required/)
   } finally { await db.close() }

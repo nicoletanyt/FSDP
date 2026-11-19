@@ -1,10 +1,29 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0'
 
 const uuid = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i
-const testEmail = /^[^\s@,;<>]+@example(?:\.test)?\.com$/i
-// Invitations remain test-only, but the confirmation link opens the deployed app.
+const validEmail = /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/i
+const primaryRecipient = 'suroul29@gmail.com'
+// The confirmation link opens the deployed app.
 const confirmationOrigin = 'https://fsdp-kappa.vercel.app'
 const localTestOrigin = 'http://localhost:5173'
+
+// EmailJS can echo the entire request (including addresses and credentials).
+// Store only fixed, non-identifying categories in the private audit record.
+export function emailJsRejectionReason(body: string): string {
+  const message = body.slice(0, 4096).toLowerCase()
+  if (/recipient|to_email|bcc|email.address/.test(message) &&
+    /corrupt|invalid|missing|required|not found|does not exist/.test(message))
+    return 'EmailJS rejected a recipient address or recipient template setting; no automatic retry.'
+  if (/template/.test(message) && /invalid|missing|not found|does not exist/.test(message))
+    return 'EmailJS rejected the template setting; no automatic retry.'
+  if (/service/.test(message) && /invalid|missing|not found|disconnected/.test(message))
+    return 'EmailJS rejected the service setting; no automatic retry.'
+  if (/user_id|public.key|private.key|access.token|unauthori[sz]ed/.test(message))
+    return 'EmailJS rejected the account credentials; no automatic retry.'
+  if (/quota|rate.limit|too many requests|limit exceeded/.test(message))
+    return 'EmailJS rejected the account limit or rate limit; no automatic retry.'
+  return 'EmailJS rejected the invitation; provider reason unclassified; no automatic retry.'
+}
 
 function requireEnv(name: string): string {
   const value = Deno.env.get(name)?.trim()
@@ -44,7 +63,7 @@ export function invitationCopy(event: Details, instructor: Instructor, confirmat
   const time = (value: string) => new Date(value).toLocaleTimeString('en-SG', {
     timeZone: 'Asia/Singapore', hour: 'numeric', minute: '2-digit', hour12: true,
   })
-  const email_subject = `[Cover Test] Cover request: ${event.name} — ${date}`
+  const email_subject = `Cover request: ${event.name} — ${date}`
   const email_body = `Hi ${instructor.first_name} ${instructor.last_name},
 
 You have been requested to cover the following class as the assigned instructor is unavailable.
@@ -86,7 +105,7 @@ export async function handleRequest(request: Request): Promise<Response> {
       !('event_id' in body) || typeof body.event_id !== 'string' || !uuid.test(body.event_id) ||
       !('instructor_id' in body) || typeof body.instructor_id !== 'string' || !uuid.test(body.instructor_id) ||
       !('action' in body) || !['preview', 'send'].includes(String(body.action))) {
-      return Response.json({ error: 'Select a valid test class and instructor.' }, { status: 400, headers })
+       return Response.json({ error: 'Select a valid class and instructor.' }, { status: 400, headers })
     }
     const { event_id, instructor_id, action } = body as { event_id: string; instructor_id: string; action: 'preview' | 'send' }
     const db = createClient(requireEnv('SUPABASE_URL'), requireEnv('SUPABASE_SERVICE_ROLE_KEY'), {
@@ -94,16 +113,16 @@ export async function handleRequest(request: Request): Promise<Response> {
     })
     const { data: eligible, error: eligibilityError } = await caller.rpc('preview_class_cover_candidates', { target_event: event_id })
     if (eligibilityError || !eligible?.some((item: { instructor_id: string; eligibility: string }) =>
-      item.instructor_id === instructor_id && item.eligibility === 'demo_only_match')) {
-      return Response.json({ error: 'This instructor is not currently eligible for the test class.' }, { status: 409, headers })
+       item.instructor_id === instructor_id && item.eligibility === 'estimated_match')) {
+       return Response.json({ error: 'This instructor is not currently eligible for the class.' }, { status: 409, headers })
     }
     const [{ data: event, error: eventError }, { data: instructor, error: instructorError }] = await Promise.all([
       db.from('events').select('id,name,centre_id,starts_at,ends_at,status,centres(name)').eq('id', event_id).single(),
       db.from('instructors').select('id,first_name,last_name,email').eq('id', instructor_id).single(),
     ])
-    if (eventError || instructorError || !event || !instructor || event.name !== '[Cover Test] Weekday 3 PM' ||
-      event.status !== 'scheduled' || new Date(event.starts_at).getTime() <= Date.now() || !testEmail.test(instructor.email)) {
-      return Response.json({ error: 'Test class or recipient is unavailable.' }, { status: 409, headers })
+    if (eventError || instructorError || !event || !instructor ||
+      event.status !== 'scheduled' || new Date(event.starts_at).getTime() <= Date.now() || !validEmail.test(instructor.email)) {
+      return Response.json({ error: 'Class or recipient is unavailable.' }, { status: 409, headers })
     }
     if (action === 'preview') return Response.json({ error: 'Preview is no longer available.' }, { status: 410, headers })
 
@@ -111,7 +130,7 @@ export async function handleRequest(request: Request): Promise<Response> {
     if (!template || !Deno.env.get('EMAILJS_SERVICE_ID') || !Deno.env.get('EMAILJS_PUBLIC_KEY')) {
       return Response.json({ error: 'Invitation EmailJS settings are not configured. Nothing sent.' }, { status: 409, headers })
     }
-    // RPC atomically rechecks the admin, test-only recipient and current
+    // RPC atomically rechecks the admin, linked instructor and current
     // eligibility under an event lock before claiming this send once.
     const { data: invitationId, error: reserveError } = await caller.rpc('reserve_class_cover_test_invitation', {
       target_event: event_id, target_instructor: instructor_id,
@@ -131,12 +150,12 @@ export async function handleRequest(request: Request): Promise<Response> {
         body: JSON.stringify({
           service_id: requireEnv('EMAILJS_SERVICE_ID'), template_id: template, user_id: requireEnv('EMAILJS_PUBLIC_KEY'),
           ...(Deno.env.get('EMAILJS_PRIVATE_KEY') ? { accessToken: Deno.env.get('EMAILJS_PRIVATE_KEY') } : {}),
-          template_params: { to_email: instructor.email, ...copy },
+           template_params: { to_email: primaryRecipient, bcc_emails: instructor.email, ...copy },
         }),
       })
       provider_http_status = response.status
       status = response.ok ? 'accepted' : 'failed'
-      if (!response.ok) failure_reason = 'EmailJS rejected the test invitation; no automatic retry.'
+       if (!response.ok) failure_reason = emailJsRejectionReason(await response.text().catch(() => ''))
     } catch {
       failure_reason = 'EmailJS response unavailable; delivery is uncertain. Do not resend.'
     }
@@ -146,7 +165,7 @@ export async function handleRequest(request: Request): Promise<Response> {
     if (updateError) throw updateError
     return Response.json({ invitation_id: invitationId, status }, { headers })
   } catch {
-    console.error('Class-cover test invitation failed; inspect its recorded status before another action.')
+     console.error('Class-cover invitation failed; inspect its recorded status before another action.')
     return Response.json({ error: 'Unable to complete the invitation. Check send history before trying again.' }, { status: 500, headers })
   }
 }
