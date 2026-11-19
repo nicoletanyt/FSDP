@@ -45,7 +45,7 @@ class MockNdefReader {
     signal.addEventListener('abort', () => { if (reader === this) reader = null }, { once: true })
   }
 }
-Object.defineProperty(window, 'NDEFReader', { configurable: true, value: ['no-api', 'ios', 'desktop'].includes(device) ? undefined : MockNdefReader })
+Object.defineProperty(window, 'NDEFReader', { configurable: true, value: ['no-api', 'ios', 'desktop', 'old-chrome'].includes(device) ? undefined : MockNdefReader })
 Object.defineProperty(navigator, 'permissions', { configurable: true, value: {
   query: async () => ({ state: device === 'granted' ? 'granted' : 'prompt' }),
 } })
