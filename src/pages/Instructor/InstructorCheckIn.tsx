@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useOutletContext } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { CalendarX2, ChevronDown, LogOut, Maximize, Nfc, UserCheck } from "lucide-react";
+import { CalendarX2, Camera, ChevronDown, LogOut, Maximize, Nfc, UserCheck } from "lucide-react";
 import CheckInScanner from "@/components/instructor/CheckInScanner";
 import { GradeLabelBadge } from "@/components/shared/grade/GradeBadge";
 import { pendingNfcTagKey } from "@/components/instructor/NfcTagCapture";
@@ -16,7 +16,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/hooks/use-auth";
-import { useCheckInAlternation } from "@/hooks/use-check-in-alternation";
+import { useCheckInMode } from "@/hooks/use-check-in-mode";
 import { useNfcReader } from "@/hooks/use-nfc-reader";
 import { useClassQuery, useInstructorRoster } from "@/hooks/use-instructor-class-queries";
 import { parseEntityId, toSingaporeDateTime } from "@/lib/instructor/adapters";
@@ -101,17 +101,12 @@ export default function InstructorCheckIn() {
     const roster = useInstructorRoster(eventId, Boolean(session));
     const [feedback, setFeedback] = useState<ScanFeedback | null>(null);
     const [cameraRunning, setCameraRunning] = useState(false);
-    const [cameraLive, setCameraLive] = useState(false);
-    const [cameraEnabled, setCameraEnabled] = useState(false);
-    const [cameraFailed, setCameraFailed] = useState(false);
     const scanLocked = useRef(false);
-    const isScanLocked = useCallback(() => scanLocked.current, []);
     const nfcInFlight = useRef(false);
     const [choice, setChoice] = useState<NfcScanResult | null>(null);
     const choiceTag = useRef<string | null>(null);
     const [nfcPending, setNfcPending] = useState(false);
     const [nfcRetry, setNfcRetry] = useState(false);
-    const [nfcStationWarning, setNfcStationWarning] = useState("");
     const attemptedUrl = useRef(false);
     const enterKioskRef = useRef<HTMLButtonElement>(null);
     const exitKioskRef = useRef<HTMLButtonElement>(null);
@@ -129,18 +124,11 @@ export default function InstructorCheckIn() {
     const attendancePercent = entries.length ? (checkedIn.length / entries.length) * 100 : 0;
     const canScan = roster.status === "success" && roster.data.canEditAttendance;
     const nfc = useNfcReader((token) => void handleNfc(token), () => scanLocked.current || !!choiceTag.current);
-    const onNfcStartupFailed = useCallback(() => {
-        nfc.stop();
-        setNfcStationWarning("NFC could not restart after the camera was released. QR scanning has resumed. Check NFC is enabled, then start NFC again.");
-    }, [nfc.stop]);
-    const onCameraRunningChange = useCallback((running: boolean, live: boolean) => { setCameraRunning(running); setCameraLive(live); }, []);
-    const onCameraEnabledChange = useCallback((enabled: boolean) => setCameraEnabled(enabled), []);
-    const onCameraErrorChange = useCallback((failed: boolean) => setCameraFailed(failed), []);
+    const onCameraRunningChange = useCallback((running: boolean) => setCameraRunning(running), []);
     const scanBusy = Boolean(feedback || choice || nfcPending || nfcRetry);
-    const { alternating, phase: scanPhase, cameraPaused } = useCheckInAlternation({
-        cameraEnabled, cameraRunning, cameraLive, cameraFailed, nfcWanted: nfc.wanted,
-        nfcState: nfc.state, nfcError: nfc.error, pauseNfc: nfc.pause, resumeNfc: nfc.resume, stopNfc: onNfcStartupFailed,
-        busy: scanBusy, locked: isScanLocked,
+    const { mode, cameraEnabled, startCamera, startNfcScanning } = useCheckInMode({
+        nfcSupported: nfc.supported, nfcState: nfc.state, cameraRunning,
+        startNfc: nfc.start, stopNfc: nfc.stop,
     });
     const sessionDetails = session
         ? `${session.dojo} · ${dateFormat.format(session.date)} · ${formatTime(session.startTime)}–${formatTime(session.endTime)}`
@@ -390,24 +378,26 @@ export default function InstructorCheckIn() {
                 {nfc.supported ? (
                     <>
                         <Button type="button" variant={isKiosk ? "secondary" : "outline"} className="min-h-11 gap-2"
-                            disabled={nfc.state === "starting"} onClick={() => {
-                                setNfcStationWarning("");
-                                if (nfc.wanted) nfc.stop();
-                                else void nfc.start();
+                            disabled={scanBusy || nfc.state === "starting" || (mode === "nfc" && cameraRunning)} onClick={() => {
+                                if (mode === "qr") startNfcScanning();
+                                else if (nfc.state === "active") startCamera();
+                                else startNfcScanning();
                             }}>
-                            <Nfc aria-hidden="true" className="size-4" />
-                            {nfc.state === "starting" ? "Starting NFC…" : nfc.wanted ? "Stop NFC scanning" : "Start NFC scanning"}
+                            {mode === "nfc" && nfc.state === "active" ? <Camera aria-hidden="true" className="size-4" /> : <Nfc aria-hidden="true" className="size-4" />}
+                            {mode === "nfc" && nfc.state === "starting" ? "Starting NFC…" : mode === "nfc" && nfc.state === "active" ? "Start camera" : "Start NFC scanning"}
                         </Button>
+                        {mode === "nfc" && nfc.state === "idle" && (
+                            <Button type="button" variant="ghost" className="min-h-11" disabled={scanBusy || cameraRunning} onClick={startCamera}>
+                                Use camera instead
+                            </Button>
+                        )}
                         <span role="status" className={cn("text-xs text-muted-foreground", isKiosk && "text-white/80")}>
-                            {nfcPending ? "Checking tag…" : alternating
-                                ? scanPhase === "nfc" ? "NFC window · Hold tag until confirmation" : "QR window · Show code to camera"
-                                : nfc.state === "active" ? "NFC reader started · Tap a student’s tag" : "Tap Start to scan NFC tags"}
+                            {nfcPending ? "Checking tag…" : mode === "qr" ? "Camera mode · Show a QR code" :
+                                nfc.state === "active" ? "NFC mode · Tap a student’s tag" : "NFC mode · Start scanning to read tags"}
                         </span>
-                        {alternating && <span className={cn("text-xs text-muted-foreground", isKiosk && "text-white/80")}>Automatic QR/NFC switching · No button needed between students</span>}
                     </>
                 ) : <p className="text-xs text-muted-foreground">NFC scanning is unavailable here. QR check-in and existing NFC tag links still work.</p>}
                 {nfc.error && <p role="alert" className="w-full text-xs text-destructive">{nfc.error}</p>}
-                {nfcStationWarning && <p role="alert" className="w-full text-xs text-destructive">{nfcStationWarning}</p>}
             </div>
 
             {nfcRetry && choiceTag.current && <div className="flex flex-wrap gap-2">
@@ -421,14 +411,14 @@ export default function InstructorCheckIn() {
                     !isKiosk && "gap-4 md:grid-cols-[minmax(0,7fr)_minmax(14rem,3fr)]",
                 )}
             >
-                {/* Keep one scanner mounted so changing modes preserves the camera stream. */}
+                {/* Keep the scanner mounted so the camera releases before NFC starts. */}
                 <CheckInScanner
                     feedback={feedback}
                     onScan={(payload) => void handleScan(payload)}
-                    cameraPaused={cameraPaused}
+                    cameraEnabled={cameraEnabled}
                     onCameraRunningChange={onCameraRunningChange}
-                    onCameraEnabledChange={onCameraEnabledChange}
-                    onCameraErrorChange={onCameraErrorChange}
+                    nfcSelected={mode === "nfc"}
+                    nfcActive={nfc.state === "active"}
                     choice={choice}
                     choicePending={nfcPending}
                     onChooseClass={eventId => { if (choiceTag.current) void handleNfc(choiceTag.current, eventId); }}
