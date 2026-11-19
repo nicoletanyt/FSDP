@@ -308,12 +308,13 @@ time; subsequent visits auto-start if permission is already granted. Keep the
 page visible and phone unlocked, then tap successive tags without navigating.
 **Stop scanning** stops the foreground reader. Web NFC needs enabled NFC hardware,
 a secure context (HTTPS or localhost), and a supported browser. If Web NFC is
-unavailable or scanning fails, an existing URL chip can still open
+unavailable or scanning fails, a new text-record tag cannot open a check-in
+page on its own. Existing URL chips can still open
 `/instructor/nfc_checkin?tag=...` as before. This route is separate from
-`/instructor/check-in`, the existing QR scanner. Tag URLs contain random bearer
+`/instructor/check-in`, the existing QR scanner. Tags contain random bearer
 tokens; `public.student_nfc_tags` stores only SHA-256 hashes under the composite
 `(student_id, tag_id)` key with a unique `tag_id`. Deleting a tag row immediately
-invalidates its URL. Only the server-side function can look up tags or mark
+invalidates its token. Only the server-side function can look up tags or mark
 attendance. The instructor must have a linked teaching record assigned to the
 student's booked class today (Singapore time).
 
@@ -333,23 +334,23 @@ the handler verifies the instructor's JWT and role itself.
 To write a tag, set `SUPABASE_SERVICE_ROLE_KEY` **only** in the local root `.env`:
 
 ```sh
-node --env-file=.env scripts/nfc-tags.mjs issue SK-1006 https://your-frontend.example
+node --env-file=.env scripts/nfc-tags.mjs issue SK-1006
 node --env-file=.env scripts/nfc-tags.mjs revoke SK-1006 TAG_TOKEN
 node --env-file=.env scripts/nfc-tags.mjs revoke-all SK-1006
 ```
 
-Write the entire printed URL as an NFC URI record. The foreground reader only
-accepts URI records on the current site at `/instructor/nfc_checkin` with one
-valid `tag` parameter. Test on an actual Android phone: some devices may open
-URI chips at the OS level instead of handing them to the active Web NFC reader.
-If so, a future non-URL tag format may be needed for uninterrupted scans; do
-not rewrite existing tags until that behavior is verified. The URL is a credential; do
-not share it or commit it. Issuing another tag does **not** revoke existing tags.
-Use `revoke-all` if the missing tag's token is unknown. For temporary LAN-only
-phone testing, the function also permits exactly `http://192.168.1.13:5173`;
-opt in when issuing with `FSDP_ALLOW_HTTP_NFC_TEST=1` and that origin. This is
-insecure and must be removed from the function and script after testing. If the
-computer's IP changes, use an HTTPS test origin rather than a stale URL.
+Write exactly the printed 64-character token as a **single NDEF text record**
+(not a URL/URI record); remove any old URL record when rewriting a tag. The
+foreground reader accepts text tokens and, temporarily, existing same-origin
+URI records at `/instructor/nfc_checkin` with one valid `tag` parameter. The
+QR/NFC station still switches automatically every two seconds. Legacy URL tags
+may still open a browser during the handoff; reprogram them to text records to
+avoid that behaviour. Test the new tags on an actual Android phone: OS handling
+and timing cannot be verified by automated tests. The token is a credential;
+do not share it or commit it. Issuing another tag does **not** revoke existing
+tags. Use `revoke-all` if the missing tag's token is unknown. For temporary
+LAN-only phone testing, the function also permits exactly
+`http://192.168.1.13:5173`; this is insecure and must be removed after testing.
 
 ### Frontend — Vercel
 

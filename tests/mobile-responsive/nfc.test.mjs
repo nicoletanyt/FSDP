@@ -36,17 +36,17 @@ async function inspect(width, device, tag = false, action = '') {
          calls: w.nfcFixtureCalls, scans: w.nfcFixtureScans, pendingTag: w.sessionStorage.getItem('fsdp-pending-nfc-tag'),
          href: link?.getAttribute('href'), targets: link ? { width: link.getBoundingClientRect().width, height: link.getBoundingClientRect().height, bottom: link.getBoundingClientRect().bottom } : null };
        if (action === 'navigate') { link.click(); await new Promise(resolve => setTimeout(resolve, 100)); result.afterNavigation = d.body.textContent; }
-       if (action === 'scan' || action === 'select') {
+        if (action === 'scan' || action === 'select' || action === 'legacy') {
          if (action === 'select') w.nfcFixtureRespond('select_class');
          [...d.querySelectorAll('button')].find(button => button.textContent.includes('Start scanning')).click();
          await new Promise(resolve => setTimeout(resolve, 50));
          result.started = d.body.textContent;
-         w.nfcFixtureEmit();
-         w.nfcFixtureEmit();
+          w.nfcFixtureEmit();
+          w.nfcFixtureEmit();
          await new Promise(resolve => setTimeout(resolve, 50));
          result.first = { text: d.body.textContent, calls: w.nfcFixtureCalls };
          if (action === 'select') {
-           w.nfcFixtureEmit('b'.repeat(64));
+          w.nfcFixtureEmit('b'.repeat(64), action === 'legacy' ? 'url' : 'text');
            await new Promise(resolve => setTimeout(resolve, 50));
            result.whileChoosing = w.nfcFixtureCalls;
            w.nfcFixtureRespond('no_class');
@@ -96,6 +96,13 @@ test('one reader handles successive tags without duplicate submissions or naviga
   assert.match(result.second.text, /No class today/)
   assert.equal(result.stopped.calls, 2)
   assert.match(result.stopped.text, /Start scanning/)
+})
+
+test('legacy URL records remain readable after a text-record scan', async () => {
+  const result = await inspect(390, 'android', false, 'legacy')
+  assert.equal(result.first.calls, 1)
+  assert.equal(result.second.calls, 2)
+  assert.equal(result.second.scans, 1)
 })
 
 test('a class choice blocks new reads until the instructor chooses', async () => {
