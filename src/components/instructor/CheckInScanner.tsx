@@ -5,9 +5,9 @@ import {
     CircleAlert,
     CircleCheck,
     LoaderCircle,
+    Nfc,
     QrCode,
     Settings2,
-    Square,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -32,10 +32,10 @@ export default function CheckInScanner({
     choicePending = false,
     onChooseClass,
     onCancelChoice,
-    cameraPaused = false,
+    cameraEnabled,
+    nfcSelected,
+    nfcActive,
     onCameraRunningChange,
-    onCameraEnabledChange,
-    onCameraErrorChange,
     isKiosk = false,
 }: {
     feedback: ScanFeedback | null;
@@ -44,35 +44,25 @@ export default function CheckInScanner({
     choicePending?: boolean;
     onChooseClass?: (eventId: string) => void;
     onCancelChoice?: () => void;
-    cameraPaused?: boolean;
+    cameraEnabled: boolean;
+    nfcSelected: boolean;
+    nfcActive: boolean;
     onCameraRunningChange?: (running: boolean, live: boolean) => void;
-    onCameraEnabledChange?: (enabled: boolean) => void;
-    onCameraErrorChange?: (failed: boolean) => void;
     isKiosk?: boolean;
 }) {
-    const [enabled, setEnabled] = useState(false);
     const [cameraId, setCameraId] = useState("");
     const [settingsOpen, setSettingsOpen] = useState(false);
     const { videoRef, frozenCanvasRef, hasFrozenFrame, status, error, cameras, activeCameraId, restart } =
         useQrCamera({
-            enabled: enabled && !cameraPaused,
+            enabled: cameraEnabled,
             cameraId,
             paused: !!feedback || !!choice || choicePending,
-            freezeOnStop: cameraPaused,
             onScan,
         });
     const live = status === "live";
     const starting = status === "starting";
 
     useEffect(() => { onCameraRunningChange?.(live || starting, live); }, [live, starting, onCameraRunningChange]);
-    useEffect(() => { onCameraEnabledChange?.(enabled); }, [enabled, onCameraEnabledChange]);
-    useEffect(() => { onCameraErrorChange?.(status === "error"); }, [status, onCameraErrorChange]);
-
-    function startCamera() {
-        if (cameraPaused) return;
-        if (enabled) restart();
-        else setEnabled(true);
-    }
 
     return (
         <Card
@@ -100,7 +90,7 @@ export default function CheckInScanner({
             <div
                 className={cn(
                     "absolute inset-x-0 top-0 z-20 items-center justify-between gap-2 bg-gradient-to-b from-black/70 to-transparent p-4",
-                    isKiosk ? "hidden" : "flex",
+                    isKiosk || nfcSelected ? "hidden" : "flex",
                 )}
             >
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -155,24 +145,11 @@ export default function CheckInScanner({
                                 </option>
                             ))}
                         </select>
-                        {enabled && (
-                            <Button
-                                variant="outline"
-                                className="min-h-11 w-full gap-2"
-                                onClick={() => {
-                                    setEnabled(false);
-                                    setSettingsOpen(false);
-                                }}
-                            >
-                                <Square aria-hidden="true" />
-                                Stop camera
-                            </Button>
-                        )}
                     </PopoverContent>
                 </Popover>
             </div>
 
-            {!live && !cameraPaused && (
+            {!live && !nfcSelected && (
                 <div className={cn("absolute inset-0 overflow-y-auto overscroll-contain px-4 text-center text-white", isKiosk ? "pt-14 pb-3" : "pt-16 pb-4")}>
                   <div className="flex min-h-full flex-col items-center justify-center gap-3">
                     {starting ? (
@@ -183,32 +160,44 @@ export default function CheckInScanner({
                     ) : (
                         <CameraOff aria-hidden="true" className="size-10 text-zinc-400" />
                     )}
-                    <div role={error && enabled ? "alert" : "status"}>
+                    <div role={error && cameraEnabled ? "alert" : "status"}>
                         <p className="text-xl font-semibold tracking-tight sm:text-2xl">
                             {starting
                                 ? "Connecting to your camera"
-                                : error && enabled
+                                : error && cameraEnabled
                                     ? "Camera needs attention"
                                     : "Ready for check-ins?"}
                         </p>
                         <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-zinc-300">
                             {starting
                                 ? "Allow camera access when your browser asks."
-                                : error && enabled
+                                : error && cameraEnabled
                                     ? error
-                                    : "Start the camera to let students scan their QR codes."}
+                                    : "The camera will start when you choose QR mode."}
                         </p>
                     </div>
-                    {!starting && (
+                    {status === "error" && (
                         <Button
-                            onClick={startCamera}
+                            onClick={restart}
                             className="mt-2 min-h-12 gap-2 rounded-xl bg-white px-6 text-zinc-950 hover:bg-zinc-200"
                         >
                             <Camera aria-hidden="true" />
-                            {error && enabled ? "Try again" : "Start camera"}
+                            Try again
                         </Button>
                     )}
                   </div>
+                </div>
+            )}
+
+            {nfcSelected && !feedback && !choice && (
+                <div className={cn("absolute inset-0 overflow-y-auto overscroll-contain px-4 text-center text-white", isKiosk ? "pt-14 pb-3" : "pt-16 pb-4")}>
+                    <div className="flex min-h-full flex-col items-center justify-center gap-3">
+                        <Nfc aria-hidden="true" className="size-10 text-zinc-300" />
+                        <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">NFC check-in</h2>
+                        <p className="max-w-sm text-sm leading-relaxed text-zinc-300">
+                            {nfcActive ? "Tap a student’s tag. Use Start camera to scan QR codes instead." : "Start NFC scanning to read student tags."}
+                        </p>
+                    </div>
                 </div>
             )}
 

@@ -343,9 +343,12 @@ Write exactly the printed 64-character token as a **single NDEF text record**
 (not a URL/URI record); remove any old URL record when rewriting a tag. The
 foreground reader accepts text tokens and, temporarily, existing same-origin
 URI records at `/instructor/nfc_checkin` with one valid `tag` parameter. The
-QR/NFC station still switches automatically every two seconds. Legacy URL tags
-may still open a browser during the handoff; reprogram them to text records to
-avoid that behaviour. Test the new tags on an actual Android phone: OS handling
+instructor station starts in NFC mode (automatically if permission was already
+granted; otherwise tap **Start NFC scanning** once). Use **Start camera** to
+switch to QR; use **Start NFC scanning** to return to NFC. The readers do not
+alternate automatically. Legacy URL tags may still open a browser whenever NFC
+is inactive. Android may show “New tag collected” for text tags during a manual
+switch or while NFC is off. Test the new tags on an actual Android phone: OS handling
 and timing cannot be verified by automated tests. The token is a credential;
 do not share it or commit it. Issuing another tag does **not** revoke existing
 tags. Use `revoke-all` if the missing tag's token is unknown. For temporary

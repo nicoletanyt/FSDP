@@ -8,7 +8,7 @@ type NdefReader = {
   onreadingerror: (() => void) | null
 }
 
-/** Keep one reader alive across taps; neither the URL nor the raw token enters UI state. */
+/** Keep one reader alive across taps; neither a legacy URL nor the raw token enters UI state. */
 export function useNfcReader(onTag: (token: string) => void, blocked: () => boolean) {
   const [supported] = useState(currentDeviceSupportsNfcCheckIn)
   const [state, setState] = useState<'idle' | 'starting' | 'active'>('idle')
@@ -53,7 +53,7 @@ export function useNfcReader(onTag: (token: string) => void, blocked: () => bool
         if (blockedRef.current()) return
         const token = tokenFromNdefRecords(event.message.records, window.location.origin)
         if (!token) {
-          setError('This tag does not contain a valid check-in URL for this site.')
+          setError('This tag does not contain a valid check-in token.')
           return
         }
         if (lastRead.current?.token === token && Date.now() - lastRead.current.at < 2500) return
