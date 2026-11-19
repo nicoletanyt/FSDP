@@ -28,7 +28,7 @@ Object.defineProperty(navigator, 'userAgentData', { configurable: true, value: u
 type FixtureReader = { onreading: ((event: { message: { records: { recordType: string; data: DataView }[] } }) => void) | null }
 let reader: FixtureReader | null = null
 window.nfcFixtureScans = 0
-window.nfcFixtureEmit = (token = 'a'.repeat(64), kind = 'url') => {
+window.nfcFixtureEmit = (token = 'a'.repeat(64), kind = 'text') => {
   const data = kind === 'url' ? `${location.origin}/instructor/nfc_checkin?tag=${token}` : token
   const bytes = new TextEncoder().encode(data)
   reader?.onreading?.({ message: { records: [{ recordType: kind, data: new DataView(bytes.buffer) }] } })
